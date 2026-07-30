@@ -1,0 +1,21 @@
+FROM node:22-alpine
+
+RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/widget/package.json ./packages/widget/
+COPY tooling/eslint-config/package.json ./tooling/eslint-config/
+COPY tooling/prettier-config/package.json ./tooling/prettier-config/
+COPY tooling/typescript-config/package.json ./tooling/typescript-config/
+
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["pnpm", "--filter", "@site-chat/web", "dev"]
