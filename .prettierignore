@@ -1,2 +1,5 @@
 # Product documentation — maintained separately from code formatting
 docs/
+
+# Generated Supabase types — checked via pnpm db:types:check
+packages/shared/src/database.types.ts

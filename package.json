@@ -9,14 +9,20 @@
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:reset": "supabase db reset",
+    "db:test": "bash scripts/run-db-tests.sh",
+    "gen:types": "bash scripts/gen-database-types.sh",
+    "db:types:check": "tmp=$(mktemp) && SITE_CHAT_TYPES_OUTPUT=\"$tmp\" bash scripts/gen-database-types.sh && diff -u packages/shared/src/database.types.ts \"$tmp\" && rm \"$tmp\""
   },
   "devDependencies": {
     "@site-chat/eslint-config": "workspace:*",
     "@site-chat/prettier-config": "workspace:*",
+    "@supabase/postgres-meta": "^0.96.6",
     "eslint": "^9.22.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
+    "pg": "^8.22.0",
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
     "typescript": "^5.8.2"
