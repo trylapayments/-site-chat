@@ -1,0 +1,1 @@
+-- Seed data will be added in a later phase when the database schema is implemented.

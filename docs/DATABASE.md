@@ -21,15 +21,15 @@ Site Chat uses PostgreSQL 15+ hosted on Supabase. The database is the single sou
 
 ### 1.2 Schema Conventions
 
-| Convention | Rule |
-|------------|------|
-| Table names | snake_case, plural (`conversations`) |
-| Column names | snake_case (`workspace_id`) |
+| Convention   | Rule                                            |
+| ------------ | ----------------------------------------------- |
+| Table names  | snake_case, plural (`conversations`)            |
+| Column names | snake_case (`workspace_id`)                     |
 | Primary keys | `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` |
-| Foreign keys | `{referenced_table_singular}_id` |
-| Indexes | `idx_{table}_{columns}` |
-| Enums | PostgreSQL native ENUM types, prefixed `app_` |
-| JSON columns | `{purpose}_json` or `{purpose}_metadata` |
+| Foreign keys | `{referenced_table_singular}_id`                |
+| Indexes      | `idx_{table}_{columns}`                         |
+| Enums        | PostgreSQL native ENUM types, prefixed `app_`   |
+| JSON columns | `{purpose}_json` or `{purpose}_metadata`        |
 
 ---
 
@@ -119,18 +119,18 @@ CREATE TYPE app_agent_presence AS ENUM ('online', 'away', 'offline');
 
 Platform-wide plan definitions. Not tenant-scoped; no RLS (read-only for authenticated users).
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | TEXT | PK | Slug identifier: `starter`, `team`, `business` |
-| name | TEXT | NOT NULL | Display name |
-| stripe_price_id | TEXT | NOT NULL | Stripe Price ID (production) |
-| stripe_price_id_test | TEXT | NOT NULL | Stripe Price ID (test mode) |
-| agent_seats | INTEGER | NOT NULL | Maximum active agents |
-| monthly_conversations | INTEGER | NOT NULL | Conversation limit per billing period |
-| storage_bytes | BIGINT | NOT NULL | Attachment storage quota |
-| audit_log_retention_days | INTEGER | NOT NULL | Audit log retention |
-| price_cents | INTEGER | NOT NULL | Monthly price in cents |
-| is_active | BOOLEAN | NOT NULL DEFAULT true | Available for new subscriptions |
+| Column                   | Type    | Constraints           | Description                                    |
+| ------------------------ | ------- | --------------------- | ---------------------------------------------- |
+| id                       | TEXT    | PK                    | Slug identifier: `starter`, `team`, `business` |
+| name                     | TEXT    | NOT NULL              | Display name                                   |
+| stripe_price_id          | TEXT    | NOT NULL              | Stripe Price ID (production)                   |
+| stripe_price_id_test     | TEXT    | NOT NULL              | Stripe Price ID (test mode)                    |
+| agent_seats              | INTEGER | NOT NULL              | Maximum active agents                          |
+| monthly_conversations    | INTEGER | NOT NULL              | Conversation limit per billing period          |
+| storage_bytes            | BIGINT  | NOT NULL              | Attachment storage quota                       |
+| audit_log_retention_days | INTEGER | NOT NULL              | Audit log retention                            |
+| price_cents              | INTEGER | NOT NULL              | Monthly price in cents                         |
+| is_active                | BOOLEAN | NOT NULL DEFAULT true | Available for new subscriptions                |
 
 ---
 
@@ -140,21 +140,23 @@ Platform-wide plan definitions. Not tenant-scoped; no RLS (read-only for authent
 
 Top-level tenant entity.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | Workspace identifier |
-| name | TEXT | NOT NULL | Display name |
-| slug | TEXT | NOT NULL, UNIQUE | URL-safe identifier |
-| status | app_workspace_status | NOT NULL DEFAULT 'active' | Lifecycle status |
-| settings_json | JSONB | NOT NULL DEFAULT '{}' | Widget and workspace settings |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| deleted_at | TIMESTAMPTZ | NULL | Soft delete timestamp |
+| Column        | Type                 | Constraints               | Description                   |
+| ------------- | -------------------- | ------------------------- | ----------------------------- |
+| id            | UUID                 | PK                        | Workspace identifier          |
+| name          | TEXT                 | NOT NULL                  | Display name                  |
+| slug          | TEXT                 | NOT NULL, UNIQUE          | URL-safe identifier           |
+| status        | app_workspace_status | NOT NULL DEFAULT 'active' | Lifecycle status              |
+| settings_json | JSONB                | NOT NULL DEFAULT '{}'     | Widget and workspace settings |
+| created_at    | TIMESTAMPTZ          | NOT NULL DEFAULT now()    |                               |
+| updated_at    | TIMESTAMPTZ          | NOT NULL DEFAULT now()    |                               |
+| deleted_at    | TIMESTAMPTZ          | NULL                      | Soft delete timestamp         |
 
 **Indexes:**
+
 - `idx_workspaces_slug` UNIQUE ON `(slug)` WHERE `deleted_at IS NULL`
 
 **settings_json schema (validated in application):**
+
 ```json
 {
   "widget": {
@@ -178,20 +180,21 @@ Top-level tenant entity.
 
 Links Supabase Auth users to workspaces with roles.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| user_id | UUID | NOT NULL, FK → auth.users | Supabase Auth user |
-| role | app_member_role | NOT NULL DEFAULT 'agent' | Permission level |
-| status | app_member_status | NOT NULL DEFAULT 'active' | |
-| display_name | TEXT | NULL | Override name shown to visitors |
-| presence | app_agent_presence | NOT NULL DEFAULT 'offline' | Current presence |
-| last_seen_at | TIMESTAMPTZ | NULL | Last dashboard activity |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column       | Type               | Constraints                | Description                     |
+| ------------ | ------------------ | -------------------------- | ------------------------------- |
+| id           | UUID               | PK                         |                                 |
+| workspace_id | UUID               | NOT NULL, FK → workspaces  |                                 |
+| user_id      | UUID               | NOT NULL, FK → auth.users  | Supabase Auth user              |
+| role         | app_member_role    | NOT NULL DEFAULT 'agent'   | Permission level                |
+| status       | app_member_status  | NOT NULL DEFAULT 'active'  |                                 |
+| display_name | TEXT               | NULL                       | Override name shown to visitors |
+| presence     | app_agent_presence | NOT NULL DEFAULT 'offline' | Current presence                |
+| last_seen_at | TIMESTAMPTZ        | NULL                       | Last dashboard activity         |
+| created_at   | TIMESTAMPTZ        | NOT NULL DEFAULT now()     |                                 |
+| updated_at   | TIMESTAMPTZ        | NOT NULL DEFAULT now()     |                                 |
 
 **Indexes:**
+
 - `idx_workspace_members_user` ON `(user_id)`
 - `idx_workspace_members_workspace` ON `(workspace_id)`
 - UNIQUE `(workspace_id, user_id)`
@@ -200,23 +203,24 @@ Links Supabase Auth users to workspaces with roles.
 
 Mirrors Stripe subscription state for entitlement enforcement.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, UNIQUE, FK → workspaces | One subscription per workspace |
-| plan_id | TEXT | NOT NULL, FK → plans | Current plan |
-| status | app_subscription_status | NOT NULL | |
-| stripe_customer_id | TEXT | NOT NULL | |
-| stripe_subscription_id | TEXT | NULL | Null during trial before payment |
-| trial_ends_at | TIMESTAMPTZ | NULL | |
-| current_period_start | TIMESTAMPTZ | NULL | |
-| current_period_end | TIMESTAMPTZ | NULL | |
-| conversations_used | INTEGER | NOT NULL DEFAULT 0 | Counter reset each period |
-| storage_used_bytes | BIGINT | NOT NULL DEFAULT 0 | Running total |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column                 | Type                    | Constraints                       | Description                      |
+| ---------------------- | ----------------------- | --------------------------------- | -------------------------------- |
+| id                     | UUID                    | PK                                |                                  |
+| workspace_id           | UUID                    | NOT NULL, UNIQUE, FK → workspaces | One subscription per workspace   |
+| plan_id                | TEXT                    | NOT NULL, FK → plans              | Current plan                     |
+| status                 | app_subscription_status | NOT NULL                          |                                  |
+| stripe_customer_id     | TEXT                    | NOT NULL                          |                                  |
+| stripe_subscription_id | TEXT                    | NULL                              | Null during trial before payment |
+| trial_ends_at          | TIMESTAMPTZ             | NULL                              |                                  |
+| current_period_start   | TIMESTAMPTZ             | NULL                              |                                  |
+| current_period_end     | TIMESTAMPTZ             | NULL                              |                                  |
+| conversations_used     | INTEGER                 | NOT NULL DEFAULT 0                | Counter reset each period        |
+| storage_used_bytes     | BIGINT                  | NOT NULL DEFAULT 0                | Running total                    |
+| created_at             | TIMESTAMPTZ             | NOT NULL DEFAULT now()            |                                  |
+| updated_at             | TIMESTAMPTZ             | NOT NULL DEFAULT now()            |                                  |
 
 **Indexes:**
+
 - `idx_workspace_subscriptions_stripe_customer` ON `(stripe_customer_id)`
 - `idx_workspace_subscriptions_stripe_subscription` ON `(stripe_subscription_id)`
 
@@ -224,15 +228,16 @@ Mirrors Stripe subscription state for entitlement enforcement.
 
 Domain allowlist for widget embedding.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| domain | TEXT | NOT NULL | e.g., `example.com`, `*.example.com` |
-| verified | BOOLEAN | NOT NULL DEFAULT false | DNS verification (post-MVP; MVP manual) |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column       | Type        | Constraints               | Description                             |
+| ------------ | ----------- | ------------------------- | --------------------------------------- |
+| id           | UUID        | PK                        |                                         |
+| workspace_id | UUID        | NOT NULL, FK → workspaces |                                         |
+| domain       | TEXT        | NOT NULL                  | e.g., `example.com`, `*.example.com`    |
+| verified     | BOOLEAN     | NOT NULL DEFAULT false    | DNS verification (post-MVP; MVP manual) |
+| created_at   | TIMESTAMPTZ | NOT NULL DEFAULT now()    |                                         |
 
 **Indexes:**
+
 - UNIQUE `(workspace_id, domain)`
 
 ---
@@ -243,26 +248,27 @@ Domain allowlist for widget embedding.
 
 Browser-scoped visitor identity.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | Session identifier |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| contact_id | UUID | NULL, FK → contacts | Linked after identification |
-| session_token_hash | TEXT | NOT NULL | SHA-256 hash of current token |
-| user_agent | TEXT | NULL | |
-| ip_address | INET | NULL | Stored in clear for 90 days; then nulled |
-| ip_address_hash | TEXT | NULL | SHA-256 hash retained after IP nulled |
-| initial_url | TEXT | NULL | First page URL |
-| current_url | TEXT | NULL | Most recent page URL |
-| referrer | TEXT | NULL | |
-| timezone | TEXT | NULL | IANA timezone |
-| language | TEXT | NULL | BCP 47 language tag |
-| metadata_json | JSONB | NOT NULL DEFAULT '{}' | Extensible visitor metadata |
-| expires_at | TIMESTAMPTZ | NOT NULL | Session expiration |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column             | Type        | Constraints               | Description                              |
+| ------------------ | ----------- | ------------------------- | ---------------------------------------- |
+| id                 | UUID        | PK                        | Session identifier                       |
+| workspace_id       | UUID        | NOT NULL, FK → workspaces |                                          |
+| contact_id         | UUID        | NULL, FK → contacts       | Linked after identification              |
+| session_token_hash | TEXT        | NOT NULL                  | SHA-256 hash of current token            |
+| user_agent         | TEXT        | NULL                      |                                          |
+| ip_address         | INET        | NULL                      | Stored in clear for 90 days; then nulled |
+| ip_address_hash    | TEXT        | NULL                      | SHA-256 hash retained after IP nulled    |
+| initial_url        | TEXT        | NULL                      | First page URL                           |
+| current_url        | TEXT        | NULL                      | Most recent page URL                     |
+| referrer           | TEXT        | NULL                      |                                          |
+| timezone           | TEXT        | NULL                      | IANA timezone                            |
+| language           | TEXT        | NULL                      | BCP 47 language tag                      |
+| metadata_json      | JSONB       | NOT NULL DEFAULT '{}'     | Extensible visitor metadata              |
+| expires_at         | TIMESTAMPTZ | NOT NULL                  | Session expiration                       |
+| created_at         | TIMESTAMPTZ | NOT NULL DEFAULT now()    |                                          |
+| updated_at         | TIMESTAMPTZ | NOT NULL DEFAULT now()    |                                          |
 
 **Indexes:**
+
 - `idx_visitor_sessions_workspace` ON `(workspace_id, created_at DESC)`
 - `idx_visitor_sessions_token_hash` ON `(session_token_hash)`
 - `idx_visitor_sessions_contact` ON `(contact_id)` WHERE `contact_id IS NOT NULL`
@@ -271,20 +277,21 @@ Browser-scoped visitor identity.
 
 Persistent visitor records with identifying information.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| email | TEXT | NULL | |
-| name | TEXT | NULL | |
-| phone | TEXT | NULL | |
-| custom_attributes_json | JSONB | NOT NULL DEFAULT '{}' | |
-| first_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column                 | Type        | Constraints               | Description |
+| ---------------------- | ----------- | ------------------------- | ----------- |
+| id                     | UUID        | PK                        |             |
+| workspace_id           | UUID        | NOT NULL, FK → workspaces |             |
+| email                  | TEXT        | NULL                      |             |
+| name                   | TEXT        | NULL                      |             |
+| phone                  | TEXT        | NULL                      |             |
+| custom_attributes_json | JSONB       | NOT NULL DEFAULT '{}'     |             |
+| first_seen_at          | TIMESTAMPTZ | NOT NULL DEFAULT now()    |             |
+| last_seen_at           | TIMESTAMPTZ | NOT NULL DEFAULT now()    |             |
+| created_at             | TIMESTAMPTZ | NOT NULL DEFAULT now()    |             |
+| updated_at             | TIMESTAMPTZ | NOT NULL DEFAULT now()    |             |
 
 **Indexes:**
+
 - `idx_contacts_workspace_email` UNIQUE ON `(workspace_id, lower(email))` WHERE `email IS NOT NULL`
 - `idx_contacts_workspace_name` ON `(workspace_id, name)`
 
@@ -296,26 +303,27 @@ Persistent visitor records with identifying information.
 
 Message threads between visitors and agents.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| visitor_session_id | UUID | NOT NULL, FK → visitor_sessions | |
-| contact_id | UUID | NULL, FK → contacts | Denormalized for query performance |
-| assigned_to | UUID | NULL, FK → workspace_members | Current assignee |
-| status | app_conversation_status | NOT NULL DEFAULT 'open' | |
-| subject | TEXT | NULL | Optional subject line |
-| source_url | TEXT | NULL | URL where conversation started |
-| referrer | TEXT | NULL | |
-| message_count | INTEGER | NOT NULL DEFAULT 0 | Denormalized counter |
-| last_message_at | TIMESTAMPTZ | NULL | For inbox sorting |
-| last_message_preview | TEXT | NULL | First 200 chars of last message |
-| resolved_at | TIMESTAMPTZ | NULL | |
-| resolved_by | UUID | NULL, FK → workspace_members | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column               | Type                    | Constraints                     | Description                        |
+| -------------------- | ----------------------- | ------------------------------- | ---------------------------------- |
+| id                   | UUID                    | PK                              |                                    |
+| workspace_id         | UUID                    | NOT NULL, FK → workspaces       |                                    |
+| visitor_session_id   | UUID                    | NOT NULL, FK → visitor_sessions |                                    |
+| contact_id           | UUID                    | NULL, FK → contacts             | Denormalized for query performance |
+| assigned_to          | UUID                    | NULL, FK → workspace_members    | Current assignee                   |
+| status               | app_conversation_status | NOT NULL DEFAULT 'open'         |                                    |
+| subject              | TEXT                    | NULL                            | Optional subject line              |
+| source_url           | TEXT                    | NULL                            | URL where conversation started     |
+| referrer             | TEXT                    | NULL                            |                                    |
+| message_count        | INTEGER                 | NOT NULL DEFAULT 0              | Denormalized counter               |
+| last_message_at      | TIMESTAMPTZ             | NULL                            | For inbox sorting                  |
+| last_message_preview | TEXT                    | NULL                            | First 200 chars of last message    |
+| resolved_at          | TIMESTAMPTZ             | NULL                            |                                    |
+| resolved_by          | UUID                    | NULL, FK → workspace_members    |                                    |
+| created_at           | TIMESTAMPTZ             | NOT NULL DEFAULT now()          |                                    |
+| updated_at           | TIMESTAMPTZ             | NOT NULL DEFAULT now()          |                                    |
 
 **Indexes:**
+
 - `idx_conversations_inbox` ON `(workspace_id, status, last_message_at DESC NULLS LAST)`
 - `idx_conversations_assigned` ON `(workspace_id, assigned_to, status)` WHERE `assigned_to IS NOT NULL`
 - `idx_conversations_visitor_session` ON `(visitor_session_id)`
@@ -325,28 +333,30 @@ Message threads between visitors and agents.
 
 Individual messages within a conversation.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | Denormalized for RLS |
-| conversation_id | UUID | NOT NULL, FK → conversations | |
-| sequence_number | BIGINT | NOT NULL | Per-conversation ordering |
-| sender_type | app_message_sender_type | NOT NULL | |
-| sender_id | UUID | NULL | workspace_member.id or visitor_session.id |
-| body | TEXT | NOT NULL | Plain text content |
-| is_internal | BOOLEAN | NOT NULL DEFAULT false | Internal notes (agent-only) |
-| delivery_status | app_message_delivery_status | NOT NULL DEFAULT 'sent' | |
-| client_message_id | UUID | NULL | Client deduplication key |
-| metadata_json | JSONB | NOT NULL DEFAULT '{}' | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column            | Type                        | Constraints                  | Description                               |
+| ----------------- | --------------------------- | ---------------------------- | ----------------------------------------- |
+| id                | UUID                        | PK                           |                                           |
+| workspace_id      | UUID                        | NOT NULL, FK → workspaces    | Denormalized for RLS                      |
+| conversation_id   | UUID                        | NOT NULL, FK → conversations |                                           |
+| sequence_number   | BIGINT                      | NOT NULL                     | Per-conversation ordering                 |
+| sender_type       | app_message_sender_type     | NOT NULL                     |                                           |
+| sender_id         | UUID                        | NULL                         | workspace_member.id or visitor_session.id |
+| body              | TEXT                        | NOT NULL                     | Plain text content                        |
+| is_internal       | BOOLEAN                     | NOT NULL DEFAULT false       | Internal notes (agent-only)               |
+| delivery_status   | app_message_delivery_status | NOT NULL DEFAULT 'sent'      |                                           |
+| client_message_id | UUID                        | NULL                         | Client deduplication key                  |
+| metadata_json     | JSONB                       | NOT NULL DEFAULT '{}'        |                                           |
+| created_at        | TIMESTAMPTZ                 | NOT NULL DEFAULT now()       |                                           |
+| updated_at        | TIMESTAMPTZ                 | NOT NULL DEFAULT now()       |                                           |
 
 **Indexes:**
+
 - UNIQUE `(conversation_id, sequence_number)`
 - UNIQUE `(conversation_id, client_message_id)` WHERE `client_message_id IS NOT NULL`
 - `idx_messages_conversation` ON `(conversation_id, sequence_number)`
 
 **Triggers:**
+
 - `trg_messages_update_conversation` — on INSERT, increment `conversations.message_count`, update `last_message_at` and `last_message_preview`.
 - `trg_messages_increment_usage` — on INSERT where `sender_type = 'visitor'` and conversation is new, increment `workspace_subscriptions.conversations_used`.
 
@@ -354,19 +364,20 @@ Individual messages within a conversation.
 
 File metadata linked to messages.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| message_id | UUID | NOT NULL, FK → messages | |
-| conversation_id | UUID | NOT NULL, FK → conversations | Denormalized |
-| storage_path | TEXT | NOT NULL | Path in Supabase Storage |
-| filename | TEXT | NOT NULL | Original filename |
-| mime_type | TEXT | NOT NULL | Validated MIME type |
-| size_bytes | BIGINT | NOT NULL | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column          | Type        | Constraints                  | Description              |
+| --------------- | ----------- | ---------------------------- | ------------------------ |
+| id              | UUID        | PK                           |                          |
+| workspace_id    | UUID        | NOT NULL, FK → workspaces    |                          |
+| message_id      | UUID        | NOT NULL, FK → messages      |                          |
+| conversation_id | UUID        | NOT NULL, FK → conversations | Denormalized             |
+| storage_path    | TEXT        | NOT NULL                     | Path in Supabase Storage |
+| filename        | TEXT        | NOT NULL                     | Original filename        |
+| mime_type       | TEXT        | NOT NULL                     | Validated MIME type      |
+| size_bytes      | BIGINT      | NOT NULL                     |                          |
+| created_at      | TIMESTAMPTZ | NOT NULL DEFAULT now()       |                          |
 
 **Indexes:**
+
 - `idx_message_attachments_message` ON `(message_id)`
 - `idx_message_attachments_conversation` ON `(conversation_id)`
 
@@ -378,21 +389,22 @@ File metadata linked to messages.
 
 Pre-written reply templates.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| created_by | UUID | NOT NULL, FK → workspace_members | |
-| title | TEXT | NOT NULL | Display name |
-| body | TEXT | NOT NULL | Template with variables |
-| shortcut | TEXT | NULL | e.g., `/greeting` |
-| category | TEXT | NULL | Optional grouping |
-| usage_count | INTEGER | NOT NULL DEFAULT 0 | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| deleted_at | TIMESTAMPTZ | NULL | Soft delete |
+| Column       | Type        | Constraints                      | Description             |
+| ------------ | ----------- | -------------------------------- | ----------------------- |
+| id           | UUID        | PK                               |                         |
+| workspace_id | UUID        | NOT NULL, FK → workspaces        |                         |
+| created_by   | UUID        | NOT NULL, FK → workspace_members |                         |
+| title        | TEXT        | NOT NULL                         | Display name            |
+| body         | TEXT        | NOT NULL                         | Template with variables |
+| shortcut     | TEXT        | NULL                             | e.g., `/greeting`       |
+| category     | TEXT        | NULL                             | Optional grouping       |
+| usage_count  | INTEGER     | NOT NULL DEFAULT 0               |                         |
+| created_at   | TIMESTAMPTZ | NOT NULL DEFAULT now()           |                         |
+| updated_at   | TIMESTAMPTZ | NOT NULL DEFAULT now()           |                         |
+| deleted_at   | TIMESTAMPTZ | NULL                             | Soft delete             |
 
 **Indexes:**
+
 - `idx_canned_responses_workspace` ON `(workspace_id)` WHERE `deleted_at IS NULL`
 - UNIQUE `(workspace_id, shortcut)` WHERE `shortcut IS NOT NULL AND deleted_at IS NULL`
 
@@ -400,19 +412,20 @@ Pre-written reply templates.
 
 Pending team member invitations.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| email | TEXT | NOT NULL | Invitee email |
-| role | app_member_role | NOT NULL DEFAULT 'agent' | Assigned role on accept |
-| token_hash | TEXT | NOT NULL | SHA-256 hash of invite token |
-| invited_by | UUID | NOT NULL, FK → workspace_members | |
-| expires_at | TIMESTAMPTZ | NOT NULL | 7 days from creation |
-| accepted_at | TIMESTAMPTZ | NULL | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column       | Type            | Constraints                      | Description                  |
+| ------------ | --------------- | -------------------------------- | ---------------------------- |
+| id           | UUID            | PK                               |                              |
+| workspace_id | UUID            | NOT NULL, FK → workspaces        |                              |
+| email        | TEXT            | NOT NULL                         | Invitee email                |
+| role         | app_member_role | NOT NULL DEFAULT 'agent'         | Assigned role on accept      |
+| token_hash   | TEXT            | NOT NULL                         | SHA-256 hash of invite token |
+| invited_by   | UUID            | NOT NULL, FK → workspace_members |                              |
+| expires_at   | TIMESTAMPTZ     | NOT NULL                         | 7 days from creation         |
+| accepted_at  | TIMESTAMPTZ     | NULL                             |                              |
+| created_at   | TIMESTAMPTZ     | NOT NULL DEFAULT now()           |                              |
 
 **Indexes:**
+
 - `idx_agent_invitations_token` ON `(token_hash)` WHERE `accepted_at IS NULL`
 - `idx_agent_invitations_email` ON `(workspace_id, email)` WHERE `accepted_at IS NULL`
 
@@ -424,56 +437,58 @@ Pending team member invitations.
 
 In-app notifications for workspace members.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| recipient_id | UUID | NOT NULL, FK → workspace_members | |
-| type | app_notification_type | NOT NULL | |
-| title | TEXT | NOT NULL | |
-| body | TEXT | NULL | |
-| resource_type | TEXT | NULL | e.g., `conversation` |
-| resource_id | UUID | NULL | |
-| read_at | TIMESTAMPTZ | NULL | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column        | Type                  | Constraints                      | Description          |
+| ------------- | --------------------- | -------------------------------- | -------------------- |
+| id            | UUID                  | PK                               |                      |
+| workspace_id  | UUID                  | NOT NULL, FK → workspaces        |                      |
+| recipient_id  | UUID                  | NOT NULL, FK → workspace_members |                      |
+| type          | app_notification_type | NOT NULL                         |                      |
+| title         | TEXT                  | NOT NULL                         |                      |
+| body          | TEXT                  | NULL                             |                      |
+| resource_type | TEXT                  | NULL                             | e.g., `conversation` |
+| resource_id   | UUID                  | NULL                             |                      |
+| read_at       | TIMESTAMPTZ           | NULL                             |                      |
+| created_at    | TIMESTAMPTZ           | NOT NULL DEFAULT now()           |                      |
 
 **Indexes:**
+
 - `idx_notifications_recipient` ON `(recipient_id, read_at NULLS FIRST, created_at DESC)`
 
 ### 9.2 notification_preferences
 
 Per-agent email and in-app notification settings.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_member_id | UUID | NOT NULL, UNIQUE, FK → workspace_members | |
-| email_conversation_new | BOOLEAN | NOT NULL DEFAULT true | |
-| email_conversation_assigned | BOOLEAN | NOT NULL DEFAULT true | |
-| quiet_hours_start | TIME | NULL | Local time |
-| quiet_hours_end | TIME | NULL | Local time |
-| timezone | TEXT | NOT NULL DEFAULT 'UTC' | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column                      | Type        | Constraints                              | Description |
+| --------------------------- | ----------- | ---------------------------------------- | ----------- |
+| id                          | UUID        | PK                                       |             |
+| workspace_member_id         | UUID        | NOT NULL, UNIQUE, FK → workspace_members |             |
+| email_conversation_new      | BOOLEAN     | NOT NULL DEFAULT true                    |             |
+| email_conversation_assigned | BOOLEAN     | NOT NULL DEFAULT true                    |             |
+| quiet_hours_start           | TIME        | NULL                                     | Local time  |
+| quiet_hours_end             | TIME        | NULL                                     | Local time  |
+| timezone                    | TEXT        | NOT NULL DEFAULT 'UTC'                   |             |
+| created_at                  | TIMESTAMPTZ | NOT NULL DEFAULT now()                   |             |
+| updated_at                  | TIMESTAMPTZ | NOT NULL DEFAULT now()                   |             |
 
 ### 9.3 audit_logs
 
 Immutable security and configuration audit trail.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_id | UUID | NOT NULL, FK → workspaces | |
-| actor_id | UUID | NULL, FK → auth.users | Null for system actions |
-| action | app_audit_action | NOT NULL | |
-| resource_type | TEXT | NULL | |
-| resource_id | UUID | NULL | |
-| ip_address | INET | NULL | |
-| user_agent | TEXT | NULL | |
-| metadata_json | JSONB | NOT NULL DEFAULT '{}' | Action-specific details |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| Column        | Type             | Constraints               | Description             |
+| ------------- | ---------------- | ------------------------- | ----------------------- |
+| id            | UUID             | PK                        |                         |
+| workspace_id  | UUID             | NOT NULL, FK → workspaces |                         |
+| actor_id      | UUID             | NULL, FK → auth.users     | Null for system actions |
+| action        | app_audit_action | NOT NULL                  |                         |
+| resource_type | TEXT             | NULL                      |                         |
+| resource_id   | UUID             | NULL                      |                         |
+| ip_address    | INET             | NULL                      |                         |
+| user_agent    | TEXT             | NULL                      |                         |
+| metadata_json | JSONB            | NOT NULL DEFAULT '{}'     | Action-specific details |
+| created_at    | TIMESTAMPTZ      | NOT NULL DEFAULT now()    |                         |
 
 **Indexes:**
+
 - `idx_audit_logs_workspace` ON `(workspace_id, created_at DESC)`
 - `idx_audit_logs_actor` ON `(actor_id, created_at DESC)`
 
@@ -487,14 +502,14 @@ Immutable security and configuration audit trail.
 
 Idempotency tracking for Stripe webhooks.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| stripe_event_id | TEXT | NOT NULL, UNIQUE | Stripe event ID |
-| event_type | TEXT | NOT NULL | |
-| processed_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| payload_json | JSONB | NOT NULL | Full event payload |
-| error | TEXT | NULL | Processing error if failed |
+| Column          | Type        | Constraints            | Description                |
+| --------------- | ----------- | ---------------------- | -------------------------- |
+| id              | UUID        | PK                     |                            |
+| stripe_event_id | TEXT        | NOT NULL, UNIQUE       | Stripe event ID            |
+| event_type      | TEXT        | NOT NULL               |                            |
+| processed_at    | TIMESTAMPTZ | NOT NULL DEFAULT now() |                            |
+| payload_json    | JSONB       | NOT NULL               | Full event payload         |
+| error           | TEXT        | NULL                   | Processing error if failed |
 
 ---
 
@@ -547,13 +562,13 @@ CREATE POLICY "members_select" ON {table}
 
 **Role-gated examples:**
 
-| Table | INSERT | UPDATE | DELETE |
-|-------|--------|--------|--------|
-| conversations | agent+ | agent+ | — |
-| messages | agent+ (non-internal or any agent) | — | — |
-| canned_responses | admin+ | admin+ | admin+ |
-| workspace_members | admin+ | admin+ (not owner role change) | admin+ |
-| allowed_domains | admin+ | — | admin+ |
+| Table             | INSERT                             | UPDATE                         | DELETE |
+| ----------------- | ---------------------------------- | ------------------------------ | ------ |
+| conversations     | agent+                             | agent+                         | —      |
+| messages          | agent+ (non-internal or any agent) | —                              | —      |
+| canned_responses  | admin+                             | admin+                         | admin+ |
+| workspace_members | admin+                             | admin+ (not owner role change) | admin+ |
+| allowed_domains   | admin+                             | —                              | admin+ |
 
 ### 11.3 Visitor Policies (anon role)
 
@@ -674,6 +689,7 @@ Example: `20260730120000_create_workspaces_and_members.sql`
 ### 14.4 Seed Data
 
 `supabase/seed.sql` provides:
+
 - Three plan records (starter, team, business)
 - One demo workspace with owner, two agents, sample conversations
 - Used for local development and staging smoke tests only
@@ -682,15 +698,15 @@ Example: `20260730120000_create_workspaces_and_members.sql`
 
 ## 15. Data Retention and Purge
 
-| Data | Retention | Purge mechanism |
-|------|-----------|-----------------|
-| Messages | Workspace-configurable (default 12 months) | Scheduled job |
-| Visitor sessions | 30 days after expiration | Scheduled job |
-| IP addresses (clear text) | 90 days | Scheduled job nulls column |
-| Audit logs | Plan-dependent (90 days – 2 years) | Scheduled job |
-| Notifications | 90 days | Scheduled job |
-| Soft-deleted workspaces | 30 days | Hard delete job |
-| Stripe webhook events | 1 year | Scheduled job |
+| Data                      | Retention                                  | Purge mechanism            |
+| ------------------------- | ------------------------------------------ | -------------------------- |
+| Messages                  | Workspace-configurable (default 12 months) | Scheduled job              |
+| Visitor sessions          | 30 days after expiration                   | Scheduled job              |
+| IP addresses (clear text) | 90 days                                    | Scheduled job nulls column |
+| Audit logs                | Plan-dependent (90 days – 2 years)         | Scheduled job              |
+| Notifications             | 90 days                                    | Scheduled job              |
+| Soft-deleted workspaces   | 30 days                                    | Hard delete job            |
+| Stripe webhook events     | 1 year                                     | Scheduled job              |
 
 Purge jobs run as Supabase Edge Functions or Vercel Cron invoking service-role endpoints. Each job is idempotent and logs rows affected.
 
@@ -714,6 +730,7 @@ Not required at launch. Supabase read replicas evaluated when dashboard query la
 ### 16.4 Denormalization
 
 Justified denormalizations:
+
 - `conversations.message_count`, `last_message_at`, `last_message_preview` — inbox queries must not aggregate messages.
 - `messages.workspace_id` — RLS policy performance.
 - `workspace_subscriptions.conversations_used` — fast limit checks.

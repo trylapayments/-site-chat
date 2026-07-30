@@ -1,0 +1,19 @@
+{
+  "name": "@site-chat/widget",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "description": "Site Chat embeddable widget bundle (placeholder for Phase 1+)",
+  "scripts": {
+    "build": "echo 'Widget build not implemented in Phase 0'",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@site-chat/eslint-config": "workspace:*",
+    "@site-chat/typescript-config": "workspace:*",
+    "eslint": "^9.22.0",
+    "typescript": "^5.8.2"
+  }
+}

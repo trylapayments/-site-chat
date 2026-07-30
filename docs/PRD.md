@@ -20,11 +20,11 @@ Businesses lose leads and customer trust when website visitors cannot get immedi
 
 ### 1.3 Target Customers
 
-| Segment | Profile | Primary need |
-|---------|---------|--------------|
-| SMB | 1–20 employees, 1–5 support agents | Affordable live chat with minimal setup |
+| Segment    | Profile                                  | Primary need                                       |
+| ---------- | ---------------------------------------- | -------------------------------------------------- |
+| SMB        | 1–20 employees, 1–5 support agents       | Affordable live chat with minimal setup            |
 | Mid-market | 20–200 employees, dedicated support team | Multi-agent routing, canned responses, audit trail |
-| Agencies | Manage chat for multiple client sites | Workspace isolation, per-client configuration |
+| Agencies   | Manage chat for multiple client sites    | Workspace isolation, per-client configuration      |
 
 ### 1.4 Product Principles
 
@@ -64,21 +64,21 @@ Anonymous or identified end user on a customer's website. Initiates chat via the
 
 Roles are scoped to a **workspace**. A single user may belong to multiple workspaces with different roles in each.
 
-| Capability | Owner | Admin | Agent | Viewer |
-|------------|:-----:|:-----:|:-----:|:------:|
-| Manage billing and subscription | ✓ | — | — | — |
-| Delete workspace | ✓ | — | — | — |
-| Transfer workspace ownership | ✓ | — | — | — |
-| Invite and remove members | ✓ | ✓ | — | — |
-| Change member roles | ✓ | ✓ | — | — |
-| Configure widget and domains | ✓ | ✓ | — | — |
-| Manage canned responses | ✓ | ✓ | ✓ | — |
-| Send and receive messages | ✓ | ✓ | ✓ | — |
-| Assign and transfer conversations | ✓ | ✓ | ✓ | — |
-| View conversations | ✓ | ✓ | ✓ | ✓ |
-| View contacts | ✓ | ✓ | ✓ | ✓ |
-| View audit logs | ✓ | ✓ | — | ✓ |
-| Export data | ✓ | ✓ | — | — |
+| Capability                        | Owner | Admin | Agent | Viewer |
+| --------------------------------- | :---: | :---: | :---: | :----: |
+| Manage billing and subscription   |   ✓   |   —   |   —   |   —    |
+| Delete workspace                  |   ✓   |   —   |   —   |   —    |
+| Transfer workspace ownership      |   ✓   |   —   |   —   |   —    |
+| Invite and remove members         |   ✓   |   ✓   |   —   |   —    |
+| Change member roles               |   ✓   |   ✓   |   —   |   —    |
+| Configure widget and domains      |   ✓   |   ✓   |   —   |   —    |
+| Manage canned responses           |   ✓   |   ✓   |   ✓   |   —    |
+| Send and receive messages         |   ✓   |   ✓   |   ✓   |   —    |
+| Assign and transfer conversations |   ✓   |   ✓   |   ✓   |   —    |
+| View conversations                |   ✓   |   ✓   |   ✓   |   ✓    |
+| View contacts                     |   ✓   |   ✓   |   ✓   |   ✓    |
+| View audit logs                   |   ✓   |   ✓   |   —   |   ✓    |
+| Export data                       |   ✓   |   ✓   |   —   |   —    |
 
 Platform operators (Site Chat staff) use a separate internal admin surface not exposed to tenant users. That surface is out of MVP scope but reserved in the security model.
 
@@ -239,11 +239,11 @@ Platform operators (Site Chat staff) use a separate internal admin surface not e
 
 - Plans (initial tiers):
 
-  | Plan | Agent seats | Monthly conversations | Storage | Price |
-  |------|-------------|----------------------|---------|-------|
-  | Starter | 2 | 500 | 1 GB | $29/mo |
-  | Team | 10 | 5,000 | 10 GB | $99/mo |
-  | Business | 25 | 25,000 | 50 GB | $249/mo |
+  | Plan     | Agent seats | Monthly conversations | Storage | Price   |
+  | -------- | ----------- | --------------------- | ------- | ------- |
+  | Starter  | 2           | 500                   | 1 GB    | $29/mo  |
+  | Team     | 10          | 5,000                 | 10 GB   | $99/mo  |
+  | Business | 25          | 25,000                | 50 GB   | $249/mo |
 
 - 14-day free trial on Starter; no credit card required to start trial.
 - Stripe Checkout for initial subscription; Stripe Customer Portal for plan changes, payment method updates, and invoice history.
@@ -270,13 +270,13 @@ Platform operators (Site Chat staff) use a separate internal admin surface not e
 
 ### 5.1 Performance
 
-| Metric | Target |
-|--------|--------|
-| Widget script load (gzip) | < 30 KB |
-| Widget time-to-interactive | < 500 ms on 4G |
-| Message delivery latency (p95) | < 300 ms |
-| Dashboard initial load (LCP) | < 2.5 s |
-| API response time (p95) | < 200 ms for reads, < 500 ms for writes |
+| Metric                         | Target                                  |
+| ------------------------------ | --------------------------------------- |
+| Widget script load (gzip)      | < 30 KB                                 |
+| Widget time-to-interactive     | < 500 ms on 4G                          |
+| Message delivery latency (p95) | < 300 ms                                |
+| Dashboard initial load (LCP)   | < 2.5 s                                 |
+| API response time (p95)        | < 200 ms for reads, < 500 ms for writes |
 
 ### 5.2 Availability
 
@@ -348,13 +348,13 @@ These items appear on the roadmap where appropriate.
 
 ## 8. Glossary
 
-| Term | Definition |
-|------|------------|
-| Workspace | A tenant account representing one business customer of Site Chat |
-| Agent | A workspace member who handles conversations |
-| Visitor | An end user on a customer's website who interacts with the widget |
-| Conversation | A message thread between a visitor and agents |
-| Widget | The embeddable JavaScript chat interface |
-| Session | A browser-scoped visitor identity persisted via cookie |
-| Contact | A persistent visitor record with identifying information |
-| Canned response | A pre-written message template for agents |
+| Term            | Definition                                                        |
+| --------------- | ----------------------------------------------------------------- |
+| Workspace       | A tenant account representing one business customer of Site Chat  |
+| Agent           | A workspace member who handles conversations                      |
+| Visitor         | An end user on a customer's website who interacts with the widget |
+| Conversation    | A message thread between a visitor and agents                     |
+| Widget          | The embeddable JavaScript chat interface                          |
+| Session         | A browser-scoped visitor identity persisted via cookie            |
+| Contact         | A persistent visitor record with identifying information          |
+| Canned response | A pre-written message template for agents                         |
