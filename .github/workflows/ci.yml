@@ -99,7 +99,8 @@ jobs:
         run: supabase start
 
       - name: Reset database
-        run: supabase db reset
+        # Temporary: surface underlying PostgreSQL SQLSTATE/relation/column in CI logs.
+        run: supabase db reset --debug --log-level debug 2>&1
 
       - name: Run database tests
         run: supabase test db
