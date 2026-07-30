@@ -21,7 +21,7 @@ BEGIN
       role,
       email,
       encrypted_password,
-      email_confirmed_at,
+      confirmed_at,
       recovery_sent_at,
       last_sign_in_at,
       raw_app_meta_data,
@@ -30,7 +30,7 @@ BEGIN
       updated_at,
       confirmation_token,
       email_change,
-      email_change_token_new,
+      email_change_token,
       recovery_token
     )
     VALUES (
@@ -52,27 +52,6 @@ BEGIN
       '',
       ''
     );
-
-    INSERT INTO auth.identities (
-      id,
-      user_id,
-      identity_data,
-      provider,
-      provider_id,
-      last_sign_in_at,
-      created_at,
-      updated_at
-    )
-    VALUES (
-      gen_random_uuid(),
-      v_owner_id,
-      jsonb_build_object('sub', v_owner_id::text, 'email', 'owner@local.test'),
-      'email',
-      v_owner_id::text,
-      now(),
-      now(),
-      now()
-    );
   ELSE
     SELECT id INTO v_owner_id FROM auth.users WHERE email = 'owner@local.test';
   END IF;
@@ -87,7 +66,7 @@ BEGIN
       role,
       email,
       encrypted_password,
-      email_confirmed_at,
+      confirmed_at,
       recovery_sent_at,
       last_sign_in_at,
       raw_app_meta_data,
@@ -96,7 +75,7 @@ BEGIN
       updated_at,
       confirmation_token,
       email_change,
-      email_change_token_new,
+      email_change_token,
       recovery_token
     )
     VALUES (
@@ -118,27 +97,6 @@ BEGIN
       '',
       ''
     );
-
-    INSERT INTO auth.identities (
-      id,
-      user_id,
-      identity_data,
-      provider,
-      provider_id,
-      last_sign_in_at,
-      created_at,
-      updated_at
-    )
-    VALUES (
-      gen_random_uuid(),
-      v_admin_id,
-      jsonb_build_object('sub', v_admin_id::text, 'email', 'admin@local.test'),
-      'email',
-      v_admin_id::text,
-      now(),
-      now(),
-      now()
-    );
   ELSE
     SELECT id INTO v_admin_id FROM auth.users WHERE email = 'admin@local.test';
   END IF;
@@ -153,7 +111,7 @@ BEGIN
       role,
       email,
       encrypted_password,
-      email_confirmed_at,
+      confirmed_at,
       recovery_sent_at,
       last_sign_in_at,
       raw_app_meta_data,
@@ -162,7 +120,7 @@ BEGIN
       updated_at,
       confirmation_token,
       email_change,
-      email_change_token_new,
+      email_change_token,
       recovery_token
     )
     VALUES (
@@ -183,27 +141,6 @@ BEGIN
       '',
       '',
       ''
-    );
-
-    INSERT INTO auth.identities (
-      id,
-      user_id,
-      identity_data,
-      provider,
-      provider_id,
-      last_sign_in_at,
-      created_at,
-      updated_at
-    )
-    VALUES (
-      gen_random_uuid(),
-      v_agent_id,
-      jsonb_build_object('sub', v_agent_id::text, 'email', 'agent@local.test'),
-      'email',
-      v_agent_id::text,
-      now(),
-      now(),
-      now()
     );
   ELSE
     SELECT id INTO v_agent_id FROM auth.users WHERE email = 'agent@local.test';

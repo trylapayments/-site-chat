@@ -26,7 +26,7 @@ BEGIN
     role,
     email,
     encrypted_password,
-    email_confirmed_at,
+    confirmed_at,
     recovery_sent_at,
     last_sign_in_at,
     raw_app_meta_data,
@@ -35,7 +35,7 @@ BEGIN
     updated_at,
     confirmation_token,
     email_change,
-    email_change_token_new,
+    email_change_token,
     recovery_token
   )
   VALUES (
@@ -58,26 +58,28 @@ BEGIN
     ''
   );
 
-  INSERT INTO auth.identities (
-    id,
-    user_id,
-    identity_data,
-    provider,
-    provider_id,
-    last_sign_in_at,
-    created_at,
-    updated_at
-  )
-  VALUES (
-    gen_random_uuid(),
-    v_user_id,
-    jsonb_build_object('sub', v_user_id::text, 'email', p_email),
-    'email',
-    v_user_id::text,
-    now(),
-    now(),
-    now()
-  );
+  IF to_regclass('auth.identities') IS NOT NULL THEN
+    INSERT INTO auth.identities (
+      id,
+      user_id,
+      identity_data,
+      provider,
+      provider_id,
+      last_sign_in_at,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      gen_random_uuid(),
+      v_user_id,
+      jsonb_build_object('sub', v_user_id::text, 'email', p_email),
+      'email',
+      v_user_id::text,
+      now(),
+      now(),
+      now()
+    );
+  END IF;
 
   RETURN v_user_id;
 END;

@@ -90,33 +90,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
         with:
-          node-version: 22
-          cache: pnpm
+          version: latest
 
-      - name: Install Supabase CLI
+      - name: Start Supabase local stack
+        run: supabase start
+
+      - name: Reset database
+        run: supabase db reset
+
+      - name: Run database tests
+        run: supabase test db
+
+      - name: Check generated database types
         run: |
-          curl -fsSL -o supabase.deb "https://github.com/supabase/cli/releases/download/v2.20.5/supabase_2.20.5_linux_amd64.deb"
-          sudo dpkg -i supabase.deb
-
-      - name: Install PostgreSQL client and pgTAP
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client postgresql-16 postgresql-16-pgtap
-          sudo pg_ctlcluster 16 main start
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Reset database and run tests
-        run: pnpm db:test
-
-      - name: Generate and check database types
-        run: |
-          pnpm gen:types
-          pnpm db:types:check
+          supabase gen types typescript --local > /tmp/database.types.ts
+          diff -u packages/shared/src/database.types.ts /tmp/database.types.ts
