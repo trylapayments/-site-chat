@@ -20,38 +20,38 @@ The Minimum Viable Product is the smallest feature set that a paying customer ca
 
 ### 2.1 MVP Includes
 
-| Feature                       | Scope                                                                                        |
-| ----------------------------- | -------------------------------------------------------------------------------------------- |
-| Workspace signup and creation | Owner signup, workspace slug, 14-day trial                                                   |
-| Team management               | Invite agents by email, roles (owner, admin, agent, viewer)                                  |
-| Widget embed                  | Script tag, iframe widget, domain allowlist, basic customization (color, position, greeting) |
-| Visitor chat                  | Anonymous sessions, send/receive text messages, session persistence                          |
-| Operator inbox                | Conversation list, detail view, realtime updates, assignment, status changes                 |
-| Realtime messaging            | Sub-second delivery via Supabase Realtime, typing indicators                                 |
-| File attachments              | Images and PDF, 10 MB limit, signed URLs                                                     |
-| Contacts                      | Auto-create on email capture, manual create, view linked conversations                       |
-| Canned responses              | CRUD, shortcut autocomplete, variable substitution                                           |
-| Notifications                 | In-app notification center, email for new/assigned conversations                             |
-| Stripe billing                | Starter and Team plans, trial, checkout, customer portal, webhook sync                       |
-| Audit logs                    | Core events logged, viewable by owner/admin/viewer                                           |
-| Authentication                | Email/password login, password reset, invite acceptance                                      |
+| Feature | Scope |
+|---------|-------|
+| Workspace signup and creation | Owner signup, workspace slug, 14-day trial |
+| Team management | Invite agents by email, roles (owner, admin, agent, viewer) |
+| Widget embed | Script tag, iframe widget, domain allowlist, basic customization (color, position, greeting) |
+| Visitor chat | Anonymous sessions, send/receive text messages, session persistence |
+| Operator inbox | Conversation list, detail view, realtime updates, assignment, status changes |
+| Realtime messaging | Sub-second delivery via Supabase Realtime, typing indicators |
+| File attachments | Images and PDF, 10 MB limit, signed URLs |
+| Contacts | Auto-create on email capture, manual create, view linked conversations |
+| Canned responses | CRUD, shortcut autocomplete, variable substitution |
+| Notifications | In-app notification center, email for new/assigned conversations |
+| Stripe billing | Starter and Team plans, trial, checkout, customer portal, webhook sync |
+| Audit logs | Core events logged, viewable by owner/admin/viewer |
+| Authentication | Email/password login, password reset, invite acceptance |
 
 ### 2.2 MVP Excludes
 
-| Feature                     | Rationale                                              |
-| --------------------------- | ------------------------------------------------------ |
-| AI/auto-replies             | Complexity; not required for core value                |
-| Mobile apps                 | Web dashboard is responsive; native apps are expensive |
-| CRM integrations            | Manual workflow sufficient for early customers         |
-| Custom SSO                  | Enterprise feature; email auth covers SMB/mid-market   |
-| Public API                  | No third-party integration demand yet                  |
-| Proactive chat triggers     | Nice-to-have; increases widget complexity              |
-| Multi-language UI           | English-only acceptable for initial market             |
-| Advanced analytics          | Basic conversation counts sufficient                   |
-| White-label dashboard       | Agency feature for later phase                         |
-| Markdown/rich text messages | Plain text reduces XSS surface for MVP                 |
-| Read receipts               | Low priority vs. delivery reliability                  |
-| Browser push notifications  | Email + in-app sufficient for MVP                      |
+| Feature | Rationale |
+|---------|-----------|
+| AI/auto-replies | Complexity; not required for core value |
+| Mobile apps | Web dashboard is responsive; native apps are expensive |
+| CRM integrations | Manual workflow sufficient for early customers |
+| Custom SSO | Enterprise feature; email auth covers SMB/mid-market |
+| Public API | No third-party integration demand yet |
+| Proactive chat triggers | Nice-to-have; increases widget complexity |
+| Multi-language UI | English-only acceptable for initial market |
+| Advanced analytics | Basic conversation counts sufficient |
+| White-label dashboard | Agency feature for later phase |
+| Markdown/rich text messages | Plain text reduces XSS surface for MVP |
+| Read receipts | Low priority vs. delivery reliability |
+| Browser push notifications | Email + in-app sufficient for MVP |
 
 ### 2.3 MVP Success Criteria
 
@@ -74,7 +74,6 @@ The MVP is complete when:
 **Goal:** Project infrastructure, documentation, and development environment ready for feature work.
 
 **Deliverables:**
-
 - [x] Product documentation (PRD, Architecture, Database, Security, Roadmap)
 - [ ] Monorepo scaffolding (Next.js app, shared packages, widget package)
 - [ ] Supabase project setup (local + staging)
@@ -94,7 +93,6 @@ The MVP is complete when:
 **Goal:** End-to-end message flow from widget to dashboard and back.
 
 **Deliverables:**
-
 - [ ] Workspace creation on signup with trial subscription
 - [ ] Domain allowlist management (settings UI + validation)
 - [ ] Widget loader script and iframe host page
@@ -118,7 +116,6 @@ The MVP is complete when:
 **Goal:** Multi-agent workspace with role-based access control.
 
 **Deliverables:**
-
 - [ ] Agent invitation flow (email via Resend, token acceptance)
 - [ ] Workspace member management UI (list, change role, deactivate)
 - [ ] Role-based UI gating (hide actions user cannot perform)
@@ -138,7 +135,6 @@ The MVP is complete when:
 **Goal:** Tools that make agents efficient and workspaces configurable.
 
 **Deliverables:**
-
 - [ ] Canned responses CRUD and autocomplete in composer
 - [ ] Variable substitution in canned responses
 - [ ] Contact creation (manual + auto on visitor identification)
@@ -160,7 +156,6 @@ The MVP is complete when:
 **Goal:** Monetization live and audit trail operational.
 
 **Deliverables:**
-
 - [ ] Stripe Checkout integration (Starter and Team plans)
 - [ ] Stripe Customer Portal (manage subscription, payment method, invoices)
 - [ ] Webhook handlers (subscription lifecycle, payment failure)
@@ -183,7 +178,6 @@ The MVP is complete when:
 **Goal:** System ready for paying customers with confidence in reliability and security.
 
 **Deliverables:**
-
 - [ ] Rate limiting on all public API endpoints
 - [ ] Widget performance optimization (< 30 KB loader, < 500 ms TTI)
 - [ ] Error boundaries and graceful degradation in dashboard
@@ -206,7 +200,6 @@ The MVP is complete when:
 **Goal:** Public launch with onboarding and support infrastructure.
 
 **Deliverables:**
-
 - [ ] Public launch (remove beta gating)
 - [ ] Onboarding checklist in dashboard (embed widget, invite agent, send test message)
 - [ ] Help documentation (widget installation guide, FAQ)
@@ -225,47 +218,47 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 
 ### 4.1 Near-Term (Phase 7–8)
 
-| Feature                                | Value                         | Dependencies              |
-| -------------------------------------- | ----------------------------- | ------------------------- |
-| Markdown message rendering (sanitized) | Richer agent replies          | XSS-safe renderer         |
-| Read receipts                          | Visitor engagement visibility | Message delivery tracking |
-| Conversation search (full-text)        | Agent productivity            | PostgreSQL tsvector index |
-| Business hours / offline mode          | Professional appearance       | Widget visibility rules   |
-| Proactive chat triggers (time on page) | Lead capture                  | Widget rule engine        |
-| Browser push notifications             | Faster agent response         | Service worker, VAPID     |
-| Multi-language operator UI             | International customers       | i18n framework            |
-| Google/social login                    | Faster signup                 | Supabase Auth providers   |
-| Conversation tags and filters          | Inbox organization            | Schema addition           |
-| Agent performance metrics              | Manager visibility            | Analytics aggregation     |
+| Feature | Value | Dependencies |
+|---------|-------|--------------|
+| Markdown message rendering (sanitized) | Richer agent replies | XSS-safe renderer |
+| Read receipts | Visitor engagement visibility | Message delivery tracking |
+| Conversation search (full-text) | Agent productivity | PostgreSQL tsvector index |
+| Business hours / offline mode | Professional appearance | Widget visibility rules |
+| Proactive chat triggers (time on page) | Lead capture | Widget rule engine |
+| Browser push notifications | Faster agent response | Service worker, VAPID |
+| Multi-language operator UI | International customers | i18n framework |
+| Google/social login | Faster signup | Supabase Auth providers |
+| Conversation tags and filters | Inbox organization | Schema addition |
+| Agent performance metrics | Manager visibility | Analytics aggregation |
 
 ### 4.2 Mid-Term (Phase 9–10)
 
-| Feature                                | Value                           | Dependencies                            |
-| -------------------------------------- | ------------------------------- | --------------------------------------- |
-| Public REST API                        | Integrations ecosystem          | API key management, rate limiting, docs |
-| Webhooks (outbound)                    | Customer automation             | Event system, retry logic               |
-| CRM integrations (HubSpot, Salesforce) | Workflow embedding              | Public API, OAuth                       |
-| Slack notifications                    | Agent workflow fit              | Slack app, OAuth                        |
-| AI suggested replies                   | Agent efficiency                | LLM integration, prompt engineering     |
-| Chatbot / auto-responder               | After-hours coverage            | AI, conversation routing                |
-| Custom attributes on contacts          | Customer segmentation           | Schema extension                        |
-| SLA tracking and alerts                | Enterprise support teams        | Timer system, reporting                 |
-| Advanced analytics dashboard           | Business insights               | Data warehouse or aggregation           |
-| SAML/OIDC SSO                          | Enterprise security requirement | Supabase Auth enterprise                |
+| Feature | Value | Dependencies |
+|---------|-------|--------------|
+| Public REST API | Integrations ecosystem | API key management, rate limiting, docs |
+| Webhooks (outbound) | Customer automation | Event system, retry logic |
+| CRM integrations (HubSpot, Salesforce) | Workflow embedding | Public API, OAuth |
+| Slack notifications | Agent workflow fit | Slack app, OAuth |
+| AI suggested replies | Agent efficiency | LLM integration, prompt engineering |
+| Chatbot / auto-responder | After-hours coverage | AI, conversation routing |
+| Custom attributes on contacts | Customer segmentation | Schema extension |
+| SLA tracking and alerts | Enterprise support teams | Timer system, reporting |
+| Advanced analytics dashboard | Business insights | Data warehouse or aggregation |
+| SAML/OIDC SSO | Enterprise security requirement | Supabase Auth enterprise |
 
 ### 4.3 Long-Term (Phase 11+)
 
-| Feature                                 | Value                       | Dependencies                          |
-| --------------------------------------- | --------------------------- | ------------------------------------- |
-| WhatsApp / SMS channels                 | Omnichannel support         | Twilio/MessageBird, channel routing   |
-| Mobile native apps (iOS, Android)       | Agent mobility              | React Native or native, push infra    |
-| White-label / custom dashboard domain   | Agency resale               | Multi-domain routing, branding system |
-| EU data residency                       | GDPR enterprise requirement | Supabase EU region, data routing      |
-| Dedicated database tenancy (Enterprise) | Maximum isolation           | Provisioning automation               |
-| Knowledge base integration              | Self-service deflection     | KB product or integration             |
-| Co-browsing                             | High-touch sales support    | Screen sharing protocol               |
-| SOC 2 Type II certification             | Enterprise sales enabler    | Audit, controls, documentation        |
-| Marketplace / app directory             | Ecosystem growth            | Public API, review process            |
+| Feature | Value | Dependencies |
+|---------|-------|--------------|
+| WhatsApp / SMS channels | Omnichannel support | Twilio/MessageBird, channel routing |
+| Mobile native apps (iOS, Android) | Agent mobility | React Native or native, push infra |
+| White-label / custom dashboard domain | Agency resale | Multi-domain routing, branding system |
+| EU data residency | GDPR enterprise requirement | Supabase EU region, data routing |
+| Dedicated database tenancy (Enterprise) | Maximum isolation | Provisioning automation |
+| Knowledge base integration | Self-service deflection | KB product or integration |
+| Co-browsing | High-touch sales support | Screen sharing protocol |
+| SOC 2 Type II certification | Enterprise sales enabler | Audit, controls, documentation |
+| Marketplace / app directory | Ecosystem growth | Public API, review process |
 
 ---
 
@@ -273,18 +266,18 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 
 These items are not customer-facing features but are required for long-term maintainability.
 
-| Milestone                              | Target phase | Description                                                         |
-| -------------------------------------- | ------------ | ------------------------------------------------------------------- |
-| OpenAPI spec generation                | Phase 5      | Auto-generate from Route Handlers or maintain manually              |
-| Database query performance baseline    | Phase 5      | EXPLAIN ANALYZE on all inbox and message queries                    |
-| Widget bundle size budget in CI        | Phase 5      | Fail CI if loader.js exceeds 30 KB gzipped                          |
-| RLS test coverage 100%                 | Phase 2      | Every table, every policy, cross-tenant negative tests              |
-| Staging data anonymization             | Phase 6      | Production-like staging without real customer data                  |
-| Automated database backup verification | Phase 6      | Monthly restore test                                                |
-| Dependency audit automation            | Phase 5      | CI fails on critical CVEs                                           |
-| Feature flags system                   | Phase 7      | Gradual rollout infrastructure (e.g., Vercel Flags or LaunchDarkly) |
-| Multi-region evaluation                | Phase 10     | Latency testing for EU customers                                    |
-| Read replica for analytics             | Phase 9      | Offload reporting queries from primary                              |
+| Milestone | Target phase | Description |
+|-----------|--------------|-------------|
+| OpenAPI spec generation | Phase 5 | Auto-generate from Route Handlers or maintain manually |
+| Database query performance baseline | Phase 5 | EXPLAIN ANALYZE on all inbox and message queries |
+| Widget bundle size budget in CI | Phase 5 | Fail CI if loader.js exceeds 30 KB gzipped |
+| RLS test coverage 100% | Phase 2 | Every table, every policy, cross-tenant negative tests |
+| Staging data anonymization | Phase 6 | Production-like staging without real customer data |
+| Automated database backup verification | Phase 6 | Monthly restore test |
+| Dependency audit automation | Phase 5 | CI fails on critical CVEs |
+| Feature flags system | Phase 7 | Gradual rollout infrastructure (e.g., Vercel Flags or LaunchDarkly) |
+| Multi-region evaluation | Phase 10 | Latency testing for EU customers |
+| Read replica for analytics | Phase 9 | Offload reporting queries from primary |
 
 ---
 
@@ -300,7 +293,6 @@ These items are not customer-facing features but are required for long-term main
 ### 6.2 Beta Program
 
 Between Phase 5 completion and GA:
-
 - Invite-only access for 20–50 beta workspaces.
 - Free access during beta in exchange for feedback.
 - Weekly feedback sessions during beta.
@@ -309,7 +301,6 @@ Between Phase 5 completion and GA:
 ### 6.3 Versioning
 
 Site Chat uses semantic versioning for API (`/api/v1/`) and application releases:
-
 - **Major:** Breaking API changes, schema migrations requiring customer action.
 - **Minor:** New features, backward-compatible API additions.
 - **Patch:** Bug fixes, security patches.
@@ -321,7 +312,6 @@ Site Chat uses semantic versioning for API (`/api/v1/`) and application releases
 ### 7.1 Phase Gate Reviews
 
 At the end of each phase, review:
-
 - All deliverables complete against exit criteria.
 - No unresolved critical bugs or security findings.
 - Test coverage meets targets defined in Architecture doc.
@@ -330,14 +320,12 @@ At the end of each phase, review:
 ### 7.2 Post-Launch Reviews
 
 Monthly review of:
-
 - Activation metrics (signup → first conversation → paid conversion).
 - Reliability metrics (uptime, error rate, message latency).
 - Customer feedback themes.
 - Roadmap priority adjustments.
 
 Quarterly review of:
-
 - Infrastructure costs vs. revenue.
 - Security posture (dependency audit, access review).
 - Technical debt backlog prioritization.
@@ -346,22 +334,21 @@ Quarterly review of:
 
 ## 8. Risk Register
 
-| Risk                                 | Likelihood | Impact   | Mitigation                                            |
-| ------------------------------------ | ---------- | -------- | ----------------------------------------------------- |
-| Supabase Realtime latency under load | Medium     | High     | Load test in Phase 5; fallback polling in widget      |
-| Widget blocked by host site CSP      | Medium     | Medium   | Document CSP requirements; offer CSP header helper    |
-| Stripe webhook delivery failures     | Low        | High     | Idempotent handlers, retry queue, alerting            |
-| Cross-tenant data leak               | Low        | Critical | RLS + integration tests + security review             |
-| Slow agent adoption (UX friction)    | Medium     | High     | Onboarding checklist, beta feedback loop              |
-| Conversation limit false positives   | Medium     | Medium   | Clear usage dashboard, grace buffer before hard block |
-| GDPR complaint from visitor          | Low        | High     | Privacy controls, DPA, data deletion capability       |
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Supabase Realtime latency under load | Medium | High | Load test in Phase 5; fallback polling in widget |
+| Widget blocked by host site CSP | Medium | Medium | Document CSP requirements; offer CSP header helper |
+| Stripe webhook delivery failures | Low | High | Idempotent handlers, retry queue, alerting |
+| Cross-tenant data leak | Low | Critical | RLS + integration tests + security review |
+| Slow agent adoption (UX friction) | Medium | High | Onboarding checklist, beta feedback loop |
+| Conversation limit false positives | Medium | Medium | Clear usage dashboard, grace buffer before hard block |
+| GDPR complaint from visitor | Low | High | Privacy controls, DPA, data deletion capability |
 
 ---
 
 ## 9. Team Assumptions
 
 This roadmap assumes:
-
 - One full-stack engineer can complete Phases 0–4 sequentially.
 - Phase 5 benefits from a dedicated QA pass (internal or contracted).
 - Design work for dashboard and widget is done incrementally alongside development using shadcn/ui defaults, with custom design polish before GA.

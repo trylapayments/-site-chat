@@ -20,18 +20,18 @@ Site Chat handles business communications between companies and their website vi
 
 ### 1.2 Threat Model
 
-| Threat                             | Impact   | Primary controls                                               |
-| ---------------------------------- | -------- | -------------------------------------------------------------- |
-| Cross-tenant data access           | Critical | RLS, workspace context validation                              |
-| Widget origin spoofing             | High     | Domain allowlist, Origin header validation                     |
-| Session token theft                | High     | Short-lived tokens, HTTPS-only, iframe isolation               |
-| Privilege escalation               | Critical | Role checks in app + RLS, immutable owner role rules           |
-| Stripe webhook forgery             | Critical | Signature verification, idempotency                            |
-| XSS via message content            | High     | Output encoding, CSP, no HTML in visitor messages (MVP)        |
-| File upload abuse                  | Medium   | MIME validation, size limits, storage quotas                   |
-| DDoS on widget API                 | Medium   | Rate limiting, Vercel edge protection                          |
-| Insider threat (platform operator) | Medium   | Separate admin tooling, audit logs, minimal service-role usage |
-| Data exfiltration via export       | Medium   | Role-gated exports, audit logging                              |
+| Threat | Impact | Primary controls |
+|--------|--------|------------------|
+| Cross-tenant data access | Critical | RLS, workspace context validation |
+| Widget origin spoofing | High | Domain allowlist, Origin header validation |
+| Session token theft | High | Short-lived tokens, HTTPS-only, iframe isolation |
+| Privilege escalation | Critical | Role checks in app + RLS, immutable owner role rules |
+| Stripe webhook forgery | Critical | Signature verification, idempotency |
+| XSS via message content | High | Output encoding, CSP, no HTML in visitor messages (MVP) |
+| File upload abuse | Medium | MIME validation, size limits, storage quotas |
+| DDoS on widget API | Medium | Rate limiting, Vercel edge protection |
+| Insider threat (platform operator) | Medium | Separate admin tooling, audit logs, minimal service-role usage |
+| Data exfiltration via export | Medium | Role-gated exports, audit logging |
 
 ---
 
@@ -42,17 +42,14 @@ Site Chat handles business communications between companies and their website vi
 **Provider:** Supabase Auth
 
 **Supported methods (MVP):**
-
 - Email and password
 
 **Password policy:**
-
 - Minimum 10 characters
 - Must not appear in known breach lists (Supabase leaked password protection)
 - Password reset via time-limited email link (1 hour expiry, single use)
 
 **Session management:**
-
 - JWT access token: 1 hour expiry
 - Refresh token: 7 days, rotated on use (Supabase default refresh rotation)
 - Sessions stored in HTTP-only, Secure, SameSite=Lax cookies via `@supabase/ssr`
@@ -70,7 +67,6 @@ Visitors do not have accounts. Authentication is session-based:
 4. Server returns session token (JWT signed with server secret, not Supabase Auth JWT).
 
 **Token properties:**
-
 - Claims: `sub` (session ID), `wid` (workspace ID), `cid` (conversation ID, optional)
 - Access token TTL: 1 hour
 - Refresh token TTL: 30 days
@@ -78,7 +74,6 @@ Visitors do not have accounts. Authentication is session-based:
 - Token stored in iframe localStorage (first-party to widget origin, inaccessible to host site)
 
 **Token validation (every widget API request):**
-
 1. Verify JWT signature and expiry.
 2. Hash token and match against `visitor_sessions.session_token_hash`.
 3. Verify session not expired (`expires_at`).
@@ -87,14 +82,12 @@ Visitors do not have accounts. Authentication is session-based:
 ### 2.3 Service Authentication
 
 **Service role key** (`SUPABASE_SERVICE_ROLE_KEY`):
-
 - Used exclusively in Next.js server context (Route Handlers, Server Actions, cron jobs).
 - Bypasses RLS; therefore used only after explicit authorization checks in code.
 - Never included in client bundles; CI check fails build if detected in client-side code.
 - Rotated quarterly; rotation procedure documented in internal runbook.
 
 **Stripe webhook authentication:**
-
 - Verify `Stripe-Signature` header against webhook secret.
 - Reject requests with timestamp older than 5 minutes (replay protection).
 
@@ -114,11 +107,11 @@ Higher roles inherit lower role capabilities unless explicitly restricted (e.g.,
 
 Authorization is enforced at three layers; all three must pass for a mutation:
 
-| Layer       | Mechanism                                             | Purpose                                                    |
-| ----------- | ----------------------------------------------------- | ---------------------------------------------------------- |
-| Middleware  | Next.js middleware checks auth + workspace membership | Block unauthenticated/unauthorized route access            |
-| Application | Role checks in Server Actions and Route Handlers      | Business logic authorization (e.g., only admin can invite) |
-| Database    | RLS policies                                          | Final enforcement; protects against application bugs       |
+| Layer | Mechanism | Purpose |
+|-------|-----------|---------|
+| Middleware | Next.js middleware checks auth + workspace membership | Block unauthenticated/unauthorized route access |
+| Application | Role checks in Server Actions and Route Handlers | Business logic authorization (e.g., only admin can invite) |
+| Database | RLS policies | Final enforcement; protects against application bugs |
 
 Application-layer checks are never skipped with the assumption that RLS alone is sufficient for user-facing error messages. RLS is the safety net, not the primary UX layer.
 
@@ -134,13 +127,13 @@ Application-layer checks are never skipped with the assumption that RLS alone is
 
 See [PRD.md](./PRD.md) Section 3 for the user-facing permission matrix. Implementation notes:
 
-| Action          | Implementation                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------- |
-| Manage billing  | Check `role = 'owner'` in Server Action; Stripe Customer Portal session created server-side |
-| Invite member   | Check `role IN ('owner', 'admin')`; verify seat limit against subscription                  |
-| Send message    | Check active membership + `role IN ('owner', 'admin', 'agent')`                             |
-| View audit logs | Check `role IN ('owner', 'admin', 'viewer')`                                                |
-| Export data     | Check `role IN ('owner', 'admin')`; log audit event                                         |
+| Action | Implementation |
+|--------|----------------|
+| Manage billing | Check `role = 'owner'` in Server Action; Stripe Customer Portal session created server-side |
+| Invite member | Check `role IN ('owner', 'admin')`; verify seat limit against subscription |
+| Send message | Check active membership + `role IN ('owner', 'admin', 'agent')` |
+| View audit logs | Check `role IN ('owner', 'admin', 'viewer')` |
+| Export data | Check `role IN ('owner', 'admin')`; log audit event |
 
 ---
 
@@ -174,12 +167,12 @@ Broadcast channels (typing, presence) validate membership before allowing publis
 
 ### 4.4 Cross-Tenant Attack Scenarios
 
-| Attack                                                    | Mitigation                                                          |
-| --------------------------------------------------------- | ------------------------------------------------------------------- |
-| User guesses another workspace's conversation UUID        | RLS blocks SELECT; UUID alone is insufficient                       |
-| Widget sends messages to another workspace's conversation | Session token encodes workspace ID; mismatch rejected               |
-| Agent manipulates workspace_id in API request             | RLS blocks; middleware validates membership for requested workspace |
-| Service role query without workspace filter               | Code review + lint rule; integration tests verify isolation         |
+| Attack | Mitigation |
+|--------|------------|
+| User guesses another workspace's conversation UUID | RLS blocks SELECT; UUID alone is insufficient |
+| Widget sends messages to another workspace's conversation | Session token encodes workspace ID; mismatch rejected |
+| Agent manipulates workspace_id in API request | RLS blocks; middleware validates membership for requested workspace |
+| Service role query without workspace filter | Code review + lint rule; integration tests verify isolation |
 
 Integration tests include explicit cross-tenant access attempts that must fail.
 
@@ -190,20 +183,19 @@ Integration tests include explicit cross-tenant access attempts that must fail.
 ### 5.1 Embed Security
 
 The widget runs on untrusted third-party websites. Assumptions:
-
 - Host site JavaScript may be malicious or compromised.
 - Host site may attempt to impersonate the widget or intercept communications.
 - Visitors may use browser extensions that modify page behavior.
 
 **Controls:**
 
-| Control                        | Detail                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------ |
-| iframe isolation               | Widget UI runs in iframe on `widget.sitechat.com` origin                                         |
-| sandbox attribute              | `sandbox="allow-scripts allow-same-origin allow-forms allow-popups"` — no top navigation         |
-| postMessage validation         | Both iframe and loader validate `event.origin` before processing messages                        |
-| CSP on widget routes           | `default-src 'self'; script-src 'self'; frame-ancestors` dynamically set per workspace allowlist |
-| No sensitive data in loader.js | Loader contains only workspace ID; config fetched after origin validation                        |
+| Control | Detail |
+|---------|--------|
+| iframe isolation | Widget UI runs in iframe on `widget.sitechat.com` origin |
+| sandbox attribute | `sandbox="allow-scripts allow-same-origin allow-forms allow-popups"` — no top navigation |
+| postMessage validation | Both iframe and loader validate `event.origin` before processing messages |
+| CSP on widget routes | `default-src 'self'; script-src 'self'; frame-ancestors` dynamically set per workspace allowlist |
+| No sensitive data in loader.js | Loader contains only workspace ID; config fetched after origin validation |
 
 ### 5.2 Domain Allowlist
 
@@ -217,10 +209,10 @@ The widget runs on untrusted third-party websites. Assumptions:
 
 Widget API endpoints are rate limited to prevent abuse:
 
-| Endpoint                   | Limit                          |
-| -------------------------- | ------------------------------ |
-| `POST /widget/init`        | 30 requests/minute per IP      |
-| `POST /widget/messages`    | 60 requests/minute per session |
+| Endpoint | Limit |
+|----------|-------|
+| `POST /widget/init` | 30 requests/minute per IP |
+| `POST /widget/messages` | 60 requests/minute per session |
 | `POST /widget/attachments` | 10 requests/minute per session |
 
 Implementation: Vercel Edge Middleware with Upstash Redis sliding window counter. Rate limit headers included in responses (`X-RateLimit-Remaining`).
@@ -232,7 +224,6 @@ Implementation: Vercel Edge Middleware with Upstash Redis sliding window counter
 ### 6.1 API Input Validation
 
 All API inputs validated with Zod schemas before processing:
-
 - Type coercion disabled (`strict()` mode).
 - String length limits enforced at schema level.
 - UUID format validated for all ID parameters.
@@ -249,12 +240,12 @@ All API inputs validated with Zod schemas before processing:
 
 ### 6.3 File Upload Validation
 
-| Check         | Method                                                                   |
-| ------------- | ------------------------------------------------------------------------ |
-| File size     | Rejected if > plan limit (10 MB default)                                 |
-| MIME type     | Validated via magic bytes (`file-type` library), not Content-Type header |
-| Filename      | Sanitized; path traversal characters rejected                            |
-| Allowed types | Whitelist: JPEG, PNG, GIF, WebP, PDF, plain text, CSV                    |
+| Check | Method |
+|-------|--------|
+| File size | Rejected if > plan limit (10 MB default) |
+| MIME type | Validated via magic bytes (`file-type` library), not Content-Type header |
+| Filename | Sanitized; path traversal characters rejected |
+| Allowed types | Whitelist: JPEG, PNG, GIF, WebP, PDF, plain text, CSV |
 
 ### 6.4 SQL Injection
 
@@ -284,7 +275,6 @@ Content-Security-Policy: [route-specific, see below]
 ```
 
 **Dashboard CSP:**
-
 ```
 default-src 'self';
 script-src 'self' 'unsafe-inline' 'unsafe-eval';
@@ -295,7 +285,6 @@ frame-src 'none';
 ```
 
 **Widget CSP:**
-
 ```
 default-src 'self';
 script-src 'self';
@@ -316,15 +305,15 @@ frame-ancestors [dynamic: workspace allowed domains];
 
 ### 8.1 Secret Classification
 
-| Secret                      | Storage             | Rotation                         |
-| --------------------------- | ------------------- | -------------------------------- |
-| `SUPABASE_SERVICE_ROLE_KEY` | Vercel env (server) | Quarterly                        |
-| `SUPABASE_JWT_SECRET`       | Supabase dashboard  | On compromise                    |
-| `STRIPE_SECRET_KEY`         | Vercel env (server) | On compromise                    |
-| `STRIPE_WEBHOOK_SECRET`     | Vercel env (server) | Per-endpoint rotation via Stripe |
-| `RESEND_API_KEY`            | Vercel env (server) | Quarterly                        |
-| `WIDGET_JWT_SECRET`         | Vercel env (server) | Quarterly                        |
-| `SENTRY_AUTH_TOKEN`         | Vercel env (CI)     | Quarterly                        |
+| Secret | Storage | Rotation |
+|--------|---------|----------|
+| `SUPABASE_SERVICE_ROLE_KEY` | Vercel env (server) | Quarterly |
+| `SUPABASE_JWT_SECRET` | Supabase dashboard | On compromise |
+| `STRIPE_SECRET_KEY` | Vercel env (server) | On compromise |
+| `STRIPE_WEBHOOK_SECRET` | Vercel env (server) | Per-endpoint rotation via Stripe |
+| `RESEND_API_KEY` | Vercel env (server) | Quarterly |
+| `WIDGET_JWT_SECRET` | Vercel env (server) | Quarterly |
+| `SENTRY_AUTH_TOKEN` | Vercel env (CI) | Quarterly |
 
 ### 8.2 Client-Exposed Keys
 
@@ -338,18 +327,18 @@ The anon key is scoped via RLS policies and Realtime authorization. It cannot by
 
 ### 9.1 Logged Events
 
-| Event                     | Actor        | Metadata                      |
-| ------------------------- | ------------ | ----------------------------- |
-| `member.invited`          | Admin/Owner  | email, role                   |
-| `member.removed`          | Admin/Owner  | removed member ID, role       |
-| `member.role_changed`     | Admin/Owner  | member ID, old role, new role |
-| `widget.settings_updated` | Admin/Owner  | changed fields                |
-| `domain.added`            | Admin/Owner  | domain                        |
-| `domain.removed`          | Admin/Owner  | domain                        |
-| `conversation.exported`   | Admin/Owner  | conversation count, format    |
-| `contact.exported`        | Admin/Owner  | contact count                 |
-| `billing.plan_changed`    | Owner/System | old plan, new plan            |
-| `auth.login_new_device`   | User         | user agent, IP                |
+| Event | Actor | Metadata |
+|-------|-------|----------|
+| `member.invited` | Admin/Owner | email, role |
+| `member.removed` | Admin/Owner | removed member ID, role |
+| `member.role_changed` | Admin/Owner | member ID, old role, new role |
+| `widget.settings_updated` | Admin/Owner | changed fields |
+| `domain.added` | Admin/Owner | domain |
+| `domain.removed` | Admin/Owner | domain |
+| `conversation.exported` | Admin/Owner | conversation count, format |
+| `contact.exported` | Admin/Owner | contact count |
+| `billing.plan_changed` | Owner/System | old plan, new plan |
+| `auth.login_new_device` | User | user agent, IP |
 
 ### 9.2 Audit Log Properties
 
@@ -367,12 +356,12 @@ Audit logs viewable by Owner, Admin, and Viewer roles. Agents cannot view audit 
 
 ### 10.1 Data Classification
 
-| Classification | Examples                          | Handling                                            |
-| -------------- | --------------------------------- | --------------------------------------------------- |
-| Public         | Marketing content, pricing        | No restrictions                                     |
-| Internal       | Application logs, metrics         | Access restricted to platform operators             |
-| Confidential   | Message content, contact emails   | Encrypted at rest (Supabase default), RLS-protected |
-| Restricted     | Service role keys, Stripe secrets | Secrets manager, never logged                       |
+| Classification | Examples | Handling |
+|----------------|----------|----------|
+| Public | Marketing content, pricing | No restrictions |
+| Internal | Application logs, metrics | Access restricted to platform operators |
+| Confidential | Message content, contact emails | Encrypted at rest (Supabase default), RLS-protected |
+| Restricted | Service role keys, Stripe secrets | Secrets manager, never logged |
 
 ### 10.2 Encryption
 
@@ -384,15 +373,14 @@ Audit logs viewable by Owner, Admin, and Viewer roles. Agents cannot view audit 
 
 Site Chat processes personal data on behalf of workspace customers (data processors under GDPR):
 
-| Data               | Subject           | Retention                                  |
-| ------------------ | ----------------- | ------------------------------------------ |
-| Visitor email/name | Website visitor   | Workspace-configurable (default 12 months) |
-| Visitor IP address | Website visitor   | 90 days clear text, then hashed            |
-| Agent email        | Workspace member  | Duration of membership + 30 days           |
-| Message content    | Visitor and agent | Workspace-configurable (default 12 months) |
+| Data | Subject | Retention |
+|------|---------|-----------|
+| Visitor email/name | Website visitor | Workspace-configurable (default 12 months) |
+| Visitor IP address | Website visitor | 90 days clear text, then hashed |
+| Agent email | Workspace member | Duration of membership + 30 days |
+| Message content | Visitor and agent | Workspace-configurable (default 12 months) |
 
 **Data subject rights (GDPR):**
-
 - **Access:** Workspace Owner can export contact and conversation data.
 - **Deletion:** Workspace Owner can delete contacts; deletion cascades to linked sessions. Full workspace deletion available.
 - **Portability:** CSV export for contacts and conversations.
@@ -442,7 +430,6 @@ A DPA template will be provided to Business tier customers. MVP launch includes 
 ### 12.3 Secret Compromise Procedure
 
 If any server secret is compromised:
-
 1. Rotate secret immediately in Vercel/Supabase.
 2. Redeploy all environments.
 3. Invalidate all active sessions if JWT secret compromised.
@@ -470,13 +457,13 @@ If any server secret is compromised:
 
 ## 14. Compliance Roadmap
 
-| Standard      | MVP                                | Target                    |
-| ------------- | ---------------------------------- | ------------------------- |
-| GDPR          | Privacy controls, export, deletion | Full compliance at launch |
-| CCPA          | Covered by GDPR controls           | Launch                    |
-| SOC 2 Type II | Controls designed-in               | 12 months post-launch     |
-| HIPAA         | Not supported                      | Not planned               |
-| PCI DSS       | SAQ A via Stripe                   | Launch                    |
+| Standard | MVP | Target |
+|----------|-----|--------|
+| GDPR | Privacy controls, export, deletion | Full compliance at launch |
+| CCPA | Covered by GDPR controls | Launch |
+| SOC 2 Type II | Controls designed-in | 12 months post-launch |
+| HIPAA | Not supported | Not planned |
+| PCI DSS | SAQ A via Stripe | Launch |
 
 ---
 

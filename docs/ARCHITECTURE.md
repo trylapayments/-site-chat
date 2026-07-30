@@ -61,19 +61,19 @@ Site Chat is a multi-tenant SaaS platform composed of four primary runtime surfa
 
 ## 2. Technology Stack
 
-| Layer          | Technology               | Rationale                                                                          |
-| -------------- | ------------------------ | ---------------------------------------------------------------------------------- |
-| Framework      | Next.js 15 (App Router)  | Full-stack TypeScript, server components, Route Handlers, Vercel-native deployment |
-| Language       | TypeScript (strict mode) | Type safety across client, server, and shared packages                             |
-| Styling        | Tailwind CSS + shadcn/ui | Consistent design system, accessible components, rapid iteration                   |
-| Database       | PostgreSQL via Supabase  | Mature RLS, realtime, storage, and auth in one platform                            |
-| Realtime       | Supabase Realtime        | Postgres CDC for message delivery; broadcast for typing/presence                   |
-| File storage   | Supabase Storage         | S3-compatible, integrated auth, workspace-scoped buckets                           |
-| Authentication | Supabase Auth            | Email/password MVP; JWT-based; integrates with RLS via `auth.uid()`                |
-| Hosting        | Vercel                   | Edge network, preview deployments, environment management                          |
-| Payments       | Stripe                   | Industry standard; Checkout + Customer Portal + webhooks                           |
-| Email          | Resend                   | Transactional email with good deliverability and developer experience              |
-| Error tracking | Sentry                   | Client and server exception capture with release tracking                          |
+| Layer | Technology | Rationale |
+|-------|------------|-----------|
+| Framework | Next.js 15 (App Router) | Full-stack TypeScript, server components, Route Handlers, Vercel-native deployment |
+| Language | TypeScript (strict mode) | Type safety across client, server, and shared packages |
+| Styling | Tailwind CSS + shadcn/ui | Consistent design system, accessible components, rapid iteration |
+| Database | PostgreSQL via Supabase | Mature RLS, realtime, storage, and auth in one platform |
+| Realtime | Supabase Realtime | Postgres CDC for message delivery; broadcast for typing/presence |
+| File storage | Supabase Storage | S3-compatible, integrated auth, workspace-scoped buckets |
+| Authentication | Supabase Auth | Email/password MVP; JWT-based; integrates with RLS via `auth.uid()` |
+| Hosting | Vercel | Edge network, preview deployments, environment management |
+| Payments | Stripe | Industry standard; Checkout + Customer Portal + webhooks |
+| Email | Resend | Transactional email with good deliverability and developer experience |
+| Error tracking | Sentry | Client and server exception capture with release tracking |
 
 ---
 
@@ -157,20 +157,20 @@ Monorepo tooling (Turborepo or pnpm workspaces) is recommended from the start to
 
 ### 4.2 Route Map
 
-| Route                                | Access                  | Purpose                     |
-| ------------------------------------ | ----------------------- | --------------------------- |
-| `/`                                  | Public                  | Marketing landing page      |
-| `/pricing`                           | Public                  | Plan comparison             |
-| `/login`, `/signup`                  | Public                  | Authentication              |
-| `/invite/[token]`                    | Public (token)          | Accept workspace invitation |
-| `/app/[slug]/inbox`                  | Authenticated member    | Conversation inbox          |
-| `/app/[slug]/inbox/[conversationId]` | Authenticated member    | Conversation detail         |
-| `/app/[slug]/contacts`               | Authenticated member    | Contact list                |
-| `/app/[slug]/settings/*`             | Role-gated              | Workspace configuration     |
-| `/widget/[workspaceId]`              | Public (domain-checked) | Widget iframe host page     |
-| `/api/v1/widget/*`                   | Public (session token)  | Widget API endpoints        |
-| `/api/v1/workspaces/*`               | Authenticated           | Dashboard API               |
-| `/api/webhooks/stripe`               | Stripe signature        | Billing webhooks            |
+| Route | Access | Purpose |
+|-------|--------|---------|
+| `/` | Public | Marketing landing page |
+| `/pricing` | Public | Plan comparison |
+| `/login`, `/signup` | Public | Authentication |
+| `/invite/[token]` | Public (token) | Accept workspace invitation |
+| `/app/[slug]/inbox` | Authenticated member | Conversation inbox |
+| `/app/[slug]/inbox/[conversationId]` | Authenticated member | Conversation detail |
+| `/app/[slug]/contacts` | Authenticated member | Contact list |
+| `/app/[slug]/settings/*` | Role-gated | Workspace configuration |
+| `/widget/[workspaceId]` | Public (domain-checked) | Widget iframe host page |
+| `/api/v1/widget/*` | Public (session token) | Widget API endpoints |
+| `/api/v1/workspaces/*` | Authenticated | Dashboard API |
+| `/api/webhooks/stripe` | Stripe signature | Billing webhooks |
 
 ---
 
@@ -230,13 +230,13 @@ Origin validation: every widget request includes the page origin; server validat
 
 ### 5.3 Server Actions vs Route Handlers
 
-| Use case                                          | Mechanism                                  |
-| ------------------------------------------------- | ------------------------------------------ |
-| Dashboard form mutations (settings, send message) | Server Actions with Zod validation         |
-| Widget API                                        | Route Handlers (must support cross-origin) |
-| Webhooks                                          | Route Handlers                             |
-| File upload initiation                            | Route Handlers (return signed URL)         |
-| Data fetching in dashboard                        | Server Components + Supabase server client |
+| Use case | Mechanism |
+|----------|-----------|
+| Dashboard form mutations (settings, send message) | Server Actions with Zod validation |
+| Widget API | Route Handlers (must support cross-origin) |
+| Webhooks | Route Handlers |
+| File upload initiation | Route Handlers (return signed URL) |
+| Data fetching in dashboard | Server Components + Supabase server client |
 
 Server Actions are preferred for dashboard mutations for colocation with UI and automatic CSRF protection. Route Handlers are required where cross-origin access or third-party webhook signatures apply.
 
@@ -268,12 +268,12 @@ Message inserts trigger Realtime events filtered by `conversation_id`. Both widg
 
 ### 6.2 Channel Design
 
-| Channel pattern            | Purpose                               | Subscribers                          |
-| -------------------------- | ------------------------------------- | ------------------------------------ |
-| `conversation:{id}`        | New messages, status changes          | Agents (dashboard), Visitor (widget) |
-| `workspace:{id}:inbox`     | New conversations, assignment changes | All online agents in workspace       |
-| `workspace:{id}:presence`  | Agent online/away/offline             | Agents                               |
-| `typing:{conversation_id}` | Typing indicators (broadcast)         | Agents + visitor                     |
+| Channel pattern | Purpose | Subscribers |
+|-----------------|---------|-------------|
+| `conversation:{id}` | New messages, status changes | Agents (dashboard), Visitor (widget) |
+| `workspace:{id}:inbox` | New conversations, assignment changes | All online agents in workspace |
+| `workspace:{id}:presence` | Agent online/away/offline | Agents |
+| `typing:{conversation_id}` | Typing indicators (broadcast) | Agents + visitor |
 
 Postgres changes are used for persistent events (messages, conversation updates). Broadcast is used for ephemeral events (typing, presence) that should not be stored.
 
@@ -292,7 +292,11 @@ Postgres changes are used for persistent events (messages, conversation updates)
 Customers add one script tag to their site:
 
 ```html
-<script async src="https://widget.sitechat.com/loader.js" data-workspace-id="ws_abc123"></script>
+<script
+  async
+  src="https://widget.sitechat.com/loader.js"
+  data-workspace-id="ws_abc123"
+></script>
 ```
 
 `loader.js` (< 5 KB gzipped) performs:
@@ -388,14 +392,14 @@ Application code reads entitlements from this table, not directly from Stripe, t
 
 Resend sends transactional emails through React Email templates stored in `apps/web/lib/email/templates/`.
 
-| Template                | Trigger                                             |
-| ----------------------- | --------------------------------------------------- |
-| `invite-agent`          | Admin invites team member                           |
-| `welcome-owner`         | Workspace created                                   |
-| `new-conversation`      | Unassigned conversation created (if agent opted in) |
-| `conversation-assigned` | Conversation assigned to agent                      |
-| `payment-failed`        | Stripe invoice.payment_failed                       |
-| `trial-ending`          | 3 days before trial expiration                      |
+| Template | Trigger |
+|----------|---------|
+| `invite-agent` | Admin invites team member |
+| `welcome-owner` | Workspace created |
+| `new-conversation` | Unassigned conversation created (if agent opted in) |
+| `conversation-assigned` | Conversation assigned to agent |
+| `payment-failed` | Stripe invoice.payment_failed |
+| `trial-ending` | 3 days before trial expiration |
 
 All emails include unsubscribe links where applicable (notification preferences).
 
@@ -405,12 +409,12 @@ All emails include unsubscribe links where applicable (notification preferences)
 
 ### 12.1 Environments
 
-| Environment | Purpose                | URL                                       |
-| ----------- | ---------------------- | ----------------------------------------- |
-| Production  | Live customers         | `app.sitechat.com`, `widget.sitechat.com` |
-| Staging     | Pre-release testing    | `staging.sitechat.com`                    |
-| Preview     | Per-PR Vercel previews | `*.vercel.app`                            |
-| Local       | Development            | `localhost:3000`                          |
+| Environment | Purpose | URL |
+|-------------|---------|-----|
+| Production | Live customers | `app.sitechat.com`, `widget.sitechat.com` |
+| Staging | Pre-release testing | `staging.sitechat.com` |
+| Preview | Per-PR Vercel previews | `*.vercel.app` |
+| Local | Development | `localhost:3000` |
 
 Each environment has isolated Supabase project (production and staging required; preview may share staging Supabase with namespace prefix).
 
@@ -426,7 +430,6 @@ Each environment has isolated Supabase project (production and staging required;
 Managed in Vercel (production/staging/preview) and `.env.local` (development). Secrets never committed. Required variables documented in `.env.example`.
 
 Critical secrets:
-
 - `SUPABASE_SERVICE_ROLE_KEY` (server only, never exposed to client)
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 - `RESEND_API_KEY`
@@ -448,7 +451,6 @@ Supabase CLI manages migrations in `supabase/migrations/`. Migrations are:
 ### 13.1 Error Tracking
 
 Sentry configured for:
-
 - Browser (widget + dashboard client components)
 - Node.js server (Route Handlers, Server Actions)
 - Edge middleware
@@ -458,7 +460,6 @@ Each event tagged with `workspaceId`, `userId`, and `requestId` where available.
 ### 13.2 Logging
 
 Structured JSON logs via Vercel log drain or Axiom (post-MVP). Every API request logs:
-
 - `requestId`
 - `method`, `path`, `statusCode`, `durationMs`
 - `workspaceId`, `userId` (if authenticated)
@@ -510,12 +511,12 @@ Message content is never logged.
 
 ### 14.6 Testing Strategy
 
-| Layer                    | Tool                      | Coverage target         |
-| ------------------------ | ------------------------- | ----------------------- |
-| Unit (validators, utils) | Vitest                    | 90%                     |
-| Integration (API routes) | Vitest + Supabase local   | Critical paths          |
-| E2E (dashboard flows)    | Playwright                | Happy paths per release |
-| RLS policies             | pgTAP or custom SQL tests | Every policy            |
+| Layer | Tool | Coverage target |
+|-------|------|-----------------|
+| Unit (validators, utils) | Vitest | 90% |
+| Integration (API routes) | Vitest + Supabase local | Critical paths |
+| E2E (dashboard flows) | Playwright | Happy paths per release |
+| RLS policies | pgTAP or custom SQL tests | Every policy |
 
 Tests run in CI on every PR. E2E runs on staging before production promotion.
 
@@ -527,15 +528,15 @@ Tests run in CI on every PR. E2E runs on staging before production promotion.
 
 ### 14.8 Naming Conventions
 
-| Entity                | Convention         | Example                    |
-| --------------------- | ------------------ | -------------------------- |
-| Database tables       | snake_case, plural | `workspace_members`        |
-| TypeScript types      | PascalCase         | `WorkspaceMember`          |
-| API routes            | kebab-case         | `/api/v1/canned-responses` |
-| React components      | PascalCase         | `ConversationList`         |
-| Files (components)    | PascalCase.tsx     | `ConversationList.tsx`     |
-| Files (utilities)     | kebab-case.ts      | `format-date.ts`           |
-| Environment variables | SCREAMING_SNAKE    | `STRIPE_SECRET_KEY`        |
+| Entity | Convention | Example |
+|--------|------------|---------|
+| Database tables | snake_case, plural | `workspace_members` |
+| TypeScript types | PascalCase | `WorkspaceMember` |
+| API routes | kebab-case | `/api/v1/canned-responses` |
+| React components | PascalCase | `ConversationList` |
+| Files (components) | PascalCase.tsx | `ConversationList.tsx` |
+| Files (utilities) | kebab-case.ts | `format-date.ts` |
+| Environment variables | SCREAMING_SNAKE | `STRIPE_SECRET_KEY` |
 
 ---
 
@@ -554,12 +555,12 @@ Detailed security controls are documented in [SECURITY.md](./SECURITY.md). Archi
 
 ## 16. Decision Log
 
-| Date       | Decision                                | Rationale                                               | Alternatives considered |
-| ---------- | --------------------------------------- | ------------------------------------------------------- | ----------------------- |
-| 2026-07-30 | Shared schema multi-tenancy             | Operational simplicity at current scale                 | Dedicated DB per tenant |
-| 2026-07-30 | REST over tRPC/GraphQL                  | Long-term openness, easier third-party integration      | tRPC, GraphQL           |
-| 2026-07-30 | Supabase Realtime over custom WebSocket | Reduced infrastructure; Postgres CDC is source of truth | Socket.io, Ably         |
-| 2026-07-30 | iframe widget over script-only          | Stronger isolation from host site CSS/JS                | Shadow DOM-only embed   |
-| 2026-07-30 | Monorepo with separate widget package   | Independent bundle size optimization                    | Single package          |
+| Date | Decision | Rationale | Alternatives considered |
+|------|----------|-----------|------------------------|
+| 2026-07-30 | Shared schema multi-tenancy | Operational simplicity at current scale | Dedicated DB per tenant |
+| 2026-07-30 | REST over tRPC/GraphQL | Long-term openness, easier third-party integration | tRPC, GraphQL |
+| 2026-07-30 | Supabase Realtime over custom WebSocket | Reduced infrastructure; Postgres CDC is source of truth | Socket.io, Ably |
+| 2026-07-30 | iframe widget over script-only | Stronger isolation from host site CSS/JS | Shadow DOM-only embed |
+| 2026-07-30 | Monorepo with separate widget package | Independent bundle size optimization | Single package |
 
 Decisions are append-only. Superseded decisions are marked but not deleted.
