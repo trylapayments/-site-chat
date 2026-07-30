@@ -1,0 +1,81 @@
+---
+description: Pre-implementation review checklist — required before writing or modifying code
+alwaysApply: true
+---
+
+# Pre-Implementation Review
+
+Before writing or modifying any code, the agent **must** explain the following in the response. Do not skip this step, even for small changes.
+
+## Required Explanation
+
+### 1. Files That Will Change
+
+List every file that will be created, modified, or deleted. Use paths relative to the repository root.
+
+Example:
+
+```
+- apps/web/app/api/v1/conversations/route.ts (new)
+- packages/shared/src/schemas/conversation.ts (new)
+- supabase/migrations/20260730120000_create_conversations.sql (new)
+```
+
+### 2. Why
+
+For each file or group of files, state the purpose of the change and how it satisfies the task.
+
+- Connect changes to user requirements or acceptance criteria.
+- Reference existing patterns when extending the codebase.
+
+### 3. Risks
+
+Identify what could go wrong:
+
+- **Security:** tenant isolation, auth, input validation, secret exposure
+- **Data integrity:** migrations, RLS policies, race conditions
+- **Breaking changes:** API contracts, shared types, existing consumers
+- **Performance:** N+1 queries, missing indexes, bundle size
+- **Operational:** deployment order, env vars, rollback strategy
+
+If risks are low, say so explicitly and explain why.
+
+### 4. Tests
+
+Describe how the change will be verified:
+
+- Unit tests to add or update (file paths and what they cover)
+- Integration or RLS tests for database/security changes
+- Manual verification steps if automated tests are not yet in place
+- If no tests are appropriate, explain why (e.g., docs-only change)
+
+### 5. Expected Result
+
+Describe the observable outcome after the change:
+
+- User-visible behavior
+- API request/response shape
+- Database state or migration effect
+- How to confirm success locally (`pnpm dev`, `supabase db reset`, etc.)
+
+## When to Apply
+
+- **Always** before the first code edit in a task.
+- **Again** if the plan changes materially (new files, different approach, scope expansion).
+- **Not required** for question-only or read-only tasks with no code changes.
+
+## Format
+
+Use a concise structured summary. Example:
+
+```markdown
+## Plan
+
+**Files:** ...
+**Why:** ...
+**Risks:** ...
+**Tests:** ...
+**Expected result:** ...
+```
+
+Proceed with implementation only after this plan is stated.

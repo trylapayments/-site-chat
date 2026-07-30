@@ -1,0 +1,69 @@
+---
+description: TypeScript server-side conventions, services, dependency injection, API validation, and Zod schemas
+globs: apps/web/app/api/**, apps/web/lib/**, apps/web/actions/**, packages/shared/**
+alwaysApply: false
+---
+
+# Backend Rules
+
+Server-side code lives in Next.js Route Handlers, Server Actions, middleware, and shared packages. Follow `docs/ARCHITECTURE.md` for system design.
+
+## TypeScript Strict
+
+- TypeScript strict mode is enabled and must remain enabled.
+- Do not disable strict checks with `@ts-ignore`, `@ts-expect-error`, or `// @ts-nocheck` unless absolutely necessary with a comment explaining why.
+- Prefer explicit return types on exported functions and public API boundaries.
+
+## No `any`
+
+- Do not use `any`. Use `unknown` for untrusted values and narrow with type guards or Zod parsing.
+- Do not use `as any` casts to bypass the type system.
+- Prefer generics and discriminated unions over loose typing.
+
+## Reusable Services
+
+- Extract business logic into reusable service modules under `apps/web/lib/` or `packages/shared/`.
+- Route Handlers and Server Actions should be thin: validate input → call service → return response.
+- Do not duplicate query logic, authorization checks, or domain rules across handlers.
+- Shared types, constants, and validators belong in `packages/shared/`.
+
+## Dependency Injection Where Appropriate
+
+- Pass dependencies (Supabase clients, config, external service clients) as function parameters or constructor arguments in services.
+- Avoid hard-coding global singletons inside business logic when it prevents testing or swapping implementations.
+- Use factory functions (e.g., `createConversationService(supabase)`) for server-side service construction.
+- Server-only modules must import from `@/lib/supabase/server` or `@/lib/supabase/service`, never the browser client.
+
+## API Validation
+
+- Validate all request inputs (body, query params, route params, headers) before any business logic runs.
+- Return consistent error responses with appropriate HTTP status codes (400 for validation, 401/403 for auth, 404 for not found).
+- Do not leak internal error details, stack traces, or SQL errors to clients.
+- Validate content type and payload size limits on upload endpoints.
+
+## Zod Schemas
+
+- Define Zod schemas in `packages/shared/src/` (or co-located `schemas/` directories) for reuse across client and server.
+- Use `.strict()` on object schemas to reject unexpected fields.
+- Derive TypeScript types from schemas: `type CreateConversationInput = z.infer<typeof CreateConversationSchema>`.
+- Parse with `.safeParse()` or `.parse()` at API boundaries; never trust raw `request.json()` types.
+- Share the same schema between client-side form validation and server-side API validation where applicable.
+
+## Server-First Mutations
+
+- All write operations flow through Route Handlers or Server Actions — never direct client writes to tables except via narrowly scoped RLS for realtime subscriptions.
+- Perform authorization checks before mutations: verify auth, workspace membership, and role.
+- Use idempotent patterns for webhooks (Stripe event deduplication via `stripe_webhook_events`).
+
+## Error Handling
+
+- Use typed error classes or result types for expected failures (not found, forbidden, conflict).
+- Log unexpected errors to Sentry with context; return generic messages to clients.
+- Never log secrets, tokens, or full request bodies containing credentials.
+
+## Database Access
+
+- Use the Supabase client with parameterized queries. No raw SQL string concatenation in application code.
+- Prefer the authenticated client for user-scoped operations (RLS enforced).
+- Use the service-role client only after explicit authorization checks in code.
+- Follow database rules for migrations and schema conventions.
