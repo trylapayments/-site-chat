@@ -30,7 +30,7 @@ BEGIN
       updated_at,
       confirmation_token,
       email_change,
-      email_change_token,
+      email_change_token_new,
       recovery_token
     )
     VALUES (
@@ -75,7 +75,7 @@ BEGIN
       updated_at,
       confirmation_token,
       email_change,
-      email_change_token,
+      email_change_token_new,
       recovery_token
     )
     VALUES (
@@ -120,7 +120,7 @@ BEGIN
       updated_at,
       confirmation_token,
       email_change,
-      email_change_token,
+      email_change_token_new,
       recovery_token
     )
     VALUES (
