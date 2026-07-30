@@ -1,0 +1,78 @@
+---
+description: PostgreSQL and Supabase migration conventions, tenant schema design, and indexing
+globs: supabase/**/*.sql, supabase/**/*.ts, **/migrations/**
+alwaysApply: false
+---
+
+# Database Rules
+
+All database changes follow the design in `docs/DATABASE.md`. The database is the single source of truth for application state.
+
+## UUID Primary Keys
+
+- Every table uses `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`.
+- Do not use serial integers, auto-increment, or client-generated IDs for primary keys.
+- Exception: reference tables with stable slug identifiers (e.g., `plans.id TEXT`) as documented.
+
+## workspace_id on Every Tenant-Owned Table
+
+- Every table scoped to a workspace **must** include `workspace_id UUID NOT NULL REFERENCES workspaces(id)`.
+- No exceptions for tenant data. Denormalize `workspace_id` onto child tables when required for RLS performance (see `messages.workspace_id`).
+- Reference/lookup tables with no tenant data (e.g., `plans`) are exempt.
+
+## Supabase Migrations Only
+
+- All schema changes go in `supabase/migrations/` as versioned SQL files.
+- Naming: `YYYYMMDDHHMMSS_descriptive_name.sql` (e.g., `20260730120000_create_workspaces_and_members.sql`).
+- Test locally with `supabase db reset` before opening a PR.
+- Include RLS policies, indexes, triggers, and helper functions in the same migration when they belong together.
+
+## No Direct Production Schema Changes
+
+- Never apply DDL directly to staging or production via the Supabase dashboard or psql.
+- All environments receive schema changes through the migration pipeline: PR review → CI → merge → deploy.
+- Destructive changes require multi-phase migrations: add new → migrate data → remove old.
+
+## Indexes for Foreign Keys
+
+- Create an index on every foreign key column used in joins or RLS policies.
+- Naming: `idx_{table}_{columns}` (e.g., `idx_conversations_workspace` ON `(workspace_id)`).
+- Prefer composite indexes that match query patterns (inbox sort, assignment filters).
+- Use partial indexes for active records (`WHERE deleted_at IS NULL`, `WHERE status = 'open'`) to limit index size.
+
+## Timestamps
+
+- Every mutable table includes:
+  - `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`
+  - `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`
+- Apply the shared `set_updated_at()` trigger to all tables with `updated_at`.
+- Use `TIMESTAMPTZ`, never `TIMESTAMP` without time zone.
+
+## Soft Delete Policy
+
+- Use `deleted_at TIMESTAMPTZ NULL` for entities where recovery is valuable (workspaces, canned responses).
+- Hard delete for ephemeral data (session tokens, typing events, webhook idempotency records).
+- Partial indexes and queries should filter `WHERE deleted_at IS NULL` for active-record access.
+- Document retention and purge behavior for soft-deleted rows.
+
+## Audit Fields
+
+- Security-relevant mutations must produce audit log entries via `log_audit_event()` or equivalent.
+- `audit_logs` is append-only: no UPDATE or DELETE policies for tenant users.
+- Include actor context where applicable: `actor_id`, `ip_address`, `user_agent`, `metadata_json`.
+- Audit log inserts use service role or security definer functions, not direct client writes.
+
+## Schema Conventions
+
+| Convention | Rule |
+|------------|------|
+| Table names | snake_case, plural (`conversations`) |
+| Column names | snake_case (`workspace_id`) |
+| Foreign keys | `{referenced_table_singular}_id` |
+| Enums | PostgreSQL native ENUM, prefixed `app_` |
+| JSON columns | `{purpose}_json` or `{purpose}_metadata` |
+
+## RLS Requirement
+
+- Enable RLS on all tenant-scoped tables. Policy definitions belong in migrations alongside table creation.
+- See `docs/DATABASE.md` Section 11 and `docs/SECURITY.md` for policy patterns.
