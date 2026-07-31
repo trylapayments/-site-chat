@@ -2,13 +2,14 @@ import { redirect } from "next/navigation";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
-import { buildLoginUrl, toAppRoute } from "@/lib/auth/redirect";
-import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
-import {
-  clearRecoveryCookie,
-  readRecoveryCookieValidationForSession,
-} from "@/lib/auth/recovery-cookie.server";
+import { readRecoveryCookieValidationForSession } from "@/lib/auth/recovery-cookie.server";
 import { resolveAppRecoveryGate } from "@/lib/auth/recovery-gate";
+import {
+  buildLoginUrl,
+  buildRecoveryClearUrl,
+  toAppRoute,
+} from "@/lib/auth/redirect";
+import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
@@ -35,8 +36,8 @@ export default async function AppLayout({
     await readRecoveryCookieValidationForSession(supabase),
   );
 
-  if (recoveryGate.action === "clear_and_continue") {
-    await clearRecoveryCookie();
+  if (recoveryGate.action === "clear_via_handler") {
+    redirect(toAppRoute(buildRecoveryClearUrl(recoveryGate.destination)));
   }
 
   if (recoveryGate.action === "redirect") {

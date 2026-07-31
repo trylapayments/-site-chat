@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import { AUTH_ERROR_CODES, getUserMessage } from "@/lib/auth/errors";
 import {
   buildLoginUrl,
+  buildRecoveryClearUrl,
   resolveMiddlewareRedirect,
+  sanitizeRecoveryClearDestination,
   sanitizeRedirectPath,
 } from "@/lib/auth/redirect";
+import { AUTH_ROUTES } from "@/lib/auth/constants";
 describe("sanitizeRedirectPath", () => {
   it("allows safe app paths", () => {
     expect(sanitizeRedirectPath("/app")).toBe("/app");
@@ -19,6 +22,42 @@ describe("sanitizeRedirectPath", () => {
     expect(sanitizeRedirectPath("/\\evil.com")).toBeNull();
     expect(sanitizeRedirectPath("/login")).toBeNull();
     expect(sanitizeRedirectPath("%2f%2fevil.com")).toBeNull();
+  });
+});
+
+describe("sanitizeRecoveryClearDestination", () => {
+  it("allows recovery cleanup destinations for /app and /forgot-password", () => {
+    expect(sanitizeRecoveryClearDestination("/app")).toBe("/app");
+    expect(sanitizeRecoveryClearDestination("/app/settings")).toBe(
+      "/app/settings",
+    );
+    expect(sanitizeRecoveryClearDestination("/forgot-password")).toBe(
+      "/forgot-password",
+    );
+  });
+
+  it("rejects open redirects for recovery cleanup", () => {
+    expect(sanitizeRecoveryClearDestination("//evil.com")).toBeNull();
+    expect(sanitizeRecoveryClearDestination("https://evil.com")).toBeNull();
+    expect(sanitizeRecoveryClearDestination("/login")).toBeNull();
+    expect(sanitizeRecoveryClearDestination("/reset-password")).toBeNull();
+  });
+});
+
+describe("buildRecoveryClearUrl", () => {
+  it("builds handler URLs for safe cleanup destinations", () => {
+    expect(buildRecoveryClearUrl("/app")).toBe(
+      `${AUTH_ROUTES.authClearRecovery}?destination=%2Fapp`,
+    );
+    expect(buildRecoveryClearUrl("/forgot-password")).toBe(
+      `${AUTH_ROUTES.authClearRecovery}?destination=%2Fforgot-password`,
+    );
+  });
+
+  it("falls back to /app for unsafe destinations", () => {
+    expect(buildRecoveryClearUrl("//evil.com")).toBe(
+      `${AUTH_ROUTES.authClearRecovery}?destination=%2Fapp`,
+    );
   });
 });
 

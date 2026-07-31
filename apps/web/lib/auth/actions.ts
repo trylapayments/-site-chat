@@ -16,7 +16,11 @@ import {
   initialAuthActionState,
   type AuthActionState,
 } from "@/lib/auth/errors";
-import { resolveSafeRedirectPath, toAppRoute } from "@/lib/auth/redirect";
+import {
+  buildRecoveryClearUrl,
+  resolveSafeRedirectPath,
+  toAppRoute,
+} from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import {
   clearRecoveryCookie,
@@ -202,9 +206,8 @@ export async function updatePasswordAction(
     cookieValidation,
   });
 
-  if (gate.action === "clear_and_redirect") {
-    await clearRecoveryCookie();
-    redirect(toAppRoute(gate.destination));
+  if (gate.action === "clear_via_handler") {
+    redirect(toAppRoute(buildRecoveryClearUrl(gate.destination)));
   }
 
   if (gate.action === "redirect") {

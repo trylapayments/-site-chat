@@ -59,6 +59,32 @@ export function resolveSafeRedirectPath(
 }
 
 /**
+ * Allowed destinations for /auth/clear-recovery after invalid sc_recovery cleanup.
+ */
+export function sanitizeRecoveryClearDestination(
+  path: string | null | undefined,
+): string | null {
+  if (!path) {
+    return null;
+  }
+
+  const trimmed = path.trim();
+
+  if (trimmed === "/forgot-password") {
+    return trimmed;
+  }
+
+  return sanitizeRedirectPath(trimmed);
+}
+
+export function buildRecoveryClearUrl(destination: string): string {
+  const safeDestination =
+    sanitizeRecoveryClearDestination(destination) ?? SAFE_REDIRECT_FALLBACK;
+
+  return `/auth/clear-recovery?destination=${encodeURIComponent(safeDestination)}`;
+}
+
+/**
  * Builds a login URL preserving an optional post-auth destination.
  */
 export function buildLoginUrl(nextPath?: string | null): string {

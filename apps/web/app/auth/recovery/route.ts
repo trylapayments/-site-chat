@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
 
   const claims = await getClaimsOrNull(supabase);
   if (!isRecoveryExchangePermitted(claims)) {
+    await supabase.auth.signOut();
     return recoveryExchangeRejectedResponse();
   }
 

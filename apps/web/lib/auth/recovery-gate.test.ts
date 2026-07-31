@@ -55,7 +55,7 @@ describe("resolveResetPasswordGate", () => {
     });
 
     expect(decision).toEqual({
-      action: "clear_and_redirect",
+      action: "clear_via_handler",
       destination: AUTH_ROUTES.forgotPassword,
     });
   });
@@ -71,7 +71,7 @@ describe("resolveResetPasswordGate", () => {
     });
 
     expect(decision).toEqual({
-      action: "clear_and_redirect",
+      action: "clear_via_handler",
       destination: AUTH_ROUTES.forgotPassword,
     });
   });
@@ -113,7 +113,10 @@ describe("resolveAppRecoveryGate", () => {
       }),
     );
 
-    expect(decision).toEqual({ action: "clear_and_continue" });
+    expect(decision).toEqual({
+      action: "clear_via_handler",
+      destination: AUTH_ROUTES.app,
+    });
   });
 
   it("clears tampered cookies and continues in /app", () => {
@@ -125,7 +128,10 @@ describe("resolveAppRecoveryGate", () => {
       }),
     );
 
-    expect(decision).toEqual({ action: "clear_and_continue" });
+    expect(decision).toEqual({
+      action: "clear_via_handler",
+      destination: AUTH_ROUTES.app,
+    });
   });
 
   it("clears session-mismatched cookies and continues in /app", () => {
@@ -137,7 +143,10 @@ describe("resolveAppRecoveryGate", () => {
       }),
     );
 
-    expect(decision).toEqual({ action: "clear_and_continue" });
+    expect(decision).toEqual({
+      action: "clear_via_handler",
+      destination: AUTH_ROUTES.app,
+    });
   });
 });
 

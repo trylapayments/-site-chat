@@ -8,14 +8,14 @@ export type ResetPasswordGateDecision =
   | { action: "allow" }
   | { action: "redirect"; destination: typeof AUTH_ROUTES.forgotPassword }
   | {
-      action: "clear_and_redirect";
+      action: "clear_via_handler";
       destination: typeof AUTH_ROUTES.forgotPassword;
     };
 
 export type AppRecoveryGateDecision =
   | { action: "continue" }
   | { action: "redirect"; destination: typeof AUTH_ROUTES.resetPassword }
-  | { action: "clear_and_continue" };
+  | { action: "clear_via_handler"; destination: typeof AUTH_ROUTES.app };
 
 export function evaluateRecoveryCookie(
   rawValue: string | undefined,
@@ -45,7 +45,7 @@ export function resolveResetPasswordGate(input: {
   }
 
   return {
-    action: "clear_and_redirect",
+    action: "clear_via_handler",
     destination: AUTH_ROUTES.forgotPassword,
   };
 }
@@ -61,5 +61,5 @@ export function resolveAppRecoveryGate(
     return { action: "continue" };
   }
 
-  return { action: "clear_and_continue" };
+  return { action: "clear_via_handler", destination: AUTH_ROUTES.app };
 }

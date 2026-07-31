@@ -1,12 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
-import {
-  clearRecoveryCookie,
-  readRecoveryCookieValidationForSession,
-} from "@/lib/auth/recovery-cookie.server";
+import { readRecoveryCookieValidationForSession } from "@/lib/auth/recovery-cookie.server";
 import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
-import { toAppRoute } from "@/lib/auth/redirect";
+import { buildRecoveryClearUrl, toAppRoute } from "@/lib/auth/redirect";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,9 +17,8 @@ export default async function ResetPasswordPage() {
     cookieValidation,
   });
 
-  if (gate.action === "clear_and_redirect") {
-    await clearRecoveryCookie();
-    redirect(toAppRoute(gate.destination));
+  if (gate.action === "clear_via_handler") {
+    redirect(toAppRoute(buildRecoveryClearUrl(gate.destination)));
   }
 
   if (gate.action === "redirect") {
