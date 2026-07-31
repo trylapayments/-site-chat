@@ -723,39 +723,46 @@ LANGUAGE plpgsql
 SET search_path = ''
 AS $$
 DECLARE
+  v_workspace_ids uuid[];
   v_workspace_id uuid;
   v_owner_count integer;
   v_exempt boolean;
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    v_workspace_id := OLD.workspace_id;
+    v_workspace_ids := ARRAY[OLD.workspace_id];
+  ELSIF TG_OP = 'INSERT' THEN
+    v_workspace_ids := ARRAY[NEW.workspace_id];
   ELSE
-    v_workspace_id := COALESCE(NEW.workspace_id, OLD.workspace_id);
-  END IF;
-
-  SELECT
-    w.deleted_at IS NOT NULL OR w.status = 'pending_deletion'
-  INTO v_exempt
-  FROM public.workspaces w
-  WHERE w.id = v_workspace_id;
-
-  IF v_exempt THEN
-    IF TG_OP = 'DELETE' THEN
-      RETURN OLD;
+    IF OLD.workspace_id IS DISTINCT FROM NEW.workspace_id THEN
+      v_workspace_ids := ARRAY[OLD.workspace_id, NEW.workspace_id];
+    ELSE
+      v_workspace_ids := ARRAY[NEW.workspace_id];
     END IF;
-    RETURN NEW;
   END IF;
 
-  SELECT count(*)
-  INTO v_owner_count
-  FROM public.workspace_members wm
-  WHERE wm.workspace_id = v_workspace_id
-    AND wm.role = 'owner'
-    AND wm.status = 'active';
+  FOREACH v_workspace_id IN ARRAY v_workspace_ids
+  LOOP
+    SELECT
+      w.deleted_at IS NOT NULL OR w.status = 'pending_deletion'
+    INTO v_exempt
+    FROM public.workspaces w
+    WHERE w.id = v_workspace_id;
 
-  IF v_owner_count < 1 THEN
-    RAISE EXCEPTION 'Workspace must have at least one active owner';
-  END IF;
+    IF v_exempt THEN
+      CONTINUE;
+    END IF;
+
+    SELECT count(*)
+    INTO v_owner_count
+    FROM public.workspace_members wm
+    WHERE wm.workspace_id = v_workspace_id
+      AND wm.role = 'owner'
+      AND wm.status = 'active';
+
+    IF v_owner_count < 1 THEN
+      RAISE EXCEPTION 'Workspace must have at least one active owner';
+    END IF;
+  END LOOP;
 
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;

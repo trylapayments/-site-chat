@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(49);
+SELECT plan(52);
 
 CREATE TEMP TABLE test_fixtures (
   key text PRIMARY KEY,
@@ -737,6 +737,75 @@ SELECT throws_like(
   $$,
   'Workspace must have at least one active owner',
   'T36: orphan workspace insert fails deferred owner invariant'
+);
+
+-- T37
+SELECT tests.clear_auth();
+SET LOCAL role postgres;
+
+SELECT throws_like(
+  format(
+    $q$
+      UPDATE public.workspace_members
+      SET workspace_id = %L::uuid
+      WHERE workspace_id = %L::uuid
+        AND user_id = %L::uuid;
+      SET CONSTRAINTS ALL IMMEDIATE;
+    $q$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_b'),
+    tests.fixture('owner_b')
+  ),
+  'Workspace must have at least one active owner',
+  'T37: moving sole active owner to another workspace fails'
+);
+
+SELECT lives_ok(
+  format(
+    $q$
+      UPDATE public.workspace_members
+      SET workspace_id = %L::uuid
+      WHERE workspace_id = %L::uuid
+        AND user_id = %L::uuid;
+      SET CONSTRAINTS ALL IMMEDIATE;
+    $q$,
+    tests.fixture('workspace_b'),
+    tests.fixture('workspace_a'),
+    tests.fixture('agent_a')
+  ),
+  'T37: moving non-owner member to another workspace succeeds'
+);
+
+SELECT tests.authenticate_as(
+  tests.fixture('owner_a')::uuid,
+  'owner-a@test.local'
+);
+
+SELECT lives_ok(
+  format(
+    $q$SELECT public.promote_workspace_member_to_owner(%L::uuid)$q$,
+    tests.fixture('admin_a')
+  ),
+  'T37: promote admin to co-owner for move test setup'
+);
+
+SELECT tests.clear_auth();
+SET LOCAL role postgres;
+
+SELECT lives_ok(
+  format(
+    $q$
+      UPDATE public.workspace_members
+      SET workspace_id = %L::uuid
+      WHERE workspace_id = %L::uuid
+        AND user_id = %L::uuid;
+      SET CONSTRAINTS ALL IMMEDIATE;
+    $q$,
+    tests.fixture('workspace_b'),
+    tests.fixture('workspace_a'),
+    tests.fixture('owner_a')
+  ),
+  'T37: moving one of multiple active owners succeeds'
 );
 
 -- T38
