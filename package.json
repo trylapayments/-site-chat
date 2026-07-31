@@ -9,7 +9,11 @@
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "gen:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts",
+    "db:types:check": "tmp=$(mktemp) && supabase gen types typescript --local > \"$tmp\" && diff -u packages/shared/src/database.types.ts \"$tmp\" && rm \"$tmp\""
   },
   "devDependencies": {
     "@site-chat/eslint-config": "workspace:*",

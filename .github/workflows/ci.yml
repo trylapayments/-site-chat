@@ -82,3 +82,29 @@ jobs:
             exit 1
           fi
           echo "Client bundle check passed"
+
+  database:
+    name: Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.111.0
+
+      - name: Start Supabase local stack
+        run: supabase start
+
+      - name: Reset database
+        run: supabase db reset
+
+      - name: Run database tests
+        run: supabase test db
+
+      - name: Check generated database types
+        run: |
+          supabase gen types typescript --local > /tmp/database.types.ts
+          diff -u packages/shared/src/database.types.ts /tmp/database.types.ts

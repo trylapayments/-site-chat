@@ -57,7 +57,7 @@ importers:
         version: 0.483.0(react@19.2.8)
       next:
         specifier: ^15.2.2
-        version: 15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 15.5.22(@opentelemetry/api@1.9.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -655,6 +655,13 @@ packages:
         integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==,
       }
     engines: { node: ">= 8" }
+
+  "@opentelemetry/api@1.9.1":
+    resolution:
+      {
+        integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==,
+      }
+    engines: { node: ">=8.0.0" }
 
   "@radix-ui/react-compose-refs@1.1.5":
     resolution:
@@ -3449,6 +3456,9 @@ snapshots:
       "@nodelib/fs.scandir": 2.1.5
       fastq: 1.20.1
 
+  "@opentelemetry/api@1.9.1":
+    optional: true
+
   "@radix-ui/react-compose-refs@1.1.5(@types/react@19.2.17)(react@19.2.8)":
     dependencies:
       react: 19.2.8
@@ -4588,7 +4598,7 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  next@15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  next@15.5.22(@opentelemetry/api@1.9.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       "@next/env": 15.5.22
       "@swc/helpers": 0.5.15
@@ -4606,6 +4616,7 @@ snapshots:
       "@next/swc-linux-x64-musl": 15.5.22
       "@next/swc-win32-arm64-msvc": 15.5.22
       "@next/swc-win32-x64-msvc": 15.5.22
+      "@opentelemetry/api": 1.9.1
       sharp: 0.34.5
     transitivePeerDependencies:
       - "@babel/core"
