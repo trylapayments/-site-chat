@@ -1,5 +1,4 @@
 # Site Chat local Supabase configuration.
-# Full schema migrations begin in a later phase.
 
 project_id = "site-chat"
 
@@ -34,11 +33,20 @@ file_size_limit = "50MiB"
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000"]
+additional_redirect_urls = [
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/auth/recovery",
+]
 jwt_expiry = 3600
 enable_signup = true
+
+[auth.sessions]
+# Maximum session lifetime (7 days). Enforced on next refresh.
+timebox = "168h"
+# Invalidate sessions inactive longer than 24 hours. Enforced on next refresh.
+inactivity_timeout = "24h"
 
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
-enable_confirmations = false
+enable_confirmations = true

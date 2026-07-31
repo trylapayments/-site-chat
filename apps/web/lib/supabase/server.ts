@@ -1,3 +1,4 @@
+import type { Database } from "@site-chat/shared";
 import {
   createServerClient,
   type CookieMethodsServer,
@@ -6,6 +7,8 @@ import {
 import { cookies } from "next/headers";
 
 import { clientEnv } from "@/lib/env";
+
+export type AppSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * Supabase client for Server Components, Server Actions, and Route Handlers.
@@ -33,7 +36,7 @@ export async function createClient() {
 
   // createServerClient has a deprecated overload for get/set/remove cookies; we use getAll/setAll.
   // eslint-disable-next-line @typescript-eslint/no-deprecated -- CookieMethodsServer overload
-  return createServerClient(
+  return createServerClient<Database>(
     clientEnv.NEXT_PUBLIC_SUPABASE_URL,
     clientEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {

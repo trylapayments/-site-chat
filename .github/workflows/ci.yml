@@ -46,6 +46,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Test web auth utilities
+        run: pnpm --filter @site-chat/web test
+
       - name: Format check
         run: pnpm format:check
 
