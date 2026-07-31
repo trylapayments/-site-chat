@@ -98,17 +98,8 @@ jobs:
       - name: Start Supabase local stack
         run: supabase start
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Reset database (without seed)
-        # Temporary diagnostics: skip Supabase CLI seed batching so psql can report errors.
-        run: supabase db reset --no-seed
-
-      - name: Seed database via psql (temporary diagnostics)
-        run: |
-          eval "$(supabase status -o env)"
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f supabase/seed.sql
+      - name: Reset database
+        run: supabase db reset
 
       - name: Run database tests
         run: supabase test db
