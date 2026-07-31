@@ -24,11 +24,11 @@ import {
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import {
   clearRecoveryCookie,
-  readRecoveryCookieValidationForSession,
+  readRecoveryGateContext,
 } from "@/lib/auth/recovery-cookie.server";
 import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
 import { createClient } from "@/lib/supabase/server";
-import { clientEnv } from "@/lib/env";
+import { clientEnv, env } from "@/lib/env";
 import { revalidatePath } from "next/cache";
 
 function mapFieldErrors(
@@ -199,15 +199,20 @@ export async function updatePasswordAction(
   const supabase = await createClient();
   const { user } = await requireUser(supabase);
 
-  const cookieValidation =
-    await readRecoveryCookieValidationForSession(supabase);
+  const recoveryContext = await readRecoveryGateContext(supabase);
   const gate = resolveResetPasswordGate({
     hasAuthenticatedUser: Boolean(user),
-    cookieValidation,
+    ...recoveryContext,
   });
 
   if (gate.action === "clear_via_handler") {
-    redirect(toAppRoute(buildRecoveryClearUrl(gate.destination)));
+    redirect(
+      toAppRoute(
+        buildRecoveryClearUrl(gate.destination, env.AUTH_COOKIE_SECRET, {
+          signOutRecoverySession: gate.signOutRecoverySession,
+        }),
+      ),
+    );
   }
 
   if (gate.action === "redirect") {

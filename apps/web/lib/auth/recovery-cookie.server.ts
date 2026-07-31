@@ -10,6 +10,7 @@ import {
   getRecoveryCookieClearOptions,
   getRecoveryCookieOptions,
   RECOVERY_COOKIE_NAME,
+  verifyExpiredRecoveryCookieBinding,
   verifyRecoveryCookieValue,
   type RecoveryCookieValidationResult,
 } from "@/lib/auth/recovery-cookie";
@@ -51,6 +52,43 @@ export async function readRecoveryCookieValidationForSession(
     nowSeconds,
     sessionId,
   });
+}
+
+export async function readRecoveryGateContext(
+  supabase: AppSupabaseClient,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): Promise<{
+  cookieValidation: RecoveryCookieValidationResult;
+  expiredSessionBindingMatches: boolean;
+}> {
+  const cookieStore = await cookies();
+  const rawValue = cookieStore.get(RECOVERY_COOKIE_NAME)?.value;
+  const claims = await getClaimsOrNull(supabase);
+  const sessionId =
+    claims && typeof claims.session_id === "string"
+      ? claims.session_id
+      : undefined;
+
+  const cookieValidation = await readRecoveryCookieValidationForSession(
+    supabase,
+    nowSeconds,
+  );
+
+  const expiredSessionBindingMatches =
+    !cookieValidation.valid &&
+    cookieValidation.reason === "expired" &&
+    rawValue !== undefined &&
+    sessionId !== undefined &&
+    verifyExpiredRecoveryCookieBinding(
+      rawValue,
+      env.AUTH_COOKIE_SECRET,
+      sessionId,
+    );
+
+  return {
+    cookieValidation,
+    expiredSessionBindingMatches,
+  };
 }
 
 export async function setRecoveryCookie(sessionId: string): Promise<void> {

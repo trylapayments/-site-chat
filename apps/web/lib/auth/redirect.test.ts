@@ -34,6 +34,9 @@ describe("sanitizeRecoveryClearDestination", () => {
     expect(sanitizeRecoveryClearDestination("/forgot-password")).toBe(
       "/forgot-password",
     );
+    expect(
+      sanitizeRecoveryClearDestination("/auth-error?code=recovery_expired"),
+    ).toBe("/auth-error?code=recovery_expired");
   });
 
   it("rejects open redirects for recovery cleanup", () => {
@@ -45,19 +48,29 @@ describe("sanitizeRecoveryClearDestination", () => {
 });
 
 describe("buildRecoveryClearUrl", () => {
-  it("builds handler URLs for safe cleanup destinations", () => {
-    expect(buildRecoveryClearUrl("/app")).toBe(
-      `${AUTH_ROUTES.authClearRecovery}?destination=%2Fapp`,
-    );
-    expect(buildRecoveryClearUrl("/forgot-password")).toBe(
-      `${AUTH_ROUTES.authClearRecovery}?destination=%2Fforgot-password`,
-    );
+  const TEST_SECRET = "test-auth-cookie-secret-min-32-characters";
+
+  it("builds handler URLs with signed cleanup tokens", () => {
+    const appUrl = buildRecoveryClearUrl("/app", TEST_SECRET, {
+      nowSeconds: 1_700_000_000,
+    });
+    expect(appUrl.startsWith(`${AUTH_ROUTES.authClearRecovery}?`)).toBe(true);
+    expect(appUrl).toContain("destination=%2Fapp");
+    expect(appUrl).toContain("token=");
+
+    const forgotUrl = buildRecoveryClearUrl("/forgot-password", TEST_SECRET, {
+      nowSeconds: 1_700_000_000,
+    });
+    expect(forgotUrl).toContain("destination=%2Fforgot-password");
+    expect(forgotUrl).toContain("token=");
   });
 
   it("falls back to /app for unsafe destinations", () => {
-    expect(buildRecoveryClearUrl("//evil.com")).toBe(
-      `${AUTH_ROUTES.authClearRecovery}?destination=%2Fapp`,
-    );
+    const url = buildRecoveryClearUrl("//evil.com", TEST_SECRET, {
+      nowSeconds: 1_700_000_000,
+    });
+    expect(url).toContain("destination=%2Fapp");
+    expect(url).toContain("token=");
   });
 });
 

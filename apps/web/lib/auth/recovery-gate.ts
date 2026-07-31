@@ -4,18 +4,23 @@ import {
   type RecoveryCookieValidationResult,
 } from "@/lib/auth/recovery-cookie";
 
+export type RecoveryClearViaHandlerDecision = {
+  action: "clear_via_handler";
+  destination: string;
+  signOutRecoverySession: boolean;
+};
+
 export type ResetPasswordGateDecision =
   | { action: "allow" }
   | { action: "redirect"; destination: typeof AUTH_ROUTES.forgotPassword }
-  | {
-      action: "clear_via_handler";
-      destination: typeof AUTH_ROUTES.forgotPassword;
-    };
+  | RecoveryClearViaHandlerDecision;
 
 export type AppRecoveryGateDecision =
   | { action: "continue" }
   | { action: "redirect"; destination: typeof AUTH_ROUTES.resetPassword }
-  | { action: "clear_via_handler"; destination: typeof AUTH_ROUTES.app };
+  | RecoveryClearViaHandlerDecision;
+
+const RECOVERY_EXPIRED_DESTINATION = `${AUTH_ROUTES.authError}?code=recovery_expired`;
 
 export function evaluateRecoveryCookie(
   rawValue: string | undefined,
@@ -31,6 +36,7 @@ export function evaluateRecoveryCookie(
 export function resolveResetPasswordGate(input: {
   hasAuthenticatedUser: boolean;
   cookieValidation: RecoveryCookieValidationResult;
+  expiredSessionBindingMatches?: boolean;
 }): ResetPasswordGateDecision {
   if (!input.hasAuthenticatedUser) {
     return { action: "redirect", destination: AUTH_ROUTES.forgotPassword };
@@ -44,15 +50,30 @@ export function resolveResetPasswordGate(input: {
     return { action: "redirect", destination: AUTH_ROUTES.forgotPassword };
   }
 
+  if (
+    input.cookieValidation.reason === "expired" &&
+    input.expiredSessionBindingMatches
+  ) {
+    return {
+      action: "clear_via_handler",
+      destination: RECOVERY_EXPIRED_DESTINATION,
+      signOutRecoverySession: true,
+    };
+  }
+
   return {
     action: "clear_via_handler",
     destination: AUTH_ROUTES.forgotPassword,
+    signOutRecoverySession: false,
   };
 }
 
-export function resolveAppRecoveryGate(
-  cookieValidation: RecoveryCookieValidationResult,
-): AppRecoveryGateDecision {
+export function resolveAppRecoveryGate(input: {
+  cookieValidation: RecoveryCookieValidationResult;
+  expiredSessionBindingMatches?: boolean;
+}): AppRecoveryGateDecision {
+  const { cookieValidation, expiredSessionBindingMatches = false } = input;
+
   if (cookieValidation.valid) {
     return { action: "redirect", destination: AUTH_ROUTES.resetPassword };
   }
@@ -61,5 +82,19 @@ export function resolveAppRecoveryGate(
     return { action: "continue" };
   }
 
-  return { action: "clear_via_handler", destination: AUTH_ROUTES.app };
+  if (cookieValidation.reason === "expired" && expiredSessionBindingMatches) {
+    return {
+      action: "clear_via_handler",
+      destination: RECOVERY_EXPIRED_DESTINATION,
+      signOutRecoverySession: true,
+    };
+  }
+
+  return {
+    action: "clear_via_handler",
+    destination: AUTH_ROUTES.app,
+    signOutRecoverySession: false,
+  };
 }
+
+export { RECOVERY_EXPIRED_DESTINATION };

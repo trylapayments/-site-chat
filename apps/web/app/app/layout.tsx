@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
-import { readRecoveryCookieValidationForSession } from "@/lib/auth/recovery-cookie.server";
+import { readRecoveryGateContext } from "@/lib/auth/recovery-cookie.server";
 import { resolveAppRecoveryGate } from "@/lib/auth/recovery-gate";
 import {
   buildLoginUrl,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
 
 export default async function AppLayout({
   children,
@@ -32,12 +33,21 @@ export default async function AppLayout({
     );
   }
 
-  const recoveryGate = resolveAppRecoveryGate(
-    await readRecoveryCookieValidationForSession(supabase),
-  );
+  const recoveryContext = await readRecoveryGateContext(supabase);
+  const recoveryGate = resolveAppRecoveryGate(recoveryContext);
 
   if (recoveryGate.action === "clear_via_handler") {
-    redirect(toAppRoute(buildRecoveryClearUrl(recoveryGate.destination)));
+    redirect(
+      toAppRoute(
+        buildRecoveryClearUrl(
+          recoveryGate.destination,
+          env.AUTH_COOKIE_SECRET,
+          {
+            signOutRecoverySession: recoveryGate.signOutRecoverySession,
+          },
+        ),
+      ),
+    );
   }
 
   if (recoveryGate.action === "redirect") {

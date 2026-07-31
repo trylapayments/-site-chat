@@ -125,6 +125,46 @@ export function verifyRecoveryCookieSessionBinding(
   return timingSafeEqualStrings(payload.session_binding, expectedBinding);
 }
 
+/**
+ * Verifies a recovery cookie signature and session binding even when expired.
+ * Used to detect an active recovery session whose sc_recovery TTL has lapsed.
+ */
+export function verifyExpiredRecoveryCookieBinding(
+  value: string,
+  secret: string,
+  sessionId: string,
+): boolean {
+  const separatorIndex = value.lastIndexOf(".");
+  if (separatorIndex <= 0) {
+    return false;
+  }
+
+  const encodedPayload = value.slice(0, separatorIndex);
+  const providedSignature = value.slice(separatorIndex + 1);
+
+  if (!encodedPayload || !providedSignature) {
+    return false;
+  }
+
+  const expectedSignature = signPayload(encodedPayload, secret);
+  if (!timingSafeEqualStrings(providedSignature, expectedSignature)) {
+    return false;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(base64UrlDecode(encodedPayload));
+  } catch {
+    return false;
+  }
+
+  if (!isRecoveryCookiePayload(parsed)) {
+    return false;
+  }
+
+  return verifyRecoveryCookieSessionBinding(parsed, secret, sessionId);
+}
+
 export function verifyRecoveryCookieValue(
   value: string | undefined,
   secret: string,

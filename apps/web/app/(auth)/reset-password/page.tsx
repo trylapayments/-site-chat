@@ -1,24 +1,30 @@
 import { redirect } from "next/navigation";
 
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
-import { readRecoveryCookieValidationForSession } from "@/lib/auth/recovery-cookie.server";
+import { readRecoveryGateContext } from "@/lib/auth/recovery-cookie.server";
 import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
 import { buildRecoveryClearUrl, toAppRoute } from "@/lib/auth/redirect";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
 
 export default async function ResetPasswordPage() {
   const supabase = await createClient();
   const { user } = await requireUser(supabase);
-  const cookieValidation =
-    await readRecoveryCookieValidationForSession(supabase);
+  const recoveryContext = await readRecoveryGateContext(supabase);
   const gate = resolveResetPasswordGate({
     hasAuthenticatedUser: Boolean(user),
-    cookieValidation,
+    ...recoveryContext,
   });
 
   if (gate.action === "clear_via_handler") {
-    redirect(toAppRoute(buildRecoveryClearUrl(gate.destination)));
+    redirect(
+      toAppRoute(
+        buildRecoveryClearUrl(gate.destination, env.AUTH_COOKIE_SECRET, {
+          signOutRecoverySession: gate.signOutRecoverySession,
+        }),
+      ),
+    );
   }
 
   if (gate.action === "redirect") {

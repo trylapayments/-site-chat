@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 import {
   createRecoveryCookieValue,
+  verifyExpiredRecoveryCookieBinding,
   verifyRecoveryCookieValue,
 } from "@/lib/auth/recovery-cookie";
 import {
+  RECOVERY_EXPIRED_DESTINATION,
   resolveAppRecoveryGate,
   resolveResetPasswordGate,
 } from "@/lib/auth/recovery-gate";
@@ -57,6 +59,7 @@ describe("resolveResetPasswordGate", () => {
     expect(decision).toEqual({
       action: "clear_via_handler",
       destination: AUTH_ROUTES.forgotPassword,
+      signOutRecoverySession: false,
     });
   });
 
@@ -73,6 +76,29 @@ describe("resolveResetPasswordGate", () => {
     expect(decision).toEqual({
       action: "clear_via_handler",
       destination: AUTH_ROUTES.forgotPassword,
+      signOutRecoverySession: false,
+    });
+  });
+
+  it("ends expired recovery sessions bound to the active session", () => {
+    const cookie = createRecoveryCookieValue(TEST_SECRET, SESSION_A, NOW);
+    const decision = resolveResetPasswordGate({
+      hasAuthenticatedUser: true,
+      cookieValidation: verifyRecoveryCookieValue(cookie, TEST_SECRET, {
+        nowSeconds: NOW + 901,
+        sessionId: SESSION_A,
+      }),
+      expiredSessionBindingMatches: verifyExpiredRecoveryCookieBinding(
+        cookie,
+        TEST_SECRET,
+        SESSION_A,
+      ),
+    });
+
+    expect(decision).toEqual({
+      action: "clear_via_handler",
+      destination: RECOVERY_EXPIRED_DESTINATION,
+      signOutRecoverySession: true,
     });
   });
 });
@@ -80,12 +106,12 @@ describe("resolveResetPasswordGate", () => {
 describe("resolveAppRecoveryGate", () => {
   it("redirects authenticated app requests to reset-password while recovery is active", () => {
     const cookie = createRecoveryCookieValue(TEST_SECRET, SESSION_A, NOW);
-    const decision = resolveAppRecoveryGate(
-      verifyRecoveryCookieValue(cookie, TEST_SECRET, {
+    const decision = resolveAppRecoveryGate({
+      cookieValidation: verifyRecoveryCookieValue(cookie, TEST_SECRET, {
         nowSeconds: NOW + 10,
         sessionId: SESSION_A,
       }),
-    );
+    });
 
     expect(decision).toEqual({
       action: "redirect",
@@ -94,58 +120,86 @@ describe("resolveAppRecoveryGate", () => {
   });
 
   it("continues when no recovery cookie is present", () => {
-    const decision = resolveAppRecoveryGate(
-      verifyRecoveryCookieValue(undefined, TEST_SECRET, {
+    const decision = resolveAppRecoveryGate({
+      cookieValidation: verifyRecoveryCookieValue(undefined, TEST_SECRET, {
         nowSeconds: NOW,
         sessionId: SESSION_A,
       }),
-    );
+    });
 
     expect(decision).toEqual({ action: "continue" });
   });
 
-  it("clears expired cookies and continues in /app", () => {
+  it("ends expired recovery sessions instead of continuing into /app", () => {
     const cookie = createRecoveryCookieValue(TEST_SECRET, SESSION_A, NOW);
-    const decision = resolveAppRecoveryGate(
-      verifyRecoveryCookieValue(cookie, TEST_SECRET, {
+    const decision = resolveAppRecoveryGate({
+      cookieValidation: verifyRecoveryCookieValue(cookie, TEST_SECRET, {
         nowSeconds: NOW + 901,
         sessionId: SESSION_A,
       }),
-    );
+      expiredSessionBindingMatches: verifyExpiredRecoveryCookieBinding(
+        cookie,
+        TEST_SECRET,
+        SESSION_A,
+      ),
+    });
+
+    expect(decision).toEqual({
+      action: "clear_via_handler",
+      destination: RECOVERY_EXPIRED_DESTINATION,
+      signOutRecoverySession: true,
+    });
+    expect(decision).not.toEqual({
+      action: "continue",
+    });
+  });
+
+  it("clears stale expired cookies and continues in /app when binding does not match", () => {
+    const cookie = createRecoveryCookieValue(TEST_SECRET, SESSION_A, NOW);
+    const decision = resolveAppRecoveryGate({
+      cookieValidation: verifyRecoveryCookieValue(cookie, TEST_SECRET, {
+        nowSeconds: NOW + 901,
+        sessionId: SESSION_B,
+      }),
+      expiredSessionBindingMatches: false,
+    });
 
     expect(decision).toEqual({
       action: "clear_via_handler",
       destination: AUTH_ROUTES.app,
+      signOutRecoverySession: false,
     });
   });
 
   it("clears tampered cookies and continues in /app", () => {
     const cookie = `${createRecoveryCookieValue(TEST_SECRET, SESSION_A, NOW)}x`;
-    const decision = resolveAppRecoveryGate(
-      verifyRecoveryCookieValue(cookie, TEST_SECRET, {
+    const decision = resolveAppRecoveryGate({
+      cookieValidation: verifyRecoveryCookieValue(cookie, TEST_SECRET, {
         nowSeconds: NOW + 10,
         sessionId: SESSION_A,
       }),
-    );
+    });
 
     expect(decision).toEqual({
       action: "clear_via_handler",
       destination: AUTH_ROUTES.app,
+      signOutRecoverySession: false,
     });
   });
 
   it("clears session-mismatched cookies and continues in /app", () => {
     const cookie = createRecoveryCookieValue(TEST_SECRET, SESSION_A, NOW);
-    const decision = resolveAppRecoveryGate(
-      verifyRecoveryCookieValue(cookie, TEST_SECRET, {
+    const decision = resolveAppRecoveryGate({
+      cookieValidation: verifyRecoveryCookieValue(cookie, TEST_SECRET, {
         nowSeconds: NOW + 10,
         sessionId: SESSION_B,
       }),
-    );
+    });
 
     expect(decision).toEqual({
       action: "clear_via_handler",
       destination: AUTH_ROUTES.app,
+      signOutRecoverySession: false,
     });
   });
 });
@@ -158,6 +212,8 @@ describe("recovery completion and sign-out cleanup helpers", () => {
     });
 
     expect(validation.valid).toBe(false);
-    expect(resolveAppRecoveryGate(validation)).toEqual({ action: "continue" });
+    expect(resolveAppRecoveryGate({ cookieValidation: validation })).toEqual({
+      action: "continue",
+    });
   });
 });
