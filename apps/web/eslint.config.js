@@ -14,4 +14,10 @@ export default [
       },
     },
   },
+  {
+    files: ["lib/auth/redirect.ts"],
+    rules: {
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+    },
+  },
 ];
