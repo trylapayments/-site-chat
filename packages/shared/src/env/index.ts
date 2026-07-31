@@ -14,6 +14,9 @@ export const serverEnvSchema = z.object({
 
   // App
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+
+  // Signed auth flow cookies (sc_recovery)
+  AUTH_COOKIE_SECRET: z.string().min(32),
 });
 
 /**

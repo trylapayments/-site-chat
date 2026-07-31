@@ -16,6 +16,7 @@ env:
   NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
   NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
   SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
+  AUTH_COOKIE_SECRET: placeholder-auth-cookie-secret-for-ci-build-min-32-chars
 
 jobs:
   lint-and-typecheck:
@@ -45,6 +46,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Test web auth utilities
+        run: pnpm --filter @site-chat/web test
 
       - name: Format check
         run: pnpm format:check
