@@ -208,12 +208,18 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
 
-  INSERT INTO public.workspaces (name, slug)
-  VALUES (p_name, p_slug)
-  RETURNING id INTO v_workspace_id;
-
+  -- Insert workspace and initial owner membership in one SQL statement so
+  -- deferrable owner-invariant triggers (including when constraint timing is
+  -- IMMEDIATE) run only after both rows exist.
+  WITH new_workspace AS (
+    INSERT INTO public.workspaces (name, slug)
+    VALUES (p_name, p_slug)
+    RETURNING id
+  )
   INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
-  VALUES (v_workspace_id, v_user_id, 'owner', 'active');
+  SELECT nw.id, v_user_id, 'owner', 'active'
+  FROM new_workspace nw
+  RETURNING workspace_id INTO v_workspace_id;
 
   RETURN v_workspace_id;
 END;
@@ -685,6 +691,10 @@ BEGIN
   ELSE
     v_workspace_id := NEW.id;
   END IF;
+
+  -- Workspace INSERT is validated once owner membership exists in the same
+  -- command (create_workspace) or at transaction commit (deferrable default).
+  -- Member workspace_id moves are handled by enforce_workspace_owner_invariant.
 
   SELECT
     w.deleted_at IS NOT NULL OR w.status = 'pending_deletion'
