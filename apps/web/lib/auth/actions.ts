@@ -18,8 +18,14 @@ import {
 } from "@/lib/auth/errors";
 import { resolveSafeRedirectPath, toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
+import {
+  clearRecoveryCookie,
+  readRecoveryCookieValidation,
+} from "@/lib/auth/recovery-cookie.server";
+import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
 import { createClient } from "@/lib/supabase/server";
 import { clientEnv } from "@/lib/env";
+import { revalidatePath } from "next/cache";
 
 function mapFieldErrors(
   issues: { path: PropertyKey[]; message: string }[],
@@ -132,6 +138,7 @@ export async function signInAction(
 
 export async function signOutAction(): Promise<void> {
   const supabase = await createClient();
+  await clearRecoveryCookie();
   await supabase.auth.signOut();
   redirect(toAppRoute(AUTH_ROUTES.login));
 }
@@ -188,8 +195,19 @@ export async function updatePasswordAction(
   const supabase = await createClient();
   const { user } = await requireUser(supabase);
 
-  if (!user) {
-    redirect(toAppRoute(AUTH_ROUTES.forgotPassword));
+  const cookieValidation = await readRecoveryCookieValidation();
+  const gate = resolveResetPasswordGate({
+    hasAuthenticatedUser: Boolean(user),
+    cookieValidation,
+  });
+
+  if (gate.action === "clear_and_redirect") {
+    await clearRecoveryCookie();
+    redirect(toAppRoute(gate.destination));
+  }
+
+  if (gate.action === "redirect") {
+    redirect(toAppRoute(gate.destination));
   }
 
   const { error } = await supabase.auth.updateUser({
@@ -204,6 +222,9 @@ export async function updatePasswordAction(
     };
   }
 
+  await supabase.auth.refreshSession();
+  await clearRecoveryCookie();
+  revalidatePath(AUTH_ROUTES.app);
   redirect(toAppRoute(AUTH_ROUTES.app));
 }
 

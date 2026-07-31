@@ -4,6 +4,8 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 import { buildLoginUrl, toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
+import { readRecoveryCookieValidation } from "@/lib/auth/recovery-cookie.server";
+import { resolveAppRecoveryGate } from "@/lib/auth/recovery-gate";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
@@ -24,6 +26,13 @@ export default async function AppLayout({
         `${AUTH_ROUTES.checkEmail}?email=${encodeURIComponent(user.email ?? "")}`,
       ),
     );
+  }
+
+  const recoveryGate = resolveAppRecoveryGate(
+    await readRecoveryCookieValidation(),
+  );
+  if (recoveryGate.action === "redirect") {
+    redirect(toAppRoute(recoveryGate.destination));
   }
 
   return (

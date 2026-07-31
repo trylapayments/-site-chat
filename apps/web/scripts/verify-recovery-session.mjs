@@ -1,5 +1,8 @@
 /**
- * Empirical verification of Supabase Auth recovery-session signals.
+ * DIAGNOSTIC DEVELOPER TOOL — not used in production runtime.
+ *
+ * Empirical verification of Supabase Auth recovery-session JWT signals.
+ * Retained to document why JWT `amr` must not be used for recovery gating.
  *
  * Stack:
  * - GoTrue v2.194.0 (matches Supabase CLI 2.111.0 auth image)
