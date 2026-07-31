@@ -131,3 +131,9 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION tests.fixture(text) TO authenticated;
+
+BEGIN;
+SELECT plan(1);
+SELECT ok(true, 'test helpers installed');
+SELECT * FROM finish();
+ROLLBACK;
