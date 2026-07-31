@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(53);
+SELECT plan(54);
 
 CREATE TEMP TABLE test_fixtures (
   key text PRIMARY KEY,
@@ -755,9 +755,32 @@ SELECT is(
   'T37: workspace_b has exactly one active owner before move test'
 );
 
+SELECT ok(
+  (
+    SELECT id IS NOT NULL
+    FROM public.workspace_members
+    WHERE workspace_id = tests.fixture('workspace_b')::uuid
+      AND user_id = tests.fixture('owner_b')::uuid
+      AND role = 'owner'
+      AND status = 'active'
+  ),
+  'T37: sole owner membership row exists before move test'
+);
+
 SELECT throws_like(
   format(
-    $q$SELECT tests.move_workspace_member(%L::uuid, %L::uuid)$q$,
+    $q$
+      DO $move_sole_owner$
+      BEGIN
+        EXECUTE 'SET CONSTRAINTS ALL DEFERRED';
+        UPDATE public.workspace_members
+        SET workspace_id = %L::uuid
+        WHERE id = %L::uuid;
+        EXECUTE 'SET CONSTRAINTS ALL IMMEDIATE';
+      END;
+      $move_sole_owner$;
+    $q$,
+    tests.fixture('workspace_a'),
     (
       SELECT id::text
       FROM public.workspace_members
@@ -765,8 +788,7 @@ SELECT throws_like(
         AND user_id = tests.fixture('owner_b')::uuid
         AND role = 'owner'
         AND status = 'active'
-    ),
-    tests.fixture('workspace_a')
+    )
   ),
   'Workspace must have at least one active owner',
   'T37: moving sole active owner to another workspace fails'
