@@ -1,3 +1,5 @@
+\ir helpers/000_helpers.psql
+
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;

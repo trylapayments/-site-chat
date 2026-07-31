@@ -1,5 +1,5 @@
 -- Test helpers for workspace foundation pgTAP suite.
--- Runs as superuser before test cases.
+-- Included via \ir; not executed directly by pg_prove.
 
 CREATE SCHEMA IF NOT EXISTS tests;
 
@@ -131,9 +131,3 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION tests.fixture(text) TO authenticated;
-
-BEGIN;
-SELECT plan(1);
-SELECT ok(true, 'test helpers installed');
-SELECT * FROM finish();
-ROLLBACK;
