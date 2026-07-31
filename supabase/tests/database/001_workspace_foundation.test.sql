@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(52);
+SELECT plan(53);
 
 CREATE TEMP TABLE test_fixtures (
   key text PRIMARY KEY,
@@ -26,7 +26,6 @@ DECLARE
   v_invite_token text;
   v_agent_member_a uuid;
   v_owner_member_a uuid;
-  v_admin_member_a uuid;
 BEGIN
   v_owner_a := tests.create_auth_user('owner-a@test.local');
   v_admin_a := tests.create_auth_user('admin-a@test.local');
@@ -79,18 +78,12 @@ BEGIN
   WHERE workspace_id = v_workspace_a
     AND user_id = v_owner_a;
 
-  SELECT id INTO v_admin_member_a
-  FROM public.workspace_members
-  WHERE workspace_id = v_workspace_a
-    AND user_id = v_admin_a;
-
   INSERT INTO test_fixtures (key, value) VALUES
     ('workspace_a', v_workspace_a::text),
     ('workspace_b', v_workspace_b::text),
     ('invite_token', v_invite_token),
     ('agent_member_a', v_agent_member_a::text),
-    ('owner_member_a', v_owner_member_a::text),
-    ('admin_member_a', v_admin_member_a::text);
+    ('owner_member_a', v_owner_member_a::text);
 
   INSERT INTO tests.fixtures (key, value)
   SELECT key, value FROM test_fixtures
@@ -750,19 +743,30 @@ SELECT throws_like(
 SELECT tests.clear_auth();
 SET LOCAL role postgres;
 
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.workspace_members
+    WHERE workspace_id = tests.fixture('workspace_b')::uuid
+      AND role = 'owner'
+      AND status = 'active'
+  ),
+  1,
+  'T37: workspace_b has exactly one active owner before move test'
+);
+
 SELECT throws_like(
   format(
-    $q$
-      SET CONSTRAINTS ALL DEFERRED;
-      UPDATE public.workspace_members
-      SET workspace_id = %L::uuid
-      WHERE workspace_id = %L::uuid
-        AND user_id = %L::uuid;
-      SET CONSTRAINTS ALL IMMEDIATE;
-    $q$,
-    tests.fixture('workspace_a'),
-    tests.fixture('workspace_b'),
-    tests.fixture('owner_b')
+    $q$SELECT tests.move_workspace_member(%L::uuid, %L::uuid)$q$,
+    (
+      SELECT id::text
+      FROM public.workspace_members
+      WHERE workspace_id = tests.fixture('workspace_b')::uuid
+        AND user_id = tests.fixture('owner_b')::uuid
+        AND role = 'owner'
+        AND status = 'active'
+    ),
+    tests.fixture('workspace_a')
   ),
   'Workspace must have at least one active owner',
   'T37: moving sole active owner to another workspace fails'
@@ -776,7 +780,14 @@ SELECT tests.authenticate_as(
 SELECT lives_ok(
   format(
     $q$SELECT public.promote_workspace_member_to_owner(%L::uuid)$q$,
-    tests.fixture('admin_member_a')
+    (
+      SELECT id::text
+      FROM public.workspace_members
+      WHERE workspace_id = tests.fixture('workspace_a')::uuid
+        AND user_id = tests.fixture('admin_a')::uuid
+        AND role = 'admin'
+        AND status = 'active'
+    )
   ),
   'T37: promote admin to co-owner for move test setup'
 );
@@ -786,34 +797,32 @@ SET LOCAL role postgres;
 
 SELECT lives_ok(
   format(
-    $q$
-      SET CONSTRAINTS ALL DEFERRED;
-      UPDATE public.workspace_members
-      SET workspace_id = %L::uuid
-      WHERE workspace_id = %L::uuid
-        AND user_id = %L::uuid;
-      SET CONSTRAINTS ALL IMMEDIATE;
-    $q$,
-    tests.fixture('workspace_b'),
-    tests.fixture('workspace_a'),
-    tests.fixture('agent_a')
+    $q$SELECT tests.move_workspace_member(%L::uuid, %L::uuid)$q$,
+    (
+      SELECT id::text
+      FROM public.workspace_members
+      WHERE workspace_id = tests.fixture('workspace_a')::uuid
+        AND user_id = tests.fixture('agent_a')::uuid
+        AND role = 'agent'
+        AND status = 'active'
+    ),
+    tests.fixture('workspace_b')
   ),
   'T37: moving non-owner member to another workspace succeeds'
 );
 
 SELECT lives_ok(
   format(
-    $q$
-      SET CONSTRAINTS ALL DEFERRED;
-      UPDATE public.workspace_members
-      SET workspace_id = %L::uuid
-      WHERE workspace_id = %L::uuid
-        AND user_id = %L::uuid;
-      SET CONSTRAINTS ALL IMMEDIATE;
-    $q$,
-    tests.fixture('workspace_b'),
-    tests.fixture('workspace_a'),
-    tests.fixture('owner_a')
+    $q$SELECT tests.move_workspace_member(%L::uuid, %L::uuid)$q$,
+    (
+      SELECT id::text
+      FROM public.workspace_members
+      WHERE workspace_id = tests.fixture('workspace_a')::uuid
+        AND user_id = tests.fixture('owner_a')::uuid
+        AND role = 'owner'
+        AND status = 'active'
+    ),
+    tests.fixture('workspace_b')
   ),
   'T37: moving one of multiple active owners succeeds'
 );

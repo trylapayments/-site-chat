@@ -131,3 +131,20 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION tests.fixture(text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION tests.move_workspace_member(
+  p_member_id uuid,
+  p_target_workspace_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  EXECUTE 'SET CONSTRAINTS ALL DEFERRED';
+  UPDATE public.workspace_members
+  SET workspace_id = p_target_workspace_id
+  WHERE id = p_member_id;
+  EXECUTE 'SET CONSTRAINTS ALL IMMEDIATE';
+END;
+$$;
