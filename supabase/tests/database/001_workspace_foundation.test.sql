@@ -26,6 +26,7 @@ DECLARE
   v_invite_token text;
   v_agent_member_a uuid;
   v_owner_member_a uuid;
+  v_admin_member_a uuid;
 BEGIN
   v_owner_a := tests.create_auth_user('owner-a@test.local');
   v_admin_a := tests.create_auth_user('admin-a@test.local');
@@ -78,12 +79,18 @@ BEGIN
   WHERE workspace_id = v_workspace_a
     AND user_id = v_owner_a;
 
+  SELECT id INTO v_admin_member_a
+  FROM public.workspace_members
+  WHERE workspace_id = v_workspace_a
+    AND user_id = v_admin_a;
+
   INSERT INTO test_fixtures (key, value) VALUES
     ('workspace_a', v_workspace_a::text),
     ('workspace_b', v_workspace_b::text),
     ('invite_token', v_invite_token),
     ('agent_member_a', v_agent_member_a::text),
-    ('owner_member_a', v_owner_member_a::text);
+    ('owner_member_a', v_owner_member_a::text),
+    ('admin_member_a', v_admin_member_a::text);
 
   INSERT INTO tests.fixtures (key, value)
   SELECT key, value FROM test_fixtures
@@ -746,6 +753,7 @@ SET LOCAL role postgres;
 SELECT throws_like(
   format(
     $q$
+      SET CONSTRAINTS ALL DEFERRED;
       UPDATE public.workspace_members
       SET workspace_id = %L::uuid
       WHERE workspace_id = %L::uuid
@@ -760,9 +768,26 @@ SELECT throws_like(
   'T37: moving sole active owner to another workspace fails'
 );
 
+SELECT tests.authenticate_as(
+  tests.fixture('owner_a')::uuid,
+  'owner-a@test.local'
+);
+
+SELECT lives_ok(
+  format(
+    $q$SELECT public.promote_workspace_member_to_owner(%L::uuid)$q$,
+    tests.fixture('admin_member_a')
+  ),
+  'T37: promote admin to co-owner for move test setup'
+);
+
+SELECT tests.clear_auth();
+SET LOCAL role postgres;
+
 SELECT lives_ok(
   format(
     $q$
+      SET CONSTRAINTS ALL DEFERRED;
       UPDATE public.workspace_members
       SET workspace_id = %L::uuid
       WHERE workspace_id = %L::uuid
@@ -776,25 +801,10 @@ SELECT lives_ok(
   'T37: moving non-owner member to another workspace succeeds'
 );
 
-SELECT tests.authenticate_as(
-  tests.fixture('owner_a')::uuid,
-  'owner-a@test.local'
-);
-
-SELECT lives_ok(
-  format(
-    $q$SELECT public.promote_workspace_member_to_owner(%L::uuid)$q$,
-    tests.fixture('admin_a')
-  ),
-  'T37: promote admin to co-owner for move test setup'
-);
-
-SELECT tests.clear_auth();
-SET LOCAL role postgres;
-
 SELECT lives_ok(
   format(
     $q$
+      SET CONSTRAINTS ALL DEFERRED;
       UPDATE public.workspace_members
       SET workspace_id = %L::uuid
       WHERE workspace_id = %L::uuid
