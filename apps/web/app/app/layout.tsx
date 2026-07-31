@@ -4,11 +4,8 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 import { readRecoveryGateContext } from "@/lib/auth/recovery-cookie.server";
 import { resolveAppRecoveryGate } from "@/lib/auth/recovery-gate";
-import {
-  buildLoginUrl,
-  buildRecoveryClearUrl,
-  toAppRoute,
-} from "@/lib/auth/redirect";
+import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
+import { buildLoginUrl, toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";

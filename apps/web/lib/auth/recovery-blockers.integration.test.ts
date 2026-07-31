@@ -14,7 +14,7 @@ import {
   RECOVERY_EXPIRED_DESTINATION,
   resolveAppRecoveryGate,
 } from "@/lib/auth/recovery-gate";
-import { buildRecoveryClearUrl } from "@/lib/auth/redirect";
+import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
 
 const TEST_SECRET = "test-auth-cookie-secret-min-32-characters";
 const SESSION_A = "bdd743e0-4844-49c5-b3b2-2cb4632a0b87";

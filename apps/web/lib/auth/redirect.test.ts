@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { AUTH_ERROR_CODES, getUserMessage } from "@/lib/auth/errors";
 import {
   buildLoginUrl,
-  buildRecoveryClearUrl,
   resolveMiddlewareRedirect,
   sanitizeRecoveryClearDestination,
   sanitizeRedirectPath,
 } from "@/lib/auth/redirect";
+import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 describe("sanitizeRedirectPath", () => {
   it("allows safe app paths", () => {

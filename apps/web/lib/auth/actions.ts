@@ -16,11 +16,8 @@ import {
   initialAuthActionState,
   type AuthActionState,
 } from "@/lib/auth/errors";
-import {
-  buildRecoveryClearUrl,
-  resolveSafeRedirectPath,
-  toAppRoute,
-} from "@/lib/auth/redirect";
+import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
+import { resolveSafeRedirectPath, toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import {
   clearRecoveryCookie,
