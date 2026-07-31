@@ -26,6 +26,10 @@ DECLARE
   v_invite_token text;
   v_agent_member_a uuid;
   v_owner_member_a uuid;
+  v_admin_member_a uuid;
+  v_sole_owner_c uuid;
+  v_workspace_c uuid;
+  v_sole_owner_member_c uuid;
 BEGIN
   v_owner_a := tests.create_auth_user('owner-a@test.local');
   v_admin_a := tests.create_auth_user('admin-a@test.local');
@@ -33,6 +37,7 @@ BEGIN
   v_owner_b := tests.create_auth_user('owner-b@test.local');
   v_invitee := tests.create_auth_user('invitee@test.local');
   v_outsider := tests.create_auth_user('outsider@test.local');
+  v_sole_owner_c := tests.create_auth_user('sole-owner-c@test.local');
 
   INSERT INTO test_fixtures (key, value) VALUES
     ('owner_a', v_owner_a::text),
@@ -52,6 +57,10 @@ BEGIN
 
   PERFORM tests.authenticate_as(v_owner_b, 'owner-b@test.local');
   v_workspace_b := public.create_workspace('Workspace B', 'workspace-b');
+  PERFORM tests.clear_auth();
+
+  PERFORM tests.authenticate_as(v_sole_owner_c, 'sole-owner-c@test.local');
+  v_workspace_c := public.create_workspace('Workspace C', 'workspace-c');
   PERFORM tests.clear_auth();
 
   PERFORM tests.authenticate_as(v_owner_a, 'owner-a@test.local');
@@ -78,12 +87,28 @@ BEGIN
   WHERE workspace_id = v_workspace_a
     AND user_id = v_owner_a;
 
+  SELECT id INTO v_admin_member_a
+  FROM public.workspace_members
+  WHERE workspace_id = v_workspace_a
+    AND user_id = v_admin_a;
+
+  SELECT id INTO v_sole_owner_member_c
+  FROM public.workspace_members
+  WHERE workspace_id = v_workspace_c
+    AND user_id = v_sole_owner_c
+    AND role = 'owner'
+    AND status = 'active';
+
   INSERT INTO test_fixtures (key, value) VALUES
     ('workspace_a', v_workspace_a::text),
     ('workspace_b', v_workspace_b::text),
+    ('workspace_c', v_workspace_c::text),
+    ('sole_owner_c', v_sole_owner_c::text),
+    ('sole_owner_member_c', v_sole_owner_member_c::text),
     ('invite_token', v_invite_token),
     ('agent_member_a', v_agent_member_a::text),
-    ('owner_member_a', v_owner_member_a::text);
+    ('owner_member_a', v_owner_member_a::text),
+    ('admin_member_a', v_admin_member_a::text);
 
   INSERT INTO tests.fixtures (key, value)
   SELECT key, value FROM test_fixtures
@@ -739,7 +764,12 @@ SELECT throws_like(
   'T36: orphan workspace insert fails deferred owner invariant'
 );
 
--- T37
+-- T36 leaves constraint triggers IMMEDIATE for the rest of the transaction;
+-- restore deferral so later create_workspace() can insert owner membership first.
+SET CONSTRAINTS ALL DEFERRED;
+
+-- T37 (workspace_c is created in initial setup: workspace_b is soft-deleted in T30
+-- and exempt from the owner invariant, so it cannot test sole-owner move rejection)
 SELECT tests.clear_auth();
 SET LOCAL role postgres;
 
@@ -747,48 +777,24 @@ SELECT is(
   (
     SELECT count(*)::integer
     FROM public.workspace_members
-    WHERE workspace_id = tests.fixture('workspace_b')::uuid
+    WHERE workspace_id = tests.fixture('workspace_c')::uuid
       AND role = 'owner'
       AND status = 'active'
   ),
   1,
-  'T37: workspace_b has exactly one active owner before move test'
+  'T37: workspace_c has exactly one active owner before move test'
 );
 
 SELECT ok(
-  (
-    SELECT id IS NOT NULL
-    FROM public.workspace_members
-    WHERE workspace_id = tests.fixture('workspace_b')::uuid
-      AND user_id = tests.fixture('owner_b')::uuid
-      AND role = 'owner'
-      AND status = 'active'
-  ),
-  'T37: sole owner membership row exists before move test'
+  tests.fixture('sole_owner_member_c') IS NOT NULL,
+  'T37: sole owner membership id fixture exists before move test'
 );
 
 SELECT throws_like(
   format(
-    $q$
-      DO $move_sole_owner$
-      BEGIN
-        EXECUTE 'SET CONSTRAINTS ALL DEFERRED';
-        UPDATE public.workspace_members
-        SET workspace_id = %L::uuid
-        WHERE id = %L::uuid;
-        EXECUTE 'SET CONSTRAINTS ALL IMMEDIATE';
-      END;
-      $move_sole_owner$;
-    $q$,
-    tests.fixture('workspace_a'),
-    (
-      SELECT id::text
-      FROM public.workspace_members
-      WHERE workspace_id = tests.fixture('workspace_b')::uuid
-        AND user_id = tests.fixture('owner_b')::uuid
-        AND role = 'owner'
-        AND status = 'active'
-    )
+    $q$SELECT tests.move_workspace_member(%L::uuid, %L::uuid)$q$,
+    tests.fixture('sole_owner_member_c'),
+    tests.fixture('workspace_a')
   ),
   'Workspace must have at least one active owner',
   'T37: moving sole active owner to another workspace fails'
@@ -802,14 +808,7 @@ SELECT tests.authenticate_as(
 SELECT lives_ok(
   format(
     $q$SELECT public.promote_workspace_member_to_owner(%L::uuid)$q$,
-    (
-      SELECT id::text
-      FROM public.workspace_members
-      WHERE workspace_id = tests.fixture('workspace_a')::uuid
-        AND user_id = tests.fixture('admin_a')::uuid
-        AND role = 'admin'
-        AND status = 'active'
-    )
+    tests.fixture('admin_member_a')
   ),
   'T37: promote admin to co-owner for move test setup'
 );
@@ -820,14 +819,7 @@ SET LOCAL role postgres;
 SELECT lives_ok(
   format(
     $q$SELECT tests.move_workspace_member(%L::uuid, %L::uuid)$q$,
-    (
-      SELECT id::text
-      FROM public.workspace_members
-      WHERE workspace_id = tests.fixture('workspace_a')::uuid
-        AND user_id = tests.fixture('agent_a')::uuid
-        AND role = 'agent'
-        AND status = 'active'
-    ),
+    tests.fixture('agent_member_a'),
     tests.fixture('workspace_b')
   ),
   'T37: moving non-owner member to another workspace succeeds'
@@ -836,14 +828,7 @@ SELECT lives_ok(
 SELECT lives_ok(
   format(
     $q$SELECT tests.move_workspace_member(%L::uuid, %L::uuid)$q$,
-    (
-      SELECT id::text
-      FROM public.workspace_members
-      WHERE workspace_id = tests.fixture('workspace_a')::uuid
-        AND user_id = tests.fixture('owner_a')::uuid
-        AND role = 'owner'
-        AND status = 'active'
-    ),
+    tests.fixture('owner_member_a'),
     tests.fixture('workspace_b')
   ),
   'T37: moving one of multiple active owners succeeds'
