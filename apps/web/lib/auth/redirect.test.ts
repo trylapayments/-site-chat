@@ -6,8 +6,6 @@ import {
   resolveMiddlewareRedirect,
   sanitizeRedirectPath,
 } from "@/lib/auth/redirect";
-import { claimsIndicateRecoverySession } from "@/lib/auth/session";
-
 describe("sanitizeRedirectPath", () => {
   it("allows safe app paths", () => {
     expect(sanitizeRedirectPath("/app")).toBe("/app");
@@ -58,31 +56,5 @@ describe("getUserMessage", () => {
     expect(getUserMessage(AUTH_ERROR_CODES.CONFIRMATION_SENT)).toBe(
       "If an account exists, check your email to continue.",
     );
-  });
-});
-
-describe("claimsIndicateRecoverySession", () => {
-  it("detects recovery method in object-form amr claims", () => {
-    expect(
-      claimsIndicateRecoverySession({
-        amr: [{ method: "recovery", timestamp: 1_715_000_000 }],
-      } as never),
-    ).toBe(true);
-  });
-
-  it("detects recovery method in string-form amr claims", () => {
-    expect(
-      claimsIndicateRecoverySession({
-        amr: ["recovery"],
-      } as never),
-    ).toBe(true);
-  });
-
-  it("returns false for standard password sessions", () => {
-    expect(
-      claimsIndicateRecoverySession({
-        amr: [{ method: "password", timestamp: 1_715_000_000 }],
-      } as never),
-    ).toBe(false);
   });
 });

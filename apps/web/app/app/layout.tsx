@@ -3,11 +3,7 @@ import { redirect } from "next/navigation";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 import { buildLoginUrl, toAppRoute } from "@/lib/auth/redirect";
-import {
-  isEmailConfirmed,
-  isRecoverySession,
-  requireUser,
-} from "@/lib/auth/session";
+import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
@@ -20,10 +16,6 @@ export default async function AppLayout({
 
   if (!user) {
     redirect(toAppRoute(buildLoginUrl("/app")));
-  }
-
-  if (await isRecoverySession(supabase)) {
-    redirect(toAppRoute(AUTH_ROUTES.resetPassword));
   }
 
   if (!isEmailConfirmed(user)) {

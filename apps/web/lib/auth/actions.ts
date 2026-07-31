@@ -17,11 +17,7 @@ import {
   type AuthActionState,
 } from "@/lib/auth/errors";
 import { resolveSafeRedirectPath, toAppRoute } from "@/lib/auth/redirect";
-import {
-  isEmailConfirmed,
-  isRecoverySession,
-  requireUser,
-} from "@/lib/auth/session";
+import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { clientEnv } from "@/lib/env";
 
@@ -193,11 +189,6 @@ export async function updatePasswordAction(
   const { user } = await requireUser(supabase);
 
   if (!user) {
-    redirect(toAppRoute(AUTH_ROUTES.forgotPassword));
-  }
-
-  const recoverySession = await isRecoverySession(supabase);
-  if (!recoverySession) {
     redirect(toAppRoute(AUTH_ROUTES.forgotPassword));
   }
 
