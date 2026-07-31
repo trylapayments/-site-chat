@@ -15,6 +15,8 @@ CREATE TEMP TABLE IF NOT EXISTS _seed_state (
 DO $seed_owner_user$
 DECLARE
   v_owner_id uuid;
+  v_detail text;
+  v_hint text;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'owner@local.test') THEN
     v_owner_id := gen_random_uuid();
@@ -64,9 +66,12 @@ BEGIN
   INSERT INTO _seed_state (key, val) VALUES ('owner_id', v_owner_id);
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=auth.users:owner@local.test sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_owner_user$;
 
@@ -74,6 +79,8 @@ $seed_owner_user$;
 DO $seed_admin_user$
 DECLARE
   v_admin_id uuid;
+  v_detail text;
+  v_hint text;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'admin@local.test') THEN
     v_admin_id := gen_random_uuid();
@@ -123,9 +130,12 @@ BEGIN
   INSERT INTO _seed_state (key, val) VALUES ('admin_id', v_admin_id);
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=auth.users:admin@local.test sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_admin_user$;
 
@@ -133,6 +143,8 @@ $seed_admin_user$;
 DO $seed_agent_user$
 DECLARE
   v_agent_id uuid;
+  v_detail text;
+  v_hint text;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'agent@local.test') THEN
     v_agent_id := gen_random_uuid();
@@ -182,9 +194,12 @@ BEGIN
   INSERT INTO _seed_state (key, val) VALUES ('agent_id', v_agent_id);
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=auth.users:agent@local.test sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_agent_user$;
 
@@ -192,6 +207,8 @@ $seed_agent_user$;
 DO $seed_workspace$
 DECLARE
   v_workspace_id uuid;
+  v_detail text;
+  v_hint text;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.workspaces WHERE slug = 'acme-support') THEN
     INSERT INTO public.workspaces (name, slug)
@@ -203,14 +220,20 @@ BEGIN
   INSERT INTO _seed_state (key, val) VALUES ('workspace_id', v_workspace_id);
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=public.workspaces:acme-support sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_workspace$;
 
 -- SEED_DIAG: public.workspace_members owner
 DO $seed_member_owner$
+DECLARE
+  v_detail text;
+  v_hint text;
 BEGIN
   INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
   SELECT workspace.val, owner.val, 'owner', 'active'
@@ -219,14 +242,20 @@ BEGIN
   ON CONFLICT (workspace_id, user_id) DO NOTHING;
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=public.workspace_members:owner sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_member_owner$;
 
 -- SEED_DIAG: public.workspace_members admin
 DO $seed_member_admin$
+DECLARE
+  v_detail text;
+  v_hint text;
 BEGIN
   INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
   SELECT workspace.val, admin.val, 'admin', 'active'
@@ -235,14 +264,20 @@ BEGIN
   ON CONFLICT (workspace_id, user_id) DO NOTHING;
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=public.workspace_members:admin sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_member_admin$;
 
 -- SEED_DIAG: public.workspace_members agent
 DO $seed_member_agent$
+DECLARE
+  v_detail text;
+  v_hint text;
 BEGIN
   INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
   SELECT workspace.val, agent.val, 'agent', 'active'
@@ -251,9 +286,12 @@ BEGIN
   ON CONFLICT (workspace_id, user_id) DO NOTHING;
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=public.workspace_members:agent sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_member_agent$;
 
@@ -263,6 +301,8 @@ DECLARE
   v_workspace_id uuid;
   v_owner_id uuid;
   v_token_hash text;
+  v_detail text;
+  v_hint text;
 BEGIN
   SELECT val INTO v_workspace_id FROM _seed_state WHERE key = 'workspace_id';
   SELECT val INTO v_owner_id FROM _seed_state WHERE key = 'owner_id';
@@ -297,8 +337,11 @@ BEGIN
   END IF;
 EXCEPTION
   WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT;
     RAISE EXCEPTION
       '[SEED_DIAG] section=public.workspace_invitations:invitee@local.test sqlstate=% message=% detail=% hint=%',
-      SQLSTATE, SQLERRM, PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT;
+      SQLSTATE, SQLERRM, v_detail, v_hint;
 END;
 $seed_invitation$;
