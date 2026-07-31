@@ -20,7 +20,7 @@ import { resolveSafeRedirectPath, toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import {
   clearRecoveryCookie,
-  readRecoveryCookieValidation,
+  readRecoveryCookieValidationForSession,
 } from "@/lib/auth/recovery-cookie.server";
 import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
 import { createClient } from "@/lib/supabase/server";
@@ -195,7 +195,8 @@ export async function updatePasswordAction(
   const supabase = await createClient();
   const { user } = await requireUser(supabase);
 
-  const cookieValidation = await readRecoveryCookieValidation();
+  const cookieValidation =
+    await readRecoveryCookieValidationForSession(supabase);
   const gate = resolveResetPasswordGate({
     hasAuthenticatedUser: Boolean(user),
     cookieValidation,

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import {
   clearRecoveryCookie,
-  readRecoveryCookieValidation,
+  readRecoveryCookieValidationForSession,
 } from "@/lib/auth/recovery-cookie.server";
 import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
 import { toAppRoute } from "@/lib/auth/redirect";
@@ -13,7 +13,8 @@ import { createClient } from "@/lib/supabase/server";
 export default async function ResetPasswordPage() {
   const supabase = await createClient();
   const { user } = await requireUser(supabase);
-  const cookieValidation = await readRecoveryCookieValidation();
+  const cookieValidation =
+    await readRecoveryCookieValidationForSession(supabase);
   const gate = resolveResetPasswordGate({
     hasAuthenticatedUser: Boolean(user),
     cookieValidation,

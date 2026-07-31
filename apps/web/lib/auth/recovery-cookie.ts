@@ -12,6 +12,7 @@ export type RecoveryCookiePayload = {
   issued_at: number;
   expires_at: number;
   nonce: string;
+  session_binding: string;
 };
 
 export type RecoveryCookiePayloadKeys = keyof RecoveryCookiePayload;
@@ -21,6 +22,7 @@ const ALLOWED_PAYLOAD_KEYS = [
   "issued_at",
   "expires_at",
   "nonce",
+  "session_binding",
 ] as const satisfies readonly RecoveryCookiePayloadKeys[];
 
 const FORBIDDEN_PAYLOAD_KEYS = [
@@ -39,7 +41,7 @@ export type RecoveryCookieValidationResult =
   | {
       valid: false;
       reason:
-        "missing" | "malformed" | "tampered" | "expired" | "invalid_purpose";
+        "missing" | "malformed" | "tampered" | "expired" | "session_mismatch";
     };
 
 function base64UrlEncode(value: string): string {
@@ -57,7 +59,7 @@ function signPayload(encodedPayload: string, secret: string): string {
     .digest("base64url");
 }
 
-function timingSafeEqualStrings(left: string, right: string): boolean {
+export function timingSafeEqualStrings(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
 
@@ -72,7 +74,19 @@ function createNonce(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 
+export function deriveSessionBinding(
+  secret: string,
+  sessionId: string,
+): string {
+  return crypto
+    .createHmac("sha256", secret)
+    .update(sessionId)
+    .digest("base64url");
+}
+
 export function createRecoveryCookiePayload(
+  secret: string,
+  sessionId: string,
   nowSeconds: number = Math.floor(Date.now() / 1000),
 ): RecoveryCookiePayload {
   return {
@@ -80,6 +94,7 @@ export function createRecoveryCookiePayload(
     issued_at: nowSeconds,
     expires_at: nowSeconds + RECOVERY_COOKIE_MAX_AGE_SECONDS,
     nonce: createNonce(),
+    session_binding: deriveSessionBinding(secret, sessionId),
   };
 }
 
@@ -87,25 +102,39 @@ export function serializeRecoveryCookiePayload(
   payload: RecoveryCookiePayload,
 ): string {
   assertRecoveryCookiePayloadShape(payload);
-  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
-  return encodedPayload;
+  return base64UrlEncode(JSON.stringify(payload));
 }
 
 export function createRecoveryCookieValue(
   secret: string,
+  sessionId: string,
   nowSeconds: number = Math.floor(Date.now() / 1000),
 ): string {
-  const payload = createRecoveryCookiePayload(nowSeconds);
+  const payload = createRecoveryCookiePayload(secret, sessionId, nowSeconds);
   const encodedPayload = serializeRecoveryCookiePayload(payload);
   const signature = signPayload(encodedPayload, secret);
   return `${encodedPayload}.${signature}`;
 }
 
+export function verifyRecoveryCookieSessionBinding(
+  payload: RecoveryCookiePayload,
+  secret: string,
+  sessionId: string,
+): boolean {
+  const expectedBinding = deriveSessionBinding(secret, sessionId);
+  return timingSafeEqualStrings(payload.session_binding, expectedBinding);
+}
+
 export function verifyRecoveryCookieValue(
   value: string | undefined,
   secret: string,
-  nowSeconds: number = Math.floor(Date.now() / 1000),
+  options: {
+    nowSeconds?: number;
+    sessionId?: string;
+  } = {},
 ): RecoveryCookieValidationResult {
+  const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
+
   if (!value) {
     return { valid: false, reason: "missing" };
   }
@@ -140,6 +169,14 @@ export function verifyRecoveryCookieValue(
 
   if (parsed.expires_at <= nowSeconds) {
     return { valid: false, reason: "expired" };
+  }
+
+  if (options.sessionId !== undefined) {
+    if (
+      !verifyRecoveryCookieSessionBinding(parsed, secret, options.sessionId)
+    ) {
+      return { valid: false, reason: "session_mismatch" };
+    }
   }
 
   return { valid: true, payload: parsed };
@@ -192,9 +229,19 @@ export function assertRecoveryCookiePayloadShape(
 
 export function recoveryCookiePayloadContainsForbiddenData(
   payload: RecoveryCookiePayload,
+  sessionId?: string,
 ): boolean {
   const serialized = JSON.stringify(payload).toLowerCase();
-  return FORBIDDEN_PAYLOAD_KEYS.some((key) => serialized.includes(`"${key}"`));
+
+  if (FORBIDDEN_PAYLOAD_KEYS.some((key) => serialized.includes(`"${key}"`))) {
+    return true;
+  }
+
+  if (sessionId && serialized.includes(sessionId.toLowerCase())) {
+    return true;
+  }
+
+  return false;
 }
 
 function isRecoveryCookiePayload(
@@ -220,6 +267,8 @@ function isRecoveryCookiePayload(
     typeof record.expires_at === "number" &&
     Number.isInteger(record.expires_at) &&
     typeof record.nonce === "string" &&
-    record.nonce.length > 0
+    record.nonce.length > 0 &&
+    typeof record.session_binding === "string" &&
+    record.session_binding.length > 0
   );
 }

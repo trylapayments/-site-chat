@@ -4,7 +4,10 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 import { buildLoginUrl, toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
-import { readRecoveryCookieValidation } from "@/lib/auth/recovery-cookie.server";
+import {
+  clearRecoveryCookie,
+  readRecoveryCookieValidationForSession,
+} from "@/lib/auth/recovery-cookie.server";
 import { resolveAppRecoveryGate } from "@/lib/auth/recovery-gate";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,8 +32,13 @@ export default async function AppLayout({
   }
 
   const recoveryGate = resolveAppRecoveryGate(
-    await readRecoveryCookieValidation(),
+    await readRecoveryCookieValidationForSession(supabase),
   );
+
+  if (recoveryGate.action === "clear_and_continue") {
+    await clearRecoveryCookie();
+  }
+
   if (recoveryGate.action === "redirect") {
     redirect(toAppRoute(recoveryGate.destination));
   }

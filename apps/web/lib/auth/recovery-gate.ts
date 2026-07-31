@@ -14,14 +14,18 @@ export type ResetPasswordGateDecision =
 
 export type AppRecoveryGateDecision =
   | { action: "continue" }
-  | { action: "redirect"; destination: typeof AUTH_ROUTES.resetPassword };
+  | { action: "redirect"; destination: typeof AUTH_ROUTES.resetPassword }
+  | { action: "clear_and_continue" };
 
 export function evaluateRecoveryCookie(
   rawValue: string | undefined,
   secret: string,
-  nowSeconds: number = Math.floor(Date.now() / 1000),
+  options: {
+    nowSeconds?: number;
+    sessionId?: string;
+  } = {},
 ): RecoveryCookieValidationResult {
-  return verifyRecoveryCookieValue(rawValue, secret, nowSeconds);
+  return verifyRecoveryCookieValue(rawValue, secret, options);
 }
 
 export function resolveResetPasswordGate(input: {
@@ -53,5 +57,9 @@ export function resolveAppRecoveryGate(
     return { action: "redirect", destination: AUTH_ROUTES.resetPassword };
   }
 
-  return { action: "continue" };
+  if (cookieValidation.reason === "missing") {
+    return { action: "continue" };
+  }
+
+  return { action: "clear_and_continue" };
 }
