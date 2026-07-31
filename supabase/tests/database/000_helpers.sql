@@ -26,7 +26,7 @@ BEGIN
     role,
     email,
     encrypted_password,
-    confirmed_at,
+    email_confirmed_at,
     recovery_sent_at,
     last_sign_in_at,
     raw_app_meta_data,
@@ -35,7 +35,7 @@ BEGIN
     updated_at,
     confirmation_token,
     email_change,
-    email_change_token,
+    email_change_token_new,
     recovery_token
   )
   VALUES (
