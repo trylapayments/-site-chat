@@ -1,7 +1,9 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
+import { buildInviteClearUrl } from "@/lib/auth/invite-clear.server";
 import { readInviteCookieValidation } from "@/lib/auth/invite-cookie.server";
+import { AUTH_ROUTES } from "@/lib/auth/constants";
 import {
   buildInvitationSuccessDestination,
   resolvePostAuthRedirect,
@@ -15,6 +17,8 @@ import {
   fetchLastWorkspaceId,
 } from "@/lib/workspace/queries";
 import { createClient } from "@/lib/supabase/server";
+
+const INVITE_INVALID_DESTINATION = `${AUTH_ROUTES.authError}?code=invite_invalid`;
 
 export const getWorkspaceContext = cache(async () => {
   const supabase = await createClient();
@@ -54,15 +58,17 @@ export async function resolveAuthenticatedDestination(
         return "/invite/pending?error=email_mismatch";
       }
 
-      return "/auth-error?code=invite_invalid";
+      return buildInviteClearUrl(INVITE_INVALID_DESTINATION);
     }
 
-    return buildInvitationSuccessDestination({
-      status: "accepted",
-      member_id: "",
-      workspace_id: "",
-      slug: result.slug,
-    });
+    return buildInviteClearUrl(
+      buildInvitationSuccessDestination({
+        status: "accepted",
+        member_id: "",
+        workspace_id: "",
+        slug: result.slug,
+      }),
+    );
   }
 
   return decision.destination;

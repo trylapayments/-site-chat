@@ -1,4 +1,3 @@
-import { clearInviteCookie } from "@/lib/auth/invite-cookie.server";
 import { requireUser } from "@/lib/auth/session";
 import {
   acceptWorkspaceInvitation,
@@ -34,7 +33,6 @@ export async function acceptInvitationForUser(token: string): Promise<
   try {
     const result = await acceptWorkspaceInvitation(supabase, token);
     await setLastWorkspace(supabase, result.workspace_id);
-    await clearInviteCookie();
     return { ok: true, slug: result.slug };
   } catch (error) {
     const message = getErrorMessage(error);
@@ -46,7 +44,6 @@ export async function acceptInvitationForUser(token: string): Promise<
     }
 
     if (message.includes("Invalid or expired invitation")) {
-      await clearInviteCookie();
       return { ok: false, reason: "invalid" };
     }
 

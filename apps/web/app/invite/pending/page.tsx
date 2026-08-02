@@ -5,6 +5,7 @@ import { AuthLink, AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { validateInvitationSchema } from "@site-chat/shared";
 
+import { buildInviteClearUrl } from "@/lib/auth/invite-clear.server";
 import { readInviteCookieValidation } from "@/lib/auth/invite-cookie.server";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 import { buildLoginUrl, toAppRoute } from "@/lib/auth/redirect";
@@ -12,6 +13,8 @@ import { requireUser } from "@/lib/auth/session";
 import { validateWorkspaceInvitation } from "@/lib/workspace/queries";
 import { redirectAuthenticatedUser } from "@/lib/workspace/redirect.server";
 import { createClient } from "@/lib/supabase/server";
+
+const INVITE_INVALID_DESTINATION = `${AUTH_ROUTES.authError}?code=invite_invalid`;
 
 export default async function InvitePendingPage({
   searchParams,
@@ -22,7 +25,7 @@ export default async function InvitePendingPage({
   const inviteCookie = await readInviteCookieValidation();
 
   if (!inviteCookie.valid) {
-    redirect(toAppRoute(`${AUTH_ROUTES.authError}?code=invite_invalid`));
+    redirect(toAppRoute(buildInviteClearUrl(INVITE_INVALID_DESTINATION)));
   }
 
   const supabase = await createClient();
@@ -34,7 +37,7 @@ export default async function InvitePendingPage({
   );
 
   if (!validation.success || !validation.data.valid) {
-    redirect(toAppRoute(`${AUTH_ROUTES.authError}?code=invite_invalid`));
+    redirect(toAppRoute(buildInviteClearUrl(INVITE_INVALID_DESTINATION)));
   }
 
   const invite = validation.data;

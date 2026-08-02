@@ -4,9 +4,11 @@ import { AUTH_ERROR_CODES, getUserMessage } from "@/lib/auth/errors";
 import {
   buildLoginUrl,
   resolveMiddlewareRedirect,
+  sanitizeInviteClearDestination,
   sanitizeRecoveryClearDestination,
   sanitizeRedirectPath,
 } from "@/lib/auth/redirect";
+import { buildInviteClearUrl } from "@/lib/auth/invite-clear.server";
 import { resolveAuthorizedSafeNextPath } from "@/lib/auth/post-auth-redirect";
 import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
@@ -51,6 +53,38 @@ describe("resolveAuthorizedSafeNextPath", () => {
     expect(resolveAuthorizedSafeNextPath("/app/other", membership)).toBeNull();
     expect(resolveAuthorizedSafeNextPath("/app/acme/inbox", membership)).toBe(
       "/app/acme/inbox",
+    );
+  });
+});
+
+describe("sanitizeInviteClearDestination", () => {
+  it("allows invite invalid auth-error destination", () => {
+    expect(
+      sanitizeInviteClearDestination("/auth-error?code=invite_invalid"),
+    ).toBe("/auth-error?code=invite_invalid");
+  });
+
+  it("allows safe app destinations for post-accept cleanup", () => {
+    expect(sanitizeInviteClearDestination("/app/acme")).toBe("/app/acme");
+  });
+
+  it("rejects open redirects", () => {
+    expect(sanitizeInviteClearDestination("//evil.com")).toBeNull();
+    expect(sanitizeInviteClearDestination("https://evil.com")).toBeNull();
+    expect(sanitizeInviteClearDestination("/login")).toBeNull();
+  });
+});
+
+describe("buildInviteClearUrl", () => {
+  it("builds a cleanup handler URL with encoded destination", () => {
+    expect(buildInviteClearUrl("/auth-error?code=invite_invalid")).toBe(
+      "/invite/clear?destination=%2Fauth-error%3Fcode%3Dinvite_invalid",
+    );
+  });
+
+  it("falls back to invite invalid when destination is unsafe", () => {
+    expect(buildInviteClearUrl("//evil.com")).toBe(
+      "/invite/clear?destination=%2Fauth-error%3Fcode%3Dinvite_invalid",
     );
   });
 });

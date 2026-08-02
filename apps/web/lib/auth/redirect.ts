@@ -82,6 +82,25 @@ export function sanitizeRecoveryClearDestination(
 }
 
 /**
+ * Allowed destinations for /invite/clear after terminal sc_invite cleanup.
+ */
+export function sanitizeInviteClearDestination(
+  path: string | null | undefined,
+): string | null {
+  if (!path) {
+    return null;
+  }
+
+  const trimmed = path.trim();
+
+  if (trimmed === "/auth-error?code=invite_invalid") {
+    return trimmed;
+  }
+
+  return sanitizeRedirectPath(trimmed);
+}
+
+/**
  * Builds a login URL preserving an optional post-auth destination.
  */
 export function buildLoginUrl(nextPath?: string | null): string {
