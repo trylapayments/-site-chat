@@ -206,12 +206,12 @@ BEGIN
   v_ws := (public.create_workspace('Deleted WS', 'deleted-ws')->>'workspace_id')::uuid;
   PERFORM public.soft_delete_workspace(v_ws);
 
-  INSERT INTO test_fixtures (key, value) VALUES
+  PERFORM tests.clear_auth();
+
+  INSERT INTO tests.fixtures (key, value) VALUES
     ('deleted_owner', v_owner::text),
     ('deleted_ws', v_ws::text)
   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-
-  PERFORM tests.clear_auth();
 END;
 $$;
 
@@ -364,12 +364,12 @@ BEGIN
     'viewer'::public.app_member_role
   ) ->> 'token';
 
-  INSERT INTO test_fixtures (key, value) VALUES
+  PERFORM tests.clear_auth();
+
+  INSERT INTO tests.fixtures (key, value) VALUES
     ('accept_ext_user', v_invitee::text),
     ('accept_ext_token', v_token)
   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-
-  PERFORM tests.clear_auth();
 END;
 $$;
 
