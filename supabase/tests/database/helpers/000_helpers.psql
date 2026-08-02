@@ -131,6 +131,7 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION tests.fixture(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION tests.fixture(text) TO anon;
 
 CREATE OR REPLACE FUNCTION tests.move_workspace_member(
   p_member_id uuid,
