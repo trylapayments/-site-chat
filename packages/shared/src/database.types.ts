@@ -7,9 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  __InternalSupabase: {
-    PostgrestVersion: "12"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -62,13 +59,6 @@ export type Database = {
             columns: ["last_workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_preferences_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -226,18 +216,7 @@ export type Database = {
         }
         Returns: undefined
       }
-      list_accessible_workspaces: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      set_last_workspace: {
-        Args: { p_workspace_id: string }
-        Returns: undefined
-      }
-      validate_workspace_invitation: {
-        Args: { p_token: string }
-        Returns: Json
-      }
+      list_accessible_workspaces: { Args: never; Returns: Json }
       promote_workspace_member_to_owner: {
         Args: { p_member_id: string }
         Returns: undefined
@@ -250,6 +229,10 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: undefined
       }
+      set_last_workspace: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
       soft_delete_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
@@ -260,6 +243,10 @@ export type Database = {
           p_new_role: Database["public"]["Enums"]["app_member_role"]
         }
         Returns: undefined
+      }
+      validate_workspace_invitation: {
+        Args: { p_token: string }
+        Returns: Json
       }
     }
     Enums: {
