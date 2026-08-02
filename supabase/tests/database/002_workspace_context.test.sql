@@ -286,18 +286,30 @@ SELECT ok(
 );
 
 -- T17 create_workspace upserts last_workspace preference atomically
-WITH created AS (
-  SELECT public.create_workspace('Atomic WS', 'atomic-ws-ctx') AS result
-)
-SELECT is(
-  (
-    SELECT up.last_workspace_id::text
-    FROM public.user_preferences up
-    WHERE up.user_id = auth.uid()
-  ),
-  (SELECT result->>'workspace_id' FROM created),
-  'T17: create_workspace sets last_workspace_id in same transaction'
-);
+DO $$
+DECLARE
+  v_workspace_id uuid;
+  v_last_workspace_id uuid;
+BEGIN
+  v_workspace_id := (
+    public.create_workspace('Atomic WS', 'atomic-ws-ctx')->>'workspace_id'
+  )::uuid;
+
+  SELECT up.last_workspace_id
+  INTO v_last_workspace_id
+  FROM public.user_preferences up
+  WHERE up.user_id = auth.uid();
+
+  IF v_last_workspace_id IS DISTINCT FROM v_workspace_id THEN
+    RAISE EXCEPTION
+      'last_workspace_id (%), workspace_id (%)',
+      v_last_workspace_id,
+      v_workspace_id;
+  END IF;
+END;
+$$;
+
+SELECT pass('T17: create_workspace sets last_workspace_id in same transaction');
 
 -- T18 failed create_workspace leaves preferences unchanged
 SELECT is(
@@ -316,7 +328,7 @@ SELECT is(
 
 SELECT throws_like(
   $$SELECT public.create_workspace('Atomic WS Duplicate', 'atomic-ws-ctx')$$,
-  'duplicate key value violates unique constraint',
+  'duplicate key value violates unique constraint "uq_workspaces_slug"',
   'T18: duplicate slug create fails'
 );
 
