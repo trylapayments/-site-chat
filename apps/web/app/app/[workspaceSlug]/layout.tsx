@@ -1,10 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 
-import { getWorkspaceContext } from "@/lib/workspace/redirect.server";
-import { resolveWorkspaceBySlug } from "@/lib/workspace/guards";
-import { createClient } from "@/lib/supabase/server";
-import { requireUser } from "@/lib/auth/session";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { toAppRoute } from "@/lib/auth/redirect";
+import { requireUser } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { resolveWorkspaceBySlug } from "@/lib/workspace/guards";
+import { getWorkspaceContext } from "@/lib/workspace/redirect.server";
 
 export default async function WorkspaceLayout({
   children,
@@ -21,7 +22,7 @@ export default async function WorkspaceLayout({
     redirect(toAppRoute("/login"));
   }
 
-  const membership = (await getWorkspaceContext()).membership;
+  const { membership } = await getWorkspaceContext();
   const guard = resolveWorkspaceBySlug(
     workspaceSlug,
     membership.accessible_workspaces,
@@ -39,12 +40,14 @@ export default async function WorkspaceLayout({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="border-b pb-4">
-        <p className="text-sm font-semibold">{guard.workspace.name}</p>
-        <p className="text-muted-foreground text-sm">/{guard.workspace.slug}</p>
-      </div>
+    <DashboardShell
+      slug={guard.workspace.slug}
+      workspaceName={guard.workspace.name}
+      workspaceId={guard.workspace.workspace_id}
+      workspaces={membership.accessible_workspaces}
+      email={user.email ?? "Signed in"}
+    >
       {children}
-    </div>
+    </DashboardShell>
   );
 }

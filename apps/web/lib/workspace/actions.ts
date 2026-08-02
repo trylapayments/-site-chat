@@ -4,6 +4,7 @@ import {
   createWorkspaceResultSchema,
   createWorkspaceSchema,
   selectWorkspaceSchema,
+  switchWorkspaceSchema,
 } from "@site-chat/shared";
 import { redirect } from "next/navigation";
 
@@ -15,6 +16,7 @@ import {
   setLastWorkspace,
 } from "@/lib/workspace/queries";
 import { callPublicRpc } from "@/lib/workspace/rpc";
+import { resolveWorkspaceSwitchDestination } from "@/lib/workspace/switch-workspace";
 import { createClient } from "@/lib/supabase/server";
 
 function mapFieldErrors(
@@ -97,9 +99,10 @@ export async function createWorkspaceAction(
   redirect(toAppRoute(`/app/${workspace.data.slug}`));
 }
 
-export async function selectWorkspaceAction(formData: FormData): Promise<void> {
-  const parsed = selectWorkspaceSchema.safeParse({
+export async function switchWorkspaceAction(formData: FormData): Promise<void> {
+  const parsed = switchWorkspaceSchema.safeParse({
     workspaceId: getFormString(formData, "workspaceId"),
+    currentPath: getFormString(formData, "currentPath") || undefined,
   });
 
   if (!parsed.success) {
@@ -113,14 +116,28 @@ export async function selectWorkspaceAction(formData: FormData): Promise<void> {
   }
 
   const membership = await fetchAccessibleWorkspaces(supabase);
-  const selected = membership.accessible_workspaces.find(
-    (workspace) => workspace.workspace_id === parsed.data.workspaceId,
-  );
+  const resolution = resolveWorkspaceSwitchDestination({
+    workspaceId: parsed.data.workspaceId,
+    currentPath: parsed.data.currentPath,
+    accessibleWorkspaces: membership.accessible_workspaces,
+  });
 
-  if (!selected) {
-    redirect(toAppRoute("/app/unavailable"));
+  if (!resolution.ok) {
+    redirect(toAppRoute(resolution.destination));
   }
 
-  await setLastWorkspace(supabase, selected.workspace_id);
-  redirect(toAppRoute(`/app/${selected.slug}`));
+  await setLastWorkspace(supabase, resolution.workspaceId);
+  redirect(toAppRoute(resolution.destination));
+}
+
+export async function selectWorkspaceAction(formData: FormData): Promise<void> {
+  const parsed = selectWorkspaceSchema.safeParse({
+    workspaceId: getFormString(formData, "workspaceId"),
+  });
+
+  if (!parsed.success) {
+    redirect(toAppRoute("/app/select-workspace"));
+  }
+
+  return switchWorkspaceAction(formData);
 }

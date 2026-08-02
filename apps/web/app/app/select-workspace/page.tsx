@@ -3,6 +3,7 @@ import { selectWorkspaceAction } from "@/lib/workspace/actions";
 import { redirect } from "next/navigation";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { Button } from "@/components/ui/button";
+import { SystemPageLayout } from "@/components/dashboard/SystemPageLayout";
 
 export default async function SelectWorkspacePage() {
   const { membership, lastWorkspaceId } = await getWorkspaceContext();
@@ -12,43 +13,45 @@ export default async function SelectWorkspacePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Select a workspace
-        </h1>
-        <p className="text-muted-foreground mt-2 max-w-2xl text-base">
-          Choose which workspace you want to open.
-        </p>
-      </div>
+    <SystemPageLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Select a workspace
+          </h1>
+          <p className="text-muted-foreground mt-2 max-w-2xl text-base">
+            Choose which workspace you want to open.
+          </p>
+        </div>
 
-      <div className="grid gap-3">
-        {membership.accessible_workspaces.map((workspace) => (
-          <form key={workspace.workspace_id} action={selectWorkspaceAction}>
-            <input
-              type="hidden"
-              name="workspaceId"
-              value={workspace.workspace_id}
-            />
-            <Button
-              type="submit"
-              variant={
-                workspace.workspace_id === lastWorkspaceId
-                  ? "default"
-                  : "outline"
-              }
-              className="h-auto w-full justify-start px-4 py-4 text-left"
-            >
-              <span>
-                <span className="block font-medium">{workspace.name}</span>
-                <span className="text-muted-foreground block text-sm">
-                  /app/{workspace.slug} · {workspace.role}
+        <div className="grid gap-3">
+          {membership.accessible_workspaces.map((workspace) => (
+            <form key={workspace.workspace_id} action={selectWorkspaceAction}>
+              <input
+                type="hidden"
+                name="workspaceId"
+                value={workspace.workspace_id}
+              />
+              <Button
+                type="submit"
+                variant={
+                  workspace.workspace_id === lastWorkspaceId
+                    ? "default"
+                    : "outline"
+                }
+                className="h-auto w-full justify-start px-4 py-4 text-left"
+              >
+                <span>
+                  <span className="block font-medium">{workspace.name}</span>
+                  <span className="text-muted-foreground block text-sm">
+                    /app/{workspace.slug} · {workspace.role}
+                  </span>
                 </span>
-              </span>
-            </Button>
-          </form>
-        ))}
+              </Button>
+            </form>
+          ))}
+        </div>
       </div>
-    </div>
+    </SystemPageLayout>
   );
 }
