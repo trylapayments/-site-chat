@@ -110,6 +110,16 @@ SELECT is(
   'T3: outsider has zero accessible workspaces'
 );
 
+-- T6 set_last_workspace rejects non-member (must run before State D membership insert)
+SELECT throws_like(
+  format(
+    $q$SELECT public.set_last_workspace(%L::uuid)$q$,
+    tests.fixture('workspace_a')
+  ),
+  'Not a member of this workspace',
+  'T6: non-member cannot set last workspace'
+);
+
 -- T4 State D: memberships exist but none accessible
 SELECT tests.clear_auth();
 
@@ -153,26 +163,11 @@ SELECT lives_ok(
   'T5: active member can set last workspace'
 );
 
--- T6 set_last_workspace rejects non-member
+-- T7 set_last_workspace rejects deactivated member (uses T4 deactivated row)
 SELECT tests.authenticate_as(
   tests.fixture('outsider')::uuid,
   'ctx-outsider@test.local'
 );
-
-SELECT throws_like(
-  format(
-    $q$SELECT public.set_last_workspace(%L::uuid)$q$,
-    tests.fixture('workspace_a')
-  ),
-  'Not a member of this workspace',
-  'T6: non-member cannot set last workspace'
-);
-
--- T7 set_last_workspace rejects deactivated member
-UPDATE public.workspace_members
-SET status = 'deactivated', updated_at = now()
-WHERE workspace_id = tests.fixture('workspace_a')::uuid
-  AND user_id = tests.fixture('outsider')::uuid;
 
 SELECT throws_like(
   format(
