@@ -52,15 +52,15 @@ BEGIN
   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
   PERFORM tests.authenticate_as(v_owner_a, 'owner-a@test.local');
-  v_workspace_a := public.create_workspace('Workspace A', 'workspace-a');
+  v_workspace_a := (public.create_workspace('Workspace A', 'workspace-a')->>'workspace_id')::uuid;
   PERFORM tests.clear_auth();
 
   PERFORM tests.authenticate_as(v_owner_b, 'owner-b@test.local');
-  v_workspace_b := public.create_workspace('Workspace B', 'workspace-b');
+  v_workspace_b := (public.create_workspace('Workspace B', 'workspace-b')->>'workspace_id')::uuid;
   PERFORM tests.clear_auth();
 
   PERFORM tests.authenticate_as(v_sole_owner_c, 'sole-owner-c@test.local');
-  v_workspace_c := public.create_workspace('Workspace C', 'workspace-c');
+  v_workspace_c := (public.create_workspace('Workspace C', 'workspace-c')->>'workspace_id')::uuid;
   PERFORM tests.clear_auth();
 
   PERFORM tests.authenticate_as(v_owner_a, 'owner-a@test.local');
@@ -609,7 +609,7 @@ BEGIN
   v_active_member := tests.create_auth_user('active-member@test.local');
 
   PERFORM tests.authenticate_as(v_active_member, 'active-member@test.local');
-  v_active_member_ws := public.create_workspace('Active Member WS', 'active-member-ws');
+  v_active_member_ws := (public.create_workspace('Active Member WS', 'active-member-ws')->>'workspace_id')::uuid;
   PERFORM tests.clear_auth();
 
   PERFORM tests.authenticate_as(
@@ -845,7 +845,7 @@ DECLARE
 BEGIN
   v_owner := tests.create_auth_user('pending-delete-owner@test.local');
   PERFORM tests.authenticate_as(v_owner, 'pending-delete-owner@test.local');
-  v_ws := public.create_workspace('Pending Delete WS', 'pending-delete-ws');
+  v_ws := (public.create_workspace('Pending Delete WS', 'pending-delete-ws')->>'workspace_id')::uuid;
 
   SELECT id INTO v_owner_member
   FROM public.workspace_members
