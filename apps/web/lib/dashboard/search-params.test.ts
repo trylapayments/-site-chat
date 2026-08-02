@@ -36,6 +36,20 @@ describe("dashboard search params", () => {
     });
   });
 
+  it("preserves valid params when only one field is malformed", () => {
+    expect(
+      parseDashboardListQuery({
+        q: "acme",
+        sort: "INVALID!!!",
+        page: "2",
+      }),
+    ).toEqual({
+      q: "acme",
+      page: 2,
+      pageSize: 25,
+    });
+  });
+
   it("serializes list query params and preserves unrelated params", () => {
     const params = serializeDashboardListQuery(
       {

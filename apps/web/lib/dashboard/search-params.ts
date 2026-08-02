@@ -32,24 +32,33 @@ function getSingleParam(
 export function parseDashboardListQuery(
   params: DashboardSearchParams,
 ): ListQuery {
-  const parsed = listQuerySchema.safeParse({
-    q: getSingleParam(params, "q") || undefined,
-    page: getSingleParam(params, "page"),
-    pageSize: getSingleParam(params, "pageSize"),
-    sort: getSingleParam(params, "sort") || undefined,
-  });
+  const qParam = getSingleParam(params, "q") || undefined;
+  const pageParam = getSingleParam(params, "page");
+  const pageSizeParam = getSingleParam(params, "pageSize");
+  const sortParam = getSingleParam(params, "sort") || undefined;
 
-  if (parsed.success) {
-    return parsed.data;
+  const qResult = listQuerySchema.shape.q.safeParse(qParam);
+  const pageResult = listQuerySchema.shape.page.safeParse(pageParam);
+  const pageSizeResult =
+    listQuerySchema.shape.pageSize.safeParse(pageSizeParam);
+  const sortResult = listQuerySchema.shape.sort.safeParse(sortParam);
+
+  const result: ListQuery = {
+    page: pageResult.success ? pageResult.data : parsePage(pageParam),
+    pageSize: pageSizeResult.success
+      ? pageSizeResult.data
+      : parsePageSize(pageSizeParam, ALLOWED_PAGE_SIZES),
+  };
+
+  if (qResult.success && qResult.data !== undefined) {
+    result.q = qResult.data;
   }
 
-  return {
-    page: parsePage(getSingleParam(params, "page")),
-    pageSize: parsePageSize(
-      getSingleParam(params, "pageSize"),
-      ALLOWED_PAGE_SIZES,
-    ),
-  };
+  if (sortResult.success && sortResult.data !== undefined) {
+    result.sort = sortResult.data;
+  }
+
+  return result;
 }
 
 export function serializeDashboardListQuery(
