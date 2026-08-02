@@ -4,6 +4,7 @@
 CREATE SCHEMA IF NOT EXISTS tests;
 
 GRANT USAGE ON SCHEMA tests TO authenticated;
+GRANT USAGE ON SCHEMA tests TO anon;
 
 CREATE TABLE IF NOT EXISTS tests.fixtures (
   key text PRIMARY KEY,
