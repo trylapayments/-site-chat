@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(24);
+SELECT plan(27);
 
 CREATE TEMP TABLE test_fixtures (
   key text PRIMARY KEY,
@@ -286,15 +286,16 @@ SELECT ok(
 );
 
 -- T17 create_workspace upserts last_workspace preference atomically
+WITH created AS (
+  SELECT public.create_workspace('Atomic WS', 'atomic-ws-ctx') AS result
+)
 SELECT is(
   (
     SELECT up.last_workspace_id::text
     FROM public.user_preferences up
     WHERE up.user_id = auth.uid()
   ),
-  (
-    SELECT public.create_workspace('Atomic WS', 'atomic-ws-ctx')->>'workspace_id'
-  ),
+  (SELECT result->>'workspace_id' FROM created),
   'T17: create_workspace sets last_workspace_id in same transaction'
 );
 
@@ -313,9 +314,9 @@ SELECT is(
   'T18: last_workspace_id established before duplicate attempt'
 );
 
-SELECT throws_ok(
+SELECT throws_like(
   $$SELECT public.create_workspace('Atomic WS Duplicate', 'atomic-ws-ctx')$$,
-  '23505',
+  'duplicate key value violates unique constraint',
   'T18: duplicate slug create fails'
 );
 
