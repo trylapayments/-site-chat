@@ -6,7 +6,7 @@ import {
   isRecoveryExchangePermitted,
 } from "@/lib/auth/recovery-exchange";
 import { setRecoveryCookieOnResponse } from "@/lib/auth/recovery-cookie.server";
-import { resolveSafeRedirectPath } from "@/lib/auth/redirect";
+import { resolveAuthenticatedDestination } from "@/lib/workspace/redirect.server";
 import { createClient } from "@/lib/supabase/server";
 import { clientEnv } from "@/lib/env";
 
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     return setRecoveryCookieOnResponse(response, claims.session_id);
   }
 
-  const destination = resolveSafeRedirectPath(nextPath);
+  const destination = await resolveAuthenticatedDestination(nextPath);
   return NextResponse.redirect(
     new URL(destination, clientEnv.NEXT_PUBLIC_APP_URL),
   );

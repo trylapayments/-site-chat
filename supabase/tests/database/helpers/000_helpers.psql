@@ -4,6 +4,7 @@
 CREATE SCHEMA IF NOT EXISTS tests;
 
 GRANT USAGE ON SCHEMA tests TO authenticated;
+GRANT USAGE ON SCHEMA tests TO anon;
 
 CREATE TABLE IF NOT EXISTS tests.fixtures (
   key text PRIMARY KEY,
@@ -131,6 +132,7 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION tests.fixture(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION tests.fixture(text) TO anon;
 
 CREATE OR REPLACE FUNCTION tests.move_workspace_member(
   p_member_id uuid,

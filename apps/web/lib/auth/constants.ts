@@ -9,6 +9,7 @@ export const AUTH_ROUTES = {
   authCallback: "/auth/callback",
   authRecovery: "/auth/recovery",
   authClearRecovery: "/auth/clear-recovery",
+  inviteClear: "/invite/clear",
   app: "/app",
 } as const;
 

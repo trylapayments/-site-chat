@@ -34,6 +34,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      user_preferences: {
+        Row: {
+          created_at: string
+          last_workspace_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_workspace_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_workspace_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_last_workspace_id_fkey"
+            columns: ["last_workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_invitations: {
         Row: {
           accepted_at: string | null
@@ -166,7 +195,7 @@ export type Database = {
       accept_workspace_invitation: { Args: { p_token: string }; Returns: Json }
       create_workspace: {
         Args: { p_name: string; p_slug: string }
-        Returns: string
+        Returns: Json
       }
       create_workspace_invitation: {
         Args: {
@@ -187,6 +216,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      list_accessible_workspaces: { Args: never; Returns: Json }
       promote_workspace_member_to_owner: {
         Args: { p_member_id: string }
         Returns: undefined
@@ -199,6 +229,10 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: undefined
       }
+      set_last_workspace: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
       soft_delete_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
@@ -209,6 +243,10 @@ export type Database = {
           p_new_role: Database["public"]["Enums"]["app_member_role"]
         }
         Returns: undefined
+      }
+      validate_workspace_invitation: {
+        Args: { p_token: string }
+        Returns: Json
       }
     }
     Enums: {

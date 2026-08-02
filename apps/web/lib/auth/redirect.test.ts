@@ -4,9 +4,12 @@ import { AUTH_ERROR_CODES, getUserMessage } from "@/lib/auth/errors";
 import {
   buildLoginUrl,
   resolveMiddlewareRedirect,
+  sanitizeInviteClearDestination,
   sanitizeRecoveryClearDestination,
   sanitizeRedirectPath,
 } from "@/lib/auth/redirect";
+import { buildInviteClearUrl } from "@/lib/auth/invite-clear.server";
+import { resolveAuthorizedSafeNextPath } from "@/lib/auth/post-auth-redirect";
 import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 describe("sanitizeRedirectPath", () => {
@@ -22,6 +25,67 @@ describe("sanitizeRedirectPath", () => {
     expect(sanitizeRedirectPath("/\\evil.com")).toBeNull();
     expect(sanitizeRedirectPath("/login")).toBeNull();
     expect(sanitizeRedirectPath("%2f%2fevil.com")).toBeNull();
+  });
+
+  it("allows system app destinations", () => {
+    expect(sanitizeRedirectPath("/app/onboarding")).toBe("/app/onboarding");
+    expect(sanitizeRedirectPath("/app/unavailable")).toBe("/app/unavailable");
+    expect(sanitizeRedirectPath("/app/select-workspace")).toBe(
+      "/app/select-workspace",
+    );
+  });
+});
+
+describe("resolveAuthorizedSafeNextPath", () => {
+  const membership = {
+    total_membership_count: 1,
+    accessible_workspaces: [
+      {
+        workspace_id: "00000000-0000-4000-8000-000000000001",
+        slug: "acme",
+        name: "Acme",
+        role: "owner" as const,
+      },
+    ],
+  };
+
+  it("rejects foreign workspace slugs in safe next", () => {
+    expect(resolveAuthorizedSafeNextPath("/app/other", membership)).toBeNull();
+    expect(resolveAuthorizedSafeNextPath("/app/acme/inbox", membership)).toBe(
+      "/app/acme/inbox",
+    );
+  });
+});
+
+describe("sanitizeInviteClearDestination", () => {
+  it("allows invite invalid auth-error destination", () => {
+    expect(
+      sanitizeInviteClearDestination("/auth-error?code=invite_invalid"),
+    ).toBe("/auth-error?code=invite_invalid");
+  });
+
+  it("allows safe app destinations for post-accept cleanup", () => {
+    expect(sanitizeInviteClearDestination("/app/acme")).toBe("/app/acme");
+  });
+
+  it("rejects open redirects", () => {
+    expect(sanitizeInviteClearDestination("//evil.com")).toBeNull();
+    expect(sanitizeInviteClearDestination("https://evil.com")).toBeNull();
+    expect(sanitizeInviteClearDestination("/login")).toBeNull();
+  });
+});
+
+describe("buildInviteClearUrl", () => {
+  it("builds a cleanup handler URL with encoded destination", () => {
+    expect(buildInviteClearUrl("/auth-error?code=invite_invalid")).toBe(
+      "/invite/clear?destination=%2Fauth-error%3Fcode%3Dinvite_invalid",
+    );
+  });
+
+  it("falls back to invite invalid when destination is unsafe", () => {
+    expect(buildInviteClearUrl("//evil.com")).toBe(
+      "/invite/clear?destination=%2Fauth-error%3Fcode%3Dinvite_invalid",
+    );
   });
 });
 
