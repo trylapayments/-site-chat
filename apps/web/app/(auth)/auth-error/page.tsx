@@ -22,6 +22,9 @@ const ERROR_COPY: Record<
   },
 };
 
+const INVITE_INVALID_MESSAGE =
+  "This invitation is invalid, expired, or has already been used.";
+
 export default async function AuthErrorPage({
   searchParams,
 }: {
@@ -33,7 +36,10 @@ export default async function AuthErrorPage({
     code: "UNKNOWN" as const,
   };
 
-  const message = getUserMessage(AUTH_ERROR_CODES[copy.code]);
+  const message =
+    params.code === "invite_invalid"
+      ? INVITE_INVALID_MESSAGE
+      : getUserMessage(AUTH_ERROR_CODES[copy.code]);
 
   return (
     <AuthShell title={copy.title} description={message}>

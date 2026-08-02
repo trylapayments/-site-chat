@@ -17,13 +17,15 @@ import {
   type AuthActionState,
 } from "@/lib/auth/errors";
 import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
-import { resolveSafeRedirectPath, toAppRoute } from "@/lib/auth/redirect";
+import { toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import {
   clearRecoveryCookie,
   readRecoveryGateContext,
 } from "@/lib/auth/recovery-cookie.server";
 import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
+import { clearInviteCookie } from "@/lib/auth/invite-cookie.server";
+import { redirectAuthenticatedUser } from "@/lib/workspace/redirect.server";
 import { createClient } from "@/lib/supabase/server";
 import { clientEnv, env } from "@/lib/env";
 import { revalidatePath } from "next/cache";
@@ -132,14 +134,13 @@ export async function signInAction(
     );
   }
 
-  redirect(
-    toAppRoute(resolveSafeRedirectPath(getFormString(formData, "next"))),
-  );
+  return redirectAuthenticatedUser(getFormString(formData, "next"));
 }
 
 export async function signOutAction(): Promise<void> {
   const supabase = await createClient();
   await clearRecoveryCookie();
+  await clearInviteCookie();
   await supabase.auth.signOut();
   redirect(toAppRoute(AUTH_ROUTES.login));
 }

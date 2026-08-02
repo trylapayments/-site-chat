@@ -54,11 +54,25 @@ vi.mock("@/lib/supabase/server", () => ({
   ),
 }));
 
+const resolveAuthenticatedDestinationMock = vi.fn((_nextPath?: string | null) =>
+  Promise.resolve("/app"),
+);
+
+vi.mock("@/lib/workspace/redirect.server", () => ({
+  resolveAuthenticatedDestination: (nextPath?: string | null) =>
+    resolveAuthenticatedDestinationMock(nextPath),
+  getWorkspaceContext: vi.fn(),
+  redirectAuthenticatedUser: vi.fn(),
+}));
+
 describe("recovery blocker integration", () => {
   beforeEach(() => {
     signOutMock.mockClear();
     exchangeCodeForSessionMock.mockClear();
     getClaimsMock.mockClear();
+    resolveAuthenticatedDestinationMock.mockImplementation(
+      (_nextPath?: string | null) => Promise.resolve("/app"),
+    );
     exchangeCodeForSessionMock.mockResolvedValue({ error: null });
     getClaimsMock.mockResolvedValue({
       data: {
@@ -224,6 +238,7 @@ describe("recovery blocker integration", () => {
       expect(response.headers.get("location")).toBe(
         "http://localhost:3000/app",
       );
+      expect(resolveAuthenticatedDestinationMock).toHaveBeenCalledWith("/app");
       expect(response.cookies.get(RECOVERY_COOKIE_NAME)).toBeUndefined();
     });
   });

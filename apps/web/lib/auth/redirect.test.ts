@@ -7,6 +7,7 @@ import {
   sanitizeRecoveryClearDestination,
   sanitizeRedirectPath,
 } from "@/lib/auth/redirect";
+import { resolveAuthorizedSafeNextPath } from "@/lib/auth/post-auth-redirect";
 import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
 import { AUTH_ROUTES } from "@/lib/auth/constants";
 describe("sanitizeRedirectPath", () => {
@@ -22,6 +23,35 @@ describe("sanitizeRedirectPath", () => {
     expect(sanitizeRedirectPath("/\\evil.com")).toBeNull();
     expect(sanitizeRedirectPath("/login")).toBeNull();
     expect(sanitizeRedirectPath("%2f%2fevil.com")).toBeNull();
+  });
+
+  it("allows system app destinations", () => {
+    expect(sanitizeRedirectPath("/app/onboarding")).toBe("/app/onboarding");
+    expect(sanitizeRedirectPath("/app/unavailable")).toBe("/app/unavailable");
+    expect(sanitizeRedirectPath("/app/select-workspace")).toBe(
+      "/app/select-workspace",
+    );
+  });
+});
+
+describe("resolveAuthorizedSafeNextPath", () => {
+  const membership = {
+    total_membership_count: 1,
+    accessible_workspaces: [
+      {
+        workspace_id: "00000000-0000-4000-8000-000000000001",
+        slug: "acme",
+        name: "Acme",
+        role: "owner" as const,
+      },
+    ],
+  };
+
+  it("rejects foreign workspace slugs in safe next", () => {
+    expect(resolveAuthorizedSafeNextPath("/app/other", membership)).toBeNull();
+    expect(resolveAuthorizedSafeNextPath("/app/acme/inbox", membership)).toBe(
+      "/app/acme/inbox",
+    );
   });
 });
 
