@@ -133,6 +133,13 @@ BEGIN
   INTO v_workspace_id, v_slug, v_name
   FROM new_workspace nw;
 
+  INSERT INTO public.user_preferences (user_id, last_workspace_id)
+  VALUES (v_user_id, v_workspace_id)
+  ON CONFLICT (user_id) DO UPDATE
+  SET
+    last_workspace_id = EXCLUDED.last_workspace_id,
+    updated_at = now();
+
   RETURN jsonb_build_object(
     'workspace_id', v_workspace_id,
     'slug', v_slug,

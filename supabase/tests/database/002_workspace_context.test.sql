@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(22);
+SELECT plan(24);
 
 CREATE TEMP TABLE test_fixtures (
   key text PRIMARY KEY,
@@ -288,6 +288,64 @@ SELECT ok(
 SELECT ok(
   public.create_workspace('New WS 2', 'new-ws-ctx-2') ? 'slug',
   'T13: create_workspace returns slug'
+);
+
+-- T17 create_workspace upserts last_workspace preference atomically
+SELECT is(
+  (
+    SELECT up.last_workspace_id::text
+    FROM public.user_preferences up
+    WHERE up.user_id = auth.uid()
+  ),
+  (
+    SELECT public.create_workspace('Atomic WS', 'atomic-ws-ctx')->>'workspace_id'
+  ),
+  'T17: create_workspace sets last_workspace_id in same transaction'
+);
+
+-- T18 failed create_workspace leaves preferences unchanged
+SELECT is(
+  (
+    SELECT up.last_workspace_id::text
+    FROM public.user_preferences up
+    WHERE up.user_id = auth.uid()
+  ),
+  (
+    SELECT id::text
+    FROM public.workspaces
+    WHERE slug = 'atomic-ws-ctx'
+  ),
+  'T18: last_workspace_id established before duplicate attempt'
+);
+
+SELECT throws_ok(
+  $$SELECT public.create_workspace('Atomic WS Duplicate', 'atomic-ws-ctx')$$,
+  '23505',
+  'T18: duplicate slug create fails'
+);
+
+SELECT is(
+  (
+    SELECT up.last_workspace_id::text
+    FROM public.user_preferences up
+    WHERE up.user_id = auth.uid()
+  ),
+  (
+    SELECT id::text
+    FROM public.workspaces
+    WHERE slug = 'atomic-ws-ctx'
+  ),
+  'T18: duplicate slug failure preserves existing last_workspace_id'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.workspaces
+    WHERE slug = 'atomic-ws-ctx'
+  ),
+  1,
+  'T18: duplicate slug failure does not create extra workspace'
 );
 
 -- T14 accept_workspace_invitation extended return

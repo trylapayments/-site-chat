@@ -79,7 +79,8 @@ When `valid = false`, all other fields are `null`.
 
 ### `create_workspace(p_name, p_slug)`
 
-Returns:
+Creates workspace, owner membership, and upserts `user_preferences.last_workspace_id`
+in one transaction. Returns:
 
 ```json
 {
@@ -88,6 +89,8 @@ Returns:
   "name": "text"
 }
 ```
+
+No separate `set_last_workspace` call is required after onboarding creation.
 
 ### `accept_workspace_invitation(p_token)`
 

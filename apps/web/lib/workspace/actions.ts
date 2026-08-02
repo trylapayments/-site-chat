@@ -94,17 +94,6 @@ export async function createWorkspaceAction(
     };
   }
 
-  const setLastError = await callPublicRpc(supabase, "set_last_workspace", {
-    p_workspace_id: workspace.data.workspace_id,
-  });
-
-  if (setLastError.error) {
-    return {
-      success: false,
-      message: "Workspace created but preferences could not be saved.",
-    };
-  }
-
   redirect(toAppRoute(`/app/${workspace.data.slug}`));
 }
 
