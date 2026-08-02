@@ -7,6 +7,9 @@ export type Json =
   | Json[]
 
 export type Database = {
+  __InternalSupabase: {
+    PostgrestVersion: "12"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -34,6 +37,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      user_preferences: {
+        Row: {
+          created_at: string
+          last_workspace_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_workspace_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_workspace_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_last_workspace_id_fkey"
+            columns: ["last_workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_invitations: {
         Row: {
           accepted_at: string | null
@@ -166,7 +205,7 @@ export type Database = {
       accept_workspace_invitation: { Args: { p_token: string }; Returns: Json }
       create_workspace: {
         Args: { p_name: string; p_slug: string }
-        Returns: string
+        Returns: Json
       }
       create_workspace_invitation: {
         Args: {
@@ -186,6 +225,18 @@ export type Database = {
           p_new_role: Database["public"]["Enums"]["app_member_role"]
         }
         Returns: undefined
+      }
+      list_accessible_workspaces: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      set_last_workspace: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
+      validate_workspace_invitation: {
+        Args: { p_token: string }
+        Returns: Json
       }
       promote_workspace_member_to_owner: {
         Args: { p_member_id: string }
