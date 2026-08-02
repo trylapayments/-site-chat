@@ -26,6 +26,13 @@ export const selectWorkspaceSchema = z
   })
   .strict();
 
+export const switchWorkspaceSchema = z
+  .object({
+    workspaceId: z.string().uuid("Select a workspace"),
+    currentPath: z.string().max(2048).optional(),
+  })
+  .strict();
+
 export const accessibleWorkspaceSchema = z
   .object({
     workspace_id: z.string().uuid(),
@@ -71,6 +78,7 @@ export const acceptInvitationResultSchema = z
 
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type SelectWorkspaceInput = z.infer<typeof selectWorkspaceSchema>;
+export type SwitchWorkspaceInput = z.infer<typeof switchWorkspaceSchema>;
 export type AccessibleWorkspace = z.infer<typeof accessibleWorkspaceSchema>;
 export type ListAccessibleWorkspacesResult = z.infer<typeof listAccessibleWorkspacesSchema>;
 export type ValidateInvitationResult = z.infer<typeof validateInvitationSchema>;
