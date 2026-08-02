@@ -8,7 +8,6 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
@@ -23,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { toAppRoute } from "@/lib/auth/redirect";
 import { serializeDashboardListQuery } from "@/lib/dashboard/search-params";
 import { cn } from "@/lib/utils";
 import { parseSortParam } from "@site-chat/shared";
@@ -54,7 +54,7 @@ function SortableHeader({
 
   return (
     <Link
-      href={href as Route}
+      href={toAppRoute(href)}
       className="hover:text-foreground inline-flex items-center gap-1"
     >
       {label}

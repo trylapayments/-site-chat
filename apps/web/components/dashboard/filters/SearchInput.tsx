@@ -1,11 +1,11 @@
 "use client";
 
 import { Search } from "lucide-react";
-import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { Input } from "@/components/ui/input";
+import { toAppRoute } from "@/lib/auth/redirect";
 import { serializeDashboardListQuery } from "@/lib/dashboard/search-params";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +51,7 @@ export function SearchInput({
       }
 
       const query = params.toString();
-      const nextUrl = (query ? `${pathname}?${query}` : pathname) as Route;
+      const nextUrl = toAppRoute(query ? `${pathname}?${query}` : pathname);
       startTransition(() => {
         router.replace(nextUrl);
       });

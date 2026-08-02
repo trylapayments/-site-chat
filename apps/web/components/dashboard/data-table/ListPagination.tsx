@@ -1,12 +1,12 @@
 "use client";
 
-import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { serializeDashboardListQuery } from "@/lib/dashboard/search-params";
+import { toAppRoute } from "@/lib/auth/redirect";
 import type { PageMeta } from "@/lib/dashboard/pagination";
+import { serializeDashboardListQuery } from "@/lib/dashboard/search-params";
 import { cn } from "@/lib/utils";
 
 export function ListPagination({
@@ -52,7 +52,7 @@ export function ListPagination({
       <div className="flex items-center gap-2">
         {pageMeta.hasPrev ? (
           <Button variant="outline" size="sm" asChild>
-            <Link href={previousHref as Route}>Previous</Link>
+            <Link href={toAppRoute(previousHref)}>Previous</Link>
           </Button>
         ) : (
           <Button variant="outline" size="sm" disabled>
@@ -61,7 +61,7 @@ export function ListPagination({
         )}
         {pageMeta.hasNext ? (
           <Button variant="outline" size="sm" asChild>
-            <Link href={nextHref as Route}>Next</Link>
+            <Link href={toAppRoute(nextHref)}>Next</Link>
           </Button>
         ) : (
           <Button variant="outline" size="sm" disabled>
