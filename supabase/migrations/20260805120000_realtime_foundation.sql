@@ -82,6 +82,7 @@ REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM widget_realtime;
 
 GRANT USAGE ON SCHEMA realtime TO widget_realtime;
 GRANT SELECT ON TABLE realtime.messages TO widget_realtime;
+GRANT widget_realtime TO postgres;
 
 CREATE POLICY widget_realtime_receive_own_broadcast
   ON realtime.messages

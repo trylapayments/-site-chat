@@ -333,6 +333,8 @@ DO $$
 DECLARE
   v_count integer;
 BEGIN
+  RESET role;
+
   PERFORM set_config(
     'request.jwt.claims',
     '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}',
