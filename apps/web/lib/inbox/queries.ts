@@ -132,7 +132,7 @@ export async function assignConversation(
   const { data, error } = await callPublicRpc(supabase, "assign_conversation", {
     p_workspace_id: workspaceId,
     p_conversation_id: conversationId,
-    p_assignee_member_id: assigneeMemberId,
+    p_assignee_member_id: assigneeMemberId as unknown as string,
   });
 
   if (error) {
