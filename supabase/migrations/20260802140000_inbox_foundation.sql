@@ -567,6 +567,9 @@ BEGIN
   END IF;
 
   v_search := NULLIF(trim(p_query ->> 'q'), '');
+  IF v_search IS NOT NULL AND length(v_search) > 200 THEN
+    RAISE EXCEPTION 'Search query too long';
+  END IF;
 
   SELECT count(*)
   INTO v_total
@@ -748,7 +751,7 @@ BEGIN
   END IF;
 
   v_limit := COALESCE((p_query ->> 'limit')::integer, 50);
-  IF v_limit < 1 OR v_limit > 100 THEN
+  IF v_limit < 1 OR v_limit > 50 THEN
     RAISE EXCEPTION 'Invalid message limit';
   END IF;
 
@@ -1157,14 +1160,14 @@ BEGIN
     RAISE EXCEPTION 'Conversation not found';
   END IF;
 
-  IF p_through_sequence IS NULL THEN
-    SELECT COALESCE(max(m.sequence_number), 0)
-    INTO v_through
-    FROM public.messages m
-    WHERE m.conversation_id = p_conversation_id
-      AND m.workspace_id = p_workspace_id;
-  ELSE
-    v_through := p_through_sequence;
+  SELECT COALESCE(max(m.sequence_number), 0)
+  INTO v_through
+  FROM public.messages m
+  WHERE m.conversation_id = p_conversation_id
+    AND m.workspace_id = p_workspace_id;
+
+  IF p_through_sequence IS NOT NULL THEN
+    v_through := LEAST(p_through_sequence, v_through);
   END IF;
 
   INSERT INTO public.conversation_member_reads (
@@ -1362,3 +1365,11 @@ GRANT EXECUTE ON FUNCTION public.mark_conversation_read(uuid, uuid, bigint) TO a
 
 REVOKE ALL ON FUNCTION public.list_assignable_members(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.list_assignable_members(uuid) TO authenticated;
+
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM anon;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM authenticated;
+
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_ids() TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_role(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.workspace_is_accessible(uuid) TO authenticated;

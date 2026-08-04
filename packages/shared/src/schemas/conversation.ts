@@ -107,7 +107,7 @@ export type MessageItem = z.infer<typeof messageItemSchema>;
 
 export const listMessagesQuerySchema = z
   .object({
-    limit: z.number().int().min(1).max(100).optional(),
+    limit: z.number().int().min(1).max(50).optional(),
     before_sequence: z.number().int().positive().optional(),
   })
   .strict();
@@ -157,7 +157,6 @@ export type MarkConversationReadResult = z.infer<typeof markConversationReadResu
 
 export const sendMessageSchema = z
   .object({
-    workspaceId: z.string().uuid(),
     conversationId: z.string().uuid(),
     body: z.string().trim().min(1).max(4000),
     clientMessageId: z.string().uuid().optional(),
@@ -168,7 +167,6 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 export const assignConversationSchema = z
   .object({
-    workspaceId: z.string().uuid(),
     conversationId: z.string().uuid(),
     assigneeMemberId: z.string().uuid().nullable(),
   })
@@ -178,7 +176,6 @@ export type AssignConversationInput = z.infer<typeof assignConversationSchema>;
 
 export const updateConversationStatusSchema = z
   .object({
-    workspaceId: z.string().uuid(),
     conversationId: z.string().uuid(),
     status: conversationStatusSchema,
   })
@@ -188,7 +185,6 @@ export type UpdateConversationStatusInput = z.infer<typeof updateConversationSta
 
 export const markConversationReadSchema = z
   .object({
-    workspaceId: z.string().uuid(),
     conversationId: z.string().uuid(),
     throughSequence: z.number().int().nonnegative().optional(),
   })

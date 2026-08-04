@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { markConversationReadAction } from "@/lib/inbox/actions";
 
 export function MarkConversationRead({
-  workspaceId,
+  workspaceSlug,
   conversationId,
   throughSequence,
 }: {
-  workspaceId: string;
+  workspaceSlug: string;
   conversationId: string;
   throughSequence?: number;
 }) {
@@ -27,8 +27,7 @@ export function MarkConversationRead({
     markedRef.current = true;
 
     startTransition(async () => {
-      const result = await markConversationReadAction({
-        workspaceId,
+      const result = await markConversationReadAction(workspaceSlug, {
         conversationId,
         throughSequence,
       });
@@ -37,7 +36,7 @@ export function MarkConversationRead({
         router.refresh();
       }
     });
-  }, [conversationId, router, throughSequence, workspaceId]);
+  }, [conversationId, router, throughSequence, workspaceSlug]);
 
   return null;
 }
@@ -82,14 +81,10 @@ export function MessageList({ messages }: { messages: MessageItem[] }) {
 
 export function ReplyComposer({
   workspaceSlug,
-  role,
-  workspaceId,
   conversationId,
   canSend,
 }: {
   workspaceSlug: string;
-  role: "owner" | "admin" | "agent" | "viewer";
-  workspaceId: string;
   conversationId: string;
   canSend: boolean;
 }) {
@@ -97,6 +92,7 @@ export function ReplyComposer({
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const clientMessageIdRef = useRef<string | null>(null);
 
   if (!canSend) {
     return (
@@ -113,17 +109,22 @@ export function ReplyComposer({
         event.preventDefault();
         setError(null);
         const trimmed = body.trim();
-        if (!trimmed) {
+        if (!trimmed || isPending) {
           return;
         }
 
+        if (!clientMessageIdRef.current) {
+          clientMessageIdRef.current = crypto.randomUUID();
+        }
+
+        const clientMessageId = clientMessageIdRef.current;
+
         startTransition(async () => {
           const { sendMessageAction } = await import("@/lib/inbox/actions");
-          const result = await sendMessageAction(workspaceSlug, role, {
-            workspaceId,
+          const result = await sendMessageAction(workspaceSlug, {
             conversationId,
             body: trimmed,
-            clientMessageId: crypto.randomUUID(),
+            clientMessageId,
           });
 
           if (!result.success) {
@@ -131,6 +132,7 @@ export function ReplyComposer({
             return;
           }
 
+          clientMessageIdRef.current = null;
           setBody("");
           router.refresh();
         });

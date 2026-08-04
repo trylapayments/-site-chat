@@ -69,7 +69,7 @@ export default async function ConversationDetailPage({
       />
 
       <MarkConversationRead
-        workspaceId={workspace.workspace_id}
+        workspaceSlug={workspaceSlug}
         conversationId={conversationId}
         throughSequence={maxSequence > 0 ? maxSequence : undefined}
       />
@@ -79,8 +79,6 @@ export default async function ConversationDetailPage({
           <MessageList messages={messages.items} />
           <ReplyComposer
             workspaceSlug={workspaceSlug}
-            role={workspace.role}
-            workspaceId={workspace.workspace_id}
             conversationId={conversationId}
             canSend={can(workspace.role, "send_messages")}
           />
@@ -88,8 +86,6 @@ export default async function ConversationDetailPage({
 
         <ConversationSidebar
           workspaceSlug={workspaceSlug}
-          role={workspace.role}
-          workspaceId={workspace.workspace_id}
           conversationId={conversationId}
           conversation={conversation}
           members={members}

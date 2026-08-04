@@ -17,8 +17,6 @@ import { formatConversationContactLabel } from "@/lib/inbox/search-params";
 
 export function ConversationSidebar({
   workspaceSlug,
-  role,
-  workspaceId,
   conversationId,
   conversation,
   members,
@@ -26,8 +24,6 @@ export function ConversationSidebar({
   canUpdateStatus,
 }: {
   workspaceSlug: string;
-  role: "owner" | "admin" | "agent" | "viewer";
-  workspaceId: string;
   conversationId: string;
   conversation: ConversationDetail;
   members: WorkspaceMemberOption[];
@@ -69,15 +65,10 @@ export function ConversationSidebar({
             onChange={(event) => {
               const value = event.target.value;
               startTransition(async () => {
-                const result = await assignConversationAction(
-                  workspaceSlug,
-                  role,
-                  {
-                    workspaceId,
-                    conversationId,
-                    assigneeMemberId: value || null,
-                  },
-                );
+                const result = await assignConversationAction(workspaceSlug, {
+                  conversationId,
+                  assigneeMemberId: value || null,
+                });
                 if (result.success) {
                   router.refresh();
                 }
@@ -114,9 +105,7 @@ export function ConversationSidebar({
                   startTransition(async () => {
                     const result = await updateConversationStatusAction(
                       workspaceSlug,
-                      role,
                       {
-                        workspaceId,
                         conversationId,
                         status,
                       },

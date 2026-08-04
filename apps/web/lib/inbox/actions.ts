@@ -2,13 +2,14 @@
 
 import {
   assignConversationSchema,
+  markConversationReadSchema,
   sendMessageSchema,
   updateConversationStatusSchema,
-  markConversationReadSchema,
 } from "@site-chat/shared";
 import { revalidatePath } from "next/cache";
 
-import { requireUser } from "@/lib/auth/session";
+import { workspaceNavPath } from "@/lib/dashboard/routes";
+import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   assignConversation,
   markConversationRead,
@@ -19,8 +20,8 @@ import {
   CapabilityError,
   requireCapability,
 } from "@/lib/permissions/require-capability";
+import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { workspaceNavPath } from "@/lib/dashboard/routes";
 
 export type InboxActionResult =
   { success: true } | { success: false; message: string };
@@ -32,32 +33,39 @@ function mapActionError(error: unknown): InboxActionResult {
   return { success: false, message: "Something went wrong. Please try again." };
 }
 
+async function requireInboxMutationContext(workspaceSlug: string) {
+  const { workspace } = await requireInboxWorkspace(workspaceSlug);
+  const supabase = await createClient();
+  const { user } = await requireUser(supabase);
+
+  if (!user) {
+    throw new CapabilityError(workspace.role, "view_conversations");
+  }
+
+  return { workspace, supabase };
+}
+
 export async function sendMessageAction(
   workspaceSlug: string,
-  role: Parameters<typeof requireCapability>[0],
   input: {
-    workspaceId: string;
     conversationId: string;
     body: string;
     clientMessageId?: string;
   },
 ): Promise<InboxActionResult> {
   try {
-    requireCapability(role, "send_messages");
     const parsed = sendMessageSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, message: "Invalid message." };
     }
 
-    const supabase = await createClient();
-    const { user } = await requireUser(supabase);
-    if (!user) {
-      return { success: false, message: "Not authenticated." };
-    }
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "send_messages");
 
     await sendOperatorMessage(
       supabase,
-      parsed.data.workspaceId,
+      workspace.workspace_id,
       parsed.data.conversationId,
       parsed.data.body,
       parsed.data.clientMessageId,
@@ -75,29 +83,24 @@ export async function sendMessageAction(
 
 export async function assignConversationAction(
   workspaceSlug: string,
-  role: Parameters<typeof requireCapability>[0],
   input: {
-    workspaceId: string;
     conversationId: string;
     assigneeMemberId: string | null;
   },
 ): Promise<InboxActionResult> {
   try {
-    requireCapability(role, "assign_conversations");
     const parsed = assignConversationSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, message: "Invalid assignment." };
     }
 
-    const supabase = await createClient();
-    const { user } = await requireUser(supabase);
-    if (!user) {
-      return { success: false, message: "Not authenticated." };
-    }
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "assign_conversations");
 
     await assignConversation(
       supabase,
-      parsed.data.workspaceId,
+      workspace.workspace_id,
       parsed.data.conversationId,
       parsed.data.assigneeMemberId,
     );
@@ -114,29 +117,24 @@ export async function assignConversationAction(
 
 export async function updateConversationStatusAction(
   workspaceSlug: string,
-  role: Parameters<typeof requireCapability>[0],
   input: {
-    workspaceId: string;
     conversationId: string;
     status: "open" | "pending" | "resolved" | "closed";
   },
 ): Promise<InboxActionResult> {
   try {
-    requireCapability(role, "update_conversation_status");
     const parsed = updateConversationStatusSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, message: "Invalid status." };
     }
 
-    const supabase = await createClient();
-    const { user } = await requireUser(supabase);
-    if (!user) {
-      return { success: false, message: "Not authenticated." };
-    }
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "update_conversation_status");
 
     await updateConversationStatus(
       supabase,
-      parsed.data.workspaceId,
+      workspace.workspace_id,
       parsed.data.conversationId,
       parsed.data.status,
     );
@@ -151,26 +149,25 @@ export async function updateConversationStatusAction(
   }
 }
 
-export async function markConversationReadAction(input: {
-  workspaceId: string;
-  conversationId: string;
-  throughSequence?: number;
-}): Promise<InboxActionResult> {
+export async function markConversationReadAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    throughSequence?: number;
+  },
+): Promise<InboxActionResult> {
   try {
     const parsed = markConversationReadSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, message: "Invalid read request." };
     }
 
-    const supabase = await createClient();
-    const { user } = await requireUser(supabase);
-    if (!user) {
-      return { success: false, message: "Not authenticated." };
-    }
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
 
     await markConversationRead(
       supabase,
-      parsed.data.workspaceId,
+      workspace.workspace_id,
       parsed.data.conversationId,
       parsed.data.throughSequence,
     );
