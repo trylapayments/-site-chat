@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(52);
+SELECT plan(28);
 
 CREATE TEMP TABLE inbox_fixtures (
   key text PRIMARY KEY,
