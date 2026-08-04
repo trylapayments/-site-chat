@@ -300,6 +300,8 @@ $$;
 
 SELECT pass('list_messages after_sequence returns newer messages');
 
+SELECT tests.clear_auth();
+
 -- T11 after_sequence widget catch-up
 SELECT ok(
   jsonb_array_length(
