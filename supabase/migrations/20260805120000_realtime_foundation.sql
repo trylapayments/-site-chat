@@ -71,17 +71,22 @@ $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'widget_realtime') THEN
-    CREATE ROLE widget_realtime NOLOGIN NOINHERIT;
+    CREATE ROLE widget_realtime NOLOGIN;
+  ELSE
+    ALTER ROLE widget_realtime INHERIT;
   END IF;
 END;
 $$;
+
+-- Supabase locks the realtime schema; explicit GRANT on realtime.messages fails in
+-- migrations. Inherit anon's platform-provided Realtime SELECT, then revoke public access.
+GRANT anon TO widget_realtime;
 
 REVOKE ALL ON SCHEMA public FROM widget_realtime;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM widget_realtime;
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM widget_realtime;
 
-GRANT USAGE ON SCHEMA realtime TO widget_realtime;
-GRANT SELECT ON TABLE realtime.messages TO widget_realtime;
+GRANT widget_realtime TO authenticator;
 GRANT widget_realtime TO postgres;
 
 CREATE POLICY widget_realtime_receive_own_broadcast

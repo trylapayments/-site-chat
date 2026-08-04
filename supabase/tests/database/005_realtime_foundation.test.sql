@@ -334,13 +334,8 @@ DECLARE
   v_count integer;
 BEGIN
   RESET role;
-
-  PERFORM set_config(
-    'request.jwt.claims',
-    '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}',
-    true
-  );
   SET LOCAL ROLE widget_realtime;
+  SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}';
 
   SELECT count(*)
   INTO v_count
