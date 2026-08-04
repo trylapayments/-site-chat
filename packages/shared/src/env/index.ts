@@ -17,6 +17,12 @@ export const serverEnvSchema = z.object({
 
   // Signed auth flow cookies (sc_recovery)
   AUTH_COOKIE_SECRET: z.string().min(32),
+
+  // Widget embed token signing (HMAC)
+  WIDGET_EMBED_SECRET: z.string().min(32),
+
+  // Rate limit bucket key hashing (HMAC; never store raw IPs)
+  RATE_LIMIT_SECRET: z.string().min(32),
 });
 
 /**

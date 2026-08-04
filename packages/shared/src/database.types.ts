@@ -34,6 +34,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      allowed_domains: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          verified: boolean
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          verified?: boolean
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          verified?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allowed_domains_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string
@@ -145,6 +177,7 @@ export type Database = {
           id: string
           last_message_at: string | null
           last_message_preview: string | null
+          locale: string | null
           message_count: number
           next_message_sequence: number
           referrer: string | null
@@ -165,6 +198,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          locale?: string | null
           message_count?: number
           next_message_sequence?: number
           referrer?: string | null
@@ -185,6 +219,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          locale?: string | null
           message_count?: number
           next_message_sequence?: number
           referrer?: string | null
@@ -348,8 +383,12 @@ export type Database = {
         Row: {
           contact_id: string | null
           created_at: string
+          current_url: string | null
           expires_at: string
           id: string
+          initial_url: string | null
+          locale: string
+          referrer: string | null
           session_token_hash: string
           updated_at: string
           workspace_id: string
@@ -357,8 +396,12 @@ export type Database = {
         Insert: {
           contact_id?: string | null
           created_at?: string
+          current_url?: string | null
           expires_at: string
           id?: string
+          initial_url?: string | null
+          locale?: string
+          referrer?: string | null
           session_token_hash: string
           updated_at?: string
           workspace_id: string
@@ -366,8 +409,12 @@ export type Database = {
         Update: {
           contact_id?: string | null
           created_at?: string
+          current_url?: string | null
           expires_at?: string
           id?: string
+          initial_url?: string | null
+          locale?: string
+          referrer?: string | null
           session_token_hash?: string
           updated_at?: string
           workspace_id?: string
@@ -388,6 +435,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      widget_rate_limit_buckets: {
+        Row: {
+          bucket_key: string
+          created_at: string
+          request_count: number
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          bucket_key: string
+          created_at?: string
+          request_count?: number
+          updated_at?: string
+          window_start: string
+        }
+        Update: {
+          bucket_key?: string
+          created_at?: string
+          request_count?: number
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
       }
       workspace_invitations: {
         Row: {
@@ -489,27 +560,33 @@ export type Database = {
           deleted_at: string | null
           id: string
           name: string
+          settings_json: Json
           slug: string
           status: Database["public"]["Enums"]["app_workspace_status"]
           updated_at: string
+          widget_public_key: string
         }
         Insert: {
           created_at?: string
           deleted_at?: string | null
           id?: string
           name: string
+          settings_json?: Json
           slug: string
           status?: Database["public"]["Enums"]["app_workspace_status"]
           updated_at?: string
+          widget_public_key: string
         }
         Update: {
           created_at?: string
           deleted_at?: string | null
           id?: string
           name?: string
+          settings_json?: Json
           slug?: string
           status?: Database["public"]["Enums"]["app_workspace_status"]
           updated_at?: string
+          widget_public_key?: string
         }
         Relationships: []
       }
@@ -626,6 +703,56 @@ export type Database = {
       validate_workspace_invitation: {
         Args: { p_token: string }
         Returns: Json
+      }
+      widget_consume_rate_limit: {
+        Args: {
+          p_bucket_key: string
+          p_limit: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
+      widget_create_or_resume_visitor_session: {
+        Args: {
+          p_locale?: string
+          p_page_url?: string
+          p_referrer?: string
+          p_session_token?: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_list_visitor_messages: {
+        Args: {
+          p_before_sequence?: number
+          p_limit?: number
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_resolve_public_key: {
+        Args: { p_widget_public_key: string }
+        Returns: Json
+      }
+      widget_send_visitor_message: {
+        Args: {
+          p_body: string
+          p_client_message_id?: string
+          p_page_url?: string
+          p_referrer?: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_validate_origin: {
+        Args: {
+          p_origin: string
+          p_require_verified?: boolean
+          p_workspace_id: string
+        }
+        Returns: boolean
       }
     }
     Enums: {

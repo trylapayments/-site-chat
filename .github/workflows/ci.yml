@@ -17,6 +17,8 @@ env:
   NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
   SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
   AUTH_COOKIE_SECRET: placeholder-auth-cookie-secret-for-ci-build-min-32-chars
+  WIDGET_EMBED_SECRET: placeholder-widget-embed-secret-for-ci-build-min-32-chars
+  RATE_LIMIT_SECRET: placeholder-rate-limit-secret-for-ci-build-min-32-chars
 
 jobs:
   lint-and-typecheck:
@@ -50,6 +52,9 @@ jobs:
       - name: Test web auth utilities
         run: pnpm --filter @site-chat/web test
 
+      - name: Test widget package
+        run: pnpm --filter @site-chat/widget test
+
       - name: Format check
         run: pnpm format:check
 
@@ -75,6 +80,15 @@ jobs:
 
       - name: Build shared packages
         run: pnpm --filter @site-chat/shared build
+
+      - name: Build widget bundle
+        run: pnpm --filter @site-chat/widget build
+
+      - name: Verify widget bundles contain no machine-specific paths
+        run: pnpm --filter @site-chat/widget verify:bundle-paths
+
+      - name: Verify committed widget bundles match build output
+        run: git diff --exit-code apps/web/public/widget/
 
       - name: Build web app
         run: pnpm --filter @site-chat/web build

@@ -147,11 +147,51 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM public.workspaces WHERE slug = 'acme-support') THEN
-    INSERT INTO public.workspaces (name, slug)
-    VALUES ('Acme Support', 'acme-support');
+    INSERT INTO public.workspaces (name, slug, widget_public_key, settings_json)
+    VALUES (
+      'Acme Support',
+      'acme-support',
+      'wk_' || replace(gen_random_uuid()::text, '-', ''),
+      jsonb_build_object(
+        'widget', jsonb_build_object(
+          'locale', 'en',
+          'greetingMessage', 'Hi! How can we help?',
+          'reopenWindowHours', 24,
+          'position', 'bottom-right',
+          'branding', jsonb_build_object(
+            'displayName', 'Acme Support',
+            'primaryColor', '#0066FF',
+            'showPoweredBy', true
+          )
+        )
+      )
+    );
   END IF;
 
   SELECT id INTO v_workspace_id FROM public.workspaces WHERE slug = 'acme-support';
+
+  UPDATE public.workspaces
+  SET settings_json = jsonb_build_object(
+    'widget', jsonb_build_object(
+      'locale', 'en',
+      'greetingMessage', 'Hi! How can we help?',
+      'reopenWindowHours', 24,
+      'position', 'bottom-right',
+      'branding', jsonb_build_object(
+        'displayName', 'Acme Support',
+        'primaryColor', '#0066FF',
+        'showPoweredBy', true
+      )
+    )
+  )
+  WHERE id = v_workspace_id;
+
+  INSERT INTO public.allowed_domains (workspace_id, domain, verified)
+  VALUES
+    (v_workspace_id, 'localhost', true),
+    (v_workspace_id, '127.0.0.1', true),
+    (v_workspace_id, 'example.com', true)
+  ON CONFLICT (workspace_id, domain) DO NOTHING;
 
   INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
   VALUES (v_workspace_id, v_owner_id, 'owner', 'active')
