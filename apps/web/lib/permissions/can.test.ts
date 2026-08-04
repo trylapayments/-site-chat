@@ -23,4 +23,11 @@ describe("can", () => {
     expect(can("agent", "assign_conversations")).toBe(true);
     expect(can("viewer", "assign_conversations")).toBe(false);
   });
+
+  it("restricts update_conversation_status to owner, admin, and agent", () => {
+    expect(can("owner", "update_conversation_status")).toBe(true);
+    expect(can("admin", "update_conversation_status")).toBe(true);
+    expect(can("agent", "update_conversation_status")).toBe(true);
+    expect(can("viewer", "update_conversation_status")).toBe(false);
+  });
 });
