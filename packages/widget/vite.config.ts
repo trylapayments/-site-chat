@@ -3,7 +3,19 @@ import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      // CI sets NODE_ENV=test globally; force production JSX so bundles never
+      // embed machine-specific jsxDEV fileName metadata.
+      jsxRuntime: "automatic",
+    }),
+  ],
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
+  esbuild: {
+    jsxDev: false,
+  },
   build: {
     outDir: resolve(__dirname, "../../apps/web/public/widget"),
     emptyOutDir: true,

@@ -84,6 +84,9 @@ jobs:
       - name: Build widget bundle
         run: pnpm --filter @site-chat/widget build
 
+      - name: Verify widget bundles contain no machine-specific paths
+        run: pnpm --filter @site-chat/widget verify:bundle-paths
+
       - name: Verify committed widget bundles match build output
         run: git diff --exit-code apps/web/public/widget/
 

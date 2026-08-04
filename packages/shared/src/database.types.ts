@@ -34,6 +34,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      allowed_domains: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          verified: boolean
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          verified?: boolean
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          verified?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allowed_domains_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string
@@ -145,6 +177,7 @@ export type Database = {
           id: string
           last_message_at: string | null
           last_message_preview: string | null
+          locale: string | null
           message_count: number
           next_message_sequence: number
           referrer: string | null
@@ -165,6 +198,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          locale?: string | null
           message_count?: number
           next_message_sequence?: number
           referrer?: string | null
@@ -185,6 +219,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          locale?: string | null
           message_count?: number
           next_message_sequence?: number
           referrer?: string | null
@@ -348,8 +383,12 @@ export type Database = {
         Row: {
           contact_id: string | null
           created_at: string
+          current_url: string | null
           expires_at: string
           id: string
+          initial_url: string | null
+          locale: string
+          referrer: string | null
           session_token_hash: string
           updated_at: string
           workspace_id: string
@@ -357,8 +396,12 @@ export type Database = {
         Insert: {
           contact_id?: string | null
           created_at?: string
+          current_url?: string | null
           expires_at: string
           id?: string
+          initial_url?: string | null
+          locale?: string
+          referrer?: string | null
           session_token_hash: string
           updated_at?: string
           workspace_id: string
@@ -366,8 +409,12 @@ export type Database = {
         Update: {
           contact_id?: string | null
           created_at?: string
+          current_url?: string | null
           expires_at?: string
           id?: string
+          initial_url?: string | null
+          locale?: string
+          referrer?: string | null
           session_token_hash?: string
           updated_at?: string
           workspace_id?: string
@@ -388,6 +435,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      widget_rate_limit_buckets: {
+        Row: {
+          bucket_key: string
+          created_at: string
+          request_count: number
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          bucket_key: string
+          created_at?: string
+          request_count?: number
+          updated_at?: string
+          window_start: string
+        }
+        Update: {
+          bucket_key?: string
+          created_at?: string
+          request_count?: number
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
       }
       workspace_invitations: {
         Row: {

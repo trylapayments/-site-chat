@@ -7,6 +7,7 @@
   "description": "Site Chat embeddable widget bundle",
   "scripts": {
     "build": "vite build",
+    "verify:bundle-paths": "node scripts/verify-bundle-paths.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"
