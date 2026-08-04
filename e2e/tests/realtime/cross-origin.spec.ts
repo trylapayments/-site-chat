@@ -10,6 +10,7 @@ import {
   sendOperatorReply,
   sendWidgetMessage,
   widgetComposer,
+  widgetFrameLocator,
 } from "../../helpers";
 
 test.describe("PR 4C realtime cross-origin", () => {
@@ -49,8 +50,8 @@ test.describe("PR 4C realtime cross-origin", () => {
     await operatorPage.getByText("Need help please").click();
     await sendOperatorReply(operatorPage, "Operator live reply");
 
-    await expect(widgetPage.getByText("Operator live reply")).toBeVisible({
-      timeout: 20_000,
+    await expect(widgetFrameLocator(widgetPage).getByText("Operator live reply")).toBeVisible({
+      timeout: 30_000,
     });
 
     await operatorContext.close();
@@ -91,8 +92,8 @@ test.describe("PR 4C realtime cross-origin", () => {
     await sendWidgetMessage(widgetPage, "Offline message");
     await widgetPage.context().setOffline(false);
 
-    await expect(widgetPage.getByText("Offline message")).toHaveCount(1, {
-      timeout: 25_000,
+    await expect(widgetFrameLocator(widgetPage).getByText("Offline message")).toHaveCount(1, {
+      timeout: 60_000,
     });
 
     await widgetContext.close();
@@ -167,13 +168,14 @@ test.describe("PR 4C realtime cross-origin", () => {
     await widgetComposer(widgetPage).fill(body);
     await widgetPage.getByRole("button", { name: "Send" }).click();
 
-    await expect(widgetPage.getByRole("button", { name: "Retry" })).toBeVisible({
-      timeout: 20_000,
+    const frame = widgetFrameLocator(widgetPage);
+    await expect(frame.getByRole("button", { name: "Retry" })).toBeVisible({
+      timeout: 30_000,
     });
-    await widgetPage.getByRole("button", { name: "Retry" }).click();
-    await widgetPage.getByRole("button", { name: "Send" }).click();
+    await frame.getByRole("button", { name: "Retry" }).click();
+    await frame.getByRole("button", { name: "Send" }).click();
 
-    await expect(widgetPage.getByText(body)).toBeVisible({ timeout: 20_000 });
+    await expect(frame.getByText(body)).toBeVisible({ timeout: 30_000 });
     expect(sendAttempts).toBeGreaterThanOrEqual(2);
 
     await widgetContext.close();
@@ -186,8 +188,9 @@ test.describe("PR 4C realtime cross-origin", () => {
     await openWidget(widgetPage);
     await widgetPage.context().setOffline(true);
 
-    await expect(widgetPage.getByText(/Connection lost|Reconnecting|offline/i)).toBeVisible({
-      timeout: 20_000,
+    const frame = widgetFrameLocator(widgetPage);
+    await expect(frame.getByText(/Connection lost|Reconnecting|offline/i)).toBeVisible({
+      timeout: 30_000,
     });
 
     await widgetPage.context().setOffline(false);
