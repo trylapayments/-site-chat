@@ -16,10 +16,6 @@ ALTER TABLE public.conversations
   ALTER COLUMN visitor_realtime_topic_key SET NOT NULL;
 
 ALTER TABLE public.conversations
-  ALTER COLUMN visitor_realtime_topic_key
-  SET DEFAULT app_private.generate_visitor_realtime_topic_key();
-
-ALTER TABLE public.conversations
   ADD CONSTRAINT chk_conversations_visitor_realtime_topic_key_format CHECK (
     visitor_realtime_topic_key ~ '^[a-f0-9]{64}$'
   );
