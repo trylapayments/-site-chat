@@ -241,7 +241,7 @@ BEGIN
   VALUES (v_workspace_id, v_viewer_id, 'viewer', 'active')
   ON CONFLICT (workspace_id, user_id) DO NOTHING;
 
-  SELECT id INTO v_agent_member_id
+  SELECT wm.id INTO v_agent_member_id
   FROM public.workspace_members wm
   INNER JOIN auth.users u ON u.id = wm.user_id
   WHERE wm.workspace_id = v_workspace_id
