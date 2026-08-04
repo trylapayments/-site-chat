@@ -489,27 +489,33 @@ export type Database = {
           deleted_at: string | null
           id: string
           name: string
+          settings_json: Json
           slug: string
           status: Database["public"]["Enums"]["app_workspace_status"]
           updated_at: string
+          widget_public_key: string
         }
         Insert: {
           created_at?: string
           deleted_at?: string | null
           id?: string
           name: string
+          settings_json?: Json
           slug: string
           status?: Database["public"]["Enums"]["app_workspace_status"]
           updated_at?: string
+          widget_public_key: string
         }
         Update: {
           created_at?: string
           deleted_at?: string | null
           id?: string
           name?: string
+          settings_json?: Json
           slug?: string
           status?: Database["public"]["Enums"]["app_workspace_status"]
           updated_at?: string
+          widget_public_key?: string
         }
         Relationships: []
       }
@@ -626,6 +632,56 @@ export type Database = {
       validate_workspace_invitation: {
         Args: { p_token: string }
         Returns: Json
+      }
+      widget_consume_rate_limit: {
+        Args: {
+          p_bucket_key: string
+          p_limit: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
+      widget_create_or_resume_visitor_session: {
+        Args: {
+          p_locale?: string
+          p_page_url?: string
+          p_referrer?: string
+          p_session_token?: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_list_visitor_messages: {
+        Args: {
+          p_before_sequence?: number
+          p_limit?: number
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_resolve_public_key: {
+        Args: { p_widget_public_key: string }
+        Returns: Json
+      }
+      widget_send_visitor_message: {
+        Args: {
+          p_body: string
+          p_client_message_id?: string
+          p_page_url?: string
+          p_referrer?: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_validate_origin: {
+        Args: {
+          p_origin: string
+          p_require_verified?: boolean
+          p_workspace_id: string
+        }
+        Returns: boolean
       }
     }
     Enums: {

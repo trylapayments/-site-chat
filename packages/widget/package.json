@@ -1,19 +1,30 @@
 {
   "name": "@site-chat/widget",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
-  "description": "Site Chat embeddable widget bundle (placeholder for Phase 1+)",
+  "description": "Site Chat embeddable widget bundle",
   "scripts": {
-    "build": "echo 'Widget build not implemented in Phase 0'",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@site-chat/eslint-config": "workspace:*",
     "@site-chat/typescript-config": "workspace:*",
+    "@types/react": "^19.0.11",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.22.0",
-    "typescript": "^5.8.2"
+    "jsdom": "^26.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vitest": "^3.0.9"
   }
 }

@@ -3,3 +3,6 @@ docs/
 
 # Generated Supabase types — checked via pnpm db:types:check
 packages/shared/src/database.types.ts
+
+# Built widget bundles
+apps/web/public/widget/
