@@ -67,30 +67,19 @@ function mapPublicConfigFromRpc(data: Json): unknown {
 
 function mapSessionFromRpc(data: Json): unknown {
   const record = asRecord(data);
-  const conversation =
-    record.conversation &&
-    typeof record.conversation === "object" &&
-    !Array.isArray(record.conversation)
-      ? asRecord(record.conversation)
-      : null;
 
   return {
     sessionToken: record.session_token,
     expiresAt: record.expires_at,
     locale: record.locale,
-    conversation: conversation
-      ? {
-          id: conversation.id,
-          status: conversation.status,
-        }
-      : null,
+    hasConversation: Boolean(record.has_conversation),
+    conversationStatus: record.conversation_status ?? null,
   };
 }
 
 function mapSendMessageFromRpc(data: Json): unknown {
   const record = asRecord(data);
   const message = asRecord(record.message ?? {});
-  const conversation = asRecord(record.conversation ?? {});
 
   return {
     message: {
@@ -100,32 +89,17 @@ function mapSendMessageFromRpc(data: Json): unknown {
       body: message.body,
       created_at: message.created_at,
     },
-    conversation: {
-      id: conversation.id,
-      status: conversation.status,
-    },
+    conversationStatus: record.conversation_status,
   };
 }
 
 function mapListMessagesFromRpc(data: Json): unknown {
   const record = asRecord(data);
-  const conversation =
-    record.conversation &&
-    typeof record.conversation === "object" &&
-    !Array.isArray(record.conversation)
-      ? asRecord(record.conversation)
-      : null;
 
   return {
     items: record.items ?? [],
     has_older: record.has_older ?? false,
     oldest_sequence: record.oldest_sequence ?? null,
-    conversation: conversation
-      ? {
-          id: conversation.id,
-          status: conversation.status,
-        }
-      : null,
   };
 }
 

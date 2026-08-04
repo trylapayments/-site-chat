@@ -6,6 +6,7 @@ import {
 } from "@site-chat/shared";
 
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
+import { getEmbedTokenFromRequest } from "@/lib/widget/constants";
 import { createRequestId } from "@/lib/widget/embed-token";
 import { getClientIp } from "@/lib/widget/origin";
 import {
@@ -35,7 +36,6 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const parsed = widgetListMessagesQuerySchema.safeParse({
-      embedToken: url.searchParams.get("embedToken"),
       limit: url.searchParams.get("limit") ?? undefined,
       beforeSequence: url.searchParams.get("beforeSequence") ?? undefined,
     });
@@ -45,6 +45,16 @@ export async function GET(request: Request) {
         "VALIDATION_ERROR",
         GENERIC_VALIDATION_MESSAGE,
         400,
+        requestId,
+      );
+    }
+
+    const embedToken = getEmbedTokenFromRequest(request);
+    if (!embedToken) {
+      return widgetJsonError(
+        "EMBED_TOKEN_INVALID",
+        GENERIC_FORBIDDEN_MESSAGE,
+        403,
         requestId,
       );
     }
@@ -59,7 +69,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const embedContext = await verifyEmbedContext(parsed.data.embedToken);
+    const embedContext = await verifyEmbedContext(embedToken);
     if (!embedContext) {
       return widgetJsonError(
         "EMBED_TOKEN_INVALID",

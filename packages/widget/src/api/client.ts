@@ -1,3 +1,5 @@
+export const WIDGET_EMBED_TOKEN_HEADER = "X-SiteChat-Embed-Token";
+
 export type WidgetBranding = {
   displayName: string | null;
   logoUrl: string | null;
@@ -24,7 +26,8 @@ export type SessionPayload = {
   sessionToken: string;
   expiresAt: string;
   locale: "en" | "ru";
-  conversation: { id: string; status: string } | null;
+  hasConversation: boolean;
+  conversationStatus: "open" | "pending" | "resolved" | "closed" | null;
 };
 
 export type MessagePayload = {
@@ -99,7 +102,6 @@ export class WidgetApiClient {
     beforeSequence?: number;
   }): Promise<{ items: MessagePayload[]; has_older: boolean; oldest_sequence: number | null }> {
     const url = new URL("/api/v1/widget/messages", this.apiBase);
-    url.searchParams.set("embedToken", input.embedToken);
     if (input.beforeSequence) {
       url.searchParams.set("beforeSequence", String(input.beforeSequence));
     }
@@ -108,6 +110,7 @@ export class WidgetApiClient {
       method: "GET",
       headers: {
         Authorization: `Bearer ${input.sessionToken}`,
+        [WIDGET_EMBED_TOKEN_HEADER]: input.embedToken,
       },
       credentials: "omit",
     });
@@ -122,7 +125,10 @@ export class WidgetApiClient {
     clientMessageId: string;
     pageUrl?: string;
     referrer?: string;
-  }): Promise<{ message: MessagePayload; conversation: { id: string; status: string } }> {
+  }): Promise<{
+    message: MessagePayload;
+    conversationStatus: SessionPayload["conversationStatus"];
+  }> {
     const response = await fetch(new URL("/api/v1/widget/messages", this.apiBase), {
       method: "POST",
       headers: {

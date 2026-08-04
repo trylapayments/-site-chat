@@ -756,8 +756,12 @@ SELECT tests.clear_auth();
 SELECT throws_like(
   $$
   SET CONSTRAINTS ALL DEFERRED;
-  INSERT INTO public.workspaces (name, slug)
-  VALUES ('Orphan Workspace', 'orphan-workspace');
+  INSERT INTO public.workspaces (name, slug, widget_public_key)
+  VALUES (
+    'Orphan Workspace',
+    'orphan-workspace',
+    'wk_' || replace(gen_random_uuid()::text, '-', '')
+  );
   SET CONSTRAINTS ALL IMMEDIATE;
   $$,
   'Workspace must have at least one active owner',

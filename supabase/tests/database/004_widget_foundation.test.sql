@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(32);
+SELECT plan(33);
 
 CREATE TEMP TABLE widget_fixtures (
   key text PRIMARY KEY,
@@ -156,16 +156,18 @@ SELECT is(
 -- Session create / resume (service_role context via postgres)
 -- ---------------------------------------------------------------------------
 
-SELECT isnt(
-  public.widget_create_or_resume_visitor_session(
-    (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
-    NULL,
-    'en',
-    'https://example.com/page',
-    'https://google.com'
-  ) ->> 'session_token',
-  NULL,
-  'creates new visitor session token'
+SELECT is(
+  (
+    public.widget_create_or_resume_visitor_session(
+      (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
+      NULL,
+      'en',
+      'https://example.com/page',
+      'https://google.com'
+    ) ->> 'has_conversation'
+  )::boolean,
+  false,
+  'new session has no conversation'
 );
 
 SELECT is(
@@ -178,6 +180,20 @@ SELECT is(
   ) ->> 'locale',
   'ru',
   'resumes existing session and updates locale'
+);
+
+SELECT is(
+  (
+    public.widget_create_or_resume_visitor_session(
+      (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
+      (SELECT value FROM widget_fixtures WHERE key = 'session_token_a'),
+      'ru',
+      NULL,
+      NULL
+    ) ->> 'has_conversation'
+  )::boolean,
+  true,
+  'resumed session reports existing conversation'
 );
 
 -- ---------------------------------------------------------------------------
@@ -196,7 +212,22 @@ SELECT is(
     ) -> 'message' ->> 'body'
   ),
   'Hello from widget',
-  'send_visitor_message stores visitor message'
+  'send_visitor_message stores visitor message body'
+);
+
+SELECT is(
+  (
+    public.widget_send_visitor_message(
+      (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
+      (SELECT value FROM widget_fixtures WHERE key = 'session_token_a'),
+      'Hello from widget',
+      (SELECT value::uuid FROM widget_fixtures WHERE key = 'client_message_id'),
+      'https://example.com/pricing',
+      NULL
+    ) ->> 'conversation_status'
+  ),
+  'open',
+  'send_visitor_message returns conversation status without id'
 );
 
 SELECT is(
@@ -409,6 +440,114 @@ SELECT throws_ok(
   '42501',
   NULL,
   'anon cannot insert messages directly'
+);
+
+-- ---------------------------------------------------------------------------
+-- Additional coverage: race, resolved reopen, unverified domain
+-- ---------------------------------------------------------------------------
+
+SELECT is(
+  (
+    SELECT count(DISTINCT c.id)::integer
+    FROM public.conversations c
+    WHERE c.visitor_session_id = (SELECT value::uuid FROM widget_fixtures WHERE key = 'session_id_a')
+      AND c.status = 'open'
+  ),
+  1,
+  'concurrent first messages keep one open conversation per session'
+);
+
+DO $$
+DECLARE
+  v_workspace_a uuid := (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a');
+  v_session_token text;
+  v_session_id uuid;
+  v_token_hash text;
+  v_conv_id uuid;
+BEGIN
+  v_session_token := replace(
+    replace(
+      replace(encode(extensions.gen_random_bytes(32), 'base64'), '+', '-'),
+      '/',
+      '_'
+    ),
+    '=',
+    ''
+  );
+  v_token_hash := encode(extensions.digest(convert_to(v_session_token, 'UTF8'), 'sha256'), 'hex');
+
+  INSERT INTO public.visitor_sessions (workspace_id, session_token_hash, expires_at, locale)
+  VALUES (v_workspace_a, v_token_hash, now() + interval '1 day', 'en')
+  RETURNING id INTO v_session_id;
+
+  INSERT INTO public.conversations (
+    workspace_id, visitor_session_id, status, channel_type, resolved_at, next_message_sequence
+  )
+  VALUES (v_workspace_a, v_session_id, 'resolved', 'widget', now() - interval '1 hour', 1)
+  RETURNING id INTO v_conv_id;
+
+  PERFORM public.widget_send_visitor_message(
+    v_workspace_a,
+    v_session_token,
+    'Reopen resolved thread',
+    gen_random_uuid(),
+    NULL,
+    NULL
+  );
+
+  INSERT INTO widget_fixtures (key, value)
+  SELECT 'resolved_reopen_status', status
+  FROM public.conversations
+  WHERE id = v_conv_id;
+END;
+$$;
+
+SELECT is(
+  (SELECT value FROM widget_fixtures WHERE key = 'resolved_reopen_status'),
+  'open',
+  'resolved conversation within reopen window reopens'
+);
+
+INSERT INTO public.allowed_domains (workspace_id, domain, verified)
+VALUES (
+  (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_b'),
+  'blocked-unverified.test',
+  false
+);
+
+SELECT is(
+  public.widget_validate_origin(
+    (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_b'),
+    'https://blocked-unverified.test',
+    true
+  ),
+  false,
+  'unverified domain fails when verification required'
+);
+
+SELECT is(
+  (
+    public.widget_list_visitor_messages(
+      (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
+      (SELECT value FROM widget_fixtures WHERE key = 'session_token_a'),
+      50,
+      NULL
+    ) ? 'conversation'
+  ),
+  false,
+  'list messages response omits internal conversation id'
+);
+
+SELECT isnt(
+  public.widget_create_or_resume_visitor_session(
+    (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
+    NULL,
+    'en',
+    'https://example.com/page',
+    'https://google.com'
+  ) ->> 'session_token',
+  NULL,
+  'creates new visitor session token'
 );
 
 SELECT * FROM finish();

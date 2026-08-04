@@ -17,10 +17,13 @@ import {
 import {
   clearSessionToken,
   generateClientMessageId,
-  isStorageAvailable,
   readSessionToken,
   writeSessionToken,
 } from "../session/storage";
+
+function isMessageFromParent(event: MessageEvent, expectedParentOrigin: string): boolean {
+  return event.source === window.parent && event.origin === expectedParentOrigin;
+}
 
 const MESSAGE_SOURCE = "sitechat-embed";
 
@@ -33,14 +36,14 @@ type WidgetState =
   | { status: "ready"; init: InitPayload; sessionToken: string; locale: WidgetLocale }
   | { status: "error"; message: string };
 
-function postToParent(type: string, payload?: Record<string, unknown>) {
+function postToParent(parentOrigin: string, type: string, payload?: Record<string, unknown>) {
   window.parent.postMessage(
     {
       source: MESSAGE_SOURCE,
       type,
       payload,
     },
-    window.location.origin,
+    parentOrigin,
   );
 }
 
@@ -52,7 +55,7 @@ function WidgetApp() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const initRef = useRef<InitPayload | null>(null);
-  const sessionRef = useRef<string | null>(null);
+  const parentOriginRef = useRef<string | null>(null);
 
   const api = useMemo(() => new WidgetApiClient(window.location.origin), []);
 
@@ -66,13 +69,15 @@ function WidgetApp() {
   const initialize = useCallback(
     async (init: InitPayload) => {
       initRef.current = init;
+      parentOriginRef.current = init.parentOrigin;
+
       const resolvedLocale = resolveWidgetLocale({
         configLocale: init.config.locale,
         browserLocale: navigator.language,
       });
 
       try {
-        const existingToken = isStorageAvailable() ? readSessionToken(init.widgetPublicKey) : null;
+        const existingToken = readSessionToken(init.widgetPublicKey);
 
         const session = await api.createSession({
           embedToken: init.embedToken,
@@ -82,11 +87,8 @@ function WidgetApp() {
           referrer: document.referrer || undefined,
         });
 
-        if (isStorageAvailable()) {
-          writeSessionToken(init.widgetPublicKey, session.sessionToken);
-        }
+        writeSessionToken(init.widgetPublicKey, session.sessionToken);
 
-        sessionRef.current = session.sessionToken;
         setState({
           status: "ready",
           init,
@@ -94,11 +96,13 @@ function WidgetApp() {
           locale: session.locale,
         });
 
-        const listed = await api.listMessages({
-          embedToken: init.embedToken,
-          sessionToken: session.sessionToken,
-        });
-        setMessages(listed.items);
+        if (session.hasConversation) {
+          const listed = await api.listMessages({
+            embedToken: init.embedToken,
+            sessionToken: session.sessionToken,
+          });
+          setMessages(listed.items);
+        }
       } catch {
         clearSessionToken(init.widgetPublicKey);
         setState({ status: "error", message: messagesCopy.loadError });
@@ -108,13 +112,10 @@ function WidgetApp() {
   );
 
   useEffect(() => {
-    postToParent("sitechat:ready");
+    const parentOrigin = parentOriginRef.current ?? window.location.origin;
+    postToParent(parentOrigin, "sitechat:ready");
 
     function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-
       const data = event.data as {
         source?: string;
         type?: string;
@@ -122,6 +123,10 @@ function WidgetApp() {
       };
 
       if (data.source !== "sitechat-loader" || data.type !== "sitechat:init" || !data.payload) {
+        return;
+      }
+
+      if (!isMessageFromParent(event, data.payload.parentOrigin)) {
         return;
       }
 
@@ -135,7 +140,12 @@ function WidgetApp() {
   }, [initialize]);
 
   useEffect(() => {
-    postToParent("sitechat:visibility", { open });
+    const parentOrigin = parentOriginRef.current ?? initRef.current?.parentOrigin;
+    if (!parentOrigin) {
+      return;
+    }
+
+    postToParent(parentOrigin, "sitechat:visibility", { open });
   }, [open]);
 
   const handleSend = async () => {

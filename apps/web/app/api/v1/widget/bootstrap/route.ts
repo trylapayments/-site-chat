@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
     if (!keyResult.success) {
       return widgetJsonError(
-        "VALIDATION_ERROR",
+        "FORBIDDEN",
         GENERIC_FORBIDDEN_MESSAGE,
         403,
         requestId,

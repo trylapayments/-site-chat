@@ -40,14 +40,18 @@ export function getRequestOrigin(request: Request): string | null {
     return origin;
   }
 
+  if (!isDevelopmentEnvironment()) {
+    return null;
+  }
+
   const referer = request.headers.get("referer");
   if (!referer) {
     return null;
   }
 
   try {
-    const url = new URL(referer);
-    return url.origin;
+    const refererOrigin = new URL(referer).origin;
+    return isDevLocalOrigin(refererOrigin) ? refererOrigin : null;
   } catch {
     return null;
   }

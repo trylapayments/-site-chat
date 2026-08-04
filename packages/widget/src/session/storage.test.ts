@@ -1,28 +1,49 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  getSessionStorageKey,
-  isStorageAvailable,
+  __resetMemoryStoreForTests,
+  clearSessionToken,
   readSessionToken,
   writeSessionToken,
 } from "./storage";
 
 describe("session storage", () => {
+  afterEach(() => {
+    __resetMemoryStoreForTests();
+    vi.unstubAllGlobals();
+  });
+
   it("uses widget public key scoped storage keys", () => {
-    expect(getSessionStorageKey("wk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBe(
-      "sitechat:session:wk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    );
+    expect(readSessionToken("wk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeNull();
   });
 
   it("reads and writes session tokens when storage is available", () => {
-    if (!isStorageAvailable()) {
-      expect(true).toBe(true);
-      return;
-    }
-
     const key = "wk_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     writeSessionToken(key, "token-value");
     expect(readSessionToken(key)).toBe("token-value");
-    localStorage.removeItem(getSessionStorageKey(key));
+    clearSessionToken(key);
+    expect(readSessionToken(key)).toBeNull();
+  });
+
+  it("falls back to in-memory storage when localStorage throws", () => {
+    const brokenStorage = {
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    };
+
+    vi.stubGlobal("localStorage", brokenStorage);
+
+    const key = "wk_cccccccccccccccccccccccccccccccc";
+    writeSessionToken(key, "memory-token");
+    expect(readSessionToken(key)).toBe("memory-token");
+    clearSessionToken(key);
+    expect(readSessionToken(key)).toBeNull();
   });
 });

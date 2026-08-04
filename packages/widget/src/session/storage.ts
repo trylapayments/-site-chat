@@ -1,34 +1,54 @@
 import type { WidgetLocale } from "../i18n";
 
 const STORAGE_PREFIX = "sitechat:session:";
+const memoryStore = new Map<string, string>();
 
 export function getSessionStorageKey(widgetPublicKey: string): string {
   return `${STORAGE_PREFIX}${widgetPublicKey}`;
 }
 
 export function readSessionToken(widgetPublicKey: string): string | null {
-  try {
-    return localStorage.getItem(getSessionStorageKey(widgetPublicKey));
-  } catch {
-    return null;
+  const storageKey = getSessionStorageKey(widgetPublicKey);
+
+  if (isStorageAvailable()) {
+    try {
+      return localStorage.getItem(storageKey);
+    } catch {
+      // Fall through to in-memory storage.
+    }
   }
+
+  return memoryStore.get(storageKey) ?? null;
 }
 
 export function writeSessionToken(widgetPublicKey: string, token: string): boolean {
-  try {
-    localStorage.setItem(getSessionStorageKey(widgetPublicKey), token);
-    return true;
-  } catch {
-    return false;
+  const storageKey = getSessionStorageKey(widgetPublicKey);
+
+  if (isStorageAvailable()) {
+    try {
+      localStorage.setItem(storageKey, token);
+      return true;
+    } catch {
+      // Fall through to in-memory storage.
+    }
   }
+
+  memoryStore.set(storageKey, token);
+  return true;
 }
 
 export function clearSessionToken(widgetPublicKey: string): void {
-  try {
-    localStorage.removeItem(getSessionStorageKey(widgetPublicKey));
-  } catch {
-    // Storage unavailable — ignore.
+  const storageKey = getSessionStorageKey(widgetPublicKey);
+
+  if (isStorageAvailable()) {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      // Ignore storage errors.
+    }
   }
+
+  memoryStore.delete(storageKey);
 }
 
 export function isStorageAvailable(): boolean {
@@ -61,4 +81,9 @@ export function generateClientMessageId(): string {
     const value = char === "x" ? random : (random & 0x3) | 0x8;
     return value.toString(16);
   });
+}
+
+/** @internal Test-only helper */
+export function __resetMemoryStoreForTests(): void {
+  memoryStore.clear();
 }

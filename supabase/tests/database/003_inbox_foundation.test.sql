@@ -263,12 +263,14 @@ SELECT throws_ok(
     INSERT INTO public.conversations (
       workspace_id,
       visitor_session_id,
-      contact_id
+      contact_id,
+      status
     )
     SELECT
       %1$L::uuid,
       vs.id,
-      c.id
+      c.id,
+      'closed'
     FROM public.visitor_sessions vs
     CROSS JOIN public.contacts c
     WHERE vs.workspace_id = %1$L::uuid

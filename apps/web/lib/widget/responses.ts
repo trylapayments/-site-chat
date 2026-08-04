@@ -8,6 +8,7 @@ import {
   widgetApiSuccessSchema,
 } from "@site-chat/shared";
 
+import { WIDGET_CORS_ALLOWED_HEADERS } from "@/lib/widget/constants";
 import { createRequestId } from "@/lib/widget/embed-token";
 
 export type WidgetErrorCode =
@@ -62,7 +63,7 @@ export function widgetOptionsResponse(
   }
 
   headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  headers.set("Access-Control-Allow-Headers", WIDGET_CORS_ALLOWED_HEADERS);
   headers.set("Access-Control-Max-Age", "86400");
 
   if (request.method === "OPTIONS") {

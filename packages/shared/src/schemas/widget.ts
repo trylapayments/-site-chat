@@ -53,18 +53,15 @@ export const widgetSessionRequestSchema = z
 
 export type WidgetSessionRequest = z.infer<typeof widgetSessionRequestSchema>;
 
+export const widgetConversationStatusSchema = z.enum(["open", "pending", "resolved", "closed"]);
+
 export const widgetSessionDataSchema = z
   .object({
     sessionToken: z.string().min(1),
     expiresAt: z.string(),
     locale: widgetLocaleSchema,
-    conversation: z
-      .object({
-        id: z.string().uuid(),
-        status: z.enum(["open", "pending", "resolved", "closed"]),
-      })
-      .strict()
-      .nullable(),
+    hasConversation: z.boolean(),
+    conversationStatus: widgetConversationStatusSchema.nullable(),
   })
   .strict();
 
@@ -105,12 +102,7 @@ export const widgetSendMessageDataSchema = z
         created_at: z.string(),
       })
       .strict(),
-    conversation: z
-      .object({
-        id: z.string().uuid(),
-        status: z.enum(["open", "pending", "resolved", "closed"]),
-      })
-      .strict(),
+    conversationStatus: widgetConversationStatusSchema,
   })
   .strict();
 
@@ -118,7 +110,6 @@ export type WidgetSendMessageData = z.infer<typeof widgetSendMessageDataSchema>;
 
 export const widgetListMessagesQuerySchema = z
   .object({
-    embedToken: z.string().min(1),
     limit: z.coerce.number().int().min(1).max(50).optional(),
     beforeSequence: z.coerce.number().int().positive().optional(),
   })
@@ -131,14 +122,6 @@ export const widgetListMessagesDataSchema = z
     items: z.array(widgetMessageItemSchema),
     has_older: z.boolean(),
     oldest_sequence: z.number().int().nullable(),
-    conversation: z
-      .object({
-        id: z.string().uuid(),
-        status: z.enum(["open", "pending", "resolved", "closed"]),
-      })
-      .strict()
-      .nullable()
-      .optional(),
   })
   .strict();
 

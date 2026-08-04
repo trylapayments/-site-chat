@@ -496,6 +496,23 @@ BEGIN
   WHERE c.id = v_conversation_id;
 
   RETURN v_conversation;
+EXCEPTION
+  WHEN unique_violation THEN
+    SELECT *
+    INTO v_conversation
+    FROM public.conversations c
+    WHERE c.workspace_id = p_workspace_id
+      AND c.visitor_session_id = p_visitor_session_id
+      AND c.status IN ('open', 'pending')
+    ORDER BY c.created_at DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE;
+    END IF;
+
+    RETURN v_conversation;
 END;
 $$;
 
@@ -548,13 +565,8 @@ BEGIN
         'session_token', p_session_token,
         'expires_at', v_session.expires_at,
         'locale', v_session.locale,
-        'conversation', CASE
-          WHEN v_conversation.id IS NULL THEN NULL
-          ELSE jsonb_build_object(
-            'id', v_conversation.id,
-            'status', v_conversation.status
-          )
-        END
+        'has_conversation', v_conversation.id IS NOT NULL,
+        'conversation_status', v_conversation.status
       );
     EXCEPTION
       WHEN OTHERS THEN
@@ -597,7 +609,8 @@ BEGIN
     'session_token', v_new_token,
     'expires_at', v_session.expires_at,
     'locale', v_session.locale,
-    'conversation', NULL
+    'has_conversation', false,
+    'conversation_status', NULL
   );
 END;
 $$;
@@ -664,10 +677,7 @@ BEGIN
           'body', v_existing.body,
           'created_at', v_existing.created_at
         ),
-        'conversation', jsonb_build_object(
-          'id', v_conversation.id,
-          'status', v_conversation.status
-        )
+        'conversation_status', v_conversation.status
       );
     END IF;
   END IF;
@@ -726,10 +736,7 @@ BEGIN
       'body', v_body,
       'created_at', v_created_at
     ),
-    'conversation', jsonb_build_object(
-      'id', v_conversation.id,
-      'status', v_conversation.status
-    )
+    'conversation_status', v_conversation.status
   );
 END;
 $$;
@@ -822,11 +829,7 @@ BEGIN
   RETURN jsonb_build_object(
     'items', v_items,
     'has_older', COALESCE(v_has_older, false),
-    'oldest_sequence', v_oldest_sequence,
-    'conversation', jsonb_build_object(
-      'id', v_conversation.id,
-      'status', v_conversation.status
-    )
+    'oldest_sequence', v_oldest_sequence
   );
 END;
 $$;

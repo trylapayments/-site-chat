@@ -1,5 +1,14 @@
 const IFRAME_PATH = "/widget/embed";
 const MESSAGE_SOURCE = "sitechat-loader";
+const WIDGET_MOUNTED_KEY = "__siteChatWidgetMounted";
+
+function isMessageFromIframe(
+  event: MessageEvent,
+  iframe: HTMLIFrameElement,
+  expectedOrigin: string,
+): boolean {
+  return event.origin === expectedOrigin && event.source === iframe.contentWindow;
+}
 
 type LoaderInitMessage = {
   source: typeof MESSAGE_SOURCE;
@@ -12,6 +21,12 @@ type LoaderInitMessage = {
     parentOrigin: string;
   };
 };
+
+type LoaderWindow = Window & {
+  [WIDGET_MOUNTED_KEY]?: boolean;
+};
+
+let activeIframe: HTMLIFrameElement | null = null;
 
 function getWidgetHost(script: HTMLScriptElement): string {
   return new URL(script.src).origin;
@@ -86,6 +101,11 @@ function postInitMessage(
 }
 
 function mount() {
+  const loaderWindow = window as LoaderWindow;
+  if (loaderWindow[WIDGET_MOUNTED_KEY]) {
+    return;
+  }
+
   const script = document.currentScript;
   if (!(script instanceof HTMLScriptElement)) {
     console.warn("[Site Chat] Loader must be executed from a script tag.");
@@ -99,29 +119,15 @@ function mount() {
   }
 
   const widgetHost = getWidgetHost(script);
-  const iframe = createIframe(widgetHost);
-  document.body.appendChild(iframe);
 
-  let initialized = false;
+  loaderWindow[WIDGET_MOUNTED_KEY] = true;
 
-  window.addEventListener("message", (event) => {
-    if (event.origin !== widgetHost) {
-      return;
-    }
+  void bootstrap(widgetHost, widgetPublicKey)
+    .then((data) => {
+      const iframe = createIframe(widgetHost);
+      activeIframe = iframe;
 
-    const data = event.data as { source?: string; type?: string };
-    if (data.source !== "sitechat-embed" || data.type !== "sitechat:ready") {
-      return;
-    }
-
-    if (initialized) {
-      return;
-    }
-
-    initialized = true;
-
-    void bootstrap(widgetHost, widgetPublicKey)
-      .then((data) => {
+      iframe.addEventListener("load", () => {
         postInitMessage(iframe, widgetHost, {
           widgetPublicKey: data.widgetPublicKey,
           config: data.config,
@@ -129,14 +135,17 @@ function mount() {
           embedTokenExpiresAt: data.embedTokenExpiresAt,
           parentOrigin: window.location.origin,
         });
-      })
-      .catch(() => {
-        console.warn("[Site Chat] Failed to initialize widget.");
       });
-  });
+
+      document.body.appendChild(iframe);
+    })
+    .catch(() => {
+      loaderWindow[WIDGET_MOUNTED_KEY] = false;
+      console.warn("[Site Chat] Failed to initialize widget.");
+    });
 
   window.addEventListener("message", (event) => {
-    if (event.origin !== widgetHost) {
+    if (!activeIframe || !isMessageFromIframe(event, activeIframe, widgetHost)) {
       return;
     }
 
@@ -146,8 +155,8 @@ function mount() {
     }
 
     if (data.type === "sitechat:visibility") {
-      iframe.style.display = data.payload?.open ? "block" : "none";
-      iframe.setAttribute("aria-hidden", data.payload?.open ? "false" : "true");
+      activeIframe.style.display = data.payload?.open ? "block" : "none";
+      activeIframe.setAttribute("aria-hidden", data.payload?.open ? "false" : "true");
     }
   });
 }
@@ -158,4 +167,4 @@ if (document.readyState === "loading") {
   mount();
 }
 
-export {};
+export { bootstrap, mount, WIDGET_MOUNTED_KEY };
