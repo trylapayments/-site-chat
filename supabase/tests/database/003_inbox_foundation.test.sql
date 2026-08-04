@@ -211,10 +211,13 @@ SELECT has_table('public', 'conversations', 'conversations table exists');
 SELECT has_table('public', 'messages', 'messages table exists');
 SELECT has_table('public', 'conversation_member_reads', 'conversation_member_reads table exists');
 
-SELECT has_check(
-  'public',
-  'messages',
-  'chk_messages_sender_identity',
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'chk_messages_sender_identity'
+      AND conrelid = 'public.messages'::regclass
+  ),
   'messages sender identity check exists'
 );
 
