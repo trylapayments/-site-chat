@@ -550,6 +550,11 @@ SELECT ok(
   'system messages do not create unread'
 );
 
+SELECT tests.authenticate_as(
+  tests.fixture('agent_a')::uuid,
+  'inbox-agent-a@test.local'
+);
+
 -- Search filter
 SELECT ok(
   (
