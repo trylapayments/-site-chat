@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(18);
+SELECT plan(22);
 
 CREATE TEMP TABLE realtime_fixtures (
   key text PRIMARY KEY,
@@ -322,6 +322,59 @@ SELECT ok(
       AND policyname = 'widget_realtime_receive_own_broadcast'
   ),
   'widget_realtime realtime.messages policy exists'
+);
+
+-- T13 widget_realtime JWT cannot read another topic broadcast
+SELECT is(
+  (
+    WITH scoped AS (
+      SELECT set_config(
+        'request.jwt.claims',
+        '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}',
+        true
+      )
+    )
+    SELECT count(*)::integer
+    FROM scoped, realtime.messages
+    WHERE topic = 'widget-conversation:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  ),
+  0,
+  'widget_realtime JWT cannot read broadcasts for a different topic'
+);
+
+-- T14 authenticated cannot execute new app_private topic helpers
+SELECT throws_ok(
+  $$
+    SET LOCAL role authenticated;
+    SELECT app_private.generate_visitor_realtime_topic_key();
+  $$,
+  '42501',
+  NULL,
+  'authenticated cannot execute generate_visitor_realtime_topic_key'
+);
+
+SELECT throws_ok(
+  $$
+    SET LOCAL role authenticated;
+    SELECT app_private.widget_resolve_realtime_topic(
+      '00000000-0000-4000-8000-000000000001'::uuid,
+      'token'
+    );
+  $$,
+  '42501',
+  NULL,
+  'authenticated cannot execute widget_resolve_realtime_topic'
+);
+
+-- T15 authenticated cannot execute broadcast trigger function
+SELECT throws_ok(
+  $$
+    SET LOCAL role authenticated;
+    SELECT app_private.broadcast_visitor_safe_message();
+  $$,
+  '42501',
+  NULL,
+  'authenticated cannot execute broadcast_visitor_safe_message'
 );
 
 SELECT finish();

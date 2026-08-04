@@ -151,7 +151,7 @@ BEGIN
     VALUES (
       'Acme Support',
       'acme-support',
-      'wk_e2e000000000000000000000000000001',
+      'wk_e2e00000000000000000000000000001',
       jsonb_build_object(
         'widget', jsonb_build_object(
           'locale', 'en',
@@ -172,7 +172,7 @@ BEGIN
 
   UPDATE public.workspaces
   SET
-    widget_public_key = 'wk_e2e000000000000000000000000000001',
+    widget_public_key = 'wk_e2e00000000000000000000000000001',
     settings_json = jsonb_build_object(
     'widget', jsonb_build_object(
       'locale', 'en',

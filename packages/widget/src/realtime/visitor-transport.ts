@@ -64,18 +64,34 @@ export class WidgetRealtimeTransport {
   }
 
   async catchUp(input: { embedToken: string; sessionToken: string }) {
-    const maxSequence = this.messages.reduce(
+    let afterSequence = this.messages.reduce(
       (max, message) => Math.max(max, message.sequenceNumber),
       0,
     );
-    const listed = await this.api.listMessages({
-      embedToken: input.embedToken,
-      sessionToken: input.sessionToken,
-      afterSequence: maxSequence,
-    });
 
-    const incoming = listed.items.map((item) => toMessageViewFromWidgetHttp(item));
-    this.messages = mergeMessages(this.messages, incoming, []);
+    for (let page = 0; page < 20; page += 1) {
+      const listed = await this.api.listMessages({
+        embedToken: input.embedToken,
+        sessionToken: input.sessionToken,
+        afterSequence,
+      });
+
+      if (listed.items.length === 0) {
+        break;
+      }
+
+      const incoming = listed.items.map((item) => toMessageViewFromWidgetHttp(item));
+      this.messages = mergeMessages(this.messages, incoming, []);
+      afterSequence = this.messages.reduce(
+        (max, message) => Math.max(max, message.sequenceNumber),
+        0,
+      );
+
+      if (listed.items.length < 50) {
+        break;
+      }
+    }
+
     this.callbacks.onMessages(this.messages);
   }
 

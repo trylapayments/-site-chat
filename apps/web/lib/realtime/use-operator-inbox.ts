@@ -192,25 +192,38 @@ export function useLiveConversationThread(input: {
 
   const catchUp = useCallback(async () => {
     const supabase = createClient() as AppSupabaseClient;
-    const result = await fetchConversationsMessages(
-      supabase,
-      input.workspaceId,
-      input.conversationId,
-      maxSequenceRef.current,
-    );
+    let afterSequence = maxSequenceRef.current;
 
-    if (result.length === 0) {
-      return;
-    }
-
-    setMessages((current) => {
-      const merged = mergeMessages(current, result, []);
-      maxSequenceRef.current = merged.reduce(
-        (max, message) => Math.max(max, message.sequenceNumber),
-        0,
+    for (let page = 0; page < 20; page += 1) {
+      const result = await fetchConversationsMessages(
+        supabase,
+        input.workspaceId,
+        input.conversationId,
+        afterSequence,
       );
-      return merged;
-    });
+
+      if (result.length === 0) {
+        break;
+      }
+
+      setMessages((current) => {
+        const merged = mergeMessages(current, result, []);
+        maxSequenceRef.current = merged.reduce(
+          (max, message) => Math.max(max, message.sequenceNumber),
+          0,
+        );
+        return merged;
+      });
+
+      afterSequence = Math.max(
+        afterSequence,
+        ...result.map((message) => message.sequenceNumber),
+      );
+
+      if (result.length < 50) {
+        break;
+      }
+    }
   }, [input.conversationId, input.workspaceId]);
 
   useEffect(() => {
@@ -285,6 +298,8 @@ export function useLiveConversationThread(input: {
       },
       { rootMargin: "0px 0px 100px 0px" },
     );
+
+    observer.observe(node);
 
     return () => {
       observer.disconnect();
