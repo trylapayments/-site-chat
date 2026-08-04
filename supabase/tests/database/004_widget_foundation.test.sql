@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(32);
+SELECT plan(38);
 
 CREATE TEMP TABLE widget_fixtures (
   key text PRIMARY KEY,
@@ -440,6 +440,101 @@ SELECT throws_ok(
   '42501',
   NULL,
   'anon cannot insert messages directly'
+);
+
+-- ---------------------------------------------------------------------------
+-- app_private grants: API roles cannot execute widget internals directly
+-- ---------------------------------------------------------------------------
+
+SELECT throws_like(
+  $$
+    SET LOCAL role authenticated;
+    SELECT app_private.widget_send_visitor_message(
+      gen_random_uuid(),
+      'fake-session-token',
+      'blocked',
+      NULL,
+      NULL,
+      NULL
+    );
+  $$,
+  'permission denied for function widget_send_visitor_message',
+  'authenticated cannot execute app_private.widget_send_visitor_message'
+);
+
+SELECT throws_like(
+  $$
+    SET LOCAL role authenticated;
+    SELECT app_private.widget_create_or_resume_visitor_session(
+      gen_random_uuid(),
+      NULL,
+      'en',
+      NULL,
+      NULL
+    );
+  $$,
+  'permission denied for function widget_create_or_resume_visitor_session',
+  'authenticated cannot execute app_private.widget_create_or_resume_visitor_session'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    (
+      SELECT p.oid
+      FROM pg_proc p
+      INNER JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'app_private'
+        AND p.proname = 'widget_list_visitor_messages'
+    ),
+    'EXECUTE'
+  ),
+  'anon cannot execute app_private.widget_list_visitor_messages'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'service_role',
+    (
+      SELECT p.oid
+      FROM pg_proc p
+      INNER JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname = 'widget_send_visitor_message'
+    ),
+    'EXECUTE'
+  ),
+  'service_role can execute public.widget_send_visitor_message'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    (
+      SELECT p.oid
+      FROM pg_proc p
+      INNER JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname = 'widget_send_visitor_message'
+    ),
+    'EXECUTE'
+  ),
+  'authenticated cannot execute public.widget_send_visitor_message'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    (
+      SELECT p.oid
+      FROM pg_proc p
+      INNER JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname = 'widget_send_visitor_message'
+    ),
+    'EXECUTE'
+  ),
+  'anon cannot execute public.widget_send_visitor_message'
 );
 
 -- ---------------------------------------------------------------------------
