@@ -35,7 +35,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: "pnpm --filter @site-chat/web start",
+      command: "pnpm --filter @site-chat/web exec next dev --hostname localhost --port 3000",
       url: "http://localhost:3000",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,

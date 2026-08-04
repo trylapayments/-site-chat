@@ -106,7 +106,11 @@ function mount() {
     return;
   }
 
-  const script = document.currentScript;
+  const script =
+    document.currentScript instanceof HTMLScriptElement
+      ? document.currentScript
+      : document.querySelector("script[data-widget-key], script[data-sitechat-key]");
+
   if (!(script instanceof HTMLScriptElement)) {
     console.warn("[Site Chat] Loader must be executed from a script tag.");
     return;

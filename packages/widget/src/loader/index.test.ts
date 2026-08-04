@@ -71,6 +71,54 @@ describe("widget loader", () => {
     expect(events.indexOf("iframe")).toBeGreaterThan(events.indexOf("bootstrap"));
   });
 
+  it("finds the loader script without document.currentScript (async embeds)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json({
+            data: {
+              widgetPublicKey: "wk_cccccccccccccccccccccccccccccc",
+              config: {
+                locale: "en",
+                greetingMessage: "Hi",
+                reopenWindowHours: 24,
+                branding: {
+                  displayName: null,
+                  logoUrl: null,
+                  primaryColor: "#0066FF",
+                  showPoweredBy: true,
+                },
+                position: "bottom-right",
+              },
+              embedToken: "embed-token",
+              embedTokenExpiresAt: new Date().toISOString(),
+            },
+          }),
+        ),
+      ),
+    );
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://app.example.com/widget/loader.js";
+    script.dataset.widgetKey = "wk_cccccccccccccccccccccccccccccc";
+    document.body.appendChild(script);
+
+    Object.defineProperty(document, "currentScript", {
+      configurable: true,
+      value: null,
+    });
+
+    await import("./index");
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(document.querySelectorAll("iframe")).toHaveLength(1);
+  });
+
   it("mounts only one widget when script executes twice", async () => {
     vi.stubGlobal(
       "fetch",
