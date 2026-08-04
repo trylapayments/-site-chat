@@ -6,7 +6,8 @@ import { AuthLink, AuthShell, FieldError } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { initialAuthActionState, signUpAction } from "@/lib/auth/actions";
+import { signUpAction } from "@/lib/auth/actions";
+import { initialAuthActionState } from "@/lib/auth/errors";
 
 export function SignupForm() {
   const [state, formAction, pending] = useActionState(

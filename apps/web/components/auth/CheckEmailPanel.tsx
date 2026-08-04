@@ -9,10 +9,8 @@ import {
   FormMessage,
 } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
-import {
-  initialAuthActionState,
-  resendConfirmationEmailAction,
-} from "@/lib/auth/actions";
+import { resendConfirmationEmailAction } from "@/lib/auth/actions";
+import { initialAuthActionState } from "@/lib/auth/errors";
 
 function maskEmail(email: string): string {
   const [localPart, domain] = email.split("@");

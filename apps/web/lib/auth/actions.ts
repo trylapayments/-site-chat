@@ -13,7 +13,6 @@ import { AUTH_ROUTES } from "@/lib/auth/constants";
 import {
   AUTH_ERROR_CODES,
   getUserMessage,
-  initialAuthActionState,
   type AuthActionState,
 } from "@/lib/auth/errors";
 import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
@@ -269,5 +268,3 @@ export async function resendConfirmationEmailAction(
     message: getUserMessage(AUTH_ERROR_CODES.CONFIRMATION_SENT),
   };
 }
-
-export { initialAuthActionState };
