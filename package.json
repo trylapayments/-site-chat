@@ -13,9 +13,11 @@
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
     "gen:types": "supabase gen types typescript --local > packages/shared/src/database.types.ts",
-    "db:types:check": "tmp=$(mktemp) && supabase gen types typescript --local > \"$tmp\" && diff -u packages/shared/src/database.types.ts \"$tmp\" && rm \"$tmp\""
+    "db:types:check": "tmp=$(mktemp) && supabase gen types typescript --local > \"$tmp\" && diff -u packages/shared/src/database.types.ts \"$tmp\" && rm \"$tmp\"",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.51.0",
     "@site-chat/eslint-config": "workspace:*",
     "@site-chat/prettier-config": "workspace:*",
     "eslint": "^9.22.0",

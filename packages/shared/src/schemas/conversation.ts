@@ -99,6 +99,7 @@ export const messageItemSchema = z
     sender_label: z.string(),
     body: z.string(),
     is_internal: z.boolean(),
+    client_message_id: z.string().uuid().nullable().optional(),
     created_at: z.string(),
   })
   .strict();
@@ -109,8 +110,12 @@ export const listMessagesQuerySchema = z
   .object({
     limit: z.number().int().min(1).max(50).optional(),
     before_sequence: z.number().int().positive().optional(),
+    after_sequence: z.number().int().nonnegative().optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => !(value.before_sequence !== undefined && value.after_sequence !== undefined), {
+    message: "Cannot use before_sequence and after_sequence together",
+  });
 
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
 

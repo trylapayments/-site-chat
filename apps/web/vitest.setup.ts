@@ -7,4 +7,5 @@ Object.assign(process.env, {
   AUTH_COOKIE_SECRET: "test-auth-cookie-secret-min-32-characters",
   WIDGET_EMBED_SECRET: "test-widget-embed-secret-min-32-characters",
   RATE_LIMIT_SECRET: "test-rate-limit-secret-min-32-characters",
+  SUPABASE_JWT_SECRET: "test-supabase-jwt-secret-min-32-characters",
 });

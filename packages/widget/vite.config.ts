@@ -12,6 +12,8 @@ export default defineConfig({
   ],
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
+    __SITECHAT_SUPABASE_URL__: JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""),
+    __SITECHAT_SUPABASE_KEY__: JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""),
   },
   esbuild: {
     jsxDev: false,

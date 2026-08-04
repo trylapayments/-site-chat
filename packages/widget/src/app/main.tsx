@@ -1,12 +1,14 @@
+import {
+  createOptimisticMessage,
+  maxSequenceNumber,
+  mergeMessages,
+  type ConnectionState,
+  type MessageView,
+} from "@site-chat/shared";
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import {
-  WidgetApiClient,
-  type BootstrapPayload,
-  type MessagePayload,
-  type WidgetPublicConfig,
-} from "../api/client";
+import { WidgetApiClient, type BootstrapPayload, type WidgetPublicConfig } from "../api/client";
 import {
   formatMessageTime,
   getWidgetDirection,
@@ -14,6 +16,7 @@ import {
   widgetDictionaries,
   type WidgetLocale,
 } from "../i18n";
+import { mapWidgetHttpMessages, WidgetRealtimeTransport } from "../realtime/visitor-transport";
 import {
   clearSessionToken,
   generateClientMessageId,
@@ -50,12 +53,16 @@ function postToParent(parentOrigin: string, type: string, payload?: Record<strin
 function WidgetApp() {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<WidgetState>({ status: "booting" });
-  const [messages, setMessages] = useState<MessagePayload[]>([]);
+  const [messages, setMessages] = useState<MessageView[]>([]);
   const [composer, setComposer] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
+  const [failedClientMessageId, setFailedClientMessageId] = useState<string | null>(null);
   const initRef = useRef<InitPayload | null>(null);
   const parentOriginRef = useRef<string | null>(null);
+  const transportRef = useRef<WidgetRealtimeTransport | null>(null);
+  const pendingClientMessageIdRef = useRef<string | null>(null);
 
   const api = useMemo(() => new WidgetApiClient(window.location.origin), []);
 
@@ -65,6 +72,35 @@ function WidgetApp() {
 
   const config: WidgetPublicConfig | null =
     state.status === "ready" ? state.init.config : (initRef.current?.config ?? null);
+
+  const startTransport = useCallback(
+    async (init: InitPayload, sessionToken: string, initialMessages: MessageView[]) => {
+      transportRef.current?.stop();
+      const transport = new WidgetRealtimeTransport(api, {
+        onMessages: setMessages,
+        onConnectionState: setConnectionState,
+      });
+      transportRef.current = transport;
+      await transport.start({
+        embedToken: init.embedToken,
+        sessionToken,
+        initialMessages,
+      });
+    },
+    [api],
+  );
+
+  const requestEmbedRefresh = useCallback(() => {
+    const parentOrigin = parentOriginRef.current;
+    const init = initRef.current;
+    if (!parentOrigin || !init) {
+      return;
+    }
+
+    postToParent(parentOrigin, "sitechat:refresh-embed", {
+      widgetPublicKey: init.widgetPublicKey,
+    });
+  }, []);
 
   const initialize = useCallback(
     async (init: InitPayload) => {
@@ -96,12 +132,14 @@ function WidgetApp() {
           locale: session.locale,
         });
 
+        let initialMessages: MessageView[] = [];
         if (session.hasConversation) {
           const listed = await api.listMessages({
             embedToken: init.embedToken,
             sessionToken: session.sessionToken,
           });
-          setMessages(listed.items);
+          initialMessages = mapWidgetHttpMessages(listed.items);
+          setMessages(initialMessages);
         }
       } catch {
         clearSessionToken(init.widgetPublicKey);
@@ -148,16 +186,43 @@ function WidgetApp() {
     postToParent(parentOrigin, "sitechat:visibility", { open });
   }, [open]);
 
+  useEffect(() => {
+    if (state.status !== "ready" || !open) {
+      transportRef.current?.stop();
+      return;
+    }
+
+    const snapshot = transportRef.current?.getMessages() ?? messages;
+    void startTransport(state.init, state.sessionToken, snapshot);
+
+    return () => {
+      transportRef.current?.stop();
+    };
+  }, [open, startTransport, state]);
+
   const handleSend = async () => {
     if (state.status !== "ready" || !composer.trim() || sending) {
       return;
     }
 
     const body = composer.trim();
-    const clientMessageId = generateClientMessageId();
+    const clientMessageId = pendingClientMessageIdRef.current ?? generateClientMessageId();
+    pendingClientMessageIdRef.current = clientMessageId;
+    const tempId = crypto.randomUUID();
+    const optimistic = createOptimisticMessage({
+      tempId,
+      clientMessageId,
+      body,
+      senderType: "visitor",
+      senderLabel: messagesCopy.youLabel,
+      nextSequence: maxSequenceNumber(messages) + 1,
+    });
+
+    setMessages((current) => mergeMessages(current, [], [optimistic]));
     setComposer("");
     setSending(true);
     setSendError(null);
+    setFailedClientMessageId(null);
 
     try {
       const result = await api.sendMessage({
@@ -169,16 +234,29 @@ function WidgetApp() {
         referrer: document.referrer || undefined,
       });
 
-      setMessages((current) => {
-        const exists = current.some((item) => item.id === result.message.id);
-        if (exists) {
-          return current;
-        }
-        return [...current, result.message].sort((a, b) => a.sequence_number - b.sequence_number);
-      });
+      pendingClientMessageIdRef.current = null;
+      setMessages((current) =>
+        mergeMessages(
+          current.filter((item) => item.id !== tempId),
+          mapWidgetHttpMessages([result.message]),
+          [],
+        ),
+      );
+
+      if (!transportRef.current) {
+        await startTransport(state.init, state.sessionToken, messages);
+      }
     } catch {
+      pendingClientMessageIdRef.current = clientMessageId;
+      setFailedClientMessageId(clientMessageId);
+      setMessages((current) =>
+        current.map((item) =>
+          item.clientMessageId === clientMessageId ? { ...item, status: "failed" } : item,
+        ),
+      );
       setComposer(body);
       setSendError(messagesCopy.sendError);
+      requestEmbedRefresh();
     } finally {
       setSending(false);
     }
@@ -259,6 +337,15 @@ function WidgetApp() {
                 {config.greetingMessage}
               </div>
             ) : null}
+            {connectionState !== "connected" && connectionState !== "connecting" ? (
+              <div style={{ fontSize: "0.75rem", marginTop: "0.35rem", opacity: 0.9 }}>
+                {connectionState === "reconnecting"
+                  ? messagesCopy.reconnectingLabel
+                  : connectionState === "failed"
+                    ? messagesCopy.connectionFailedLabel
+                    : messagesCopy.offlineLabel}
+              </div>
+            ) : null}
           </header>
 
           <div
@@ -282,10 +369,10 @@ function WidgetApp() {
             ) : null}
 
             {messages.map((message) => {
-              const isVisitor = message.sender_type === "visitor";
+              const isVisitor = message.senderType === "visitor";
               const label = isVisitor
                 ? messagesCopy.youLabel
-                : message.sender_type === "agent"
+                : message.senderType === "agent"
                   ? messagesCopy.agentLabel
                   : messagesCopy.systemLabel;
 
@@ -300,14 +387,36 @@ function WidgetApp() {
                     padding: "0.625rem 0.75rem",
                     borderRadius: "0.75rem",
                     boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+                    opacity: message.status === "pending" ? 0.8 : 1,
                   }}
                 >
                   <div style={{ fontSize: "0.75rem", opacity: 0.85, marginBottom: "0.25rem" }}>
-                    {label} · {formatMessageTime(message.created_at, locale)}
+                    {label} · {formatMessageTime(message.createdAt, locale)}
                   </div>
                   <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                     {message.body}
                   </div>
+                  {message.status === "failed" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setComposer(message.body);
+                        pendingClientMessageIdRef.current =
+                          message.clientMessageId ?? failedClientMessageId;
+                      }}
+                      style={{
+                        marginTop: "0.35rem",
+                        background: "transparent",
+                        border: "none",
+                        color: isVisitor ? "#fff" : "#b91c1c",
+                        textDecoration: "underline",
+                        cursor: "pointer",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      {messagesCopy.retryLabel}
+                    </button>
+                  ) : null}
                 </article>
               );
             })}

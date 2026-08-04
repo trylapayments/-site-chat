@@ -149,7 +149,11 @@ function mount() {
       return;
     }
 
-    const data = event.data as { source?: string; type?: string; payload?: { open?: boolean } };
+    const data = event.data as {
+      source?: string;
+      type?: string;
+      payload?: { open?: boolean; widgetPublicKey?: string };
+    };
     if (data.source !== "sitechat-embed") {
       return;
     }
@@ -157,6 +161,27 @@ function mount() {
     if (data.type === "sitechat:visibility") {
       activeIframe.style.display = data.payload?.open ? "block" : "none";
       activeIframe.setAttribute("aria-hidden", data.payload?.open ? "false" : "true");
+      return;
+    }
+
+    if (data.type === "sitechat:refresh-embed" && data.payload?.widgetPublicKey) {
+      void bootstrap(widgetHost, data.payload.widgetPublicKey)
+        .then((boot) => {
+          if (!activeIframe?.contentWindow) {
+            return;
+          }
+
+          postInitMessage(activeIframe, widgetHost, {
+            widgetPublicKey: boot.widgetPublicKey,
+            config: boot.config,
+            embedToken: boot.embedToken,
+            embedTokenExpiresAt: boot.embedTokenExpiresAt,
+            parentOrigin: window.location.origin,
+          });
+        })
+        .catch(() => {
+          console.warn("[Site Chat] Failed to refresh embed token.");
+        });
     }
   });
 }

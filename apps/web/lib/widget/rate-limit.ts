@@ -22,4 +22,5 @@ export const WIDGET_RATE_LIMITS = {
   session: { windowSeconds: 60, limit: 30 },
   messagesRead: { windowSeconds: 60, limit: 120 },
   messagesWrite: { windowSeconds: 60, limit: 60 },
+  realtimeToken: { windowSeconds: 60, limit: 10 },
 } as const;

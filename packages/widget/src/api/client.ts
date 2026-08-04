@@ -100,10 +100,14 @@ export class WidgetApiClient {
     embedToken: string;
     sessionToken: string;
     beforeSequence?: number;
+    afterSequence?: number;
   }): Promise<{ items: MessagePayload[]; has_older: boolean; oldest_sequence: number | null }> {
     const url = new URL("/api/v1/widget/messages", this.apiBase);
     if (input.beforeSequence) {
       url.searchParams.set("beforeSequence", String(input.beforeSequence));
+    }
+    if (input.afterSequence) {
+      url.searchParams.set("afterSequence", String(input.afterSequence));
     }
 
     const response = await fetch(url.toString(), {
@@ -142,6 +146,25 @@ export class WidgetApiClient {
         clientMessageId: input.clientMessageId,
         pageUrl: input.pageUrl ?? null,
         referrer: input.referrer ?? null,
+      }),
+    });
+
+    return this.parseResponse(response);
+  }
+
+  async createRealtimeToken(input: {
+    embedToken: string;
+    sessionToken: string;
+  }): Promise<{ token: string; topic: string; expiresAt: string }> {
+    const response = await fetch(new URL("/api/v1/widget/realtime-token", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify({
+        embedToken: input.embedToken,
       }),
     });
 

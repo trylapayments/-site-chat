@@ -151,7 +151,7 @@ BEGIN
     VALUES (
       'Acme Support',
       'acme-support',
-      'wk_' || replace(gen_random_uuid()::text, '-', ''),
+      'wk_e2e000000000000000000000000000001',
       jsonb_build_object(
         'widget', jsonb_build_object(
           'locale', 'en',
@@ -171,7 +171,9 @@ BEGIN
   SELECT id INTO v_workspace_id FROM public.workspaces WHERE slug = 'acme-support';
 
   UPDATE public.workspaces
-  SET settings_json = jsonb_build_object(
+  SET
+    widget_public_key = 'wk_e2e000000000000000000000000000001',
+    settings_json = jsonb_build_object(
     'widget', jsonb_build_object(
       'locale', 'en',
       'greetingMessage', 'Hi! How can we help?',

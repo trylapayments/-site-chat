@@ -5,6 +5,7 @@ import {
   markConversationReadSchema,
   sendMessageSchema,
   updateConversationStatusSchema,
+  type SendOperatorMessageResult,
 } from "@site-chat/shared";
 import { revalidatePath } from "next/cache";
 
@@ -24,7 +25,8 @@ import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export type InboxActionResult =
-  { success: true } | { success: false; message: string };
+  | { success: true; data?: SendOperatorMessageResult }
+  | { success: false; message: string };
 
 function mapActionError(error: unknown): InboxActionResult {
   if (error instanceof CapabilityError) {
@@ -63,7 +65,7 @@ export async function sendMessageAction(
       await requireInboxMutationContext(workspaceSlug);
     requireCapability(workspace.role, "send_messages");
 
-    await sendOperatorMessage(
+    const result = await sendOperatorMessage(
       supabase,
       workspace.workspace_id,
       parsed.data.conversationId,
@@ -75,7 +77,7 @@ export async function sendMessageAction(
     revalidatePath(
       `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
     );
-    return { success: true };
+    return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
   }

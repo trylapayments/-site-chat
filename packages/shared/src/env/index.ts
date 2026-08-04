@@ -23,6 +23,9 @@ export const serverEnvSchema = z.object({
 
   // Rate limit bucket key hashing (HMAC; never store raw IPs)
   RATE_LIMIT_SECRET: z.string().min(32),
+
+  // Supabase JWT signing secret for scoped widget Realtime tokens
+  SUPABASE_JWT_SECRET: z.string().min(32),
 });
 
 /**

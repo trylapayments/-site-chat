@@ -112,8 +112,20 @@ export const widgetListMessagesQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(50).optional(),
     beforeSequence: z.coerce.number().int().positive().optional(),
+    afterSequence: z.coerce.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .refine((value) => !(value.beforeSequence !== undefined && value.afterSequence !== undefined), {
+    message: "Cannot use beforeSequence and afterSequence together",
+  });
+
+export const widgetRealtimeTokenRequestSchema = z
+  .object({
+    embedToken: z.string().min(1),
   })
   .strict();
+
+export type WidgetRealtimeTokenRequest = z.infer<typeof widgetRealtimeTokenRequestSchema>;
 
 export type WidgetListMessagesQuery = z.infer<typeof widgetListMessagesQuerySchema>;
 

@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     const parsed = widgetListMessagesQuerySchema.safeParse({
       limit: url.searchParams.get("limit") ?? undefined,
       beforeSequence: url.searchParams.get("beforeSequence") ?? undefined,
+      afterSequence: url.searchParams.get("afterSequence") ?? undefined,
     });
 
     if (!parsed.success) {
@@ -106,6 +107,7 @@ export async function GET(request: Request) {
       sessionToken,
       limit: parsed.data.limit,
       beforeSequence: parsed.data.beforeSequence,
+      afterSequence: parsed.data.afterSequence,
     });
 
     return widgetJsonSuccess(

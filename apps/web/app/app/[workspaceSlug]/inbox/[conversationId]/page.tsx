@@ -5,11 +5,8 @@ import { notFound } from "next/navigation";
 import { DashboardPage } from "@/components/dashboard/layout/DashboardPage";
 import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPageHeader";
 import { ConversationSidebar } from "@/components/inbox/ConversationSidebar";
-import {
-  MarkConversationRead,
-  MessageList,
-  ReplyComposer,
-} from "@/components/inbox/ConversationThread";
+import { LiveConversationThread } from "@/components/inbox/LiveConversationThread";
+import { MarkConversationRead } from "@/components/inbox/ConversationThread";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
@@ -75,11 +72,12 @@ export default async function ConversationDetailPage({
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <section className="space-y-4 rounded-lg border p-4">
-          <MessageList messages={messages.items} />
-          <ReplyComposer
+        <section className="rounded-lg border p-4">
+          <LiveConversationThread
+            workspaceId={workspace.workspace_id}
             workspaceSlug={workspaceSlug}
             conversationId={conversationId}
+            initialMessages={messages.items}
             canSend={can(workspace.role, "send_messages")}
           />
         </section>

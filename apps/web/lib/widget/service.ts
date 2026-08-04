@@ -245,6 +245,7 @@ export async function listVisitorMessages(input: {
   sessionToken: string;
   limit?: number;
   beforeSequence?: number;
+  afterSequence?: number;
 }): Promise<WidgetListMessagesData> {
   const supabase = createServiceClient();
   const { data, error } = await supabase.rpc("widget_list_visitor_messages", {
@@ -252,6 +253,7 @@ export async function listVisitorMessages(input: {
     p_session_token: input.sessionToken,
     p_limit: input.limit ?? 50,
     p_before_sequence: input.beforeSequence,
+    p_after_sequence: input.afterSequence,
   });
 
   if (error) {
@@ -263,4 +265,33 @@ export async function listVisitorMessages(input: {
     data as Json,
     widgetListMessagesDataSchema,
   );
+}
+
+export async function resolveWidgetRealtimeTopic(input: {
+  workspaceId: string;
+  sessionToken: string;
+}): Promise<{ topic: string; subject: string }> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("widget_resolve_realtime_topic", {
+    p_workspace_id: input.workspaceId,
+    p_session_token: input.sessionToken,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Invalid realtime topic response");
+  }
+
+  const record = data as Record<string, unknown>;
+  if (typeof record.topic !== "string" || typeof record.subject !== "string") {
+    throw new Error("Invalid realtime topic response");
+  }
+
+  return {
+    topic: record.topic,
+    subject: record.subject,
+  };
 }

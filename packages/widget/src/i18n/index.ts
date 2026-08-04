@@ -10,6 +10,9 @@ export type WidgetMessages = {
   sendLabel: string;
   sendingLabel: string;
   retryLabel: string;
+  reconnectingLabel: string;
+  offlineLabel: string;
+  connectionFailedLabel: string;
   welcomeTitle: string;
   loadError: string;
   sessionError: string;
@@ -29,6 +32,9 @@ export const widgetDictionaries: Record<WidgetLocale, WidgetMessages> = {
     sendLabel: "Send",
     sendingLabel: "Sending…",
     retryLabel: "Retry",
+    reconnectingLabel: "Reconnecting…",
+    offlineLabel: "Connection lost. Retrying…",
+    connectionFailedLabel: "Live updates unavailable.",
     welcomeTitle: "Start a conversation",
     loadError: "Unable to load chat.",
     sessionError: "Session expired. Please reload the page.",
@@ -46,6 +52,9 @@ export const widgetDictionaries: Record<WidgetLocale, WidgetMessages> = {
     sendLabel: "Отправить",
     sendingLabel: "Отправка…",
     retryLabel: "Повторить",
+    reconnectingLabel: "Переподключение…",
+    offlineLabel: "Соединение потеряно. Повтор…",
+    connectionFailedLabel: "Живые обновления недоступны.",
     welcomeTitle: "Начните диалог",
     loadError: "Не удалось загрузить чат.",
     sessionError: "Сессия истекла. Обновите страницу.",
