@@ -182,20 +182,6 @@ SELECT is(
   'resumes existing session and updates locale'
 );
 
-SELECT is(
-  (
-    public.widget_create_or_resume_visitor_session(
-      (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
-      (SELECT value FROM widget_fixtures WHERE key = 'session_token_a'),
-      'ru',
-      NULL,
-      NULL
-    ) ->> 'has_conversation'
-  )::boolean,
-  true,
-  'resumed session reports existing conversation'
-);
-
 -- ---------------------------------------------------------------------------
 -- Send message + idempotency
 -- ---------------------------------------------------------------------------
@@ -213,6 +199,20 @@ SELECT is(
   ),
   'Hello from widget',
   'send_visitor_message stores visitor message body'
+);
+
+SELECT is(
+  (
+    public.widget_create_or_resume_visitor_session(
+      (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
+      (SELECT value FROM widget_fixtures WHERE key = 'session_token_a'),
+      'ru',
+      NULL,
+      NULL
+    ) ->> 'has_conversation'
+  )::boolean,
+  true,
+  'resumed session reports existing conversation'
 );
 
 SELECT is(

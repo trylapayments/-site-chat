@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: ["@site-chat/shared"],
   typedRoutes: true,
-  async headers() {
-    return [
+  headers() {
+    return Promise.resolve([
       {
         source: "/widget/embed",
         headers: [
@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-    ];
+    ]);
   },
 };
 
