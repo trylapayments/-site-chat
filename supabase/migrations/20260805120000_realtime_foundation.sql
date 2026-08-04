@@ -32,6 +32,10 @@ AS $$
   SELECT encode(extensions.gen_random_bytes(32), 'hex');
 $$;
 
+ALTER TABLE public.conversations
+  ALTER COLUMN visitor_realtime_topic_key
+  SET DEFAULT app_private.generate_visitor_realtime_topic_key();
+
 -- ---------------------------------------------------------------------------
 -- Realtime publication for operator postgres_changes
 -- ---------------------------------------------------------------------------
@@ -524,6 +528,8 @@ BEGIN
   );
 END;
 $$;
+
+DROP FUNCTION IF EXISTS public.widget_list_visitor_messages(uuid, text, integer, bigint);
 
 CREATE OR REPLACE FUNCTION public.widget_list_visitor_messages(
   p_workspace_id uuid,

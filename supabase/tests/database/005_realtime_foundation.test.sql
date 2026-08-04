@@ -271,6 +271,8 @@ SELECT throws_ok(
   'widget_realtime cannot execute widget_send_visitor_message'
 );
 
+RESET role;
+
 -- T10 after_sequence operator catch-up
 DO $$
 DECLARE
@@ -325,22 +327,31 @@ SELECT ok(
 );
 
 -- T13 widget_realtime JWT cannot read another topic broadcast
-SELECT is(
-  (
-    WITH scoped AS (
-      SELECT set_config(
-        'request.jwt.claims',
-        '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}',
-        true
-      )
-    )
-    SELECT count(*)::integer
-    FROM scoped, realtime.messages
-    WHERE topic = 'widget-conversation:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
-  ),
-  0,
-  'widget_realtime JWT cannot read broadcasts for a different topic'
-);
+DO $$
+DECLARE
+  v_count integer;
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}',
+    true
+  );
+  SET LOCAL ROLE widget_realtime;
+
+  SELECT count(*)
+  INTO v_count
+  FROM realtime.messages
+  WHERE topic = 'widget-conversation:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'widget_realtime JWT read another topic broadcast';
+  END IF;
+END;
+$$;
+
+SELECT pass('widget_realtime JWT cannot read broadcasts for a different topic');
+
+RESET role;
 
 -- T14 authenticated cannot execute new app_private topic helpers
 SELECT throws_ok(

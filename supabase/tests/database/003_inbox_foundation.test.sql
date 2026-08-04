@@ -82,7 +82,8 @@ BEGIN
     message_count,
     last_message_at,
     last_message_preview,
-    next_message_sequence
+    next_message_sequence,
+    visitor_realtime_topic_key
   )
   VALUES (
     v_workspace_a,
@@ -93,7 +94,8 @@ BEGIN
     2,
     now(),
     'Hello from visitor',
-    3
+    3,
+    encode(extensions.gen_random_bytes(32), 'hex')
   )
   RETURNING id INTO v_conversation_a;
 
@@ -151,7 +153,8 @@ BEGIN
     message_count,
     last_message_at,
     last_message_preview,
-    next_message_sequence
+    next_message_sequence,
+    visitor_realtime_topic_key
   )
   VALUES (
     v_workspace_b,
@@ -160,7 +163,8 @@ BEGIN
     1,
     now(),
     'Workspace B message',
-    2
+    2,
+    encode(extensions.gen_random_bytes(32), 'hex')
   )
   RETURNING id INTO v_conversation_b;
 

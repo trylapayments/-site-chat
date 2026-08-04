@@ -29,7 +29,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "node e2e/host-server.mjs",
+      command: "node host-server.mjs",
       url: "http://127.0.0.1:3001",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
