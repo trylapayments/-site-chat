@@ -431,6 +431,8 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS app_private.widget_list_visitor_messages(uuid, text, integer, bigint);
+
 CREATE OR REPLACE FUNCTION app_private.widget_list_visitor_messages(
   p_workspace_id uuid,
   p_session_token text,
