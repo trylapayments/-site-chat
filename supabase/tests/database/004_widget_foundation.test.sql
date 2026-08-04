@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(33);
+SELECT plan(32);
 
 CREATE TEMP TABLE widget_fixtures (
   key text PRIMARY KEY,
