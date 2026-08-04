@@ -211,7 +211,7 @@ SELECT has_table('public', 'conversations', 'conversations table exists');
 SELECT has_table('public', 'messages', 'messages table exists');
 SELECT has_table('public', 'conversation_member_reads', 'conversation_member_reads table exists');
 
-SELECT col_has_check(
+SELECT has_check(
   'public',
   'messages',
   'chk_messages_sender_identity',
@@ -247,14 +247,14 @@ SELECT throws_like(
     tests.fixture('workspace_a'),
     tests.fixture('conversation_a')
   ),
-  'Conversation not found',
+  'Workspace not accessible',
   'workspace B owner cannot get workspace A conversation via RPC'
 );
 
 SELECT tests.clear_auth();
 
 -- Composite FK: contact from wrong workspace on conversation
-SELECT throws_ok(
+SELECT throws_like(
   format(
     $q$
     INSERT INTO public.conversations (
@@ -275,7 +275,7 @@ SELECT throws_ok(
     tests.fixture('workspace_a'),
     tests.fixture('workspace_b')
   ),
-  '23503',
+  'fk_conversations_contact_workspace',
   'composite FK rejects contact from another workspace'
 );
 

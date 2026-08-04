@@ -1373,3 +1373,4 @@ REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM authenticated;
 GRANT EXECUTE ON FUNCTION app_private.user_workspace_ids() TO authenticated;
 GRANT EXECUTE ON FUNCTION app_private.user_workspace_role(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION app_private.workspace_is_accessible(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.get_caller_member_id(uuid) TO authenticated;
