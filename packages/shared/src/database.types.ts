@@ -114,25 +114,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "conversation_member_reads_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversation_member_reads_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_members"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "conversation_member_reads_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_conversation_member_reads_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_conversation_member_reads_member_workspace"
+            columns: ["member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
           },
         ]
       }
@@ -205,6 +205,34 @@ export type Database = {
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_conversations_assigned_to_workspace"
+            columns: ["assigned_to", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_conversations_contact_workspace"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_conversations_resolved_by_workspace"
+            columns: ["resolved_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_conversations_visitor_session_workspace"
+            columns: ["visitor_session_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sessions"
+            referencedColumns: ["id", "workspace_id"]
+          },
         ]
       }
       messages: {
@@ -258,11 +286,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "messages_conversation_id_fkey"
-            columns: ["conversation_id"]
+            foreignKeyName: "fk_messages_agent_member_workspace"
+            columns: ["agent_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_messages_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "conversations"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_messages_visitor_session_workspace"
+            columns: ["visitor_session_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sessions"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "messages_workspace_id_fkey"
@@ -331,6 +373,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_visitor_sessions_contact_workspace"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "visitor_sessions_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -472,7 +521,7 @@ export type Database = {
       accept_workspace_invitation: { Args: { p_token: string }; Returns: Json }
       assign_conversation: {
         Args: {
-          p_assignee_member_id: string | null
+          p_assignee_member_id: string
           p_conversation_id: string
           p_workspace_id: string
         }
@@ -559,13 +608,6 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: undefined
       }
-      update_workspace_member_role: {
-        Args: {
-          p_member_id: string
-          p_new_role: Database["public"]["Enums"]["app_member_role"]
-        }
-        Returns: undefined
-      }
       update_conversation_status: {
         Args: {
           p_conversation_id: string
@@ -573,6 +615,13 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: Json
+      }
+      update_workspace_member_role: {
+        Args: {
+          p_member_id: string
+          p_new_role: Database["public"]["Enums"]["app_member_role"]
+        }
+        Returns: undefined
       }
       validate_workspace_invitation: {
         Args: { p_token: string }
