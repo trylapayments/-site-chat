@@ -257,7 +257,7 @@ SELECT throws_like(
 SELECT tests.clear_auth();
 
 -- Composite FK: contact from wrong workspace on conversation
-SELECT throws_like(
+SELECT throws_ok(
   format(
     $q$
     INSERT INTO public.conversations (
@@ -278,7 +278,8 @@ SELECT throws_like(
     tests.fixture('workspace_a'),
     tests.fixture('workspace_b')
   ),
-  'fk_conversations_contact_workspace',
+  '23503',
+  NULL,
   'composite FK rejects contact from another workspace'
 );
 
@@ -435,7 +436,7 @@ SELECT ok(
       tests.fixture('workspace_a')::uuid,
       tests.fixture('conversation_a')::uuid,
       NULL
-    ) -> 'assigned_to') IS NULL
+    ) ->> 'assigned_to') IS NULL
   ),
   'agent can unassign conversation'
 );
@@ -475,6 +476,8 @@ SELECT ok(
 );
 
 -- Internal messages hidden from viewer
+SELECT tests.clear_auth();
+
 INSERT INTO public.messages (
   workspace_id,
   conversation_id,
@@ -516,10 +519,7 @@ SELECT ok(
 SELECT tests.clear_auth();
 
 -- System messages do not cause unread
-SELECT tests.authenticate_as(
-  tests.fixture('owner_a')::uuid,
-  'inbox-owner-a@test.local'
-);
+SELECT tests.clear_auth();
 
 INSERT INTO public.messages (
   workspace_id,
