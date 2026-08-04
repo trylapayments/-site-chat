@@ -346,43 +346,50 @@ BEGIN
 
   INSERT INTO public.conversations (
     workspace_id, visitor_session_id, contact_id, assigned_to, status,
-    source_url, message_count, last_message_at, last_message_preview, next_message_sequence
+    source_url, message_count, last_message_at, last_message_preview, next_message_sequence,
+    visitor_realtime_topic_key
   )
   VALUES (
     v_workspace_id, v_session_open, v_contact_open, v_agent_member_id, 'open',
-    'https://example.com/pricing', 2, now() - interval '5 minutes', 'Can you help with pricing?', 3
+    'https://example.com/pricing', 2, now() - interval '5 minutes', 'Can you help with pricing?', 3,
+    encode(extensions.gen_random_bytes(32), 'hex')
   )
   RETURNING id INTO v_conv_open;
 
   INSERT INTO public.conversations (
     workspace_id, visitor_session_id, contact_id, assigned_to, status,
-    message_count, last_message_at, last_message_preview, next_message_sequence
+    message_count, last_message_at, last_message_preview, next_message_sequence,
+    visitor_realtime_topic_key
   )
   VALUES (
     v_workspace_id, v_session_pending, v_contact_pending, v_agent_member_id, 'pending',
-    2, now() - interval '1 hour', 'Thanks, I will check that.', 3
+    2, now() - interval '1 hour', 'Thanks, I will check that.', 3,
+    encode(extensions.gen_random_bytes(32), 'hex')
   )
   RETURNING id INTO v_conv_pending;
 
   INSERT INTO public.conversations (
     workspace_id, visitor_session_id, contact_id, assigned_to, status,
     message_count, last_message_at, last_message_preview, next_message_sequence,
-    resolved_at, resolved_by
+    resolved_at, resolved_by, visitor_realtime_topic_key
   )
   VALUES (
     v_workspace_id, v_session_resolved, v_contact_resolved, v_agent_member_id, 'resolved',
     2, now() - interval '1 day', 'All set, thank you!', 3,
-    now() - interval '20 hours', v_agent_member_id
+    now() - interval '20 hours', v_agent_member_id,
+    encode(extensions.gen_random_bytes(32), 'hex')
   )
   RETURNING id INTO v_conv_resolved;
 
   INSERT INTO public.conversations (
     workspace_id, visitor_session_id, status,
-    message_count, last_message_at, last_message_preview, next_message_sequence
+    message_count, last_message_at, last_message_preview, next_message_sequence,
+    visitor_realtime_topic_key
   )
   VALUES (
     v_workspace_id, v_session_unassigned, 'open',
-    1, now() - interval '10 minutes', 'Hello, anyone there?', 2
+    1, now() - interval '10 minutes', 'Hello, anyone there?', 2,
+    encode(extensions.gen_random_bytes(32), 'hex')
   )
   RETURNING id INTO v_conv_unassigned;
 
