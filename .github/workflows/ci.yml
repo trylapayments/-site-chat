@@ -178,4 +178,4 @@ jobs:
           AUTH_COOKIE_SECRET: placeholder-auth-cookie-secret-for-ci-build-min-32-chars
           WIDGET_EMBED_SECRET: placeholder-widget-embed-secret-for-ci-build-min-32-chars
           RATE_LIMIT_SECRET: placeholder-rate-limit-secret-for-ci-build-min-32-chars
-          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000

@@ -30,13 +30,13 @@ export default defineConfig({
   webServer: [
     {
       command: "node host-server.mjs",
-      url: "http://127.0.0.1:3001",
+      url: "http://localhost:3001",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
       command: "pnpm --filter @site-chat/web start",
-      url: "http://127.0.0.1:3000",
+      url: "http://localhost:3000",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
     },

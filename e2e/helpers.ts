@@ -1,7 +1,7 @@
 import { expect, type FrameLocator, type Page } from "@playwright/test";
 
-export const HOST_URL = "http://127.0.0.1:3001";
-export const APP_URL = "http://127.0.0.1:3000";
+export const HOST_URL = "http://localhost:3001";
+export const APP_URL = "http://localhost:3000";
 export const WORKSPACE_SLUG = "acme-support";
 export const OPERATOR_EMAIL = "owner@local.test";
 export const OPERATOR_PASSWORD = "local-dev-password";
