@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(22);
+SELECT plan(16);
 
 CREATE TEMP TABLE realtime_fixtures (
   key text PRIMARY KEY,
