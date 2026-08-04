@@ -209,6 +209,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["app_conversation_status"]
           subject?: string | null
           updated_at?: string
+          visitor_realtime_topic_key?: string
           visitor_session_id: string
           workspace_id: string
         }
@@ -230,6 +231,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["app_conversation_status"]
           subject?: string | null
           updated_at?: string
+          visitor_realtime_topic_key?: string
           visitor_session_id?: string
           workspace_id?: string
         }
@@ -285,7 +287,6 @@ export type Database = {
           sender_type: Database["public"]["Enums"]["app_message_sender_type"]
           sequence_number: number
           updated_at: string
-          visitor_realtime_topic_key: string
           visitor_session_id: string | null
           workspace_id: string
         }
@@ -734,15 +735,12 @@ export type Database = {
         }
         Returns: Json
       }
-      widget_resolve_realtime_topic: {
-        Args: {
-          p_session_token: string
-          p_workspace_id: string
-        }
-        Returns: Json
-      }
       widget_resolve_public_key: {
         Args: { p_widget_public_key: string }
+        Returns: Json
+      }
+      widget_resolve_realtime_topic: {
+        Args: { p_session_token: string; p_workspace_id: string }
         Returns: Json
       }
       widget_send_visitor_message: {
