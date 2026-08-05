@@ -18,6 +18,17 @@ export type WidgetTransportCallbacks = {
   onConnectionState: (state: ConnectionState) => void;
 };
 
+function isDeferredWidgetRealtimeError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("session") || message.includes("conversation") || message.includes("forbidden")
+  );
+}
+
 export class WidgetRealtimeTransport {
   private client: SupabaseClient | null = null;
   private channel: RealtimeChannel | null = null;
@@ -114,6 +125,10 @@ export class WidgetRealtimeTransport {
     window.addEventListener("online", onOnline);
   }
 
+  async ensureLiveConnection(input: { embedToken: string; sessionToken: string }) {
+    await this.ensureSubscription(input.embedToken, input.sessionToken);
+  }
+
   private async ensureSubscription(embedToken: string, sessionToken: string) {
     if (!this.running) {
       return;
@@ -123,10 +138,21 @@ export class WidgetRealtimeTransport {
       await this.teardown();
       this.callbacks.onConnectionState("connecting");
 
-      const credentials = await this.api.createRealtimeToken({
-        embedToken,
-        sessionToken,
-      });
+      let credentials: { token: string; topic: string; expiresAt: string };
+      try {
+        credentials = await this.api.createRealtimeToken({
+          embedToken,
+          sessionToken,
+        });
+      } catch (error) {
+        if (isDeferredWidgetRealtimeError(error)) {
+          this.callbacks.onConnectionState("connecting");
+          return;
+        }
+
+        this.callbacks.onConnectionState("failed");
+        return;
+      }
 
       this.topic = credentials.topic;
       this.tokenExpiresAt = new Date(credentials.expiresAt).getTime();

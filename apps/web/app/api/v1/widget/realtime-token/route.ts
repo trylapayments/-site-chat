@@ -27,6 +27,33 @@ import {
   resolveWidgetRealtimeTopic,
 } from "@/lib/widget/service";
 
+function isRetriableWidgetRealtimeError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("no active conversation")) {
+      return true;
+    }
+    if (message.includes("session invalid or expired")) {
+      return true;
+    }
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("no active conversation") ||
+      message.includes("session invalid or expired")
+    );
+  }
+
+  return false;
+}
+
 export async function POST(request: Request) {
   const requestId = createRequestId();
 
@@ -124,7 +151,7 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
-    if (isSessionError(error) || isNoConversationError(error)) {
+    if (isSessionError(error) || isRetriableWidgetRealtimeError(error)) {
       return widgetJsonError(
         "SESSION_EXPIRED",
         GENERIC_SESSION_MESSAGE,
@@ -160,11 +187,5 @@ function isSessionError(error: unknown): boolean {
   return (
     error instanceof Error &&
     error.message.includes("Session invalid or expired")
-  );
-}
-
-function isNoConversationError(error: unknown): boolean {
-  return (
-    error instanceof Error && error.message.includes("No active conversation")
   );
 }

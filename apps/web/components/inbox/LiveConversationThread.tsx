@@ -61,6 +61,11 @@ export function LiveConversationThread({
 
   return (
     <div className="space-y-4">
+      <span
+        data-testid="thread-realtime-ready"
+        data-realtime-state={connectionState}
+        hidden
+      />
       <ConnectionBanner
         state={connectionState}
         onRetry={() => {

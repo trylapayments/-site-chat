@@ -258,6 +258,11 @@ function WidgetApp() {
 
       if (!transportRef.current) {
         await startTransport(state.init, state.sessionToken, messages);
+      } else {
+        await transportRef.current.ensureLiveConnection({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+        });
       }
     } catch {
       pendingClientMessageIdRef.current = clientMessageId;

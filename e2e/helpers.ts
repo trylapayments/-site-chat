@@ -24,6 +24,22 @@ function isBootstrapRequest(url: string, method: string) {
   return url.includes("/api/v1/widget/bootstrap") && method === "GET";
 }
 
+export async function waitForOperatorThreadRealtimeReady(page: Page) {
+  await expect(page.getByTestId("thread-realtime-ready")).toHaveAttribute(
+    "data-realtime-state",
+    "connected",
+    { timeout: 60_000 },
+  );
+}
+
+export async function waitForOperatorInboxRealtimeReady(page: Page) {
+  await expect(page.getByTestId("inbox-realtime-ready")).toHaveAttribute(
+    "data-realtime-state",
+    "connected",
+    { timeout: 60_000 },
+  );
+}
+
 export async function openWidget(page: Page) {
   const loaderLoaded = page.waitForResponse(
     (response) =>

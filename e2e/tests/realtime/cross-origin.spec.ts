@@ -9,6 +9,8 @@ import {
   operatorReplyComposer,
   sendOperatorReply,
   sendWidgetMessage,
+  waitForOperatorInboxRealtimeReady,
+  waitForOperatorThreadRealtimeReady,
   widgetComposer,
   widgetFrameLocator,
 } from "../../helpers";
@@ -23,6 +25,7 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
+    await waitForOperatorInboxRealtimeReady(operatorPage);
 
     await openWidget(widgetPage);
     await sendWidgetMessage(widgetPage, "Hello from visitor e2e");
@@ -72,6 +75,7 @@ test.describe("PR 4C realtime cross-origin", () => {
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
     await operatorPage.getByText("Seed for open thread test").click();
     await expect(operatorReplyComposer(operatorPage)).toBeVisible();
+    await waitForOperatorThreadRealtimeReady(operatorPage);
 
     await sendWidgetMessage(widgetPage, "Append while thread open");
 
@@ -108,6 +112,7 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox?status=open`);
+    await waitForOperatorInboxRealtimeReady(operatorPage);
 
     await openWidget(widgetPage);
     const uniquePreview = `Filtered inbox ${Date.now()}`;

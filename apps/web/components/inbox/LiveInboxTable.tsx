@@ -42,6 +42,11 @@ export function LiveInboxTable({
 
   return (
     <>
+      <span
+        data-testid="inbox-realtime-ready"
+        data-realtime-state={connectionState}
+        hidden
+      />
       <ConnectionBanner
         state={connectionState}
         onRetry={() => {

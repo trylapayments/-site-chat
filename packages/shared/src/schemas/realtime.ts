@@ -41,7 +41,7 @@ export const operatorMessageChangeSchema = z
     sender_type: z.enum(["visitor", "agent", "system"]),
     body: z.string(),
     is_internal: z.boolean(),
-    client_message_id: z.string().uuid().nullable(),
+    client_message_id: z.string().uuid().nullable().optional(),
     created_at: z.string(),
   })
   .strict();
