@@ -202,7 +202,7 @@ test.describe("PR 4C realtime cross-origin", () => {
     await frame.getByRole("button", { name: "Retry" }).click();
     await frame.getByRole("button", { name: "Send" }).click();
 
-    await expect(frame.getByRole("article").getByText(body)).toBeVisible({
+    await expect(frame.getByRole("article").getByText(body)).toHaveCount(1, {
       timeout: 30_000,
     });
     expect(sendAttempts).toBeGreaterThanOrEqual(2);

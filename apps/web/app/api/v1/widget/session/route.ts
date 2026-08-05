@@ -6,7 +6,7 @@ import {
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
 import {
-  hashClientIp,
+  hashSessionIpRateLimitKey,
   hashSessionRateLimitKey,
   WIDGET_RATE_LIMITS,
 } from "@/lib/widget/rate-limit";
@@ -58,9 +58,8 @@ export async function POST(request: Request) {
       return options;
     }
 
-    const ipBucket = hashClientIp(getClientIp(request));
     const ipAllowed = await consumeWidgetRateLimit(
-      ipBucket,
+      hashSessionIpRateLimitKey(getClientIp(request)),
       WIDGET_RATE_LIMITS.session.windowSeconds,
       WIDGET_RATE_LIMITS.session.limit,
     );

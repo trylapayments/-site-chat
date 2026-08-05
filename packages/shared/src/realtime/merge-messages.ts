@@ -23,7 +23,11 @@ export function mergeMessages(
 
     if (message.clientMessageId) {
       const prior = byClientId.get(message.clientMessageId);
-      if (prior?.isOptimistic && !message.isOptimistic) {
+      if (
+        prior &&
+        !message.isOptimistic &&
+        (prior.isOptimistic || prior.status === "failed" || prior.status === "pending")
+      ) {
         byId.delete(prior.id);
       }
       byClientId.set(message.clientMessageId, message);

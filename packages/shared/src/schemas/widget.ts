@@ -94,15 +94,7 @@ export type WidgetSendMessageRequest = z.infer<typeof widgetSendMessageRequestSc
 
 export const widgetSendMessageDataSchema = z
   .object({
-    message: z
-      .object({
-        id: z.string().uuid(),
-        sequence_number: z.number().int(),
-        sender_type: z.enum(["visitor", "agent", "system"]),
-        body: z.string(),
-        created_at: z.string(),
-      })
-      .strict(),
+    message: widgetMessageItemSchema,
     conversationStatus: widgetConversationStatusSchema,
   })
   .strict();

@@ -13,6 +13,20 @@ export function hashClientIp(ip: string | null): string {
   return hashRateLimitKey("ip", normalized);
 }
 
+export function hashBootstrapRateLimitKey(widgetPublicKey: string): string {
+  return hashRateLimitKey("bootstrap", widgetPublicKey);
+}
+
+export function hashSessionIpRateLimitKey(ip: string | null): string {
+  const normalized = ip?.trim() || "unknown";
+  return hashRateLimitKey("session-ip", normalized);
+}
+
+export function hashMessagesReadIpRateLimitKey(ip: string | null): string {
+  const normalized = ip?.trim() || "unknown";
+  return hashRateLimitKey("messages-read-ip", normalized);
+}
+
 export function hashSessionRateLimitKey(sessionToken: string): string {
   return hashRateLimitKey("session", sessionToken);
 }

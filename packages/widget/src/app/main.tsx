@@ -69,6 +69,11 @@ function WidgetApp() {
   const parentOriginRef = useRef<string | null>(null);
   const transportRef = useRef<WidgetRealtimeTransport | null>(null);
   const pendingClientMessageIdRef = useRef<string | null>(null);
+  const messagesRef = useRef<MessageView[]>([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const api = useMemo(() => new WidgetApiClient(window.location.origin), []);
 
@@ -251,17 +256,25 @@ function WidgetApp() {
       });
 
       pendingClientMessageIdRef.current = null;
-      setMessages((current) =>
-        mergeMessages(
-          current.filter((item) => item.id !== tempId),
-          mapWidgetHttpMessages([result.message]),
-          [],
+      const confirmedMessages = mapWidgetHttpMessages([result.message]).map((message) => ({
+        ...message,
+        clientMessageId: message.clientMessageId ?? clientMessageId,
+      }));
+      const mergedMessages = mergeMessages(
+        messagesRef.current.filter(
+          (item) => item.id !== tempId && item.clientMessageId !== clientMessageId,
         ),
+        confirmedMessages,
+        [],
       );
 
+      messagesRef.current = mergedMessages;
+      setMessages(mergedMessages);
+
       if (!transportRef.current) {
-        await startTransport(state.init, state.sessionToken, messages);
+        await startTransport(state.init, state.sessionToken, mergedMessages);
       } else {
+        transportRef.current.replaceMessages(mergedMessages);
         await transportRef.current.ensureLiveConnection({
           embedToken: state.init.embedToken,
           sessionToken: state.sessionToken,
