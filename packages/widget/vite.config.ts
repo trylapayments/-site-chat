@@ -17,6 +17,8 @@ export default defineConfig({
   },
   esbuild: {
     jsxDev: false,
+    // Keep identifier names stable across build environments so CI bundle diff checks pass.
+    minifyIdentifiers: false,
   },
   build: {
     outDir: resolve(__dirname, "../../apps/web/public/widget"),
