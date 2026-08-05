@@ -10,6 +10,12 @@ function isMessageFromIframe(
   return event.origin === expectedOrigin && event.source === iframe.contentWindow;
 }
 
+function buildEmbedIframeSrc(widgetHost: string, parentOrigin: string): string {
+  const url = new URL(`${widgetHost}${IFRAME_PATH}`);
+  url.searchParams.set("parentOrigin", parentOrigin);
+  return url.toString();
+}
+
 type LoaderInitMessage = {
   source: typeof MESSAGE_SOURCE;
   type: "sitechat:init";
@@ -39,9 +45,9 @@ function getWidgetPublicKey(script: HTMLScriptElement): string | null {
   return key?.trim() || null;
 }
 
-function createIframe(widgetHost: string): HTMLIFrameElement {
+function createIframe(widgetHost: string, parentOrigin: string): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
-  iframe.src = `${widgetHost}${IFRAME_PATH}`;
+  iframe.src = buildEmbedIframeSrc(widgetHost, parentOrigin);
   iframe.title = "Site Chat";
   iframe.setAttribute("aria-hidden", "false");
   iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
@@ -135,7 +141,7 @@ function mount() {
 
   void bootstrap(widgetHost, widgetPublicKey)
     .then((data) => {
-      const iframe = createIframe(widgetHost);
+      const iframe = createIframe(widgetHost, window.location.origin);
       activeIframe = iframe;
       pendingInitPayload = {
         widgetPublicKey: data.widgetPublicKey,
@@ -206,4 +212,4 @@ if (document.readyState === "loading") {
   mount();
 }
 
-export { bootstrap, mount, WIDGET_MOUNTED_KEY };
+export { bootstrap, buildEmbedIframeSrc, mount, WIDGET_MOUNTED_KEY };

@@ -17,10 +17,11 @@ export default defineConfig({
   },
   fullyParallel: false,
   workers: 1,
-  reporter: [["list"]],
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    video: "retain-on-failure",
   },
   projects: [
     {

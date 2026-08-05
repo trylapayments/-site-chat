@@ -16,6 +16,8 @@ import {
   widgetDictionaries,
   type WidgetLocale,
 } from "../i18n";
+import { isMessageFromParent } from "../post-message";
+import { readParentOriginFromLocation } from "../parent-origin";
 import { mapWidgetHttpMessages, WidgetRealtimeTransport } from "../realtime/visitor-transport";
 import {
   clearSessionToken,
@@ -23,10 +25,6 @@ import {
   readSessionToken,
   writeSessionToken,
 } from "../session/storage";
-
-function isMessageFromParent(event: MessageEvent, expectedParentOrigin: string): boolean {
-  return event.source === window.parent && event.origin === expectedParentOrigin;
-}
 
 const MESSAGE_SOURCE = "sitechat-embed";
 
@@ -55,15 +53,7 @@ function resolveParentOrigin(init: InitPayload | null): string | null {
     return init.parentOrigin;
   }
 
-  if (document.referrer) {
-    try {
-      return new URL(document.referrer).origin;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+  return readParentOriginFromLocation(window.location);
 }
 
 function WidgetApp() {

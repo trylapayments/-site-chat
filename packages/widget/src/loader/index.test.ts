@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { WIDGET_MOUNTED_KEY } from "./index";
+import { buildEmbedIframeSrc, WIDGET_MOUNTED_KEY } from "./index";
 
 describe("widget loader", () => {
   beforeEach(() => {
@@ -45,11 +45,21 @@ describe("widget loader", () => {
     );
 
     const appendChildSpy = vi.spyOn(document.body, "appendChild");
+    let iframeSrc = "";
     appendChildSpy.mockImplementation((node) => {
       if (node instanceof HTMLIFrameElement) {
         events.push("iframe");
+        iframeSrc = node.src;
       }
       return node;
+    });
+
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        ...window.location,
+        origin: "http://localhost:3001",
+      },
     });
 
     const script = document.createElement("script");
@@ -69,6 +79,15 @@ describe("widget loader", () => {
 
     expect(events.indexOf("bootstrap")).toBeGreaterThanOrEqual(0);
     expect(events.indexOf("iframe")).toBeGreaterThan(events.indexOf("bootstrap"));
+    expect(iframeSrc).toBe(
+      "https://app.example.com/widget/embed?parentOrigin=http%3A%2F%2Flocalhost%3A3001",
+    );
+  });
+
+  it("includes parentOrigin on the embed iframe URL", () => {
+    expect(buildEmbedIframeSrc("https://app.example.com", "http://localhost:3001")).toBe(
+      "https://app.example.com/widget/embed?parentOrigin=http%3A%2F%2Flocalhost%3A3001",
+    );
   });
 
   it("finds the loader script without document.currentScript (async embeds)", async () => {
