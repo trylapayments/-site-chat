@@ -162,14 +162,42 @@ jobs:
       - name: Reset database and seed
         run: supabase db reset
 
+      - name: Export local Supabase credentials for E2E
+        run: |
+          set -a
+          # shellcheck disable=SC1090
+          source <(supabase status -o env)
+          set +a
+          if [ -z "${API_URL:-}" ] || [ -z "${ANON_KEY:-}" ] || [ -z "${SERVICE_ROLE_KEY:-}" ] || [ -z "${JWT_SECRET:-}" ]; then
+            echo "supabase status -o env did not export required credentials"
+            exit 1
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}"
+            echo "SUPABASE_JWT_SECRET=${JWT_SECRET}"
+          } >> "$GITHUB_ENV"
+          echo "Exported Supabase credentials for ${API_URL}"
+
+      - name: Verify widget bootstrap RPC credentials
+        run: |
+          curl_args=(
+            -sf "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/widget_resolve_public_key"
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}"
+            -H "Content-Type: application/json"
+            -d '{"p_widget_public_key":"wk_e2e00000000000000000000000000001"}'
+          )
+          if [[ "${SUPABASE_SERVICE_ROLE_KEY}" != sb_secret_* ]]; then
+            curl_args+=(-H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+          fi
+          "${curl_args[@]}" | grep -q workspace_id
+
       - name: Build application
         run: pnpm build
 
       - name: Build widget bundle for E2E
         run: pnpm --filter @site-chat/widget build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHQiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -177,11 +205,4 @@ jobs:
       - name: Run Playwright cross-origin realtime suite
         run: pnpm test:e2e
         env:
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHQiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
-          SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4tI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
-          SUPABASE_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
-          AUTH_COOKIE_SECRET: placeholder-auth-cookie-secret-for-ci-build-min-32-chars
-          WIDGET_EMBED_SECRET: placeholder-widget-embed-secret-for-ci-build-min-32-chars
-          RATE_LIMIT_SECRET: placeholder-rate-limit-secret-for-ci-build-min-32-chars
           NEXT_PUBLIC_APP_URL: http://localhost:3000
