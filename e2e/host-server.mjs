@@ -11,6 +11,6 @@ createServer((_request, response) => {
     "Cache-Control": "no-store",
   });
   response.end(hostPage);
-}).listen(port, () => {
-  console.log(`E2E host server listening on http://127.0.0.1:${port}`);
+}).listen(port, "0.0.0.0", () => {
+  console.log(`E2E host server listening on http://localhost:${port}`);
 });

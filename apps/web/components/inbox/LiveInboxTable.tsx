@@ -1,33 +1,38 @@
 "use client";
 
 import { Inbox } from "lucide-react";
-import type { ColumnDef } from "@tanstack/react-table";
 import type {
   ConversationListItem,
   ListConversationsQuery,
 } from "@site-chat/shared";
+import { useMemo } from "react";
 
 import { DataTable } from "@/components/dashboard/data-table/DataTable";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
+import { createInboxColumns } from "@/lib/inbox/columns";
 import { useLiveInboxList } from "@/lib/realtime/use-operator-inbox";
 
 export function LiveInboxTable({
   workspaceId,
+  workspaceSlug,
   memberId,
   initialItems,
   query,
-  columns,
   currentSort,
   hasFilters,
 }: {
   workspaceId: string;
+  workspaceSlug: string;
   memberId: string;
   initialItems: ConversationListItem[];
   query: ListConversationsQuery;
-  columns: ColumnDef<ConversationListItem>[];
   currentSort: string;
   hasFilters: boolean;
 }) {
+  const columns = useMemo(
+    () => createInboxColumns(workspaceSlug),
+    [workspaceSlug],
+  );
   const { items, connectionState, refreshList } = useLiveInboxList({
     workspaceId,
     memberId,

@@ -1,5 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const webServerEnv = {
+  NODE_ENV: "development",
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321",
+  NEXT_PUBLIC_SUPABASE_ANON_KEY:
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHQiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  SUPABASE_JWT_SECRET: process.env.SUPABASE_JWT_SECRET ?? "",
+  AUTH_COOKIE_SECRET: process.env.AUTH_COOKIE_SECRET ?? "",
+  WIDGET_EMBED_SECRET: process.env.WIDGET_EMBED_SECRET ?? "",
+  RATE_LIMIT_SECRET: process.env.RATE_LIMIT_SECRET ?? "",
+};
+
 export default defineConfig({
   testDir: "./tests",
   timeout: 120_000,
@@ -36,9 +50,10 @@ export default defineConfig({
     },
     {
       command: "pnpm --filter @site-chat/web exec next dev --hostname localhost --port 3000",
-      url: "http://localhost:3000",
+      url: "http://localhost:3000/widget/loader.js",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
+      env: webServerEnv,
     },
   ],
 });

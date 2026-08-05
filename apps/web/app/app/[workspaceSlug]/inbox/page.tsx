@@ -7,7 +7,6 @@ import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPage
 import { DashboardPageToolbar } from "@/components/dashboard/layout/DashboardPageToolbar";
 import { InboxFilters } from "@/components/inbox/InboxFilters";
 import { LiveInboxTable } from "@/components/inbox/LiveInboxTable";
-import { createInboxColumns } from "@/lib/inbox/columns";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import { fetchConversations } from "@/lib/inbox/queries";
 import { parseInboxListQuery } from "@/lib/inbox/search-params";
@@ -60,7 +59,6 @@ export default async function InboxPage({
   }
 
   const pageMeta = getListQueryPageMeta(query, conversations.total);
-  const columns = createInboxColumns(workspaceSlug);
   const hasFilters = Boolean(query.q || query.status || query.assignment);
 
   return (
@@ -84,10 +82,10 @@ export default async function InboxPage({
         <>
           <LiveInboxTable
             workspaceId={workspace.workspace_id}
+            workspaceSlug={workspaceSlug}
             memberId={memberId}
             initialItems={conversations.items}
             query={query}
-            columns={columns}
             currentSort={query.sort ?? "-last_message_at"}
             hasFilters={hasFilters}
           />

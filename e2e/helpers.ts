@@ -20,10 +20,22 @@ function widgetFrame(page: Page): FrameLocator {
   return page.frameLocator('iframe[title="Site Chat"]');
 }
 
+function isBootstrapRequest(url: string, method: string) {
+  return url.includes("/api/v1/widget/bootstrap") && method === "GET";
+}
+
 export async function openWidget(page: Page) {
+  const bootstrapReady = page.waitForResponse(
+    (response) =>
+      isBootstrapRequest(response.url(), response.request().method()) && response.status() === 200,
+    { timeout: 60_000 },
+  );
+
   await page.goto(HOST_URL);
+  await bootstrapReady;
+
   await expect(page.locator('iframe[title="Site Chat"]')).toBeAttached({
-    timeout: 60_000,
+    timeout: 10_000,
   });
 
   const frame = widgetFrame(page);
@@ -33,6 +45,7 @@ export async function openWidget(page: Page) {
   await expect(frame.locator('section[aria-label="Site Chat"]')).toBeVisible({
     timeout: 60_000,
   });
+  await expect(widgetComposer(page)).toBeVisible({ timeout: 60_000 });
 }
 
 export function widgetComposer(page: Page) {
