@@ -17,13 +17,12 @@ export default defineConfig({
   },
   esbuild: {
     jsxDev: false,
-    // Keep identifier names stable across build environments so CI bundle diff checks pass.
-    minifyIdentifiers: false,
   },
   build: {
     outDir: resolve(__dirname, "../../apps/web/public/widget"),
     emptyOutDir: true,
     rollupOptions: {
+      maxParallelFileOps: 1,
       input: {
         loader: resolve(__dirname, "src/loader/index.ts"),
         app: resolve(__dirname, "src/app/main.tsx"),
