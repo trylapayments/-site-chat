@@ -88,12 +88,23 @@ export function operatorReplyComposer(page: Page) {
   return page.getByPlaceholder("Write a reply...");
 }
 
+export async function openOperatorConversation(page: Page, previewText: string) {
+  const row = page.getByRole("row").filter({ hasText: previewText });
+  await expect(row).toBeVisible({ timeout: 60_000 });
+  await Promise.all([
+    page.waitForURL(/\/inbox\/[0-9a-f-]+/, { timeout: 60_000 }),
+    row.getByRole("link").first().click(),
+  ]);
+}
+
 export async function sendWidgetMessage(page: Page, body: string) {
   const frame = widgetFrame(page);
   const composer = widgetComposer(page);
   await composer.fill(body);
   await frame.getByRole("button", { name: "Send" }).click();
-  await expect(frame.getByText(body)).toBeVisible({ timeout: 30_000 });
+  await expect(frame.getByRole("article").getByText(body)).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 export async function sendOperatorReply(page: Page, body: string) {

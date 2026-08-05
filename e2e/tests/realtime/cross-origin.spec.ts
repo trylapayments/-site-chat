@@ -5,6 +5,7 @@ import {
   HOST_URL,
   WORKSPACE_SLUG,
   loginOperator,
+  openOperatorConversation,
   openWidget,
   operatorReplyComposer,
   sendOperatorReply,
@@ -54,7 +55,7 @@ test.describe("PR 4C realtime cross-origin", () => {
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
     await waitForOperatorInboxRealtimeReady(operatorPage);
-    await operatorPage.getByText(visitorMessage).click();
+    await openOperatorConversation(operatorPage, visitorMessage);
     await waitForOperatorThreadRealtimeReady(operatorPage);
     await sendOperatorReply(operatorPage, "Operator live reply");
 
@@ -80,7 +81,7 @@ test.describe("PR 4C realtime cross-origin", () => {
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
     await waitForOperatorInboxRealtimeReady(operatorPage);
-    await operatorPage.getByText(seedMessage).click();
+    await openOperatorConversation(operatorPage, seedMessage);
     await expect(operatorReplyComposer(operatorPage)).toBeVisible();
     await waitForOperatorThreadRealtimeReady(operatorPage);
 
@@ -141,14 +142,15 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     const operatorPage = await operatorContext.newPage();
     const widgetPage = await widgetContext.newPage();
+    const triggerMessage = `Trigger operator optimistic send ${Date.now()}`;
 
     await openWidget(widgetPage);
-    await sendWidgetMessage(widgetPage, `Trigger operator optimistic send ${Date.now()}`);
+    await sendWidgetMessage(widgetPage, triggerMessage);
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
     await waitForOperatorInboxRealtimeReady(operatorPage);
-    await operatorPage.getByText(/Trigger operator optimistic send \d+/).click();
+    await openOperatorConversation(operatorPage, triggerMessage);
     await waitForOperatorThreadRealtimeReady(operatorPage);
 
     const reply = "Optimistic operator confirmation";
@@ -191,7 +193,9 @@ test.describe("PR 4C realtime cross-origin", () => {
     await frame.getByRole("button", { name: "Retry" }).click();
     await frame.getByRole("button", { name: "Send" }).click();
 
-    await expect(frame.getByText(body)).toBeVisible({ timeout: 30_000 });
+    await expect(frame.getByRole("article").getByText(body)).toBeVisible({
+      timeout: 30_000,
+    });
     expect(sendAttempts).toBeGreaterThanOrEqual(2);
 
     await widgetContext.close();
