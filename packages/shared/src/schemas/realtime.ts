@@ -37,10 +37,10 @@ export const operatorMessageChangeSchema = z
     id: z.string().uuid(),
     workspace_id: z.string().uuid(),
     conversation_id: z.string().uuid(),
-    sequence_number: z.number().int(),
+    sequence_number: z.coerce.number().int(),
     sender_type: z.enum(["visitor", "agent", "system"]),
     body: z.string(),
-    is_internal: z.boolean(),
+    is_internal: z.coerce.boolean(),
     client_message_id: z.string().uuid().nullable().optional(),
     created_at: z.string(),
   })
@@ -56,7 +56,7 @@ export const operatorConversationChangeSchema = z
     assigned_to: z.string().uuid().nullable(),
     last_message_at: z.string().nullable(),
     last_message_preview: z.string().nullable(),
-    message_count: z.number().int(),
+    message_count: z.coerce.number().int(),
     updated_at: z.string(),
   })
   .strict();

@@ -213,6 +213,21 @@ function WidgetApp() {
     };
   }, [open, startTransport, state]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const onOffline = () => {
+      setConnectionState("disconnected");
+    };
+
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [open]);
+
   const handleSend = async () => {
     if (state.status !== "ready" || !composer.trim() || sending) {
       return;
