@@ -323,6 +323,8 @@ function WidgetApp() {
       {open ? (
         <section
           aria-label="Site Chat"
+          data-testid="widget-realtime-ready"
+          data-realtime-state={connectionState}
           style={{
             position: "fixed",
             insetInlineEnd: "1rem",

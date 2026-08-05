@@ -24,6 +24,14 @@ function isBootstrapRequest(url: string, method: string) {
   return url.includes("/api/v1/widget/bootstrap") && method === "GET";
 }
 
+export async function waitForWidgetRealtimeReady(page: Page) {
+  await expect(widgetFrame(page).getByTestId("widget-realtime-ready")).toHaveAttribute(
+    "data-realtime-state",
+    "connected",
+    { timeout: 60_000 },
+  );
+}
+
 export async function waitForOperatorThreadRealtimeReady(page: Page) {
   await expect(page.getByTestId("thread-realtime-ready")).toHaveAttribute(
     "data-realtime-state",

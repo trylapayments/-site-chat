@@ -11,6 +11,7 @@ import {
   sendWidgetMessage,
   waitForOperatorInboxRealtimeReady,
   waitForOperatorThreadRealtimeReady,
+  waitForWidgetRealtimeReady,
   widgetComposer,
   widgetFrameLocator,
 } from "../../helpers";
@@ -44,13 +45,17 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     const operatorPage = await operatorContext.newPage();
     const widgetPage = await widgetContext.newPage();
+    const visitorMessage = `Need help please ${Date.now()}`;
 
     await openWidget(widgetPage);
-    await sendWidgetMessage(widgetPage, "Need help please");
+    await sendWidgetMessage(widgetPage, visitorMessage);
+    await waitForWidgetRealtimeReady(widgetPage);
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
-    await operatorPage.getByText("Need help please").click();
+    await waitForOperatorInboxRealtimeReady(operatorPage);
+    await operatorPage.getByText(visitorMessage).click();
+    await waitForOperatorThreadRealtimeReady(operatorPage);
     await sendOperatorReply(operatorPage, "Operator live reply");
 
     await expect(widgetFrameLocator(widgetPage).getByText("Operator live reply")).toBeVisible({
@@ -67,13 +72,15 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     const operatorPage = await operatorContext.newPage();
     const widgetPage = await widgetContext.newPage();
+    const seedMessage = `Seed for open thread test ${Date.now()}`;
 
     await openWidget(widgetPage);
-    await sendWidgetMessage(widgetPage, "Seed for open thread test");
+    await sendWidgetMessage(widgetPage, seedMessage);
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
-    await operatorPage.getByText("Seed for open thread test").click();
+    await waitForOperatorInboxRealtimeReady(operatorPage);
+    await operatorPage.getByText(seedMessage).click();
     await expect(operatorReplyComposer(operatorPage)).toBeVisible();
     await waitForOperatorThreadRealtimeReady(operatorPage);
 
@@ -96,7 +103,9 @@ test.describe("PR 4C realtime cross-origin", () => {
     await sendWidgetMessage(widgetPage, "Offline message");
     await widgetPage.context().setOffline(false);
 
-    await expect(widgetFrameLocator(widgetPage).getByText("Offline message")).toHaveCount(1, {
+    await expect(
+      widgetFrameLocator(widgetPage).getByRole("article").getByText("Offline message"),
+    ).toHaveCount(1, {
       timeout: 60_000,
     });
 
@@ -134,11 +143,13 @@ test.describe("PR 4C realtime cross-origin", () => {
     const widgetPage = await widgetContext.newPage();
 
     await openWidget(widgetPage);
-    await sendWidgetMessage(widgetPage, "Trigger operator optimistic send");
+    await sendWidgetMessage(widgetPage, `Trigger operator optimistic send ${Date.now()}`);
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
-    await operatorPage.getByText("Trigger operator optimistic send").click();
+    await waitForOperatorInboxRealtimeReady(operatorPage);
+    await operatorPage.getByText(/Trigger operator optimistic send \d+/).click();
+    await waitForOperatorThreadRealtimeReady(operatorPage);
 
     const reply = "Optimistic operator confirmation";
     await operatorReplyComposer(operatorPage).fill(reply);

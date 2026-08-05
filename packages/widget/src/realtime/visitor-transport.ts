@@ -121,8 +121,15 @@ export class WidgetRealtimeTransport {
       }
     };
 
+    const onOffline = () => {
+      if (this.running) {
+        this.callbacks.onConnectionState("disconnected");
+      }
+    };
+
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
   }
 
   async ensureLiveConnection(input: { embedToken: string; sessionToken: string }) {
