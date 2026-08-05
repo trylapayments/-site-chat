@@ -28,6 +28,7 @@ type LoaderWindow = Window & {
 };
 
 let activeIframe: HTMLIFrameElement | null = null;
+let pendingInitPayload: LoaderInitMessage["payload"] | null = null;
 
 function getWidgetHost(script: HTMLScriptElement): string {
   return new URL(script.src).origin;
@@ -42,7 +43,7 @@ function createIframe(widgetHost: string): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
   iframe.src = `${widgetHost}${IFRAME_PATH}`;
   iframe.title = "Site Chat";
-  iframe.setAttribute("aria-hidden", "true");
+  iframe.setAttribute("aria-hidden", "false");
   iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
   iframe.style.position = "fixed";
   iframe.style.bottom = "0";
@@ -136,16 +137,13 @@ function mount() {
     .then((data) => {
       const iframe = createIframe(widgetHost);
       activeIframe = iframe;
-
-      iframe.addEventListener("load", () => {
-        postInitMessage(iframe, widgetHost, {
-          widgetPublicKey: data.widgetPublicKey,
-          config: data.config,
-          embedToken: data.embedToken,
-          embedTokenExpiresAt: data.embedTokenExpiresAt,
-          parentOrigin: window.location.origin,
-        });
-      });
+      pendingInitPayload = {
+        widgetPublicKey: data.widgetPublicKey,
+        config: data.config,
+        embedToken: data.embedToken,
+        embedTokenExpiresAt: data.embedTokenExpiresAt,
+        parentOrigin: window.location.origin,
+      };
 
       document.body.appendChild(iframe);
     })
@@ -168,8 +166,15 @@ function mount() {
       return;
     }
 
+    if (data.type === "sitechat:ready") {
+      if (pendingInitPayload) {
+        postInitMessage(activeIframe, widgetHost, pendingInitPayload);
+        pendingInitPayload = null;
+      }
+      return;
+    }
+
     if (data.type === "sitechat:visibility") {
-      activeIframe.setAttribute("aria-hidden", data.payload?.open ? "false" : "true");
       return;
     }
 
