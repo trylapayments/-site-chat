@@ -56,9 +56,14 @@ describe("widget loader", () => {
 
     Object.defineProperty(window, "location", {
       configurable: true,
+      writable: true,
       value: {
-        ...window.location,
         origin: "http://localhost:3001",
+        href: "http://localhost:3001/",
+        protocol: "http:",
+        host: "localhost:3001",
+        hostname: "localhost",
+        port: "3001",
       },
     });
 
