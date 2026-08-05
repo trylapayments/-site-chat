@@ -32,34 +32,30 @@ export const widgetRealtimeTokenDataSchema = z
 
 export type WidgetRealtimeTokenData = z.infer<typeof widgetRealtimeTokenDataSchema>;
 
-export const operatorMessageChangeSchema = z
-  .object({
-    id: z.string().uuid(),
-    workspace_id: z.string().uuid(),
-    conversation_id: z.string().uuid(),
-    sequence_number: z.coerce.number().int(),
-    sender_type: z.enum(["visitor", "agent", "system"]),
-    body: z.string(),
-    is_internal: z.coerce.boolean(),
-    client_message_id: z.string().uuid().nullable().optional(),
-    created_at: z.string(),
-  })
-  .strict();
+export const operatorMessageChangeSchema = z.object({
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  conversation_id: z.string().uuid(),
+  sequence_number: z.coerce.number().int(),
+  sender_type: z.enum(["visitor", "agent", "system"]),
+  body: z.string(),
+  is_internal: z.coerce.boolean(),
+  client_message_id: z.string().uuid().nullable().optional(),
+  created_at: z.string(),
+});
 
 export type OperatorMessageChange = z.infer<typeof operatorMessageChangeSchema>;
 
-export const operatorConversationChangeSchema = z
-  .object({
-    id: z.string().uuid(),
-    workspace_id: z.string().uuid(),
-    status: z.enum(["open", "pending", "resolved", "closed"]),
-    assigned_to: z.string().uuid().nullable(),
-    last_message_at: z.string().nullable(),
-    last_message_preview: z.string().nullable(),
-    message_count: z.coerce.number().int(),
-    updated_at: z.string(),
-  })
-  .strict();
+export const operatorConversationChangeSchema = z.object({
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  status: z.enum(["open", "pending", "resolved", "closed"]),
+  assigned_to: z.string().uuid().nullable(),
+  last_message_at: z.string().nullable(),
+  last_message_preview: z.string().nullable(),
+  message_count: z.coerce.number().int(),
+  updated_at: z.string(),
+});
 
 export type OperatorConversationChange = z.infer<typeof operatorConversationChangeSchema>;
 

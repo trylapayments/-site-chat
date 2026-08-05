@@ -18,14 +18,17 @@ export type WidgetTransportCallbacks = {
   onConnectionState: (state: ConnectionState) => void;
 };
 
-function isDeferredWidgetRealtimeError(error: unknown): boolean {
+function isRetriableWidgetRealtimeError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
 
   const message = error.message.toLowerCase();
   return (
-    message.includes("session") || message.includes("conversation") || message.includes("forbidden")
+    message.includes("session") ||
+    message.includes("conversation") ||
+    message.includes("forbidden") ||
+    message.includes("too many requests")
   );
 }
 
@@ -36,6 +39,8 @@ export class WidgetRealtimeTransport {
   private tokenExpiresAt = 0;
   private topic = "";
   private running = false;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempt = 0;
 
   constructor(
     private readonly api: WidgetApiClient,
@@ -46,12 +51,19 @@ export class WidgetRealtimeTransport {
     this.running = true;
     this.messages = input.initialMessages;
     this.callbacks.onMessages(this.messages);
-    await this.ensureSubscription(input.embedToken, input.sessionToken);
+
+    if (input.initialMessages.length > 0) {
+      await this.ensureSubscription(input.embedToken, input.sessionToken);
+    } else {
+      this.callbacks.onConnectionState("connecting");
+    }
+
     this.attachLifecycle(input.embedToken, input.sessionToken);
   }
 
   stop() {
     this.running = false;
+    this.clearRetryTimer();
     void this.teardown();
   }
 
@@ -136,71 +148,120 @@ export class WidgetRealtimeTransport {
     await this.ensureSubscription(input.embedToken, input.sessionToken);
   }
 
+  private scheduleSubscriptionRetry(embedToken: string, sessionToken: string) {
+    if (!this.running || this.retryTimer !== null) {
+      return;
+    }
+
+    const delayMs = Math.min(1_000 * 2 ** this.retryAttempt, 15_000);
+    this.retryAttempt += 1;
+    this.callbacks.onConnectionState("reconnecting");
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (this.running) {
+        void this.ensureSubscription(embedToken, sessionToken);
+      }
+    }, delayMs);
+  }
+
+  private clearRetryTimer() {
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
+
   private async ensureSubscription(embedToken: string, sessionToken: string) {
     if (!this.running) {
       return;
     }
 
-    if (Date.now() > this.tokenExpiresAt - 60_000) {
-      await this.teardown();
-      this.callbacks.onConnectionState("connecting");
+    const tokenStale = Date.now() > this.tokenExpiresAt - 60_000;
 
-      let credentials: { token: string; topic: string; expiresAt: string };
-      try {
-        credentials = await this.api.createRealtimeToken({
-          embedToken,
-          sessionToken,
-        });
-      } catch (error) {
-        if (isDeferredWidgetRealtimeError(error)) {
-          this.callbacks.onConnectionState("connecting");
+    if (this.channel && !tokenStale) {
+      return;
+    }
+
+    if (!tokenStale && this.client && this.topic) {
+      this.callbacks.onConnectionState("connecting");
+      this.subscribeChannel(embedToken, sessionToken);
+      return;
+    }
+
+    if (!tokenStale) {
+      return;
+    }
+
+    this.clearRetryTimer();
+    await this.teardown();
+    this.callbacks.onConnectionState("connecting");
+
+    let credentials: { token: string; topic: string; expiresAt: string };
+    try {
+      credentials = await this.api.createRealtimeToken({
+        embedToken,
+        sessionToken,
+      });
+    } catch (error) {
+      if (isRetriableWidgetRealtimeError(error)) {
+        this.callbacks.onConnectionState("reconnecting");
+        this.scheduleSubscriptionRetry(embedToken, sessionToken);
+        return;
+      }
+
+      this.callbacks.onConnectionState("failed");
+      return;
+    }
+
+    this.retryAttempt = 0;
+    this.topic = credentials.topic;
+    this.tokenExpiresAt = new Date(credentials.expiresAt).getTime();
+
+    const url = __SITECHAT_SUPABASE_URL__;
+    const key = __SITECHAT_SUPABASE_KEY__;
+
+    if (!url || !key) {
+      this.callbacks.onConnectionState("failed");
+      return;
+    }
+
+    this.client = createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    await this.client.realtime.setAuth(credentials.token);
+    this.subscribeChannel(embedToken, sessionToken);
+  }
+
+  private subscribeChannel(embedToken: string, sessionToken: string) {
+    if (!this.client || !this.topic) {
+      return;
+    }
+
+    this.channel = this.client
+      .channel(this.topic, { config: { private: true } })
+      .on("broadcast", { event: "message.created" }, (payload) => {
+        const parsed = widgetBroadcastEventSchema.safeParse(payload.payload);
+        if (!parsed.success) {
           return;
         }
 
-        this.callbacks.onConnectionState("failed");
-        return;
-      }
-
-      this.topic = credentials.topic;
-      this.tokenExpiresAt = new Date(credentials.expiresAt).getTime();
-
-      const url = __SITECHAT_SUPABASE_URL__;
-      const key = __SITECHAT_SUPABASE_KEY__;
-
-      if (!url || !key) {
-        this.callbacks.onConnectionState("failed");
-        return;
-      }
-
-      this.client = createClient(url, key, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
+        const next = toMessageViewFromWidgetBroadcast(parsed.data.message);
+        this.messages = mergeMessages(this.messages, [next], []);
+        this.callbacks.onMessages(this.messages);
+      })
+      .subscribe((status) => {
+        this.handleChannelStatus(status, embedToken, sessionToken);
       });
-
-      await this.client.realtime.setAuth(credentials.token);
-
-      this.channel = this.client
-        .channel(this.topic, { config: { private: true } })
-        .on("broadcast", { event: "message.created" }, (payload) => {
-          const parsed = widgetBroadcastEventSchema.safeParse(payload.payload);
-          if (!parsed.success) {
-            return;
-          }
-
-          const next = toMessageViewFromWidgetBroadcast(parsed.data.message);
-          this.messages = mergeMessages(this.messages, [next], []);
-          this.callbacks.onMessages(this.messages);
-        })
-        .subscribe((status) => {
-          this.handleChannelStatus(status, embedToken, sessionToken);
-        });
-    }
   }
 
   private handleChannelStatus(status: string, embedToken: string, sessionToken: string) {
     if (status === "SUBSCRIBED") {
+      this.retryAttempt = 0;
       this.callbacks.onConnectionState("connected");
       void this.catchUp({ embedToken, sessionToken });
       return;
@@ -208,6 +269,7 @@ export class WidgetRealtimeTransport {
 
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
       this.callbacks.onConnectionState("reconnecting");
+      this.scheduleSubscriptionRetry(embedToken, sessionToken);
       return;
     }
 

@@ -175,6 +175,7 @@ export function useLiveConversationThread(input: {
     useState<ConnectionState>("connecting");
   const [newMessagesBelow, setNewMessagesBelow] = useState(0);
   const atBottomRef = useRef(true);
+  const conversationIdRef = useRef(input.conversationId);
   const maxSequenceRef = useRef(
     input.initialMessages.reduce(
       (max, message) => Math.max(max, message.sequenceNumber),
@@ -183,12 +184,31 @@ export function useLiveConversationThread(input: {
   );
 
   useEffect(() => {
-    setMessages(input.initialMessages);
-    maxSequenceRef.current = input.initialMessages.reduce(
-      (max, message) => Math.max(max, message.sequenceNumber),
-      0,
-    );
-  }, [input.initialMessages]);
+    setMessages((current) => {
+      if (conversationIdRef.current !== input.conversationId) {
+        conversationIdRef.current = input.conversationId;
+        maxSequenceRef.current = input.initialMessages.reduce(
+          (max, message) => Math.max(max, message.sequenceNumber),
+          0,
+        );
+        return input.initialMessages;
+      }
+
+      if (
+        current.some(
+          (message) => message.isOptimistic || message.status === "pending",
+        )
+      ) {
+        return current;
+      }
+
+      maxSequenceRef.current = input.initialMessages.reduce(
+        (max, message) => Math.max(max, message.sequenceNumber),
+        0,
+      );
+      return input.initialMessages;
+    });
+  }, [input.conversationId, input.initialMessages]);
 
   const catchUp = useCallback(async () => {
     const supabase = createClient() as AppSupabaseClient;

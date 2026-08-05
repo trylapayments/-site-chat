@@ -9,7 +9,6 @@ import {
   toMessageViewFromOperatorRow,
   type MessageView,
 } from "@site-chat/shared";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -170,7 +169,6 @@ function LiveReplyComposer({
   setMessages: (updater: (current: MessageView[]) => MessageView[]) => void;
   onVisitorMessageDisplayed: (sequence: number) => void;
 }) {
-  const router = useRouter();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -270,7 +268,6 @@ function LiveReplyComposer({
               [],
             ),
           );
-          router.refresh();
         });
       }}
     >

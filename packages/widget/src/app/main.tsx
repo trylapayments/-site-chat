@@ -96,18 +96,6 @@ function WidgetApp() {
     [api],
   );
 
-  const requestEmbedRefresh = useCallback(() => {
-    const parentOrigin = parentOriginRef.current;
-    const init = initRef.current;
-    if (!parentOrigin || !init) {
-      return;
-    }
-
-    postToParent(parentOrigin, "sitechat:refresh-embed", {
-      widgetPublicKey: init.widgetPublicKey,
-    });
-  }, []);
-
   const initialize = useCallback(
     async (init: InitPayload) => {
       initRef.current = init;
@@ -289,7 +277,6 @@ function WidgetApp() {
       );
       setComposer(body);
       setSendError(messagesCopy.sendError);
-      requestEmbedRefresh();
     } finally {
       setSending(false);
     }

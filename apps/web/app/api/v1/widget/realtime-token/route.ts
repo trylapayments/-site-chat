@@ -5,9 +5,7 @@ import {
 
 import { verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
-import { getClientIp } from "@/lib/widget/origin";
 import {
-  hashClientIp,
   hashSessionRateLimitKey,
   WIDGET_RATE_LIMITS,
 } from "@/lib/widget/rate-limit";
@@ -94,22 +92,6 @@ export async function POST(request: Request) {
     const options = widgetOptionsResponse(request, corsOrigin);
     if (options) {
       return options;
-    }
-
-    const ipAllowed = await consumeWidgetRateLimit(
-      hashClientIp(getClientIp(request)),
-      WIDGET_RATE_LIMITS.realtimeToken.windowSeconds,
-      WIDGET_RATE_LIMITS.realtimeToken.limit,
-    );
-
-    if (!ipAllowed) {
-      return widgetJsonError(
-        "RATE_LIMITED",
-        "Too many requests",
-        429,
-        requestId,
-        corsHeaders(corsOrigin),
-      );
     }
 
     const sessionAllowed = await consumeWidgetRateLimit(
