@@ -54,7 +54,6 @@ function createIframe(widgetHost: string): HTMLIFrameElement {
   iframe.style.border = "0";
   iframe.style.zIndex = "2147483646";
   iframe.style.background = "transparent";
-  iframe.style.display = "none";
   return iframe;
 }
 
@@ -170,7 +169,6 @@ function mount() {
     }
 
     if (data.type === "sitechat:visibility") {
-      activeIframe.style.display = data.payload?.open ? "block" : "none";
       activeIframe.setAttribute("aria-hidden", data.payload?.open ? "false" : "true");
       return;
     }
