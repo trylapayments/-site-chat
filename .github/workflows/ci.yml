@@ -182,16 +182,16 @@ jobs:
 
       - name: Verify widget bootstrap RPC credentials
         run: |
-          curl_args=(
-            -sf "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/widget_resolve_public_key"
-            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}"
-            -H "Content-Type: application/json"
-            -d '{"p_widget_public_key":"wk_e2e00000000000000000000000000001"}'
-          )
+          auth_header=()
           if [[ "${SUPABASE_SERVICE_ROLE_KEY}" != sb_secret_* ]]; then
-            curl_args+=(-H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+            auth_header=(-H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
           fi
-          "${curl_args[@]}" | grep -q workspace_id
+          curl -sf "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/widget_resolve_public_key" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${auth_header[@]}" \
+            -H "Content-Type: application/json" \
+            -d '{"p_widget_public_key":"wk_e2e00000000000000000000000000001"}' \
+            | grep -q workspace_id
 
       - name: Build application
         run: pnpm build
