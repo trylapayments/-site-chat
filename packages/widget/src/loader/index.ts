@@ -24,6 +24,7 @@ type LoaderInitMessage = {
 
 type LoaderWindow = Window & {
   [WIDGET_MOUNTED_KEY]?: boolean;
+  __siteChatMountRetried?: boolean;
 };
 
 let activeIframe: HTMLIFrameElement | null = null;
@@ -112,6 +113,12 @@ function mount() {
       : document.querySelector("script[data-widget-key], script[data-sitechat-key]");
 
   if (!(script instanceof HTMLScriptElement)) {
+    if (!loaderWindow.__siteChatMountRetried) {
+      loaderWindow.__siteChatMountRetried = true;
+      queueMicrotask(mount);
+      return;
+    }
+
     console.warn("[Site Chat] Loader must be executed from a script tag.");
     return;
   }

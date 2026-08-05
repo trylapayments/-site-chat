@@ -25,14 +25,22 @@ function isBootstrapRequest(url: string, method: string) {
 }
 
 export async function openWidget(page: Page) {
-  const bootstrapReady = page.waitForResponse(
+  const loaderLoaded = page.waitForResponse(
     (response) =>
-      isBootstrapRequest(response.url(), response.request().method()) && response.status() === 200,
+      response.url().includes("/widget/loader.js") &&
+      response.request().method() === "GET" &&
+      response.status() === 200,
+    { timeout: 60_000 },
+  );
+  const bootstrapResponse = page.waitForResponse(
+    (response) => isBootstrapRequest(response.url(), response.request().method()),
     { timeout: 60_000 },
   );
 
   await page.goto(HOST_URL);
-  await bootstrapReady;
+  await loaderLoaded;
+  const bootstrap = await bootstrapResponse;
+  expect(bootstrap.status(), `widget bootstrap failed with HTTP ${bootstrap.status()}`).toBe(200);
 
   await expect(page.locator('iframe[title="Site Chat"]')).toBeAttached({
     timeout: 10_000,
