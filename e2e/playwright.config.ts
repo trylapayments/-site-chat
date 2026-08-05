@@ -1,8 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = process.cwd();
 const webServerEnv = {
   NODE_ENV: "development",
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
