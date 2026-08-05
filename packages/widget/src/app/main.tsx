@@ -50,6 +50,22 @@ function postToParent(parentOrigin: string, type: string, payload?: Record<strin
   );
 }
 
+function resolveParentOrigin(init: InitPayload | null): string | null {
+  if (init?.parentOrigin) {
+    return init.parentOrigin;
+  }
+
+  if (document.referrer) {
+    try {
+      return new URL(document.referrer).origin;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 function WidgetApp() {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<WidgetState>({ status: "booting" });
@@ -150,7 +166,12 @@ function WidgetApp() {
   );
 
   useEffect(() => {
-    const parentOrigin = parentOriginRef.current ?? window.location.origin;
+    const parentOrigin = resolveParentOrigin(initRef.current);
+    if (!parentOrigin) {
+      return;
+    }
+
+    parentOriginRef.current = parentOrigin;
     postToParent(parentOrigin, "sitechat:ready");
 
     function onMessage(event: MessageEvent) {
@@ -178,13 +199,15 @@ function WidgetApp() {
   }, [initialize]);
 
   useEffect(() => {
-    const parentOrigin = parentOriginRef.current ?? initRef.current?.parentOrigin;
+    const parentOrigin = resolveParentOrigin(
+      state.status === "ready" ? state.init : initRef.current,
+    );
     if (!parentOrigin) {
       return;
     }
 
     postToParent(parentOrigin, "sitechat:visibility", { open });
-  }, [open]);
+  }, [open, state]);
 
   useEffect(() => {
     if (state.status !== "ready" || !open) {
