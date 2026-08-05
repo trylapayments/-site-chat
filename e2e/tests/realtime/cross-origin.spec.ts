@@ -157,11 +157,13 @@ test.describe("PR 4C realtime cross-origin", () => {
     await operatorReplyComposer(operatorPage).fill(reply);
     await operatorPage.getByRole("button", { name: "Send reply" }).click();
 
-    await expect(operatorPage.getByText("Sending...")).toBeVisible({
+    await expect(operatorPage.getByRole("article").getByText("Sending...")).toBeVisible({
       timeout: 5_000,
     });
-    await expect(operatorPage.getByText(reply)).toBeVisible({ timeout: 20_000 });
-    await expect(operatorPage.getByText("Sending...")).toHaveCount(0);
+    await expect(operatorPage.getByRole("article").getByText(reply)).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(operatorPage.getByRole("article").getByText("Sending...")).toHaveCount(0);
 
     await operatorContext.close();
     await widgetContext.close();
@@ -173,6 +175,11 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     let sendAttempts = 0;
     await widgetPage.route("**/api/v1/widget/messages", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+
       sendAttempts += 1;
       if (sendAttempts === 1) {
         await route.abort("failed");

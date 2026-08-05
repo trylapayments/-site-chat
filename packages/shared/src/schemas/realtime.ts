@@ -1,24 +1,20 @@
 import { z } from "zod";
 
-export const widgetBroadcastMessageSchema = z
-  .object({
-    id: z.string().uuid(),
-    sequenceNumber: z.number().int(),
-    senderType: z.enum(["visitor", "agent", "system"]),
-    body: z.string(),
-    createdAt: z.string(),
-    clientMessageId: z.string().uuid().nullable(),
-  })
-  .strict();
+export const widgetBroadcastMessageSchema = z.object({
+  id: z.string().uuid(),
+  sequenceNumber: z.coerce.number().int(),
+  senderType: z.enum(["visitor", "agent", "system"]),
+  body: z.string(),
+  createdAt: z.string(),
+  clientMessageId: z.string().uuid().nullable(),
+});
 
 export type WidgetBroadcastMessage = z.infer<typeof widgetBroadcastMessageSchema>;
 
-export const widgetBroadcastEventSchema = z
-  .object({
-    type: z.literal("message.created"),
-    message: widgetBroadcastMessageSchema,
-  })
-  .strict();
+export const widgetBroadcastEventSchema = z.object({
+  type: z.literal("message.created"),
+  message: widgetBroadcastMessageSchema,
+});
 
 export type WidgetBroadcastEvent = z.infer<typeof widgetBroadcastEventSchema>;
 
