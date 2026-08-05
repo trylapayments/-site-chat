@@ -87,7 +87,9 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     await sendWidgetMessage(widgetPage, "Append while thread open");
 
-    await expect(operatorPage.getByText("Append while thread open")).toBeVisible({
+    await expect(
+      operatorPage.getByRole("article").getByText("Append while thread open"),
+    ).toBeVisible({
       timeout: 20_000,
     });
 
@@ -190,10 +192,10 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     await openWidget(widgetPage);
     const body = "Retry with same clientMessageId";
-    await widgetComposer(widgetPage).fill(body);
-    await widgetPage.getByRole("button", { name: "Send" }).click();
-
     const frame = widgetFrameLocator(widgetPage);
+    await widgetComposer(widgetPage).fill(body);
+    await frame.getByRole("button", { name: "Send" }).click();
+
     await expect(frame.getByRole("button", { name: "Retry" })).toBeVisible({
       timeout: 30_000,
     });

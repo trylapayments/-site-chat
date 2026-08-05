@@ -202,10 +202,20 @@ export function useLiveConversationThread(input: {
         return current;
       }
 
-      maxSequenceRef.current = input.initialMessages.reduce(
+      const serverMax = input.initialMessages.reduce(
         (max, message) => Math.max(max, message.sequenceNumber),
         0,
       );
+      const localMax = current.reduce(
+        (max, message) => Math.max(max, message.sequenceNumber),
+        0,
+      );
+
+      if (localMax > serverMax) {
+        return current;
+      }
+
+      maxSequenceRef.current = Math.max(serverMax, localMax);
       return input.initialMessages;
     });
   }, [input.conversationId, input.initialMessages]);
