@@ -11,7 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { initialAuthActionState, signInAction } from "@/lib/auth/actions";
+import { signInAction } from "@/lib/auth/actions";
+import { initialAuthActionState } from "@/lib/auth/errors";
 
 export function LoginForm({
   nextPath,

@@ -5,8 +5,11 @@ import {
 
 import { issueEmbedToken, resolveBootstrapContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
-import { getClientIp, getRequestOrigin } from "@/lib/widget/origin";
-import { hashClientIp, WIDGET_RATE_LIMITS } from "@/lib/widget/rate-limit";
+import { getRequestOrigin } from "@/lib/widget/origin";
+import {
+  hashBootstrapRateLimitKey,
+  WIDGET_RATE_LIMITS,
+} from "@/lib/widget/rate-limit";
 import {
   GENERIC_FORBIDDEN_MESSAGE,
   GENERIC_INTERNAL_MESSAGE,
@@ -54,9 +57,8 @@ export async function GET(request: Request) {
       );
     }
 
-    const ipBucket = hashClientIp(getClientIp(request));
     const allowed = await consumeWidgetRateLimit(
-      ipBucket,
+      hashBootstrapRateLimitKey(keyResult.data),
       WIDGET_RATE_LIMITS.bootstrap.windowSeconds,
       WIDGET_RATE_LIMITS.bootstrap.limit,
     );
@@ -93,7 +95,11 @@ export async function GET(request: Request) {
         },
       },
     );
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[widget bootstrap]", error);
+    }
+
     return widgetJsonError(
       "INTERNAL_ERROR",
       GENERIC_INTERNAL_MESSAGE,

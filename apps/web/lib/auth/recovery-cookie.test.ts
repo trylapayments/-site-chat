@@ -19,7 +19,7 @@ const SESSION_A = "bdd743e0-4844-49c5-b3b2-2cb4632a0b87";
 const SESSION_B = "1c574637-81d9-478f-b8a2-08fe28a93bb5";
 const NOW = 1_700_000_000;
 
-vi.mock("@/lib/env", () => ({
+vi.mock("@/lib/env.server", () => ({
   env: {
     AUTH_COOKIE_SECRET: "test-auth-cookie-secret-min-32-characters",
     NODE_ENV: "test",

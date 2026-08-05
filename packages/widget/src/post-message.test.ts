@@ -34,7 +34,42 @@ describe("postMessage validation", () => {
       source: null,
     });
 
+    const wrongOrigin = new MessageEvent("message", {
+      origin: "https://evil.example.com",
+      source: window.parent,
+    });
+
     expect(isMessageFromParent(trusted, "https://customer.example.com")).toBe(true);
     expect(isMessageFromParent(wrongSource, "https://customer.example.com")).toBe(false);
+    expect(isMessageFromParent(wrongOrigin, "https://customer.example.com")).toBe(false);
+  });
+
+  it("validates ready and init postMessage origin and source together", () => {
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+    const iframeWindow = iframe.contentWindow;
+
+    const readyFromEmbed = new MessageEvent("message", {
+      origin: "https://app.example.com",
+      source: iframeWindow,
+      data: { source: "sitechat-embed", type: "sitechat:ready" },
+    });
+
+    const initFromParent = new MessageEvent("message", {
+      origin: "http://localhost:3001",
+      source: window.parent,
+      data: {
+        source: "sitechat-loader",
+        type: "sitechat:init",
+        payload: { parentOrigin: "http://localhost:3001" },
+      },
+    });
+
+    expect(isMessageFromIframe(readyFromEmbed, iframe, "https://app.example.com")).toBe(true);
+    expect(isMessageFromIframe(readyFromEmbed, iframe, "https://evil.example.com")).toBe(false);
+    expect(isMessageFromParent(initFromParent, "http://localhost:3001")).toBe(true);
+    expect(isMessageFromParent(initFromParent, "https://evil.example.com")).toBe(false);
+
+    iframe.remove();
   });
 });

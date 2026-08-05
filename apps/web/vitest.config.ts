@@ -4,7 +4,11 @@ import path from "node:path";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "lib/**/*.integration.test.ts"],
+    include: [
+      "lib/**/*.test.ts",
+      "lib/**/*.integration.test.ts",
+      "app/widget/embed/**/*.test.tsx",
+    ],
     setupFiles: ["./vitest.setup.ts"],
   },
   resolve: {

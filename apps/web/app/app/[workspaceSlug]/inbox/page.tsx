@@ -1,18 +1,17 @@
-import { Inbox } from "lucide-react";
 import { Suspense } from "react";
 
-import { DataTable } from "@/components/dashboard/data-table/DataTable";
 import { ListPagination } from "@/components/dashboard/data-table/ListPagination";
 import { SearchInput } from "@/components/dashboard/filters/SearchInput";
 import { DashboardPage } from "@/components/dashboard/layout/DashboardPage";
 import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPageHeader";
 import { DashboardPageToolbar } from "@/components/dashboard/layout/DashboardPageToolbar";
 import { InboxFilters } from "@/components/inbox/InboxFilters";
-import { createInboxColumns } from "@/lib/inbox/columns";
+import { LiveInboxTable } from "@/components/inbox/LiveInboxTable";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import { fetchConversations } from "@/lib/inbox/queries";
 import { parseInboxListQuery } from "@/lib/inbox/search-params";
 import { getListQueryPageMeta } from "@/lib/dashboard/search-params";
+import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InboxPage({
@@ -27,6 +26,18 @@ export default async function InboxPage({
   const { workspace } = await requireInboxWorkspace(workspaceSlug);
   const query = parseInboxListQuery(resolvedSearchParams);
   const supabase = await createClient();
+  const { user } = await requireUser(supabase);
+
+  let memberId = "";
+  if (user) {
+    const { data: memberRow } = await supabase
+      .from("workspace_members")
+      .select("id")
+      .eq("workspace_id", workspace.workspace_id)
+      .eq("user_id", user.id)
+      .maybeSingle<{ id: string }>();
+    memberId = memberRow?.id ?? "";
+  }
 
   let conversations;
   let loadError = false;
@@ -48,7 +59,6 @@ export default async function InboxPage({
   }
 
   const pageMeta = getListQueryPageMeta(query, conversations.total);
-  const columns = createInboxColumns(workspaceSlug);
   const hasFilters = Boolean(query.q || query.status || query.assignment);
 
   return (
@@ -70,20 +80,14 @@ export default async function InboxPage({
         </p>
       ) : (
         <>
-          <DataTable
-            columns={columns}
-            data={conversations.items}
-            sortableColumns={["last_message_at", "created_at", "status"]}
+          <LiveInboxTable
+            workspaceId={workspace.workspace_id}
+            workspaceSlug={workspaceSlug}
+            memberId={memberId}
+            initialItems={conversations.items}
+            query={query}
             currentSort={query.sort ?? "-last_message_at"}
-            emptyState={{
-              icon: Inbox,
-              title: hasFilters
-                ? "No matching conversations"
-                : "No conversations yet",
-              description: hasFilters
-                ? "Try adjusting your search or filters."
-                : "Visitor messages will appear here once conversations are created.",
-            }}
+            hasFilters={hasFilters}
           />
           <ListPagination pageMeta={pageMeta} />
         </>

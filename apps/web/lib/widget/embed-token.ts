@@ -2,7 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { widgetPublicKeySchema } from "@site-chat/shared";
 
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 
 const EMBED_TOKEN_TTL_SECONDS = 300;
 

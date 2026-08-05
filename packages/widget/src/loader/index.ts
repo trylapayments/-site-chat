@@ -10,6 +10,12 @@ function isMessageFromIframe(
   return event.origin === expectedOrigin && event.source === iframe.contentWindow;
 }
 
+function buildEmbedIframeSrc(widgetHost: string, parentOrigin: string): string {
+  const url = new URL(`${widgetHost}${IFRAME_PATH}`);
+  url.searchParams.set("parentOrigin", parentOrigin);
+  return url.toString();
+}
+
 type LoaderInitMessage = {
   source: typeof MESSAGE_SOURCE;
   type: "sitechat:init";
@@ -24,9 +30,11 @@ type LoaderInitMessage = {
 
 type LoaderWindow = Window & {
   [WIDGET_MOUNTED_KEY]?: boolean;
+  __siteChatMountRetried?: boolean;
 };
 
 let activeIframe: HTMLIFrameElement | null = null;
+let pendingInitPayload: LoaderInitMessage["payload"] | null = null;
 
 function getWidgetHost(script: HTMLScriptElement): string {
   return new URL(script.src).origin;
@@ -37,11 +45,11 @@ function getWidgetPublicKey(script: HTMLScriptElement): string | null {
   return key?.trim() || null;
 }
 
-function createIframe(widgetHost: string): HTMLIFrameElement {
+function createIframe(widgetHost: string, parentOrigin: string): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
-  iframe.src = `${widgetHost}${IFRAME_PATH}`;
+  iframe.src = buildEmbedIframeSrc(widgetHost, parentOrigin);
   iframe.title = "Site Chat";
-  iframe.setAttribute("aria-hidden", "true");
+  iframe.setAttribute("aria-hidden", "false");
   iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
   iframe.style.position = "fixed";
   iframe.style.bottom = "0";
@@ -53,7 +61,6 @@ function createIframe(widgetHost: string): HTMLIFrameElement {
   iframe.style.border = "0";
   iframe.style.zIndex = "2147483646";
   iframe.style.background = "transparent";
-  iframe.style.display = "none";
   return iframe;
 }
 
@@ -106,8 +113,18 @@ function mount() {
     return;
   }
 
-  const script = document.currentScript;
+  const script =
+    document.currentScript instanceof HTMLScriptElement
+      ? document.currentScript
+      : document.querySelector("script[data-widget-key], script[data-sitechat-key]");
+
   if (!(script instanceof HTMLScriptElement)) {
+    if (!loaderWindow.__siteChatMountRetried) {
+      loaderWindow.__siteChatMountRetried = true;
+      queueMicrotask(mount);
+      return;
+    }
+
     console.warn("[Site Chat] Loader must be executed from a script tag.");
     return;
   }
@@ -124,18 +141,15 @@ function mount() {
 
   void bootstrap(widgetHost, widgetPublicKey)
     .then((data) => {
-      const iframe = createIframe(widgetHost);
+      const iframe = createIframe(widgetHost, window.location.origin);
       activeIframe = iframe;
-
-      iframe.addEventListener("load", () => {
-        postInitMessage(iframe, widgetHost, {
-          widgetPublicKey: data.widgetPublicKey,
-          config: data.config,
-          embedToken: data.embedToken,
-          embedTokenExpiresAt: data.embedTokenExpiresAt,
-          parentOrigin: window.location.origin,
-        });
-      });
+      pendingInitPayload = {
+        widgetPublicKey: data.widgetPublicKey,
+        config: data.config,
+        embedToken: data.embedToken,
+        embedTokenExpiresAt: data.embedTokenExpiresAt,
+        parentOrigin: window.location.origin,
+      };
 
       document.body.appendChild(iframe);
     })
@@ -149,14 +163,45 @@ function mount() {
       return;
     }
 
-    const data = event.data as { source?: string; type?: string; payload?: { open?: boolean } };
+    const data = event.data as {
+      source?: string;
+      type?: string;
+      payload?: { open?: boolean; widgetPublicKey?: string };
+    };
     if (data.source !== "sitechat-embed") {
       return;
     }
 
+    if (data.type === "sitechat:ready") {
+      if (pendingInitPayload) {
+        postInitMessage(activeIframe, widgetHost, pendingInitPayload);
+        pendingInitPayload = null;
+      }
+      return;
+    }
+
     if (data.type === "sitechat:visibility") {
-      activeIframe.style.display = data.payload?.open ? "block" : "none";
-      activeIframe.setAttribute("aria-hidden", data.payload?.open ? "false" : "true");
+      return;
+    }
+
+    if (data.type === "sitechat:refresh-embed" && data.payload?.widgetPublicKey) {
+      void bootstrap(widgetHost, data.payload.widgetPublicKey)
+        .then((boot) => {
+          if (!activeIframe?.contentWindow) {
+            return;
+          }
+
+          postInitMessage(activeIframe, widgetHost, {
+            widgetPublicKey: boot.widgetPublicKey,
+            config: boot.config,
+            embedToken: boot.embedToken,
+            embedTokenExpiresAt: boot.embedTokenExpiresAt,
+            parentOrigin: window.location.origin,
+          });
+        })
+        .catch(() => {
+          console.warn("[Site Chat] Failed to refresh embed token.");
+        });
     }
   });
 }
@@ -167,4 +212,4 @@ if (document.readyState === "loading") {
   mount();
 }
 
-export { bootstrap, mount, WIDGET_MOUNTED_KEY };
+export { bootstrap, buildEmbedIframeSrc, mount, WIDGET_MOUNTED_KEY };

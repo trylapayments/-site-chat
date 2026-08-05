@@ -12,6 +12,8 @@ export default defineConfig({
   ],
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
+    __SITECHAT_SUPABASE_URL__: JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""),
+    __SITECHAT_SUPABASE_KEY__: JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""),
   },
   esbuild: {
     jsxDev: false,
@@ -20,6 +22,7 @@ export default defineConfig({
     outDir: resolve(__dirname, "../../apps/web/public/widget"),
     emptyOutDir: true,
     rollupOptions: {
+      maxParallelFileOps: 1,
       input: {
         loader: resolve(__dirname, "src/loader/index.ts"),
         app: resolve(__dirname, "src/app/main.tsx"),

@@ -74,6 +74,7 @@ export const widgetMessageItemSchema = z
     sender_type: z.enum(["visitor", "agent", "system"]),
     body: z.string(),
     created_at: z.string(),
+    client_message_id: z.string().uuid().nullable().optional(),
   })
   .strict();
 
@@ -93,15 +94,7 @@ export type WidgetSendMessageRequest = z.infer<typeof widgetSendMessageRequestSc
 
 export const widgetSendMessageDataSchema = z
   .object({
-    message: z
-      .object({
-        id: z.string().uuid(),
-        sequence_number: z.number().int(),
-        sender_type: z.enum(["visitor", "agent", "system"]),
-        body: z.string(),
-        created_at: z.string(),
-      })
-      .strict(),
+    message: widgetMessageItemSchema,
     conversationStatus: widgetConversationStatusSchema,
   })
   .strict();
@@ -112,8 +105,20 @@ export const widgetListMessagesQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(50).optional(),
     beforeSequence: z.coerce.number().int().positive().optional(),
+    afterSequence: z.coerce.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .refine((value) => !(value.beforeSequence !== undefined && value.afterSequence !== undefined), {
+    message: "Cannot use beforeSequence and afterSequence together",
+  });
+
+export const widgetRealtimeTokenRequestSchema = z
+  .object({
+    embedToken: z.string().min(1),
   })
   .strict();
+
+export type WidgetRealtimeTokenRequest = z.infer<typeof widgetRealtimeTokenRequestSchema>;
 
 export type WidgetListMessagesQuery = z.infer<typeof widgetListMessagesQuerySchema>;
 

@@ -10,7 +10,7 @@ import { getEmbedTokenFromRequest } from "@/lib/widget/constants";
 import { createRequestId } from "@/lib/widget/embed-token";
 import { getClientIp } from "@/lib/widget/origin";
 import {
-  hashClientIp,
+  hashMessagesReadIpRateLimitKey,
   hashSessionRateLimitKey,
   WIDGET_RATE_LIMITS,
 } from "@/lib/widget/rate-limit";
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     const parsed = widgetListMessagesQuerySchema.safeParse({
       limit: url.searchParams.get("limit") ?? undefined,
       beforeSequence: url.searchParams.get("beforeSequence") ?? undefined,
+      afterSequence: url.searchParams.get("afterSequence") ?? undefined,
     });
 
     if (!parsed.success) {
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
     }
 
     const ipAllowed = await consumeWidgetRateLimit(
-      hashClientIp(getClientIp(request)),
+      hashMessagesReadIpRateLimitKey(getClientIp(request)),
       WIDGET_RATE_LIMITS.messagesRead.windowSeconds,
       WIDGET_RATE_LIMITS.messagesRead.limit,
     );
@@ -106,6 +107,7 @@ export async function GET(request: Request) {
       sessionToken,
       limit: parsed.data.limit,
       beforeSequence: parsed.data.beforeSequence,
+      afterSequence: parsed.data.afterSequence,
     });
 
     return widgetJsonSuccess(

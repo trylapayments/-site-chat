@@ -13,7 +13,6 @@ import { AUTH_ROUTES } from "@/lib/auth/constants";
 import {
   AUTH_ERROR_CODES,
   getUserMessage,
-  initialAuthActionState,
   type AuthActionState,
 } from "@/lib/auth/errors";
 import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
@@ -27,7 +26,8 @@ import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
 import { clearInviteCookie } from "@/lib/auth/invite-cookie.server";
 import { redirectAuthenticatedUser } from "@/lib/workspace/redirect.server";
 import { createClient } from "@/lib/supabase/server";
-import { clientEnv, env } from "@/lib/env";
+import { clientEnv } from "@/lib/env.client";
+import { env } from "@/lib/env.server";
 import { revalidatePath } from "next/cache";
 
 function mapFieldErrors(
@@ -269,5 +269,3 @@ export async function resendConfirmationEmailAction(
     message: getUserMessage(AUTH_ERROR_CODES.CONFIRMATION_SENT),
   };
 }
-
-export { initialAuthActionState };

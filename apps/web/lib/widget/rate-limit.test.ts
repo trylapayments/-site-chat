@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { hashClientIp, hashRateLimitKey } from "@/lib/widget/rate-limit";
+import {
+  hashBootstrapRateLimitKey,
+  hashClientIp,
+  hashRateLimitKey,
+  hashSessionIpRateLimitKey,
+} from "@/lib/widget/rate-limit";
 
 describe("rate limit hashing", () => {
   it("hashes identifiers without exposing raw values", () => {
@@ -19,6 +24,17 @@ describe("rate limit hashing", () => {
     );
     expect(hashRateLimitKey("session", "abc")).not.toBe(
       hashRateLimitKey("session", "def"),
+    );
+  });
+
+  it("isolates endpoint buckets from shared client IP counters", () => {
+    process.env.RATE_LIMIT_SECRET = "test-rate-limit-secret-min-32-characters";
+
+    expect(
+      hashBootstrapRateLimitKey("wk_0123456789abcdef0123456789abcdef"),
+    ).not.toBe(hashSessionIpRateLimitKey("203.0.113.10"));
+    expect(hashClientIp("203.0.113.10")).not.toBe(
+      hashSessionIpRateLimitKey("203.0.113.10"),
     );
   });
 });

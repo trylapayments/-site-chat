@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 
 /**
  * Supabase client with service role key.

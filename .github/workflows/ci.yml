@@ -16,6 +16,7 @@ env:
   NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
   NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
   SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
+  SUPABASE_JWT_SECRET: placeholder-supabase-jwt-secret-for-ci-build-min-32-chars
   AUTH_COOKIE_SECRET: placeholder-auth-cookie-secret-for-ci-build-min-32-chars
   WIDGET_EMBED_SECRET: placeholder-widget-embed-secret-for-ci-build-min-32-chars
   RATE_LIMIT_SECRET: placeholder-rate-limit-secret-for-ci-build-min-32-chars
@@ -48,6 +49,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Test shared package
+        run: pnpm --filter @site-chat/shared test
 
       - name: Test web auth utilities
         run: pnpm --filter @site-chat/web test
@@ -126,3 +130,89 @@ jobs:
         run: |
           supabase gen types typescript --local > /tmp/database.types.ts
           diff -u packages/shared/src/database.types.ts /tmp/database.types.ts
+
+  e2e-realtime:
+    name: Playwright Realtime E2E
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.111.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Supabase local stack
+        run: supabase start
+
+      - name: Reset database and seed
+        run: supabase db reset
+
+      - name: Export local Supabase credentials for E2E
+        run: |
+          set -a
+          # shellcheck disable=SC1090
+          source <(supabase status -o env)
+          set +a
+          if [ -z "${API_URL:-}" ] || [ -z "${ANON_KEY:-}" ] || [ -z "${SERVICE_ROLE_KEY:-}" ] || [ -z "${JWT_SECRET:-}" ]; then
+            echo "supabase status -o env did not export required credentials"
+            exit 1
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}"
+            echo "SUPABASE_JWT_SECRET=${JWT_SECRET}"
+          } >> "$GITHUB_ENV"
+          echo "Exported Supabase credentials for ${API_URL}"
+
+      - name: Verify widget bootstrap RPC credentials
+        run: |
+          auth_header=()
+          if [[ "${SUPABASE_SERVICE_ROLE_KEY}" != sb_secret_* ]]; then
+            auth_header=(-H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+          fi
+          curl -sf "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/widget_resolve_public_key" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${auth_header[@]}" \
+            -H "Content-Type: application/json" \
+            -d '{"p_widget_public_key":"wk_e2e00000000000000000000000000001"}' \
+            | grep -q workspace_id
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Build widget bundle for E2E
+        run: pnpm --filter @site-chat/widget build
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright cross-origin realtime suite
+        run: pnpm test:e2e
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7

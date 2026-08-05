@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
 import { getClaimsOrNull } from "@/lib/auth/recovery-exchange";
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 
 import {

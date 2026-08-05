@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 
 import {
   createInviteCookieValue,

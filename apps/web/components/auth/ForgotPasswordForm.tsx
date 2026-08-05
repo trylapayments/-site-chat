@@ -11,10 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  initialAuthActionState,
-  requestPasswordResetAction,
-} from "@/lib/auth/actions";
+import { requestPasswordResetAction } from "@/lib/auth/actions";
+import { initialAuthActionState } from "@/lib/auth/errors";
 
 export function ForgotPasswordForm({
   defaultEmail,
