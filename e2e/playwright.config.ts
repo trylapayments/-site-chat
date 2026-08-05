@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webServerEnv = {
   NODE_ENV: "development",
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
@@ -50,6 +53,7 @@ export default defineConfig({
   webServer: [
     {
       command: "node host-server.mjs",
+      cwd: path.join(repoRoot, "e2e"),
       url: "http://localhost:3001",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
@@ -57,6 +61,7 @@ export default defineConfig({
     {
       command:
         "rm -rf apps/web/.next && pnpm --filter @site-chat/web exec next dev --hostname localhost --port 3000",
+      cwd: repoRoot,
       url: "http://localhost:3000/widget/loader.js",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,

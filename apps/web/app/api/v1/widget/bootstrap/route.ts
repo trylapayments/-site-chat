@@ -93,7 +93,11 @@ export async function GET(request: Request) {
         },
       },
     );
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[widget bootstrap]", error);
+    }
+
     return widgetJsonError(
       "INTERNAL_ERROR",
       GENERIC_INTERNAL_MESSAGE,
