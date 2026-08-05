@@ -32,7 +32,7 @@ const getClaimsMock = vi.fn(() => ({
   error: null,
 }));
 
-vi.mock("@/lib/env", () => ({
+vi.mock("@/lib/env.server", () => ({
   env: {
     AUTH_COOKIE_SECRET: TEST_SECRET,
     NODE_ENV: "test",

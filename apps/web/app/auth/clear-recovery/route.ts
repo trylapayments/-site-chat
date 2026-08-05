@@ -4,7 +4,8 @@ import { verifyRecoveryCleanupToken } from "@/lib/auth/recovery-cleanup-token";
 import { clearRecoveryCookieOnResponse } from "@/lib/auth/recovery-cookie.server";
 import { sanitizeRecoveryClearDestination } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
-import { clientEnv, env } from "@/lib/env";
+import { clientEnv } from "@/lib/env.client";
+import { env } from "@/lib/env.server";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

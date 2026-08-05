@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 
 const REALTIME_TOKEN_TTL_SECONDS = 15 * 60;
 

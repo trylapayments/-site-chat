@@ -74,6 +74,7 @@ export const widgetMessageItemSchema = z
     sender_type: z.enum(["visitor", "agent", "system"]),
     body: z.string(),
     created_at: z.string(),
+    client_message_id: z.string().uuid().nullable().optional(),
   })
   .strict();
 

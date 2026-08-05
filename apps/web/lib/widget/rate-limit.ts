@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 
 export function hashRateLimitKey(scope: string, identifier: string): string {
   return createHmac("sha256", env.RATE_LIMIT_SECRET)

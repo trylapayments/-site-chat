@@ -26,7 +26,8 @@ import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
 import { clearInviteCookie } from "@/lib/auth/invite-cookie.server";
 import { redirectAuthenticatedUser } from "@/lib/workspace/redirect.server";
 import { createClient } from "@/lib/supabase/server";
-import { clientEnv, env } from "@/lib/env";
+import { clientEnv } from "@/lib/env.client";
+import { env } from "@/lib/env.server";
 import { revalidatePath } from "next/cache";
 
 function mapFieldErrors(

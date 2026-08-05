@@ -7,7 +7,7 @@ import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
 import { buildLoginUrl, toAppRoute } from "@/lib/auth/redirect";
 import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 
 export default async function AppLayout({
   children,

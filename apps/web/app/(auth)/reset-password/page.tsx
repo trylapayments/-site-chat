@@ -7,7 +7,7 @@ import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { env } from "@/lib/env";
+import { env } from "@/lib/env.server";
 
 export default async function ResetPasswordPage() {
   const supabase = await createClient();

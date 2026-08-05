@@ -1,3 +1,7 @@
+import { vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 Object.assign(process.env, {
   NODE_ENV: "test",
   NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
