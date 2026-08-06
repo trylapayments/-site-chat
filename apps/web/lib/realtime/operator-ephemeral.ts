@@ -259,6 +259,12 @@ export function subscribeOperatorConversationEphemeral(input: {
     if (decision.action === "stopped") {
       clearTypingIdleTimer();
       void emitTypingStopped();
+      return;
+    }
+
+    // Meaningful input while already typing (throttled): keep idle clock fresh.
+    if (text.trim().length > 0 && localTyping) {
+      armTypingIdleTimer();
     }
   }
 

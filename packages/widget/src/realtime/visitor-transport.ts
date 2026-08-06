@@ -196,6 +196,12 @@ export class WidgetRealtimeTransport {
     if (decision.action === "stopped") {
       this.clearTypingIdleTimer();
       void this.emitTypingStopped();
+      return;
+    }
+
+    // Meaningful input while already typing (throttled): keep idle clock fresh.
+    if (text.trim().length > 0 && this.localTyping) {
+      this.armTypingIdleTimer();
     }
   }
 

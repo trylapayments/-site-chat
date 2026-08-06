@@ -122,7 +122,6 @@ export function LiveConversationThread({
           className="text-muted-foreground text-xs"
           data-testid="visitor-presence"
           data-presence={visitorOnline ? "online" : "offline"}
-          aria-live="polite"
         >
           <span
             className={

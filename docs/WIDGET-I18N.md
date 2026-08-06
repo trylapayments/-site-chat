@@ -137,7 +137,7 @@ Invalid stored locales are normalized to English at the SQL and Zod boundaries. 
 3. Use the key from `messagesCopy` in `WidgetApp` — no hardcoded UI chrome strings.
 4. Run `pnpm --filter @site-chat/widget i18n:check`.
 
-Preserve interpolation placeholders exactly (none are required today; the checker enforces parity).
+Preserve interpolation placeholders exactly. `agentTyping` requires `{{name}}` (filled with a safe display name or localized `agentLabel`). The checker enforces placeholder parity against English.
 
 Do not translate brand name **Site Chat** or visitor/agent message bodies. Workspace greeting text is configuration, not dictionary copy.
 

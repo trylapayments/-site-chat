@@ -163,7 +163,9 @@ CREATE POLICY "workspace_storage" ON storage.objects
 
 Supabase Realtime channels include workspace or conversation ID. Clients subscribe only to channels they are authorized for. RLS on underlying tables prevents unauthorized postgres_changes events from being delivered.
 
-Broadcast channels (typing, presence) validate membership before allowing publish/subscribe via server-side channel authorization (Supabase Realtime authorization hooks).
+Broadcast channels (typing, presence) validate membership before allowing publish/subscribe via server-side channel authorization (Supabase Realtime authorization hooks / RLS on `realtime.messages`).
+
+**Typing / presence (PR 4D-2):** Client publish is authorized at **topic + extension** granularity (`broadcast` / `presence`), not per event name. A scoped visitor JWT may therefore publish any Broadcast event on its own `widget-conversation:{topic}` channel (including forged `message.created`). Cross-tenant isolation remains enforced by exact topic matching. Receivers must validate payloads and filter by expected `actorRole` / `role`; do not treat ephemeral Broadcast/Presence metadata as authenticated identity. Durable message authority remains PostgreSQL + HTTP catch-up.
 
 ### 4.4 Cross-Tenant Attack Scenarios
 

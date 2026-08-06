@@ -323,7 +323,7 @@ SELECT ok(
     FROM pg_policies
     WHERE schemaname = 'realtime'
       AND tablename = 'messages'
-      AND policyname = 'widget_realtime_receive_own_broadcast'
+      AND policyname = 'widget_realtime_receive_own_topic'
   ),
   'widget_realtime realtime.messages policy exists'
 );
