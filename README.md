@@ -73,15 +73,15 @@ site-chat/
 
 ## Scripts
 
-| Command             | Description                 |
-| ------------------- | --------------------------- |
-| `pnpm dev`          | Start Next.js dev server    |
-| `pnpm build`        | Build all packages          |
-| `pnpm lint`         | Run ESLint across workspace |
-| `pnpm typecheck`    | Run TypeScript checks       |
-| `pnpm format`       | Format with Prettier        |
-| `pnpm format:check` | Check formatting            |
-| `pnpm local:refresh` | Rebuild shared/widget and clear Next.js cache |
+| Command              | Description                                    |
+| -------------------- | ---------------------------------------------- |
+| `pnpm dev`           | Start Next.js dev server                       |
+| `pnpm build`         | Build all packages                             |
+| `pnpm lint`          | Run ESLint across workspace                    |
+| `pnpm typecheck`     | Run TypeScript checks                          |
+| `pnpm format`        | Format with Prettier                           |
+| `pnpm format:check`  | Check formatting                               |
+| `pnpm local:refresh` | Rebuild shared/widget and clear Next.js cache  |
 | `pnpm local:restart` | Refresh local artifacts, then start dev server |
 
 ## Documentation
