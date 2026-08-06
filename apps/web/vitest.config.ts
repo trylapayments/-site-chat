@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       "lib/**/*.test.ts",
       "lib/**/*.integration.test.ts",
+      "app/widget/embed/**/*.test.ts",
       "app/widget/embed/**/*.test.tsx",
     ],
     setupFiles: ["./vitest.setup.ts"],
