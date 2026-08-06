@@ -14,6 +14,23 @@ This document covers **visitor widget interface localization** only. It does **n
 
 ---
 
+## Translation provenance
+
+Dictionary **key completeness** is enforced by `i18n:check` (every locale has every key; placeholders match English). That is **not** the same as human-certified linguistic quality.
+
+| Source class | Locales |
+|--------------|---------|
+| Canonical / authored | `en` (source of truth) |
+| Prior product copy, reviewed | `ru` (pre-existing widget dictionary, retained/extended) |
+| Machine-assisted + manual UI review | `he`, `ar`, `fa` (RTL-critical), plus major LTR: `de`, `es`, `fr`, `it`, `pt-PT`, `pt-BR`, `nl`, `pl`, `uk`, `zh-CN`, `zh-TW`, `ja`, `ko` |
+| Machine-assisted (short UI chrome; needs native-speaker polish) | Remaining registry locales (`hy`, `az`, `bg`, `ca`, `hr`, `cs`, `da`, `et`, `fi`, `ka`, `el`, `hi`, `hu`, `is`, `id`, `kk`, `lv`, `lt`, `mg`, `ms`, `nb`, `nn`, `ro`, `sr`, `sk`, `sl`, `sv`, `th`, `tr`, `vi`) |
+
+Do **not** describe machine-assisted dictionaries as “human-complete translations.” Prefer native-speaker review for customer-facing production of lower-resource locales.
+
+Legitimate English loanwords in some locales (`Send`, `Agent`, `System`, `Chat`) and brand-preserving `poweredBy` lines that keep “Site Chat” are intentional, not missing translations.
+
+---
+
 ## Supported locales
 
 Canonical BCP 47 codes live in `packages/shared/src/i18n/widget-locales.ts`. Do not scatter locale arrays across packages.
