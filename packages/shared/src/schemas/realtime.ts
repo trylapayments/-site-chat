@@ -23,6 +23,10 @@ export const widgetRealtimeTokenDataSchema = z
     token: z.string().min(1),
     topic: z.string().regex(/^widget-conversation:[a-f0-9]{64}$/),
     expiresAt: z.string(),
+    /** Public Supabase project URL for the widget Realtime WebSocket client. */
+    supabaseUrl: z.string().url(),
+    /** Public anon/publishable key paired with supabaseUrl (not a secret). */
+    supabaseAnonKey: z.string().min(1),
   })
   .strict();
 

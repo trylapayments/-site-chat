@@ -5,7 +5,15 @@ import {
   type ConnectionState,
   type MessageView,
 } from "@site-chat/shared";
-import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 
 import { WidgetApiClient, type BootstrapPayload, type WidgetPublicConfig } from "../api/client";
@@ -25,6 +33,7 @@ import {
   readSessionToken,
   writeSessionToken,
 } from "../session/storage";
+import { isNearBottom, scrollContainerToBottom, shouldAutoScroll } from "./scroll";
 
 const MESSAGE_SOURCE = "sitechat-embed";
 
@@ -70,10 +79,42 @@ function WidgetApp() {
   const transportRef = useRef<WidgetRealtimeTransport | null>(null);
   const pendingClientMessageIdRef = useRef<string | null>(null);
   const messagesRef = useRef<MessageView[]>([]);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const forceScrollRef = useRef(false);
+  const nearBottomRef = useRef(true);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || !open) {
+      return;
+    }
+
+    const force = forceScrollRef.current;
+    forceScrollRef.current = false;
+
+    if (
+      !shouldAutoScroll({
+        force,
+        nearBottom: nearBottomRef.current,
+      })
+    ) {
+      return;
+    }
+
+    scrollContainerToBottom(container);
+    // After paint, snap again in case bubble height settled late.
+    requestAnimationFrame(() => {
+      const latest = messagesContainerRef.current;
+      if (latest) {
+        scrollContainerToBottom(latest);
+        nearBottomRef.current = true;
+      }
+    });
+  }, [messages, open]);
 
   const api = useMemo(() => new WidgetApiClient(window.location.origin), []);
 
@@ -84,22 +125,8 @@ function WidgetApp() {
   const config: WidgetPublicConfig | null =
     state.status === "ready" ? state.init.config : (initRef.current?.config ?? null);
 
-  const startTransport = useCallback(
-    async (init: InitPayload, sessionToken: string, initialMessages: MessageView[]) => {
-      transportRef.current?.stop();
-      const transport = new WidgetRealtimeTransport(api, {
-        onMessages: setMessages,
-        onConnectionState: setConnectionState,
-      });
-      transportRef.current = transport;
-      await transport.start({
-        embedToken: init.embedToken,
-        sessionToken,
-        initialMessages,
-      });
-    },
-    [api],
-  );
+  const readySessionToken = state.status === "ready" ? state.sessionToken : null;
+  const readyEmbedToken = state.status === "ready" ? state.init.embedToken : null;
 
   const initialize = useCallback(
     async (init: InitPayload) => {
@@ -131,13 +158,14 @@ function WidgetApp() {
           locale: session.locale,
         });
 
-        let initialMessages: MessageView[] = [];
         if (session.hasConversation) {
           const listed = await api.listMessages({
             embedToken: init.embedToken,
             sessionToken: session.sessionToken,
           });
-          initialMessages = mapWidgetHttpMessages(listed.items);
+          const initialMessages = mapWidgetHttpMessages(listed.items);
+          forceScrollRef.current = true;
+          nearBottomRef.current = true;
           setMessages(initialMessages);
         }
       } catch {
@@ -193,18 +221,44 @@ function WidgetApp() {
   }, [open, state]);
 
   useEffect(() => {
-    if (state.status !== "ready" || !open) {
+    const init = initRef.current;
+    if (!readySessionToken || !readyEmbedToken || !open || !init) {
       transportRef.current?.stop();
+      transportRef.current = null;
       return;
     }
 
-    const snapshot = transportRef.current?.getMessages() ?? messages;
-    void startTransport(state.init, state.sessionToken, snapshot);
+    const sessionToken = readySessionToken;
+    const snapshot = transportRef.current?.getMessages() ?? messagesRef.current;
+
+    void (async () => {
+      transportRef.current?.stop();
+
+      const transport = new WidgetRealtimeTransport(api, {
+        onMessages: (next) => {
+          setMessages(next);
+        },
+        onConnectionState: setConnectionState,
+      });
+      transportRef.current = transport;
+      await transport.start({
+        embedToken: init.embedToken,
+        sessionToken,
+        initialMessages: snapshot,
+      });
+
+      // StrictMode/effect cleanup may have replaced or cleared this transport.
+      if (transportRef.current !== transport) {
+        transport.stop();
+      }
+    })();
 
     return () => {
-      transportRef.current?.stop();
+      const current = transportRef.current;
+      transportRef.current = null;
+      current?.stop();
     };
-  }, [open, startTransport, state]);
+  }, [api, open, readyEmbedToken, readySessionToken]);
 
   useEffect(() => {
     if (!open) {
@@ -239,6 +293,8 @@ function WidgetApp() {
       nextSequence: maxSequenceNumber(messages) + 1,
     });
 
+    forceScrollRef.current = true;
+    nearBottomRef.current = true;
     setMessages((current) => mergeMessages(current, [], [optimistic]));
     setComposer("");
     setSending(true);
@@ -269,10 +325,21 @@ function WidgetApp() {
       );
 
       messagesRef.current = mergedMessages;
+      forceScrollRef.current = true;
+      nearBottomRef.current = true;
       setMessages(mergedMessages);
 
       if (!transportRef.current) {
-        await startTransport(state.init, state.sessionToken, mergedMessages);
+        const transport = new WidgetRealtimeTransport(api, {
+          onMessages: setMessages,
+          onConnectionState: setConnectionState,
+        });
+        transportRef.current = transport;
+        await transport.start({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+          initialMessages: mergedMessages,
+        });
       } else {
         transportRef.current.replaceMessages(mergedMessages);
         await transportRef.current.ensureLiveConnection({
@@ -384,7 +451,12 @@ function WidgetApp() {
           </header>
 
           <div
+            ref={messagesContainerRef}
             aria-live="polite"
+            data-testid="widget-messages"
+            onScroll={(event) => {
+              nearBottomRef.current = isNearBottom(event.currentTarget);
+            }}
             style={{
               flex: 1,
               overflowY: "auto",
@@ -455,6 +527,7 @@ function WidgetApp() {
                 </article>
               );
             })}
+            <div data-testid="widget-messages-end" aria-hidden="true" />
           </div>
 
           <footer style={{ borderTop: "1px solid #e5e7eb", padding: "0.75rem" }}>
