@@ -3,6 +3,7 @@ import {
   widgetRealtimeTokenRequestSchema,
 } from "@site-chat/shared";
 
+import { env } from "@/lib/env.server";
 import { verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
 import {
@@ -126,6 +127,10 @@ export async function POST(request: Request) {
         token: token.token,
         topic: resolved.topic,
         expiresAt: token.expiresAt.toISOString(),
+        // Served at token-mint time so the committed widget bundle is not tied
+        // to CI placeholder URL/key baked into public/widget/app.js.
+        supabaseUrl: env.NEXT_PUBLIC_SUPABASE_URL,
+        supabaseAnonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       },
       requestId,
       {

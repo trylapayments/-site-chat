@@ -18,6 +18,20 @@ export type WidgetTransportCallbacks = {
   onConnectionState: (state: ConnectionState) => void;
 };
 
+type RealtimeCredentials = {
+  token: string;
+  topic: string;
+  expiresAt: string;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+};
+
+type LifecycleHandlers = {
+  onVisible: () => void;
+  onOnline: () => void;
+  onOffline: () => void;
+};
+
 function isRetriableWidgetRealtimeError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -32,6 +46,28 @@ function isRetriableWidgetRealtimeError(error: unknown): boolean {
   );
 }
 
+/**
+ * Prefer URL/key from the realtime-token response (server env). Fall back to
+ * Vite-injected defines only when they are real — never use CI placeholders.
+ */
+export function resolveWidgetSupabaseConfig(input?: {
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+}): { url: string; key: string } | null {
+  const url = (input?.supabaseUrl || __SITECHAT_SUPABASE_URL__ || "").trim();
+  const key = (input?.supabaseAnonKey || __SITECHAT_SUPABASE_KEY__ || "").trim();
+
+  if (!url || !key) {
+    return null;
+  }
+
+  if (url.includes("placeholder.supabase") || key.startsWith("placeholder-")) {
+    return null;
+  }
+
+  return { url, key };
+}
+
 export class WidgetRealtimeTransport {
   private client: SupabaseClient | null = null;
   private channel: RealtimeChannel | null = null;
@@ -41,6 +77,8 @@ export class WidgetRealtimeTransport {
   private running = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
+  private lifecycle: LifecycleHandlers | null = null;
+  private subscribeGeneration = 0;
 
   constructor(
     private readonly api: WidgetApiClient,
@@ -63,7 +101,9 @@ export class WidgetRealtimeTransport {
 
   stop() {
     this.running = false;
+    this.subscribeGeneration += 1;
     this.clearRetryTimer();
+    this.detachLifecycle();
     void this.teardown();
   }
 
@@ -119,6 +159,8 @@ export class WidgetRealtimeTransport {
   }
 
   private attachLifecycle(embedToken: string, sessionToken: string) {
+    this.detachLifecycle();
+
     const onVisible = () => {
       if (document.visibilityState === "visible" && this.running) {
         void this.catchUp({ embedToken, sessionToken });
@@ -139,9 +181,21 @@ export class WidgetRealtimeTransport {
       }
     };
 
+    this.lifecycle = { onVisible, onOnline, onOffline };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
+  }
+
+  private detachLifecycle() {
+    if (!this.lifecycle) {
+      return;
+    }
+
+    document.removeEventListener("visibilitychange", this.lifecycle.onVisible);
+    window.removeEventListener("online", this.lifecycle.onOnline);
+    window.removeEventListener("offline", this.lifecycle.onOffline);
+    this.lifecycle = null;
   }
 
   async ensureLiveConnection(input: { embedToken: string; sessionToken: string }) {
@@ -172,6 +226,10 @@ export class WidgetRealtimeTransport {
     }
   }
 
+  private isSubscriptionCurrent(generation: number): boolean {
+    return this.running && generation === this.subscribeGeneration;
+  }
+
   private async ensureSubscription(embedToken: string, sessionToken: string) {
     if (!this.running) {
       return;
@@ -193,17 +251,27 @@ export class WidgetRealtimeTransport {
       return;
     }
 
+    const generation = ++this.subscribeGeneration;
     this.clearRetryTimer();
     await this.teardown();
+
+    if (!this.isSubscriptionCurrent(generation)) {
+      return;
+    }
+
     this.callbacks.onConnectionState("connecting");
 
-    let credentials: { token: string; topic: string; expiresAt: string };
+    let credentials: RealtimeCredentials;
     try {
       credentials = await this.api.createRealtimeToken({
         embedToken,
         sessionToken,
       });
     } catch (error) {
+      if (!this.isSubscriptionCurrent(generation)) {
+        return;
+      }
+
       if (isRetriableWidgetRealtimeError(error)) {
         this.callbacks.onConnectionState("reconnecting");
         this.scheduleSubscriptionRetry(embedToken, sessionToken);
@@ -214,19 +282,25 @@ export class WidgetRealtimeTransport {
       return;
     }
 
+    if (!this.isSubscriptionCurrent(generation)) {
+      return;
+    }
+
     this.retryAttempt = 0;
     this.topic = credentials.topic;
     this.tokenExpiresAt = new Date(credentials.expiresAt).getTime();
 
-    const url = __SITECHAT_SUPABASE_URL__;
-    const key = __SITECHAT_SUPABASE_KEY__;
+    const supabase = resolveWidgetSupabaseConfig({
+      supabaseUrl: credentials.supabaseUrl,
+      supabaseAnonKey: credentials.supabaseAnonKey,
+    });
 
-    if (!url || !key) {
+    if (!supabase) {
       this.callbacks.onConnectionState("failed");
       return;
     }
 
-    this.client = createClient(url, key, {
+    this.client = createClient(supabase.url, supabase.key, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -234,6 +308,12 @@ export class WidgetRealtimeTransport {
     });
 
     await this.client.realtime.setAuth(credentials.token);
+
+    if (!this.isSubscriptionCurrent(generation)) {
+      await this.teardown();
+      return;
+    }
+
     this.subscribeChannel(embedToken, sessionToken);
   }
 
@@ -268,13 +348,26 @@ export class WidgetRealtimeTransport {
     }
 
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      // Drop the failed channel so ensureSubscription does not early-return
+      // on a dead RealtimeChannel and skip the scheduled retry.
+      const failed = this.channel;
+      this.channel = null;
+      if (failed && this.client) {
+        void this.client.removeChannel(failed);
+      }
+
       this.callbacks.onConnectionState("reconnecting");
       this.scheduleSubscriptionRetry(embedToken, sessionToken);
       return;
     }
 
     if (status === "CLOSED") {
-      this.callbacks.onConnectionState("disconnected");
+      // Clear the dead channel so a later ensureSubscription (online /
+      // visibility / retry) does not early-return on a stale RealtimeChannel.
+      this.channel = null;
+      if (this.running) {
+        this.callbacks.onConnectionState("disconnected");
+      }
     }
   }
 

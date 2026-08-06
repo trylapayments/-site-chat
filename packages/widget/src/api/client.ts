@@ -152,10 +152,13 @@ export class WidgetApiClient {
     return this.parseResponse(response);
   }
 
-  async createRealtimeToken(input: {
-    embedToken: string;
-    sessionToken: string;
-  }): Promise<{ token: string; topic: string; expiresAt: string }> {
+  async createRealtimeToken(input: { embedToken: string; sessionToken: string }): Promise<{
+    token: string;
+    topic: string;
+    expiresAt: string;
+    supabaseUrl: string;
+    supabaseAnonKey: string;
+  }> {
     const response = await fetch(new URL("/api/v1/widget/realtime-token", this.apiBase), {
       method: "POST",
       headers: {
