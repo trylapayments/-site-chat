@@ -5,6 +5,7 @@ import {
 
 import { env } from "@/lib/env.server";
 import { verifyEmbedContext } from "@/lib/widget/context";
+import { getRequestOrigin } from "@/lib/widget/origin";
 import { createRequestId } from "@/lib/widget/embed-token";
 import {
   hashSessionRateLimitKey,
@@ -55,6 +56,7 @@ function isRetriableWidgetRealtimeError(error: unknown): boolean {
 
 export async function POST(request: Request) {
   const requestId = createRequestId();
+  const requestOrigin = getRequestOrigin(request);
 
   try {
     const json = (await request.json()) as unknown;
@@ -138,12 +140,15 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
+    const corsHeadersInit = corsHeadersForOrigin(requestOrigin);
+
     if (isSessionError(error) || isRetriableWidgetRealtimeError(error)) {
       return widgetJsonError(
         "SESSION_EXPIRED",
         GENERIC_SESSION_MESSAGE,
         401,
         requestId,
+        corsHeadersInit,
       );
     }
 
@@ -152,6 +157,7 @@ export async function POST(request: Request) {
       GENERIC_INTERNAL_MESSAGE,
       500,
       requestId,
+      corsHeadersInit,
     );
   }
 }
@@ -168,6 +174,14 @@ function corsHeaders(origin: string): Headers {
   headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Vary", "Origin");
   return headers;
+}
+
+function corsHeadersForOrigin(origin: string | null): Headers | undefined {
+  if (!origin) {
+    return undefined;
+  }
+
+  return corsHeaders(origin);
 }
 
 function isSessionError(error: unknown): boolean {

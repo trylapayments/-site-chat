@@ -18,11 +18,36 @@ pnpm install
 cp .env.example .env.local
 # Edit .env.local with your Supabase credentials
 
+# Start Supabase (requires Docker)
+supabase start
+
+# Rebuild shared packages and clear stale Next.js cache
+pnpm local:refresh
+
 # Start development server
 pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### Local development refresh
+
+After pulling changes, run `pnpm local:refresh` when local runtime errors look misleading or when shared package output may be stale. It is **required after pulling changes that affect `packages/shared`** (schemas, types, validators, or constants). Without a refresh, the widget bundle and Next.js app can keep using stale compiled output from `packages/shared/dist`, which leads to confusing validation or type mismatches at runtime.
+
+The refresh script:
+
+1. rebuilds `@site-chat/shared`
+2. rebuilds `@site-chat/widget` (so committed/public widget bundles pick up updated schemas/types)
+3. removes `apps/web/.next` (clears cached Next.js build output)
+
+Normal local startup sequence:
+
+1. Ensure Docker is running (for Supabase)
+2. `supabase start`
+3. `pnpm local:refresh`
+4. `pnpm dev`
+
+Use `pnpm local:restart` to run the refresh steps and then start the dev server in one command.
 
 ## Docker Development
 
@@ -56,6 +81,8 @@ site-chat/
 | `pnpm typecheck`    | Run TypeScript checks       |
 | `pnpm format`       | Format with Prettier        |
 | `pnpm format:check` | Check formatting            |
+| `pnpm local:refresh` | Rebuild shared/widget and clear Next.js cache |
+| `pnpm local:restart` | Refresh local artifacts, then start dev server |
 
 ## Documentation
 

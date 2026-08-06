@@ -9,6 +9,7 @@ export default defineConfig({
       "lib/**/*.integration.test.ts",
       "app/widget/embed/**/*.test.ts",
       "app/widget/embed/**/*.test.tsx",
+      "app/api/v1/widget/realtime-token/**/*.test.ts",
     ],
     setupFiles: ["./vitest.setup.ts"],
   },
