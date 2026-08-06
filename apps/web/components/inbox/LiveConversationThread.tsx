@@ -9,11 +9,12 @@ import {
   toMessageViewFromOperatorRow,
   type MessageView,
 } from "@site-chat/shared";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
 import { markConversationReadAction } from "@/lib/inbox/actions";
+import { formatRelativeTime } from "@/lib/inbox/search-params";
 import { useLiveConversationThread } from "@/lib/realtime/use-operator-inbox";
 
 function mapInitialMessages(messages: MessageItem[]): MessageView[] {
@@ -44,6 +45,13 @@ export function LiveConversationThread({
   initialMessages: MessageItem[];
   canSend: boolean;
 }) {
+  // Stabilize mapped props so useLiveConversationThread's effect does not see a
+  // fresh array reference on every parent re-render.
+  const mappedInitialMessages = useMemo(
+    () => mapInitialMessages(initialMessages),
+    [initialMessages],
+  );
+
   const {
     messages,
     setMessages,
@@ -55,7 +63,7 @@ export function LiveConversationThread({
     workspaceId,
     workspaceSlug,
     conversationId,
-    initialMessages: mapInitialMessages(initialMessages),
+    initialMessages: mappedInitialMessages,
   });
 
   return (
@@ -132,12 +140,7 @@ function MessageList({
           <header className="mb-1 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{message.senderLabel}</span>
             <time className="text-muted-foreground text-xs">
-              {new Intl.DateTimeFormat(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-              }).format(new Date(message.createdAt))}
+              {formatRelativeTime(message.createdAt)}
             </time>
           </header>
           <p className="text-sm whitespace-pre-wrap">{message.body}</p>

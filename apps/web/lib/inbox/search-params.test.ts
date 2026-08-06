@@ -60,6 +60,14 @@ describe("formatRelativeTime", () => {
     );
   });
 
+  it("formats thread message timestamps deterministically (hydration regression)", () => {
+    // Matches LiveConversationThread timestamps: en-US + UTC, date/time joined
+    // with an app-owned separator — not Intl(undefined) glue ("at" vs ", ").
+    expect(formatRelativeTime("2024-08-06T08:55:00.000Z")).toBe(
+      "Aug 6, 8:55 AM",
+    );
+  });
+
   it("joins date and time with our literal comma separator, not Intl glue", () => {
     const formatted = formatRelativeTime("2024-08-05T22:43:00.000Z");
 
