@@ -4,6 +4,7 @@ import {
   formatConversationContactLabel,
   formatRelativeTime,
   INBOX_ACTIVITY_DATE_LOCALE,
+  INBOX_ACTIVITY_DATE_TIME_SEPARATOR,
   INBOX_ACTIVITY_DATE_TIME_ZONE,
   parseInboxListQuery,
 } from "@/lib/inbox/search-params";
@@ -51,38 +52,22 @@ describe("formatRelativeTime", () => {
     expect(formatRelativeTime("not-a-date")).toBe("—");
   });
 
-  it("formats a timestamp identically for SSR and client with fixed locale/timeZone", () => {
-    const timestamp = "2024-08-05T18:43:00.000Z";
-
-    // Simulates server and browser both calling the same pure formatter.
-    const serverHtml = formatRelativeTime(timestamp);
-    const clientHtml = formatRelativeTime(timestamp);
-
-    expect(serverHtml).toBe(clientHtml);
-    expect(serverHtml).toBe("Aug 5, 6:43 PM");
-
-    // Pin policy: en-US + UTC (not runtime default locale/timeZone).
+  it("formats a fixed ISO timestamp to an exact deterministic string", () => {
     expect(INBOX_ACTIVITY_DATE_LOCALE).toBe("en-US");
     expect(INBOX_ACTIVITY_DATE_TIME_ZONE).toBe("UTC");
-    expect(
-      new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: INBOX_ACTIVITY_DATE_TIME_ZONE,
-      }).format(new Date(timestamp)),
-    ).toBe(serverHtml);
+    expect(formatRelativeTime("2024-08-05T22:43:00.000Z")).toBe(
+      "Aug 5, 10:43 PM",
+    );
+  });
 
-    // Confirms we are not using en-GB-style output that caused the mismatch.
-    expect(serverHtml).not.toBe(
-      new Intl.DateTimeFormat("en-GB", {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: "UTC",
-      }).format(new Date(timestamp)),
+  it("joins date and time with our literal comma separator, not Intl glue", () => {
+    const formatted = formatRelativeTime("2024-08-05T22:43:00.000Z");
+
+    expect(INBOX_ACTIVITY_DATE_TIME_SEPARATOR).toBe(", ");
+    expect(formatted).toContain(INBOX_ACTIVITY_DATE_TIME_SEPARATOR);
+    expect(formatted).not.toContain(" at ");
+    expect(formatted).toBe(
+      `Aug 5${INBOX_ACTIVITY_DATE_TIME_SEPARATOR}10:43 PM`,
     );
   });
 });
