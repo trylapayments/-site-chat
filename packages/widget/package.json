@@ -8,6 +8,7 @@
   "scripts": {
     "build": "vite build",
     "verify:bundle-paths": "node scripts/verify-bundle-paths.mjs",
+    "i18n:check": "node scripts/i18n-check.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"

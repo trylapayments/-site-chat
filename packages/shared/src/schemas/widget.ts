@@ -1,8 +1,28 @@
 import { z } from "zod";
 
-export const widgetLocaleSchema = z.enum(["en", "ru"]);
+import { WIDGET_LOCALE_CODES, type WidgetLocale } from "../i18n/widget-locales";
+import { normalizeStoredWidgetLocale } from "../i18n/resolve-widget-locale";
 
-export type WidgetLocale = z.infer<typeof widgetLocaleSchema>;
+export const widgetLocaleSchema = z.enum(WIDGET_LOCALE_CODES);
+
+/**
+ * Accepts canonical codes and common aliases; invalid values become English.
+ * Use at bootstrap/settings boundaries so bad stored data never breaks the widget.
+ */
+export const widgetLocaleInputSchema = z.preprocess(
+  (value) => normalizeStoredWidgetLocale(value),
+  widgetLocaleSchema,
+);
+
+/** Optional locale field: absent/null stays unset; invalid strings become English. */
+export const optionalWidgetLocaleInputSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  return normalizeStoredWidgetLocale(value);
+}, widgetLocaleSchema.optional());
+
+export type { WidgetLocale };
 
 export const widgetPublicKeySchema = z
   .string()
@@ -21,7 +41,8 @@ export type WidgetBranding = z.infer<typeof widgetBrandingSchema>;
 
 export const widgetPublicConfigSchema = z
   .object({
-    locale: widgetLocaleSchema,
+    /** Canonical widget UI locale (public branding/config only). */
+    locale: widgetLocaleInputSchema,
     greetingMessage: z.string().min(1).max(500),
     reopenWindowHours: z.number().int().min(1).max(720),
     branding: widgetBrandingSchema,
@@ -45,7 +66,7 @@ export type WidgetBootstrapData = z.infer<typeof widgetBootstrapDataSchema>;
 export const widgetSessionRequestSchema = z
   .object({
     embedToken: z.string().min(1),
-    locale: widgetLocaleSchema.optional(),
+    locale: optionalWidgetLocaleInputSchema,
     pageUrl: z.string().url().optional().nullable(),
     referrer: z.string().optional().nullable(),
   })
@@ -59,7 +80,7 @@ export const widgetSessionDataSchema = z
   .object({
     sessionToken: z.string().min(1),
     expiresAt: z.string(),
-    locale: widgetLocaleSchema,
+    locale: widgetLocaleInputSchema,
     hasConversation: z.boolean(),
     conversationStatus: widgetConversationStatusSchema.nullable(),
   })
@@ -163,7 +184,7 @@ export const widgetSettingsSchema = z
   .object({
     widget: z
       .object({
-        locale: widgetLocaleSchema.optional(),
+        locale: optionalWidgetLocaleInputSchema,
         greetingMessage: z.string().min(1).max(500).optional(),
         reopenWindowHours: z.number().int().min(1).max(720).optional(),
         position: z.enum(["bottom-right", "bottom-left"]).optional(),

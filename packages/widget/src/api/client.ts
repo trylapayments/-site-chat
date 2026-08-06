@@ -1,3 +1,5 @@
+import type { WidgetLocale } from "@site-chat/shared";
+
 export const WIDGET_EMBED_TOKEN_HEADER = "X-SiteChat-Embed-Token";
 
 export type WidgetBranding = {
@@ -8,7 +10,7 @@ export type WidgetBranding = {
 };
 
 export type WidgetPublicConfig = {
-  locale: "en" | "ru";
+  locale: WidgetLocale;
   greetingMessage: string;
   reopenWindowHours: number;
   branding: WidgetBranding;
@@ -25,7 +27,7 @@ export type BootstrapPayload = {
 export type SessionPayload = {
   sessionToken: string;
   expiresAt: string;
-  locale: "en" | "ru";
+  locale: WidgetLocale;
   hasConversation: boolean;
   conversationStatus: "open" | "pending" | "resolved" | "closed" | null;
 };
@@ -69,7 +71,7 @@ export class WidgetApiClient {
   async createSession(input: {
     embedToken: string;
     sessionToken?: string | null;
-    locale?: "en" | "ru";
+    locale?: WidgetLocale;
     pageUrl?: string;
     referrer?: string;
   }): Promise<SessionPayload> {

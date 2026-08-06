@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(38);
+SELECT plan(41);
 
 CREATE TEMP TABLE widget_fixtures (
   key text PRIMARY KEY,
@@ -180,6 +180,30 @@ SELECT is(
   ) ->> 'locale',
   'ru',
   'resumes existing session and updates locale'
+);
+
+SELECT is(
+  public.widget_create_or_resume_visitor_session(
+    (SELECT value::uuid FROM widget_fixtures WHERE key = 'workspace_a'),
+    (SELECT value FROM widget_fixtures WHERE key = 'session_token_a'),
+    'he',
+    NULL,
+    NULL
+  ) ->> 'locale',
+  'he',
+  'accepts Hebrew canonical locale'
+);
+
+SELECT is(
+  app_private.normalize_widget_locale('zh-CN'),
+  'zh-CN',
+  'normalizes supported Simplified Chinese locale'
+);
+
+SELECT is(
+  app_private.normalize_widget_locale('nope'),
+  'en',
+  'invalid locale falls back to English'
 );
 
 -- ---------------------------------------------------------------------------

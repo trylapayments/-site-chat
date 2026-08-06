@@ -1,0 +1,25 @@
+import type { WidgetMessages } from "../types";
+
+export const messages_hr: WidgetMessages = {
+  launcherLabel: "Otvori chat",
+  launcherOpenLabel: "Zatvori chat",
+  closeLabel: "Zatvori",
+  composerPlaceholder: "Upišite poruku…",
+  sendLabel: "Pošalji",
+  sendingLabel: "Slanje…",
+  retryLabel: "Pokušaj ponovno",
+  reconnectingLabel: "Ponovno povezivanje…",
+  offlineLabel: "Veza je prekinuta. Ponovni pokušaj…",
+  connectionFailedLabel: "Ažuriranja uživo nisu dostupna.",
+  welcomeTitle: "Započnite razgovor",
+  loadError: "Nije moguće učitati chat.",
+  sessionError: "Sesija je istekla. Ponovno učitajte stranicu.",
+  sendError: "Slanje poruke nije uspjelo.",
+  poweredBy: "Pokreće Site Chat",
+  youLabel: "Vi",
+  agentLabel: "Agent",
+  systemLabel: "Sustav",
+  chatPanelLabel: "Chat",
+};
+
+export default messages_hr;

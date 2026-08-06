@@ -1,0 +1,25 @@
+import type { WidgetMessages } from "../types";
+
+export const messages_pt_PT: WidgetMessages = {
+  launcherLabel: "Abrir chat",
+  launcherOpenLabel: "Fechar chat",
+  closeLabel: "Fechar",
+  composerPlaceholder: "Escreva a sua mensagem…",
+  sendLabel: "Enviar",
+  sendingLabel: "A enviar…",
+  retryLabel: "Tentar novamente",
+  reconnectingLabel: "A restabelecer ligação…",
+  offlineLabel: "Ligação perdida. A tentar novamente…",
+  connectionFailedLabel: "Atualizações em direto indisponíveis.",
+  welcomeTitle: "Iniciar uma conversa",
+  loadError: "Não foi possível carregar o chat.",
+  sessionError: "Sessão expirada. Recarregue a página.",
+  sendError: "Falha ao enviar a mensagem.",
+  poweredBy: "Powered by Site Chat",
+  youLabel: "Tu",
+  agentLabel: "Agente",
+  systemLabel: "Sistema",
+  chatPanelLabel: "Chat",
+};
+
+export default messages_pt_PT;

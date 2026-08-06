@@ -1,0 +1,25 @@
+import type { WidgetMessages } from "../types";
+
+export const messages_sl: WidgetMessages = {
+  launcherLabel: "Odpri klepet",
+  launcherOpenLabel: "Zapri klepet",
+  closeLabel: "Zapri",
+  composerPlaceholder: "Vnesite sporočilo…",
+  sendLabel: "Pošlji",
+  sendingLabel: "Pošiljanje…",
+  retryLabel: "Poskusi znova",
+  reconnectingLabel: "Ponovno povezovanje…",
+  offlineLabel: "Povezava prekinjena. Ponovni poskus…",
+  connectionFailedLabel: "Posodobitve v živo niso na voljo.",
+  welcomeTitle: "Začni pogovor",
+  loadError: "Klepeta ni mogoče naložiti.",
+  sessionError: "Seja je potekla. Osvežite stran.",
+  sendError: "Pošiljanje sporočila ni uspelo.",
+  poweredBy: "Omogoča Site Chat",
+  youLabel: "Vi",
+  agentLabel: "Svetovalec",
+  systemLabel: "Sistem",
+  chatPanelLabel: "Klepet",
+};
+
+export default messages_sl;
