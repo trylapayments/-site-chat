@@ -85,6 +85,10 @@ export function formatConversationContactLabel(
   return contact.name ?? contact.email ?? "Unknown visitor";
 }
 
+/** Deterministic locale/timeZone so SSR and browser hydration match. */
+export const INBOX_ACTIVITY_DATE_LOCALE = "en-US";
+export const INBOX_ACTIVITY_DATE_TIME_ZONE = "UTC";
+
 export function formatRelativeTime(value: string | null): string {
   if (!value) {
     return "—";
@@ -95,10 +99,11 @@ export function formatRelativeTime(value: string | null): string {
     return "—";
   }
 
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: INBOX_ACTIVITY_DATE_TIME_ZONE,
   }).format(date);
 }
