@@ -2,8 +2,8 @@
 -- ephemeral typing/Presence so widget_realtime cannot forge message.created.
 --
 -- Topics (same opaque 64-hex visitor_realtime_topic_key):
---   widget-conversation:{key}  — server-originated message.created only
---   widget-ephemeral:{key}     — typing.v1 Broadcast + Presence
+--   widget-conversation:{key}  — server-originated message.created only (SELECT)
+--   widget-ephemeral:{key}     — typing.v1 Broadcast + Presence (SELECT+INSERT)
 --
 -- JWT claim for widget_realtime is topic_key (64-hex), not a full topic name.
 
