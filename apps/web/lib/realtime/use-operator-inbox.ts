@@ -25,6 +25,7 @@ import {
   subscribeOperatorWorkspaceInbox,
   useOnlineStatus,
 } from "@/lib/realtime/operator-subscriptions";
+import { reconcileThreadMessages } from "@/lib/realtime/reconcile-thread-messages";
 import { createClient } from "@/lib/supabase/client";
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 
@@ -185,38 +186,31 @@ export function useLiveConversationThread(input: {
 
   useEffect(() => {
     setMessages((current) => {
-      if (conversationIdRef.current !== input.conversationId) {
+      const conversationChanged =
+        conversationIdRef.current !== input.conversationId;
+
+      const next = reconcileThreadMessages({
+        conversationChanged,
+        current,
+        initialMessages: input.initialMessages,
+      });
+
+      if (conversationChanged) {
         conversationIdRef.current = input.conversationId;
-        maxSequenceRef.current = input.initialMessages.reduce(
-          (max, message) => Math.max(max, message.sequenceNumber),
-          0,
-        );
-        return input.initialMessages;
       }
 
-      if (
-        current.some(
-          (message) => message.isOptimistic || message.status === "pending",
-        )
-      ) {
+      // Bail out with the same reference when content is unchanged so React
+      // skips the re-render (avoids Maximum update depth from rematerialized
+      // initialMessages arrays).
+      if (next === current) {
         return current;
       }
 
-      const serverMax = input.initialMessages.reduce(
+      maxSequenceRef.current = next.reduce(
         (max, message) => Math.max(max, message.sequenceNumber),
         0,
       );
-      const localMax = current.reduce(
-        (max, message) => Math.max(max, message.sequenceNumber),
-        0,
-      );
-
-      if (localMax > serverMax) {
-        return current;
-      }
-
-      maxSequenceRef.current = Math.max(serverMax, localMax);
-      return input.initialMessages;
+      return next;
     });
   }, [input.conversationId, input.initialMessages]);
 
