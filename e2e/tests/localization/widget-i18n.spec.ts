@@ -153,8 +153,9 @@ test.describe("widget localization", () => {
 
   test("default English realtime path still works", async ({ page }) => {
     await openWidget(page);
-    await waitForWidgetRealtimeReady(page);
     await expect(widgetComposer(page)).toBeVisible();
+    // Realtime connects after a conversation exists (first successful send).
     await sendWidgetMessage(page, `Default en probe ${Date.now()}`);
+    await waitForWidgetRealtimeReady(page);
   });
 });

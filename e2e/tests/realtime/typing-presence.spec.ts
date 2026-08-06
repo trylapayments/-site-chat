@@ -10,6 +10,7 @@ import {
   operatorReplyComposer,
   sendOperatorReply,
   sendWidgetMessage,
+  waitForOperatorInboxRealtimeReady,
   waitForOperatorThreadRealtimeReady,
   waitForWidgetRealtimeReady,
   widgetComposer,
@@ -18,9 +19,8 @@ import {
 
 async function openOperatorInbox(page: Page) {
   await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
-  await expect(page.getByTestId("inbox-realtime-ready")).toBeVisible({
-    timeout: 60_000,
-  });
+  // Marker is intentionally hidden; assert connected via attribute (same as helpers).
+  await waitForOperatorInboxRealtimeReady(page);
 }
 
 test.describe("PR 4D-2 typing indicators and presence", () => {
@@ -151,12 +151,8 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
 
   test("representative locales: English, Russian, Hebrew RTL", async ({ page }) => {
     // English chrome already covered by widget open helpers.
-    await openWidget(page);
-    const frame = widgetFrameLocator(page);
-    await expect(frame.getByTestId("widget-operator-presence")).toBeVisible();
-
-    // Russian / Hebrew are covered by widget i18n E2E + dictionary completeness;
-    // here we assert typing chrome keys render without console errors when present.
+    // Russian / Hebrew dictionaries are covered by widget-i18n E2E; here we only
+    // assert presence chrome mounts without console errors after open.
     const errors: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -164,10 +160,15 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
       }
     });
 
-    await frame
-      .getByRole("button", { name: "Open chat" })
-      .click()
-      .catch(() => undefined);
+    await openWidget(page);
+    const frame = widgetFrameLocator(page);
+    await expect(frame.getByTestId("widget-operator-presence")).toBeVisible();
+    await expect(frame.getByTestId("widget-operator-presence")).toHaveAttribute(
+      "data-presence",
+      /^(online|offline)$/,
+    );
+
+    // Panel is already open from openWidget — do not wait on "Open chat" again.
     expect(errors.filter((e) => !e.includes("favicon"))).toEqual([]);
   });
 });

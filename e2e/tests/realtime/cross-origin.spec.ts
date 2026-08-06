@@ -215,14 +215,33 @@ test.describe("PR 4C realtime cross-origin", () => {
     const widgetPage = await widgetContext.newPage();
 
     await openWidget(widgetPage);
-    await widgetPage.context().setOffline(true);
+    // Establish a conversation so Realtime can reach a connected state after recovery.
+    await sendWidgetMessage(widgetPage, `offline-banner-seed-${Date.now()}`);
+    await waitForWidgetRealtimeReady(widgetPage);
 
     const frame = widgetFrameLocator(widgetPage);
-    await expect(frame.getByText(/Connection lost|Reconnecting|offline/i)).toBeVisible({
-      timeout: 30_000,
-    });
+    const connectionBanner = frame.getByTestId("widget-connection-status");
+
+    await widgetPage.context().setOffline(true);
+
+    await expect(connectionBanner).toBeVisible({ timeout: 30_000 });
+    await expect(connectionBanner).toHaveAttribute(
+      "data-connection-state",
+      /^(disconnected|reconnecting|failed)$/,
+    );
+    await expect(frame.getByRole("status")).toHaveAttribute(
+      "data-testid",
+      "widget-connection-status",
+    );
 
     await widgetPage.context().setOffline(false);
+
+    await expect(connectionBanner).toHaveCount(0, { timeout: 60_000 });
+    await expect(frame.getByTestId("widget-realtime-ready")).toHaveAttribute(
+      "data-realtime-state",
+      "connected",
+      { timeout: 60_000 },
+    );
 
     await sendWidgetMessage(widgetPage, "Recovered after offline");
 

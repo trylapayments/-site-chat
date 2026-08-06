@@ -529,6 +529,8 @@ function WidgetApp() {
             {connectionState !== "connected" && connectionState !== "connecting" ? (
               <div
                 role="status"
+                data-testid="widget-connection-status"
+                data-connection-state={connectionState}
                 style={{ fontSize: "0.75rem", marginTop: "0.35rem", opacity: 0.9 }}
               >
                 {connectionState === "reconnecting"
