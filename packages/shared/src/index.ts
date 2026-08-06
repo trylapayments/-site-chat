@@ -9,5 +9,6 @@ export * from "./schemas/realtime";
 export * from "./realtime/merge-messages";
 export * from "./realtime/merge-conversations";
 export * from "./realtime/connection-state";
+export * from "./realtime/ephemeral";
 export * from "./i18n/index";
 export type { Database, Json } from "./database.types";

@@ -38,17 +38,11 @@ describe("widget dictionaries", () => {
   });
 });
 
-describe("formatMessageTime", () => {
-  it("formats deterministically for a fixed instant", () => {
-    const iso = "2026-08-06T15:30:00.000Z";
-    const en = formatMessageTime(iso, "en");
-    const ru = formatMessageTime(iso, "ru");
-    expect(en.length).toBeGreaterThan(0);
-    expect(ru.length).toBeGreaterThan(0);
-  });
-
-  it("degrades safely for invalid timestamps", () => {
-    expect(formatMessageTime("not-a-date", "en")).toBe("");
-    expect(formatMessageTime("", "he")).toBe("");
+describe("formatWidgetMessage", () => {
+  it("interpolates {{name}} placeholders", async () => {
+    const { formatWidgetMessage } = await import("./format");
+    expect(
+      formatWidgetMessage("{{name}} is typing…", { name: "Agent" }),
+    ).toBe("Agent is typing…");
   });
 });

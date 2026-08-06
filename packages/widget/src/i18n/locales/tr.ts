@@ -20,6 +20,10 @@ export const messages_tr: WidgetMessages = {
   agentLabel: "Temsilci",
   systemLabel: "Sistem",
   chatPanelLabel: "Sohbet",
+  agentTyping: "{{name}} yazıyor…",
+  visitorTyping: "Ziyaretçi yazıyor…",
+  online: "Çevrimiçi",
+  offline: "Çevrimdışı",
 };
 
 export default messages_tr;

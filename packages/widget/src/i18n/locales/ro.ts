@@ -20,6 +20,10 @@ export const messages_ro: WidgetMessages = {
   agentLabel: "Agent",
   systemLabel: "Sistem",
   chatPanelLabel: "Chat",
+  agentTyping: "{{name}} tastează…",
+  visitorTyping: "Vizitatorul tastează…",
+  online: "Online",
+  offline: "Offline",
 };
 
 export default messages_ro;

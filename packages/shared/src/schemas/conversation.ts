@@ -80,6 +80,14 @@ export const conversationDetailSchema = z
     assigned_to: assigneeSchema,
     contact: contactDetailSchema,
     visitor_session_id: z.string().uuid(),
+    /**
+     * Private Realtime topic for typing Broadcast + Presence.
+     * Opaque `widget-conversation:{64-hex}` — never the conversation UUID.
+     * Operator-only (authorized workspace members).
+     */
+    visitor_realtime_topic: z
+      .string()
+      .regex(/^widget-conversation:[a-f0-9]{64}$/),
     source_url: z.string().nullable(),
     message_count: z.number().int(),
     last_message_at: z.string().nullable(),

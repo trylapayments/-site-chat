@@ -20,6 +20,10 @@ export const messages_kk: WidgetMessages = {
   agentLabel: "Оператор",
   systemLabel: "Жүйе",
   chatPanelLabel: "Чат",
+  agentTyping: "{{name}} теріп жатыр…",
+  visitorTyping: "Қонақ теріп жатыр…",
+  online: "Желіде",
+  offline: "Желіде емес",
 };
 
 export default messages_kk;

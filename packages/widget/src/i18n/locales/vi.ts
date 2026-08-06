@@ -20,6 +20,10 @@ export const messages_vi: WidgetMessages = {
   agentLabel: "Nhân viên",
   systemLabel: "Hệ thống",
   chatPanelLabel: "Trò chuyện",
+  agentTyping: "{{name}} đang nhập…",
+  visitorTyping: "Khách đang nhập…",
+  online: "Trực tuyến",
+  offline: "Ngoại tuyến",
 };
 
 export default messages_vi;

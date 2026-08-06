@@ -21,6 +21,7 @@ import { WidgetApiClient, type BootstrapPayload, type WidgetPublicConfig } from 
 import {
   englishMessages,
   formatMessageTime,
+  formatWidgetMessage,
   getWidgetDirection,
   loadWidgetDictionary,
   resolveWidgetLocale,
@@ -28,7 +29,11 @@ import {
 } from "../i18n";
 import { isMessageFromParent } from "../post-message";
 import { readParentOriginFromLocation } from "../parent-origin";
-import { mapWidgetHttpMessages, WidgetRealtimeTransport } from "../realtime/visitor-transport";
+import {
+  mapWidgetHttpMessages,
+  WidgetRealtimeTransport,
+  type WidgetTypingIndicator,
+} from "../realtime/visitor-transport";
 import {
   clearSessionToken,
   generateClientMessageId,
@@ -93,6 +98,11 @@ function WidgetApp() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [failedClientMessageId, setFailedClientMessageId] = useState<string | null>(null);
   const [messagesCopy, setMessagesCopy] = useState<WidgetMessages>(englishMessages);
+  const [agentTyping, setAgentTyping] = useState<WidgetTypingIndicator>({
+    active: false,
+    displayName: null,
+  });
+  const [operatorsOnline, setOperatorsOnline] = useState(false);
   const initRef = useRef<InitPayload | null>(null);
   const parentOriginRef = useRef<string | null>(null);
   const transportRef = useRef<WidgetRealtimeTransport | null>(null);
@@ -134,7 +144,7 @@ function WidgetApp() {
         nearBottomRef.current = true;
       }
     });
-  }, [messages, open]);
+  }, [messages, open, agentTyping.active]);
 
   const api = useMemo(() => new WidgetApiClient(window.location.origin), []);
 
@@ -263,6 +273,8 @@ function WidgetApp() {
     if (!readySessionToken || !readyEmbedToken || !open || !init) {
       transportRef.current?.stop();
       transportRef.current = null;
+      setAgentTyping({ active: false, displayName: null });
+      setOperatorsOnline(false);
       return;
     }
 
@@ -277,6 +289,12 @@ function WidgetApp() {
           setMessages(next);
         },
         onConnectionState: setConnectionState,
+        onAgentTyping: (indicator) => {
+          setAgentTyping(indicator);
+        },
+        onPresence: (presence) => {
+          setOperatorsOnline(presence.operatorsOnline);
+        },
       });
       transportRef.current = transport;
       await transport.start({
@@ -295,6 +313,8 @@ function WidgetApp() {
       const current = transportRef.current;
       transportRef.current = null;
       current?.stop();
+      setAgentTyping({ active: false, displayName: null });
+      setOperatorsOnline(false);
     };
   }, [api, open, readyEmbedToken, readySessionToken]);
 
@@ -335,6 +355,7 @@ function WidgetApp() {
     nearBottomRef.current = true;
     setMessages((current) => mergeMessages(current, [], [optimistic]));
     setComposer("");
+    transportRef.current?.clearLocalTyping();
     setSending(true);
     setSendError(null);
     setFailedClientMessageId(null);
@@ -371,6 +392,10 @@ function WidgetApp() {
         const transport = new WidgetRealtimeTransport(api, {
           onMessages: setMessages,
           onConnectionState: setConnectionState,
+          onAgentTyping: setAgentTyping,
+          onPresence: (presence) => {
+            setOperatorsOnline(presence.operatorsOnline);
+          },
         });
         transportRef.current = transport;
         await transport.start({
@@ -472,6 +497,30 @@ function WidgetApp() {
             <div style={{ fontWeight: 600 }}>
               {config?.branding.displayName ?? messagesCopy.chatPanelLabel}
             </div>
+            <div
+              data-testid="widget-operator-presence"
+              data-presence={operatorsOnline ? "online" : "offline"}
+              style={{
+                fontSize: "0.75rem",
+                opacity: 0.9,
+                marginTop: "0.2rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.35rem",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: "0.4rem",
+                  height: "0.4rem",
+                  borderRadius: "9999px",
+                  background: operatorsOnline ? "#86efac" : "rgba(255,255,255,0.45)",
+                  display: "inline-block",
+                }}
+              />
+              {operatorsOnline ? messagesCopy.online : messagesCopy.offline}
+            </div>
             {config?.greetingMessage ? (
               <div style={{ fontSize: "0.875rem", opacity: 0.95, marginTop: "0.25rem" }}>
                 {config.greetingMessage}
@@ -571,6 +620,25 @@ function WidgetApp() {
             <div data-testid="widget-messages-end" aria-hidden="true" />
           </div>
 
+          <div
+            data-testid="agent-typing"
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              minHeight: "1.25rem",
+              padding: "0 1rem",
+              fontSize: "0.75rem",
+              color: "#6b7280",
+              background: "#f9fafb",
+            }}
+          >
+            {agentTyping.active
+              ? formatWidgetMessage(messagesCopy.agentTyping, {
+                  name: agentTyping.displayName ?? messagesCopy.agentLabel,
+                })
+              : null}
+          </div>
+
           <footer style={{ borderTop: "1px solid #e5e7eb", padding: "0.75rem" }}>
             {sendError ? (
               <p
@@ -584,7 +652,9 @@ function WidgetApp() {
               <textarea
                 value={composer}
                 onChange={(event) => {
-                  setComposer(event.target.value);
+                  const next = event.target.value;
+                  setComposer(next);
+                  transportRef.current?.notifyComposerChange(next);
                 }}
                 placeholder={messagesCopy.composerPlaceholder}
                 aria-label={messagesCopy.composerPlaceholder}

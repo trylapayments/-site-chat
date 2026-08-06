@@ -270,12 +270,13 @@ Message inserts trigger Realtime events filtered by `conversation_id`. Both widg
 
 | Channel pattern | Purpose | Subscribers |
 |-----------------|---------|-------------|
-| `conversation:{id}` | New messages, status changes | Agents (dashboard), Visitor (widget) |
+| `conversation:{id}` | New messages, status changes (postgres_changes) | Agents (dashboard) |
 | `workspace:{id}:inbox` | New conversations, assignment changes | All online agents in workspace |
-| `workspace:{id}:presence` | Agent online/away/offline | Agents |
-| `typing:{conversation_id}` | Typing indicators (broadcast) | Agents + visitor |
+| `widget-conversation:{topic_key}` | Visitor message Broadcast + typing Broadcast + Presence | Visitor (scoped JWT) + authorized operators |
 
-Postgres changes are used for persistent events (messages, conversation updates). Broadcast is used for ephemeral events (typing, presence) that should not be stored.
+Postgres changes are used for persistent events (messages, conversation updates). Private Broadcast is used for visitor-safe message delivery and ephemeral typing. Presence on the same private conversation topic tracks visitor/operator online state (not database-backed).
+
+Operators continue to receive durable messages via `postgres_changes`. Typing and presence use the opaque visitor topic (`visitor_realtime_topic_key`), never raw conversation or workspace IDs in the widget JWT.
 
 ### 6.3 Ordering and Idempotency
 

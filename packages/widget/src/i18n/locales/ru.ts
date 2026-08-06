@@ -20,6 +20,10 @@ export const messages_ru: WidgetMessages = {
   agentLabel: "Оператор",
   systemLabel: "Система",
   chatPanelLabel: "Чат",
+  agentTyping: "{{name}} печатает…",
+  visitorTyping: "Посетитель печатает…",
+  online: "В сети",
+  offline: "Не в сети",
 };
 
 export default messages_ru;

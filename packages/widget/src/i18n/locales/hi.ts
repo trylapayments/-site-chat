@@ -20,6 +20,10 @@ export const messages_hi: WidgetMessages = {
   agentLabel: "एजेंट",
   systemLabel: "सिस्टम",
   chatPanelLabel: "चैट",
+  agentTyping: "{{name}} टाइप कर रहे हैं…",
+  visitorTyping: "आगंतुक टाइप कर रहे हैं…",
+  online: "ऑनलाइन",
+  offline: "ऑफ़लाइन",
 };
 
 export default messages_hi;

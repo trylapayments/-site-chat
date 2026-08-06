@@ -20,6 +20,10 @@ export const messages_hr: WidgetMessages = {
   agentLabel: "Agent",
   systemLabel: "Sustav",
   chatPanelLabel: "Chat",
+  agentTyping: "{{name}} tipka…",
+  visitorTyping: "Posjetitelj tipka…",
+  online: "Online",
+  offline: "Offline",
 };
 
 export default messages_hr;

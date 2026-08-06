@@ -20,6 +20,10 @@ export const messages_ar: WidgetMessages = {
   agentLabel: "الوكيل",
   systemLabel: "النظام",
   chatPanelLabel: "محادثة",
+  agentTyping: "{{name}} يكتب…",
+  visitorTyping: "الزائر يكتب…",
+  online: "متصل",
+  offline: "غير متصل",
 };
 
 export default messages_ar;

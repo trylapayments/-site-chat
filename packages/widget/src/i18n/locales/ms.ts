@@ -20,6 +20,10 @@ export const messages_ms: WidgetMessages = {
   agentLabel: "Ejen",
   systemLabel: "Sistem",
   chatPanelLabel: "Sembang",
+  agentTyping: "{{name}} sedang menaip…",
+  visitorTyping: "Pelawat sedang menaip…",
+  online: "Dalam talian",
+  offline: "Luar talian",
 };
 
 export default messages_ms;

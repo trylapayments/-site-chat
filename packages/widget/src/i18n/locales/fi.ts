@@ -20,6 +20,10 @@ export const messages_fi: WidgetMessages = {
   agentLabel: "Asiakaspalvelija",
   systemLabel: "Järjestelmä",
   chatPanelLabel: "Chat",
+  agentTyping: "{{name}} kirjoittaa…",
+  visitorTyping: "Vierailija kirjoittaa…",
+  online: "Paikalla",
+  offline: "Poissa",
 };
 
 export default messages_fi;

@@ -20,6 +20,10 @@ export const messages_ka: WidgetMessages = {
   agentLabel: "აგენტი",
   systemLabel: "სისტემა",
   chatPanelLabel: "ჩატი",
+  agentTyping: "{{name}} ბეჭდავს…",
+  visitorTyping: "ვიზიტორი ბეჭდავს…",
+  online: "ონლაინ",
+  offline: "ოფლაინ",
 };
 
 export default messages_ka;

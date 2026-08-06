@@ -20,6 +20,10 @@ export const messages_sl: WidgetMessages = {
   agentLabel: "Svetovalec",
   systemLabel: "Sistem",
   chatPanelLabel: "Klepet",
+  agentTyping: "{{name}} tipka…",
+  visitorTyping: "Obiskovalec tipka…",
+  online: "Na spletu",
+  offline: "Nepovezan",
 };
 
 export default messages_sl;

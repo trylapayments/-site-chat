@@ -20,6 +20,10 @@ export const messages_el: WidgetMessages = {
   agentLabel: "Σύμβουλος",
   systemLabel: "Σύστημα",
   chatPanelLabel: "Συνομιλία",
+  agentTyping: "{{name}} πληκτρολογεί…",
+  visitorTyping: "Ο επισκέπτης πληκτρολογεί…",
+  online: "Σε σύνδεση",
+  offline: "Εκτός σύνδεσης",
 };
 
 export default messages_el;

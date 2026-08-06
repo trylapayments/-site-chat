@@ -8,7 +8,7 @@ export {
   loadWidgetDictionary,
 } from "./load-dictionary";
 
-export { formatMessageTime, getWidgetDirection } from "./format";
+export { formatMessageTime, formatWidgetMessage, getWidgetDirection } from "./format";
 
 export {
   DEFAULT_WIDGET_LOCALE,

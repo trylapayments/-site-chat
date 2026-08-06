@@ -9,12 +9,22 @@ import {
   toMessageViewFromOperatorRow,
   type MessageView,
 } from "@site-chat/shared";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
 import { markConversationReadAction } from "@/lib/inbox/actions";
 import { formatRelativeTime } from "@/lib/inbox/search-params";
+import {
+  subscribeOperatorConversationEphemeral,
+  type OperatorEphemeralController,
+} from "@/lib/realtime/operator-ephemeral";
 import { useLiveConversationThread } from "@/lib/realtime/use-operator-inbox";
 
 function mapInitialMessages(messages: MessageItem[]): MessageView[] {
@@ -36,12 +46,18 @@ export function LiveConversationThread({
   workspaceId,
   workspaceSlug,
   conversationId,
+  realtimeTopic,
+  memberId,
+  memberDisplayLabel,
   initialMessages,
   canSend,
 }: {
   workspaceId: string;
   workspaceSlug: string;
   conversationId: string;
+  realtimeTopic: string;
+  memberId: string;
+  memberDisplayLabel?: string | null;
   initialMessages: MessageItem[];
   canSend: boolean;
 }) {
@@ -66,6 +82,40 @@ export function LiveConversationThread({
     initialMessages: mappedInitialMessages,
   });
 
+  const [visitorTyping, setVisitorTyping] = useState(false);
+  const [visitorOnline, setVisitorOnline] = useState(false);
+  const ephemeralRef = useRef<OperatorEphemeralController | null>(null);
+
+  useEffect(() => {
+    setVisitorTyping(false);
+    setVisitorOnline(false);
+
+    if (!realtimeTopic || !memberId) {
+      return;
+    }
+
+    const controller = subscribeOperatorConversationEphemeral({
+      realtimeTopic,
+      memberId,
+      displayLabel: memberDisplayLabel,
+      onVisitorTyping: (indicator) => {
+        setVisitorTyping(indicator.active);
+      },
+      onVisitorPresence: (presence) => {
+        setVisitorOnline(presence.online);
+      },
+    });
+
+    ephemeralRef.current = controller;
+
+    return () => {
+      ephemeralRef.current = null;
+      controller.unsubscribe();
+      setVisitorTyping(false);
+      setVisitorOnline(false);
+    };
+  }, [conversationId, memberDisplayLabel, memberId, realtimeTopic]);
+
   return (
     <div className="space-y-4">
       <span
@@ -73,6 +123,24 @@ export function LiveConversationThread({
         data-realtime-state={connectionState}
         hidden
       />
+      <div className="flex items-center justify-between gap-3">
+        <p
+          className="text-muted-foreground text-xs"
+          data-testid="visitor-presence"
+          data-presence={visitorOnline ? "online" : "offline"}
+          aria-live="polite"
+        >
+          <span
+            className={
+              visitorOnline
+                ? "bg-emerald-500 mr-1.5 inline-block size-1.5 rounded-full"
+                : "bg-muted-foreground/40 mr-1.5 inline-block size-1.5 rounded-full"
+            }
+            aria-hidden="true"
+          />
+          {visitorOnline ? "Online" : "Offline"}
+        </p>
+      </div>
       <ConnectionBanner
         state={connectionState}
         onRetry={() => {
@@ -94,12 +162,26 @@ export function LiveConversationThread({
           </Button>
         </div>
       ) : null}
+      <div
+        className="text-muted-foreground min-h-5 text-xs"
+        data-testid="visitor-typing"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {visitorTyping ? "Visitor is typing…" : null}
+      </div>
       <LiveReplyComposer
         workspaceSlug={workspaceSlug}
         conversationId={conversationId}
         canSend={canSend}
         messages={messages}
         setMessages={setMessages}
+        onComposerChange={(text) => {
+          ephemeralRef.current?.notifyComposerChange(text);
+        }}
+        onClearTyping={() => {
+          ephemeralRef.current?.clearLocalTyping();
+        }}
         onVisitorMessageDisplayed={(sequence) => {
           void markConversationReadAction(workspaceSlug, {
             conversationId,
@@ -163,6 +245,8 @@ function LiveReplyComposer({
   canSend,
   messages,
   setMessages,
+  onComposerChange,
+  onClearTyping,
   onVisitorMessageDisplayed,
 }: {
   workspaceSlug: string;
@@ -170,6 +254,8 @@ function LiveReplyComposer({
   canSend: boolean;
   messages: MessageView[];
   setMessages: (updater: (current: MessageView[]) => MessageView[]) => void;
+  onComposerChange: (text: string) => void;
+  onClearTyping: () => void;
   onVisitorMessageDisplayed: (sequence: number) => void;
 }) {
   const [body, setBody] = useState("");
@@ -190,6 +276,15 @@ function LiveReplyComposer({
       }
     }
   }, [messages, onVisitorMessageDisplayed]);
+
+  const onClearTypingRef = useRef(onClearTyping);
+  onClearTypingRef.current = onClearTyping;
+
+  useEffect(() => {
+    // Conversation switch: clear composer typing state.
+    setBody("");
+    onClearTypingRef.current();
+  }, [conversationId]);
 
   if (!canSend) {
     return (
@@ -227,6 +322,7 @@ function LiveReplyComposer({
 
         setMessages((current) => mergeMessages(current, [], [optimistic]));
         setBody("");
+        onClearTyping();
 
         startTransition(async () => {
           const { sendMessageAction } = await import("@/lib/inbox/actions");
@@ -281,7 +377,9 @@ function LiveReplyComposer({
         id="reply-body"
         value={body}
         onChange={(event) => {
-          setBody(event.target.value);
+          const next = event.target.value;
+          setBody(next);
+          onComposerChange(next);
         }}
         rows={4}
         maxLength={4000}

@@ -128,6 +128,7 @@ export async function POST(request: Request) {
       {
         token: token.token,
         topic: resolved.topic,
+        presenceKey: resolved.subject,
         expiresAt: token.expiresAt.toISOString(),
         // Served at token-mint time so the committed widget bundle is not tied
         // to CI placeholder URL/key baked into public/widget/app.js.

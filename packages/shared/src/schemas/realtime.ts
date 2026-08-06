@@ -18,10 +18,19 @@ export const widgetBroadcastEventSchema = z.object({
 
 export type WidgetBroadcastEvent = z.infer<typeof widgetBroadcastEventSchema>;
 
+export const widgetRealtimeTopicSchema = z
+  .string()
+  .regex(/^widget-conversation:[a-f0-9]{64}$/);
+
 export const widgetRealtimeTokenDataSchema = z
   .object({
     token: z.string().min(1),
-    topic: z.string().regex(/^widget-conversation:[a-f0-9]{64}$/),
+    topic: widgetRealtimeTopicSchema,
+    /**
+     * Opaque presence/typing actor key for this visitor session (JWT `sub`).
+     * Stable across tabs for the same session; not a raw session UUID.
+     */
+    presenceKey: z.string().min(1).max(128),
     expiresAt: z.string(),
     /** Public Supabase project URL for the widget Realtime WebSocket client. */
     supabaseUrl: z.string().url(),

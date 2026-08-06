@@ -20,6 +20,10 @@ export const messages_is: WidgetMessages = {
   agentLabel: "Fulltrúi",
   systemLabel: "Kerfi",
   chatPanelLabel: "Spjall",
+  agentTyping: "{{name}} er að skrifa…",
+  visitorTyping: "Gestur er að skrifa…",
+  online: "Á netinu",
+  offline: "Ótengdur",
 };
 
 export default messages_is;

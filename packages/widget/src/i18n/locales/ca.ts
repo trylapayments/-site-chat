@@ -20,6 +20,10 @@ export const messages_ca: WidgetMessages = {
   agentLabel: "Agent",
   systemLabel: "Sistema",
   chatPanelLabel: "Xat",
+  agentTyping: "{{name}} està escrivint…",
+  visitorTyping: "El visitant està escrivint…",
+  online: "En línia",
+  offline: "Fora de línia",
 };
 
 export default messages_ca;

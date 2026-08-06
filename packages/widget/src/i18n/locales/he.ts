@@ -20,6 +20,10 @@ export const messages_he: WidgetMessages = {
   agentLabel: "נציג",
   systemLabel: "מערכת",
   chatPanelLabel: "צ׳אט",
+  agentTyping: "{{name}} מקליד…",
+  visitorTyping: "האורח מקליד…",
+  online: "מחובר",
+  offline: "לא מחובר",
 };
 
 export default messages_he;

@@ -1,11 +1,26 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import {
+  TYPING_BROADCAST_EVENT,
+  TYPING_IDLE_STOP_MS,
+  TYPING_REMOTE_TTL_MS,
+  applyRemoteTypingEvent,
+  buildPresenceStatePayload,
+  buildTypingBroadcastPayload,
+  decideLocalTypingEmit,
+  expireRemoteTypingActors,
+  isAnyoneTyping,
+  isRoleOnline,
   mergeMessages,
+  parseTypingBroadcastPayload,
+  reconcilePresencePeers,
+  resolveTypingDisplayName,
   toMessageViewFromWidgetBroadcast,
   toMessageViewFromWidgetHttp,
   widgetBroadcastEventSchema,
   type ConnectionState,
   type MessageView,
+  type PresencePeer,
+  type RemoteTypingActor,
 } from "@site-chat/shared";
 
 import type { WidgetApiClient } from "../api/client";
@@ -13,14 +28,26 @@ import type { WidgetApiClient } from "../api/client";
 declare const __SITECHAT_SUPABASE_URL__: string;
 declare const __SITECHAT_SUPABASE_KEY__: string;
 
+export type WidgetTypingIndicator = {
+  active: boolean;
+  displayName: string | null;
+};
+
+export type WidgetPresenceView = {
+  operatorsOnline: boolean;
+};
+
 export type WidgetTransportCallbacks = {
   onMessages: (messages: MessageView[]) => void;
   onConnectionState: (state: ConnectionState) => void;
+  onAgentTyping?: (indicator: WidgetTypingIndicator) => void;
+  onPresence?: (presence: WidgetPresenceView) => void;
 };
 
 type RealtimeCredentials = {
   token: string;
   topic: string;
+  presenceKey: string;
   expiresAt: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -74,11 +101,18 @@ export class WidgetRealtimeTransport {
   private messages: MessageView[] = [];
   private tokenExpiresAt = 0;
   private topic = "";
+  private presenceKey = "";
   private running = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
   private lifecycle: LifecycleHandlers | null = null;
   private subscribeGeneration = 0;
+  private remoteTyping = new Map<string, RemoteTypingActor>();
+  private typingExpiryTimer: ReturnType<typeof setInterval> | null = null;
+  private localTyping = false;
+  private lastTypingStartedAt: number | null = null;
+  private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  private presenceTracked = false;
 
   constructor(
     private readonly api: WidgetApiClient,
@@ -103,12 +137,20 @@ export class WidgetRealtimeTransport {
     this.running = false;
     this.subscribeGeneration += 1;
     this.clearRetryTimer();
+    this.clearTypingIdleTimer();
+    this.stopTypingExpiryLoop();
+    void this.emitTypingStopped();
+    this.clearRemoteTyping();
     this.detachLifecycle();
     void this.teardown();
   }
 
   getMessages() {
     return this.messages;
+  }
+
+  getPresenceKey() {
+    return this.presenceKey;
   }
 
   replaceMessages(messages: MessageView[]) {
@@ -124,6 +166,43 @@ export class WidgetRealtimeTransport {
   mergePending(pending: MessageView[]) {
     this.messages = mergeMessages(this.messages, [], pending);
     this.callbacks.onMessages(this.messages);
+  }
+
+  /**
+   * Drive visitor typing broadcasts from composer input.
+   * Starts only after meaningful text; throttles; stops on idle/clear.
+   */
+  notifyComposerChange(text: string) {
+    if (!this.running || !this.channel || !this.presenceKey) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    const decision = decideLocalTypingEmit({
+      text,
+      nowMs,
+      lastStartedAt: this.lastTypingStartedAt,
+      isCurrentlyTyping: this.localTyping,
+    });
+
+    if (decision.action === "started") {
+      this.localTyping = true;
+      this.lastTypingStartedAt = nowMs;
+      void this.broadcastTyping("started");
+      this.armTypingIdleTimer();
+      return;
+    }
+
+    if (decision.action === "stopped") {
+      this.clearTypingIdleTimer();
+      void this.emitTypingStopped();
+    }
+  }
+
+  /** Clear local typing (send, close, session change). */
+  clearLocalTyping() {
+    this.clearTypingIdleTimer();
+    void this.emitTypingStopped();
   }
 
   async catchUp(input: { embedToken: string; sessionToken: string }) {
@@ -177,7 +256,10 @@ export class WidgetRealtimeTransport {
 
     const onOffline = () => {
       if (this.running) {
+        void this.emitTypingStopped();
+        this.clearRemoteTyping();
         this.callbacks.onConnectionState("disconnected");
+        this.callbacks.onPresence?.({ operatorsOnline: false });
       }
     };
 
@@ -288,6 +370,7 @@ export class WidgetRealtimeTransport {
 
     this.retryAttempt = 0;
     this.topic = credentials.topic;
+    this.presenceKey = credentials.presenceKey;
     this.tokenExpiresAt = new Date(credentials.expiresAt).getTime();
 
     const supabase = resolveWidgetSupabaseConfig({
@@ -322,8 +405,17 @@ export class WidgetRealtimeTransport {
       return;
     }
 
+    this.presenceTracked = false;
+
     this.channel = this.client
-      .channel(this.topic, { config: { private: true } })
+      .channel(this.topic, {
+        config: {
+          private: true,
+          presence: {
+            key: this.presenceKey,
+          },
+        },
+      })
       .on("broadcast", { event: "message.created" }, (payload) => {
         const parsed = widgetBroadcastEventSchema.safeParse(payload.payload);
         if (!parsed.success) {
@@ -334,15 +426,176 @@ export class WidgetRealtimeTransport {
         this.messages = mergeMessages(this.messages, [next], []);
         this.callbacks.onMessages(this.messages);
       })
+      .on("broadcast", { event: TYPING_BROADCAST_EVENT }, (payload) => {
+        this.handleTypingBroadcast(payload.payload);
+      })
+      .on("presence", { event: "sync" }, () => {
+        this.emitPresenceFromChannel();
+      })
+      .on("presence", { event: "join" }, () => {
+        this.emitPresenceFromChannel();
+      })
+      .on("presence", { event: "leave" }, () => {
+        this.emitPresenceFromChannel();
+      })
       .subscribe((status) => {
         this.handleChannelStatus(status, embedToken, sessionToken);
       });
+  }
+
+  private handleTypingBroadcast(raw: unknown) {
+    const parsed = parseTypingBroadcastPayload(raw);
+    if (!parsed || parsed.actorRole !== "operator") {
+      return;
+    }
+
+    this.remoteTyping = applyRemoteTypingEvent({
+      actors: this.remoteTyping,
+      payload: parsed,
+      nowMs: Date.now(),
+      localActorKey: this.presenceKey,
+    });
+    this.emitAgentTyping();
+    this.ensureTypingExpiryLoop();
+  }
+
+  private emitAgentTyping() {
+    const active = isAnyoneTyping(this.remoteTyping, "operator");
+    this.callbacks.onAgentTyping?.({
+      active,
+      displayName: active
+        ? resolveTypingDisplayName(this.remoteTyping, "operator")
+        : null,
+    });
+  }
+
+  private clearRemoteTyping() {
+    if (this.remoteTyping.size === 0) {
+      this.callbacks.onAgentTyping?.({ active: false, displayName: null });
+      return;
+    }
+
+    this.remoteTyping = new Map();
+    this.callbacks.onAgentTyping?.({ active: false, displayName: null });
+  }
+
+  private ensureTypingExpiryLoop() {
+    if (this.typingExpiryTimer !== null) {
+      return;
+    }
+
+    this.typingExpiryTimer = setInterval(() => {
+      const { actors, changed } = expireRemoteTypingActors({
+        actors: this.remoteTyping,
+        nowMs: Date.now(),
+      });
+      if (!changed) {
+        if (actors.size === 0) {
+          this.stopTypingExpiryLoop();
+        }
+        return;
+      }
+
+      this.remoteTyping = actors;
+      this.emitAgentTyping();
+      if (actors.size === 0) {
+        this.stopTypingExpiryLoop();
+      }
+    }, 500);
+  }
+
+  private stopTypingExpiryLoop() {
+    if (this.typingExpiryTimer !== null) {
+      clearInterval(this.typingExpiryTimer);
+      this.typingExpiryTimer = null;
+    }
+  }
+
+  private armTypingIdleTimer() {
+    this.clearTypingIdleTimer();
+    this.typingIdleTimer = setTimeout(() => {
+      this.typingIdleTimer = null;
+      void this.emitTypingStopped();
+    }, TYPING_IDLE_STOP_MS);
+  }
+
+  private clearTypingIdleTimer() {
+    if (this.typingIdleTimer !== null) {
+      clearTimeout(this.typingIdleTimer);
+      this.typingIdleTimer = null;
+    }
+  }
+
+  private async emitTypingStopped() {
+    if (!this.localTyping) {
+      this.lastTypingStartedAt = null;
+      return;
+    }
+
+    this.localTyping = false;
+    this.lastTypingStartedAt = null;
+    await this.broadcastTyping("stopped");
+  }
+
+  private async broadcastTyping(state: "started" | "stopped") {
+    if (!this.channel || !this.presenceKey) {
+      return;
+    }
+
+    const payload = buildTypingBroadcastPayload({
+      actorRole: "visitor",
+      actorKey: this.presenceKey,
+      state,
+    });
+
+    try {
+      await this.channel.send({
+        type: "broadcast",
+        event: TYPING_BROADCAST_EVENT,
+        payload,
+      });
+    } catch {
+      // Ephemeral — ignore send failures; remote TTL will clear stale state.
+    }
+  }
+
+  private emitPresenceFromChannel() {
+    if (!this.channel) {
+      this.callbacks.onPresence?.({ operatorsOnline: false });
+      return;
+    }
+
+    const state = this.channel.presenceState();
+    const peers: PresencePeer[] = reconcilePresencePeers(
+      state as Record<string, unknown[]>,
+    );
+    this.callbacks.onPresence?.({
+      operatorsOnline: isRoleOnline(peers, "operator"),
+    });
+  }
+
+  private async trackVisitorPresence() {
+    if (!this.channel || !this.presenceKey || this.presenceTracked) {
+      return;
+    }
+
+    try {
+      await this.channel.track(
+        buildPresenceStatePayload({
+          role: "visitor",
+        }),
+      );
+      this.presenceTracked = true;
+    } catch {
+      this.presenceTracked = false;
+    }
   }
 
   private handleChannelStatus(status: string, embedToken: string, sessionToken: string) {
     if (status === "SUBSCRIBED") {
       this.retryAttempt = 0;
       this.callbacks.onConnectionState("connected");
+      void this.trackVisitorPresence();
       void this.catchUp({ embedToken, sessionToken });
       return;
     }
@@ -352,10 +605,13 @@ export class WidgetRealtimeTransport {
       // on a dead RealtimeChannel and skip the scheduled retry.
       const failed = this.channel;
       this.channel = null;
+      this.presenceTracked = false;
       if (failed && this.client) {
         void this.client.removeChannel(failed);
       }
 
+      this.clearRemoteTyping();
+      this.callbacks.onPresence?.({ operatorsOnline: false });
       this.callbacks.onConnectionState("reconnecting");
       this.scheduleSubscriptionRetry(embedToken, sessionToken);
       return;
@@ -365,6 +621,9 @@ export class WidgetRealtimeTransport {
       // Clear the dead channel so a later ensureSubscription (online /
       // visibility / retry) does not early-return on a stale RealtimeChannel.
       this.channel = null;
+      this.presenceTracked = false;
+      this.clearRemoteTyping();
+      this.callbacks.onPresence?.({ operatorsOnline: false });
       if (this.running) {
         this.callbacks.onConnectionState("disconnected");
       }
@@ -372,7 +631,16 @@ export class WidgetRealtimeTransport {
   }
 
   private async teardown() {
+    this.clearTypingIdleTimer();
+    void this.emitTypingStopped();
+    this.presenceTracked = false;
+
     if (this.channel && this.client) {
+      try {
+        await this.channel.untrack();
+      } catch {
+        // ignore
+      }
       await this.client.removeChannel(this.channel);
     }
     this.channel = null;
@@ -392,3 +660,6 @@ export function mapWidgetHttpMessages(
 ): MessageView[] {
   return items.map((item) => toMessageViewFromWidgetHttp(item));
 }
+
+/** Test helper: remote typing TTL constant. */
+export { TYPING_REMOTE_TTL_MS };
