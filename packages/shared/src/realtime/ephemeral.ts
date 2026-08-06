@@ -1,8 +1,9 @@
 /**
  * Shared ephemeral Realtime contracts: typing Broadcast + Presence.
  *
- * Typing events are never persisted. Presence is conversation-scoped on the
- * existing private visitor topic (`widget-conversation:{64-hex}`).
+ * Typing events are never persisted. Presence and typing use the private
+ * ephemeral topic (`widget-ephemeral:{64-hex}`), separate from the durable
+ * message Broadcast topic (`widget-conversation:{64-hex}`).
  */
 
 import { z } from "zod";

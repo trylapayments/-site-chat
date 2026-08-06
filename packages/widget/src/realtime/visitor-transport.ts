@@ -46,7 +46,8 @@ export type WidgetTransportCallbacks = {
 
 type RealtimeCredentials = {
   token: string;
-  topic: string;
+  messageTopic: string;
+  ephemeralTopic: string;
   presenceKey: string;
   expiresAt: string;
   supabaseUrl: string;
@@ -97,10 +98,12 @@ export function resolveWidgetSupabaseConfig(input?: {
 
 export class WidgetRealtimeTransport {
   private client: SupabaseClient | null = null;
-  private channel: RealtimeChannel | null = null;
+  private messageChannel: RealtimeChannel | null = null;
+  private ephemeralChannel: RealtimeChannel | null = null;
   private messages: MessageView[] = [];
   private tokenExpiresAt = 0;
-  private topic = "";
+  private messageTopic = "";
+  private ephemeralTopic = "";
   private presenceKey = "";
   private running = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -113,6 +116,7 @@ export class WidgetRealtimeTransport {
   private lastTypingStartedAt: number | null = null;
   private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
   private presenceTracked = false;
+  private messageSubscribed = false;
 
   constructor(
     private readonly api: WidgetApiClient,
@@ -173,7 +177,7 @@ export class WidgetRealtimeTransport {
    * Starts only after meaningful text; throttles; stops on idle/clear.
    */
   notifyComposerChange(text: string) {
-    if (!this.running || !this.channel || !this.presenceKey) {
+    if (!this.running || !this.ephemeralChannel || !this.presenceKey) {
       return;
     }
 
@@ -324,14 +328,17 @@ export class WidgetRealtimeTransport {
     }
 
     const tokenStale = Date.now() > this.tokenExpiresAt - 60_000;
+    const channelsReady =
+      this.messageChannel !== null && this.ephemeralChannel !== null && !tokenStale;
 
-    if (this.channel && !tokenStale) {
+    if (channelsReady) {
       return;
     }
 
-    if (!tokenStale && this.client && this.topic) {
+    // Token still valid: recreate only the missing channel(s) without reminting.
+    if (!tokenStale && this.client && this.messageTopic && this.ephemeralTopic) {
       this.callbacks.onConnectionState("connecting");
-      this.subscribeChannel(embedToken, sessionToken);
+      this.subscribeMissingChannels(embedToken, sessionToken);
       return;
     }
 
@@ -375,7 +382,8 @@ export class WidgetRealtimeTransport {
     }
 
     this.retryAttempt = 0;
-    this.topic = credentials.topic;
+    this.messageTopic = credentials.messageTopic;
+    this.ephemeralTopic = credentials.ephemeralTopic;
     this.presenceKey = credentials.presenceKey;
     this.tokenExpiresAt = new Date(credentials.expiresAt).getTime();
 
@@ -403,23 +411,29 @@ export class WidgetRealtimeTransport {
       return;
     }
 
-    this.subscribeChannel(embedToken, sessionToken);
+    this.subscribeMissingChannels(embedToken, sessionToken);
   }
 
-  private subscribeChannel(embedToken: string, sessionToken: string) {
-    if (!this.client || !this.topic) {
+  private subscribeMissingChannels(embedToken: string, sessionToken: string) {
+    if (!this.messageChannel) {
+      this.subscribeMessageChannel(embedToken, sessionToken);
+    }
+    if (!this.ephemeralChannel) {
+      this.subscribeEphemeralChannel(embedToken, sessionToken);
+    }
+  }
+
+  private subscribeMessageChannel(embedToken: string, sessionToken: string) {
+    if (!this.client || !this.messageTopic) {
       return;
     }
 
-    this.presenceTracked = false;
+    this.messageSubscribed = false;
 
-    this.channel = this.client
-      .channel(this.topic, {
+    this.messageChannel = this.client
+      .channel(this.messageTopic, {
         config: {
           private: true,
-          presence: {
-            key: this.presenceKey,
-          },
         },
       })
       .on("broadcast", { event: "message.created" }, (payload) => {
@@ -431,6 +445,27 @@ export class WidgetRealtimeTransport {
         const next = toMessageViewFromWidgetBroadcast(parsed.data.message);
         this.messages = mergeMessages(this.messages, [next], []);
         this.callbacks.onMessages(this.messages);
+      })
+      .subscribe((status) => {
+        this.handleMessageChannelStatus(status, embedToken, sessionToken);
+      });
+  }
+
+  private subscribeEphemeralChannel(embedToken: string, sessionToken: string) {
+    if (!this.client || !this.ephemeralTopic) {
+      return;
+    }
+
+    this.presenceTracked = false;
+
+    this.ephemeralChannel = this.client
+      .channel(this.ephemeralTopic, {
+        config: {
+          private: true,
+          presence: {
+            key: this.presenceKey,
+          },
+        },
       })
       .on("broadcast", { event: TYPING_BROADCAST_EVENT }, (payload) => {
         this.handleTypingBroadcast(payload.payload);
@@ -445,7 +480,7 @@ export class WidgetRealtimeTransport {
         this.emitPresenceFromChannel();
       })
       .subscribe((status) => {
-        this.handleChannelStatus(status, embedToken, sessionToken);
+        this.handleEphemeralChannelStatus(status, embedToken, sessionToken);
       });
   }
 
@@ -542,7 +577,7 @@ export class WidgetRealtimeTransport {
   }
 
   private async broadcastTyping(state: "started" | "stopped") {
-    if (!this.channel || !this.presenceKey) {
+    if (!this.ephemeralChannel || !this.presenceKey) {
       return;
     }
 
@@ -553,7 +588,7 @@ export class WidgetRealtimeTransport {
     });
 
     try {
-      await this.channel.send({
+      await this.ephemeralChannel.send({
         type: "broadcast",
         event: TYPING_BROADCAST_EVENT,
         payload,
@@ -564,12 +599,12 @@ export class WidgetRealtimeTransport {
   }
 
   private emitPresenceFromChannel() {
-    if (!this.channel) {
+    if (!this.ephemeralChannel) {
       this.callbacks.onPresence?.({ operatorsOnline: false });
       return;
     }
 
-    const state = this.channel.presenceState();
+    const state = this.ephemeralChannel.presenceState();
     const peers: PresencePeer[] = reconcilePresencePeers(state);
     this.callbacks.onPresence?.({
       operatorsOnline: isRoleOnline(peers, "operator"),
@@ -577,12 +612,12 @@ export class WidgetRealtimeTransport {
   }
 
   private async trackVisitorPresence() {
-    if (!this.channel || !this.presenceKey || this.presenceTracked) {
+    if (!this.ephemeralChannel || !this.presenceKey || this.presenceTracked) {
       return;
     }
 
     try {
-      await this.channel.track(
+      await this.ephemeralChannel.track(
         buildPresenceStatePayload({
           role: "visitor",
         }),
@@ -593,20 +628,58 @@ export class WidgetRealtimeTransport {
     }
   }
 
-  private handleChannelStatus(status: string, embedToken: string, sessionToken: string) {
-    if (status === "SUBSCRIBED") {
-      this.retryAttempt = 0;
+  private emitCombinedConnectionState() {
+    if (this.messageSubscribed) {
       this.callbacks.onConnectionState("connected");
-      void this.trackVisitorPresence();
+      return;
+    }
+
+    if (this.messageChannel || this.ephemeralChannel) {
+      this.callbacks.onConnectionState("connecting");
+    }
+  }
+
+  private handleMessageChannelStatus(status: string, embedToken: string, sessionToken: string) {
+    if (status === "SUBSCRIBED") {
+      this.messageSubscribed = true;
+      this.retryAttempt = 0;
+      this.emitCombinedConnectionState();
       void this.catchUp({ embedToken, sessionToken });
       return;
     }
 
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-      // Drop the failed channel so ensureSubscription does not early-return
-      // on a dead RealtimeChannel and skip the scheduled retry.
-      const failed = this.channel;
-      this.channel = null;
+      const failed = this.messageChannel;
+      this.messageChannel = null;
+      this.messageSubscribed = false;
+      if (failed && this.client) {
+        void this.client.removeChannel(failed);
+      }
+
+      this.callbacks.onConnectionState("reconnecting");
+      this.scheduleSubscriptionRetry(embedToken, sessionToken);
+      return;
+    }
+
+    if (status === "CLOSED") {
+      this.messageChannel = null;
+      this.messageSubscribed = false;
+      if (this.running) {
+        this.callbacks.onConnectionState("disconnected");
+      }
+    }
+  }
+
+  private handleEphemeralChannelStatus(status: string, embedToken: string, sessionToken: string) {
+    if (status === "SUBSCRIBED") {
+      void this.trackVisitorPresence();
+      this.emitCombinedConnectionState();
+      return;
+    }
+
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      const failed = this.ephemeralChannel;
+      this.ephemeralChannel = null;
       this.presenceTracked = false;
       if (failed && this.client) {
         void this.client.removeChannel(failed);
@@ -614,38 +687,48 @@ export class WidgetRealtimeTransport {
 
       this.clearRemoteTyping();
       this.callbacks.onPresence?.({ operatorsOnline: false });
-      this.callbacks.onConnectionState("reconnecting");
+      // Recreate the missing ephemeral channel without blocking message channel recovery.
       this.scheduleSubscriptionRetry(embedToken, sessionToken);
       return;
     }
 
     if (status === "CLOSED") {
-      // Clear the dead channel so a later ensureSubscription (online /
-      // visibility / retry) does not early-return on a stale RealtimeChannel.
-      this.channel = null;
+      this.ephemeralChannel = null;
       this.presenceTracked = false;
       this.clearRemoteTyping();
       this.callbacks.onPresence?.({ operatorsOnline: false });
-      if (this.running) {
-        this.callbacks.onConnectionState("disconnected");
+    }
+  }
+
+  private async teardownChannel(channel: RealtimeChannel | null, untrack: boolean) {
+    if (!channel || !this.client) {
+      return;
+    }
+
+    if (untrack) {
+      try {
+        await channel.untrack();
+      } catch {
+        // ignore
       }
     }
+
+    await this.client.removeChannel(channel);
   }
 
   private async teardown() {
     this.clearTypingIdleTimer();
     void this.emitTypingStopped();
     this.presenceTracked = false;
+    this.messageSubscribed = false;
 
-    if (this.channel && this.client) {
-      try {
-        await this.channel.untrack();
-      } catch {
-        // ignore
-      }
-      await this.client.removeChannel(this.channel);
-    }
-    this.channel = null;
+    const message = this.messageChannel;
+    const ephemeral = this.ephemeralChannel;
+    this.messageChannel = null;
+    this.ephemeralChannel = null;
+
+    await this.teardownChannel(ephemeral, true);
+    await this.teardownChannel(message, false);
     this.client = null;
   }
 }

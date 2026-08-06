@@ -7,7 +7,8 @@ const REALTIME_TOKEN_TTL_SECONDS = 15 * 60;
 export type WidgetRealtimeTokenClaims = {
   role: "widget_realtime";
   purpose: "widget_realtime";
-  topic: string;
+  /** Opaque 64-hex key authorizing both message + ephemeral topics via RLS. */
+  topic_key: string;
   sub: string;
   exp: number;
   iat: number;
@@ -24,7 +25,7 @@ function signPayload(payloadBase64: string): string {
 }
 
 export function createWidgetRealtimeToken(input: {
-  topic: string;
+  topicKey: string;
   subject: string;
 }): { token: string; expiresAt: Date } {
   const issuedAt = Math.floor(Date.now() / 1000);
@@ -33,7 +34,7 @@ export function createWidgetRealtimeToken(input: {
   const claims: WidgetRealtimeTokenClaims = {
     role: "widget_realtime",
     purpose: "widget_realtime",
-    topic: input.topic,
+    topic_key: input.topicKey,
     sub: input.subject,
     iat: issuedAt,
     exp: Math.floor(expiresAt.getTime() / 1000),

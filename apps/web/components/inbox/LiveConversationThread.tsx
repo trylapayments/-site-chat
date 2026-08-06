@@ -40,7 +40,7 @@ export function LiveConversationThread({
   workspaceId,
   workspaceSlug,
   conversationId,
-  realtimeTopic,
+  ephemeralTopic,
   memberId,
   memberDisplayLabel,
   initialMessages,
@@ -49,7 +49,7 @@ export function LiveConversationThread({
   workspaceId: string;
   workspaceSlug: string;
   conversationId: string;
-  realtimeTopic: string;
+  ephemeralTopic: string;
   memberId: string;
   memberDisplayLabel?: string | null;
   initialMessages: MessageItem[];
@@ -84,12 +84,12 @@ export function LiveConversationThread({
     setVisitorTyping(false);
     setVisitorOnline(false);
 
-    if (!realtimeTopic || !memberId) {
+    if (!ephemeralTopic || !memberId) {
       return;
     }
 
     const controller = subscribeOperatorConversationEphemeral({
-      realtimeTopic,
+      ephemeralTopic,
       memberId,
       displayLabel: memberDisplayLabel,
       onVisitorTyping: (indicator) => {
@@ -108,7 +108,7 @@ export function LiveConversationThread({
       setVisitorTyping(false);
       setVisitorOnline(false);
     };
-  }, [conversationId, memberDisplayLabel, memberId, realtimeTopic]);
+  }, [conversationId, ephemeralTopic, memberDisplayLabel, memberId]);
 
   return (
     <div className="space-y-4">

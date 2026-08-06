@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(16);
+SELECT plan(19);
 
 CREATE TEMP TABLE realtime_fixtures (
   key text PRIMARY KEY,
@@ -125,7 +125,34 @@ SELECT is(
     (SELECT value FROM realtime_fixtures WHERE key = 'session_token_a')
   ) ->> 'topic',
   'widget-conversation:' || (SELECT value FROM realtime_fixtures WHERE key = 'topic_a'),
-  'widget_resolve_realtime_topic returns private topic'
+  'widget_resolve_realtime_topic returns private message topic'
+);
+
+SELECT is(
+  app_private.widget_resolve_realtime_topic(
+    (SELECT value::uuid FROM realtime_fixtures WHERE key = 'workspace_id'),
+    (SELECT value FROM realtime_fixtures WHERE key = 'session_token_a')
+  ) ->> 'message_topic',
+  'widget-conversation:' || (SELECT value FROM realtime_fixtures WHERE key = 'topic_a'),
+  'widget_resolve_realtime_topic returns message_topic'
+);
+
+SELECT is(
+  app_private.widget_resolve_realtime_topic(
+    (SELECT value::uuid FROM realtime_fixtures WHERE key = 'workspace_id'),
+    (SELECT value FROM realtime_fixtures WHERE key = 'session_token_a')
+  ) ->> 'ephemeral_topic',
+  'widget-ephemeral:' || (SELECT value FROM realtime_fixtures WHERE key = 'topic_a'),
+  'widget_resolve_realtime_topic returns ephemeral_topic'
+);
+
+SELECT is(
+  app_private.widget_resolve_realtime_topic(
+    (SELECT value::uuid FROM realtime_fixtures WHERE key = 'workspace_id'),
+    (SELECT value FROM realtime_fixtures WHERE key = 'session_token_a')
+  ) ->> 'topic_key',
+  (SELECT value FROM realtime_fixtures WHERE key = 'topic_a'),
+  'widget_resolve_realtime_topic returns opaque topic_key'
 );
 
 -- T5 internal message does not broadcast
@@ -232,7 +259,7 @@ SELECT pass('visitor-visible messages emit sanitized broadcast payload');
 SELECT throws_ok(
   $$
     SET LOCAL role widget_realtime;
-    SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:test"}';
+    SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}';
     SELECT count(*) FROM public.messages;
   $$,
   '42501',
@@ -244,7 +271,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $$
     SET LOCAL role widget_realtime;
-    SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:test"}';
+    SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}';
     SELECT public.list_conversations('00000000-0000-4000-8000-000000000001'::uuid, '{}'::jsonb);
   $$,
   '42501',
@@ -256,7 +283,7 @@ SELECT throws_ok(
 SELECT throws_ok(
   $$
     SET LOCAL role widget_realtime;
-    SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:test"}';
+    SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}';
     SELECT public.widget_send_visitor_message(
       '00000000-0000-4000-8000-000000000001'::uuid,
       'token',
@@ -323,9 +350,9 @@ SELECT ok(
     FROM pg_policies
     WHERE schemaname = 'realtime'
       AND tablename = 'messages'
-      AND policyname = 'widget_realtime_receive_own_topic'
+      AND policyname = 'widget_realtime_receive_message_topic'
   ),
-  'widget_realtime realtime.messages policy exists'
+  'widget_realtime realtime.messages message-topic policy exists'
 );
 
 -- T13 widget_realtime JWT cannot read another topic broadcast
@@ -335,7 +362,7 @@ DECLARE
 BEGIN
   RESET role;
   SET LOCAL ROLE widget_realtime;
-  SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic":"widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}';
+  SET LOCAL request.jwt.claims TO '{"role":"widget_realtime","purpose":"widget_realtime","topic_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}';
 
   SELECT count(*)
   INTO v_count

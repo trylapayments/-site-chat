@@ -18,12 +18,39 @@ export const widgetBroadcastEventSchema = z.object({
 
 export type WidgetBroadcastEvent = z.infer<typeof widgetBroadcastEventSchema>;
 
-export const widgetRealtimeTopicSchema = z.string().regex(/^widget-conversation:[a-f0-9]{64}$/);
+/** Opaque 64-hex topic key shared by message + ephemeral topic names. */
+export const widgetRealtimeTopicKeySchema = z.string().regex(/^[a-f0-9]{64}$/);
+
+export type WidgetRealtimeTopicKey = z.infer<typeof widgetRealtimeTopicKeySchema>;
+
+/** Server-originated visitor-safe message Broadcast topic. */
+export const widgetMessageTopicSchema = z.string().regex(/^widget-conversation:[a-f0-9]{64}$/);
+
+export type WidgetMessageTopic = z.infer<typeof widgetMessageTopicSchema>;
+
+/** Typing Broadcast + Presence topic (never durable messages). */
+export const widgetEphemeralTopicSchema = z.string().regex(/^widget-ephemeral:[a-f0-9]{64}$/);
+
+export type WidgetEphemeralTopic = z.infer<typeof widgetEphemeralTopicSchema>;
+
+/** @deprecated Prefer widgetMessageTopicSchema — kept as an alias. */
+export const widgetRealtimeTopicSchema = widgetMessageTopicSchema;
+
+export function widgetMessageTopicFromKey(topicKey: string): WidgetMessageTopic {
+  return `widget-conversation:${topicKey}`;
+}
+
+export function widgetEphemeralTopicFromKey(topicKey: string): WidgetEphemeralTopic {
+  return `widget-ephemeral:${topicKey}`;
+}
 
 export const widgetRealtimeTokenDataSchema = z
   .object({
     token: z.string().min(1),
-    topic: widgetRealtimeTopicSchema,
+    /** Private topic for server-originated `message.created` Broadcast (SELECT only). */
+    messageTopic: widgetMessageTopicSchema,
+    /** Private topic for typing Broadcast + Presence (SELECT + INSERT). */
+    ephemeralTopic: widgetEphemeralTopicSchema,
     /**
      * Opaque presence/typing actor key for this visitor session (JWT `sub`).
      * Stable across tabs for the same session; not a raw session UUID.

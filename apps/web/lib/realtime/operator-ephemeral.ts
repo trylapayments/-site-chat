@@ -57,11 +57,11 @@ async function applyOperatorRealtimeAuth(supabase: OperatorSupabaseClient) {
 }
 
 /**
- * Subscribe to private conversation topic for typing Broadcast + Presence.
+ * Subscribe to private ephemeral topic for typing Broadcast + Presence.
  * Does not replace CDC message subscriptions.
  */
 export function subscribeOperatorConversationEphemeral(input: {
-  realtimeTopic: string;
+  ephemeralTopic: string;
   memberId: string;
   displayLabel?: string | null;
   onVisitorTyping: (indicator: OperatorTypingIndicator) => void;
@@ -281,14 +281,20 @@ export function subscribeOperatorConversationEphemeral(input: {
     }
 
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      const failed = channel;
+      channel = null;
       presenceTracked = false;
       clearRemoteTyping();
       input.onVisitorPresence({ online: false });
       setStatus(currentStatus === "connected" ? "reconnecting" : "failed");
+      if (failed) {
+        void supabase.removeChannel(failed);
+      }
       return;
     }
 
     if (status === "CLOSED") {
+      channel = null;
       presenceTracked = false;
       clearRemoteTyping();
       input.onVisitorPresence({ online: false });
@@ -305,7 +311,7 @@ export function subscribeOperatorConversationEphemeral(input: {
     }
 
     channel = supabase
-      .channel(input.realtimeTopic, {
+      .channel(input.ephemeralTopic, {
         config: {
           private: true,
           presence: {

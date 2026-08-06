@@ -92,7 +92,7 @@ export default async function ConversationDetailPage({
             workspaceId={workspace.workspace_id}
             workspaceSlug={workspaceSlug}
             conversationId={conversationId}
-            realtimeTopic={conversation.visitor_realtime_topic}
+            ephemeralTopic={conversation.visitor_ephemeral_topic}
             memberId={memberId}
             memberDisplayLabel={memberDisplayLabel}
             initialMessages={messages.items}

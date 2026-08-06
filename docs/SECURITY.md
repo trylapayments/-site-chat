@@ -165,7 +165,12 @@ Supabase Realtime channels include workspace or conversation ID. Clients subscri
 
 Broadcast channels (typing, presence) validate membership before allowing publish/subscribe via server-side channel authorization (Supabase Realtime authorization hooks / RLS on `realtime.messages`).
 
-**Typing / presence (PR 4D-2):** Client publish is authorized at **topic + extension** granularity (`broadcast` / `presence`), not per event name. A scoped visitor JWT may therefore publish any Broadcast event on its own `widget-conversation:{topic}` channel (including forged `message.created`). Cross-tenant isolation remains enforced by exact topic matching. Receivers must validate payloads and filter by expected `actorRole` / `role`; do not treat ephemeral Broadcast/Presence metadata as authenticated identity. Durable message authority remains PostgreSQL + HTTP catch-up.
+**Typing / presence (PR 4D-2 + dual-topic hardening):** Durable message Broadcast and ephemeral typing/Presence use **separate** private topics derived from the same opaque 64-hex key:
+
+- `widget-conversation:{topic_key}` — server-originated `message.created` only. `widget_realtime` may **SELECT** only (no INSERT).
+- `widget-ephemeral:{topic_key}` — `typing.v1` Broadcast + Presence. `widget_realtime` may SELECT+INSERT Broadcast/Presence on this topic only.
+
+Client publish remains authorized at topic + extension granularity on the ephemeral topic (not per event name), so receivers must still validate payloads and filter by expected `actorRole` / `role`. Cross-tenant isolation remains exact topic matching. Do not treat ephemeral metadata as authenticated identity. Durable message authority remains PostgreSQL + HTTP catch-up; visitors cannot forge `message.created` on the message topic.
 
 ### 4.4 Cross-Tenant Attack Scenarios
 

@@ -272,11 +272,12 @@ Message inserts trigger Realtime events filtered by `conversation_id`. Both widg
 |-----------------|---------|-------------|
 | `conversation:{id}` | New messages, status changes (postgres_changes) | Agents (dashboard) |
 | `workspace:{id}:inbox` | New conversations, assignment changes | All online agents in workspace |
-| `widget-conversation:{topic_key}` | Visitor message Broadcast + typing Broadcast + Presence | Visitor (scoped JWT) + authorized operators |
+| `widget-conversation:{topic_key}` | Server-originated visitor-safe `message.created` Broadcast | Visitor (scoped JWT, SELECT only) + authorized operators (SELECT) |
+| `widget-ephemeral:{topic_key}` | Typing Broadcast (`typing.v1`) + Presence | Visitor (scoped JWT, SELECT+INSERT) + authorized operators (SELECT+INSERT) |
 
-Postgres changes are used for persistent events (messages, conversation updates). Private Broadcast is used for visitor-safe message delivery and ephemeral typing. Presence on the same private conversation topic tracks visitor/operator online state (not database-backed).
+Postgres changes are used for persistent events (messages, conversation updates). Private Broadcast on `widget-conversation` delivers durable visitor-safe messages. Typing and Presence use a **separate** private ephemeral topic so visitors cannot INSERT forged `message.created` events onto the message transport.
 
-Operators continue to receive durable messages via `postgres_changes`. Typing and presence use the opaque visitor topic (`visitor_realtime_topic_key`), never raw conversation or workspace IDs in the widget JWT.
+Operators continue to receive durable messages via `postgres_changes`. Typing and presence use the opaque visitor topic key (`visitor_realtime_topic_key`) derived into both topic names — never raw conversation, workspace, session, or member IDs in the widget JWT.
 
 ### 6.3 Ordering and Idempotency
 
