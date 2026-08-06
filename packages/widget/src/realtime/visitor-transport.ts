@@ -362,7 +362,12 @@ export class WidgetRealtimeTransport {
     }
 
     if (status === "CLOSED") {
-      this.callbacks.onConnectionState("disconnected");
+      // Clear the dead channel so a later ensureSubscription (online /
+      // visibility / retry) does not early-return on a stale RealtimeChannel.
+      this.channel = null;
+      if (this.running) {
+        this.callbacks.onConnectionState("disconnected");
+      }
     }
   }
 
