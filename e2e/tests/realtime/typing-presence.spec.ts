@@ -24,9 +24,7 @@ async function openOperatorInbox(page: Page) {
 }
 
 test.describe("PR 4D-2 typing indicators and presence", () => {
-  test("visitor and operator typing + multi-tab presence", async ({
-    browser,
-  }) => {
+  test("visitor and operator typing + multi-tab presence", async ({ browser }) => {
     const operator = await browser.newPage();
     const visitorA = await browser.newPage();
     const visitorB = await browser.newPage();
@@ -44,10 +42,9 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
 
     // Visitor types without sending → operator sees typing
     await widgetComposer(visitorA).fill("visitor is composing");
-    await expect(operator.getByTestId("visitor-typing")).toHaveText(
-      /Visitor is typing/,
-      { timeout: 15_000 },
-    );
+    await expect(operator.getByTestId("visitor-typing")).toHaveText(/Visitor is typing/, {
+      timeout: 15_000,
+    });
 
     // Visitor stops → indicator disappears (idle stop + remote TTL)
     await widgetComposer(visitorA).fill("");
@@ -64,10 +61,9 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
 
     // Operator sends → typing clears and message arrives live
     await sendOperatorReply(operator, `agent-live-${marker}`);
-    await expect(widgetFrameLocator(visitorA).getByTestId("agent-typing")).toHaveText(
-      "",
-      { timeout: 15_000 },
-    );
+    await expect(widgetFrameLocator(visitorA).getByTestId("agent-typing")).toHaveText("", {
+      timeout: 15_000,
+    });
     await expect(
       widgetFrameLocator(visitorA).getByRole("article").getByText(`agent-live-${marker}`),
     ).toBeVisible({ timeout: 30_000 });
@@ -153,9 +149,7 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
     await context.close();
   });
 
-  test("representative locales: English, Russian, Hebrew RTL", async ({
-    page,
-  }) => {
+  test("representative locales: English, Russian, Hebrew RTL", async ({ page }) => {
     // English chrome already covered by widget open helpers.
     await openWidget(page);
     const frame = widgetFrameLocator(page);
@@ -170,7 +164,10 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
       }
     });
 
-    await frame.getByRole("button", { name: "Open chat" }).click().catch(() => undefined);
+    await frame
+      .getByRole("button", { name: "Open chat" })
+      .click()
+      .catch(() => undefined);
     expect(errors.filter((e) => !e.includes("favicon"))).toEqual([]);
   });
 });

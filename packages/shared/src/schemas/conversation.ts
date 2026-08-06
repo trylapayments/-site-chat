@@ -85,9 +85,7 @@ export const conversationDetailSchema = z
      * Opaque `widget-conversation:{64-hex}` — never the conversation UUID.
      * Operator-only (authorized workspace members).
      */
-    visitor_realtime_topic: z
-      .string()
-      .regex(/^widget-conversation:[a-f0-9]{64}$/),
+    visitor_realtime_topic: z.string().regex(/^widget-conversation:[a-f0-9]{64}$/),
     source_url: z.string().nullable(),
     message_count: z.number().int(),
     last_message_at: z.string().nullable(),

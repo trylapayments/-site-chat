@@ -36,12 +36,14 @@ export type OperatorEphemeralCallbacks = {
   onVisitorPresence: (presence: OperatorVisitorPresence) => void;
   onConnectionChange?: (
     status:
-      | "connecting"
-      | "connected"
-      | "reconnecting"
-      | "disconnected"
-      | "failed",
+      "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
   ) => void;
+};
+
+export type OperatorEphemeralController = {
+  notifyComposerChange: (text: string) => void;
+  clearLocalTyping: () => void;
+  unsubscribe: () => void;
 };
 
 async function applyOperatorRealtimeAuth(supabase: OperatorSupabaseClient) {
@@ -65,7 +67,7 @@ export function subscribeOperatorConversationEphemeral(input: {
   onVisitorTyping: (indicator: OperatorTypingIndicator) => void;
   onVisitorPresence: (presence: OperatorVisitorPresence) => void;
   onConnectionChange?: OperatorEphemeralCallbacks["onConnectionChange"];
-}): () => void {
+}): OperatorEphemeralController {
   const supabase = createClient();
   const actorKey = operatorEphemeralActorKey(input.memberId);
   const safeDisplayName = sanitizePublicDisplayName(input.displayLabel ?? null);
@@ -79,21 +81,14 @@ export function subscribeOperatorConversationEphemeral(input: {
   let typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
   let presenceTracked = false;
   let currentStatus:
-    | "connecting"
-    | "connected"
-    | "reconnecting"
-    | "disconnected"
-    | "failed" = "connecting";
+    "connecting" | "connected" | "reconnecting" | "disconnected" | "failed" =
+    "connecting";
 
   input.onConnectionChange?.(currentStatus);
 
   function setStatus(
     next:
-      | "connecting"
-      | "connected"
-      | "reconnecting"
-      | "disconnected"
-      | "failed",
+      "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
   ) {
     if (next === currentStatus) {
       return;
@@ -167,7 +162,7 @@ export function subscribeOperatorConversationEphemeral(input: {
     }
 
     const peers: PresencePeer[] = reconcilePresencePeers(
-      channel.presenceState() as Record<string, unknown[]>,
+      channel.presenceState(),
     );
     input.onVisitorPresence({
       online: isRoleOnline(peers, "visitor"),
@@ -240,7 +235,6 @@ export function subscribeOperatorConversationEphemeral(input: {
     }, TYPING_IDLE_STOP_MS);
   }
 
-  /** Exposed via returned controller for the composer. */
   function notifyComposerChange(text: string) {
     if (!active || !channel) {
       return;
@@ -273,6 +267,31 @@ export function subscribeOperatorConversationEphemeral(input: {
     void emitTypingStopped();
   }
 
+  function handleChannelStatus(status: string) {
+    if (status === "SUBSCRIBED") {
+      setStatus("connected");
+      void trackPresence();
+      return;
+    }
+
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      presenceTracked = false;
+      clearRemoteTyping();
+      input.onVisitorPresence({ online: false });
+      setStatus(currentStatus === "connected" ? "reconnecting" : "failed");
+      return;
+    }
+
+    if (status === "CLOSED") {
+      presenceTracked = false;
+      clearRemoteTyping();
+      input.onVisitorPresence({ online: false });
+      if (active) {
+        setStatus("disconnected");
+      }
+    }
+  }
+
   async function startSubscription() {
     await applyOperatorRealtimeAuth(supabase);
     if (!active) {
@@ -301,30 +320,7 @@ export function subscribeOperatorConversationEphemeral(input: {
         emitPresence();
       })
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          setStatus("connected");
-          void trackPresence();
-          return;
-        }
-
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          presenceTracked = false;
-          clearRemoteTyping();
-          input.onVisitorPresence({ online: false });
-          setStatus(
-            currentStatus === "connected" ? "reconnecting" : "failed",
-          );
-          return;
-        }
-
-        if (status === "CLOSED") {
-          presenceTracked = false;
-          clearRemoteTyping();
-          input.onVisitorPresence({ online: false });
-          if (active) {
-            setStatus("disconnected");
-          }
-        }
+        handleChannelStatus(status);
       });
   }
 
@@ -339,7 +335,7 @@ export function subscribeOperatorConversationEphemeral(input: {
     void supabase.realtime.setAuth(session.access_token);
   });
 
-  const controller = {
+  return {
     notifyComposerChange,
     clearLocalTyping,
     unsubscribe: () => {
@@ -366,10 +362,4 @@ export function subscribeOperatorConversationEphemeral(input: {
       }
     },
   };
-
-  return controller;
 }
-
-export type OperatorEphemeralController = ReturnType<
-  typeof subscribeOperatorConversationEphemeral
->;

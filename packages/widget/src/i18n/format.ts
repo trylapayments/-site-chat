@@ -50,13 +50,12 @@ export function getWidgetDirection(locale: WidgetLocale): WidgetTextDirection {
 /**
  * Replace `{{name}}` / `{name}` placeholders in dictionary strings.
  */
-export function formatWidgetMessage(
-  template: string,
-  vars: Record<string, string>,
-): string {
+export function formatWidgetMessage(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{\s*([\w.]+)\s*\}\}|\{([\w.]+)\}/g, (match, a, b) => {
-    const key = (a ?? b) as string;
-    return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key]! : match;
+    const key = typeof a === "string" ? a : typeof b === "string" ? b : "";
+    if (!key || !Object.prototype.hasOwnProperty.call(vars, key)) {
+      return match;
+    }
+    return vars[key] ?? match;
   });
 }
-

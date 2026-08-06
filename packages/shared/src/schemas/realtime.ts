@@ -18,9 +18,7 @@ export const widgetBroadcastEventSchema = z.object({
 
 export type WidgetBroadcastEvent = z.infer<typeof widgetBroadcastEventSchema>;
 
-export const widgetRealtimeTopicSchema = z
-  .string()
-  .regex(/^widget-conversation:[a-f0-9]{64}$/);
+export const widgetRealtimeTopicSchema = z.string().regex(/^widget-conversation:[a-f0-9]{64}$/);
 
 export const widgetRealtimeTokenDataSchema = z
   .object({

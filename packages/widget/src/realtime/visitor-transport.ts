@@ -463,9 +463,7 @@ export class WidgetRealtimeTransport {
     const active = isAnyoneTyping(this.remoteTyping, "operator");
     this.callbacks.onAgentTyping?.({
       active,
-      displayName: active
-        ? resolveTypingDisplayName(this.remoteTyping, "operator")
-        : null,
+      displayName: active ? resolveTypingDisplayName(this.remoteTyping, "operator") : null,
     });
   }
 
@@ -566,9 +564,7 @@ export class WidgetRealtimeTransport {
     }
 
     const state = this.channel.presenceState();
-    const peers: PresencePeer[] = reconcilePresencePeers(
-      state as Record<string, unknown[]>,
-    );
+    const peers: PresencePeer[] = reconcilePresencePeers(state);
     this.callbacks.onPresence?.({
       operatorsOnline: isRoleOnline(peers, "operator"),
     });

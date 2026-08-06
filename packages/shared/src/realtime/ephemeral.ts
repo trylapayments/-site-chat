@@ -50,7 +50,7 @@ export type PresenceStatePayload = z.infer<typeof presenceStateSchema>;
 /**
  * Reject emails and other non-public labels before showing to the opposite party.
  */
-export function isSafePublicDisplayName(value: string | null | undefined): boolean {
+export function isSafePublicDisplayName(value: string | null | undefined): value is string {
   if (!value) {
     return false;
   }
@@ -68,14 +68,12 @@ export function isSafePublicDisplayName(value: string | null | undefined): boole
   return true;
 }
 
-export function sanitizePublicDisplayName(
-  value: string | null | undefined,
-): string | null {
+export function sanitizePublicDisplayName(value: string | null | undefined): string | null {
   if (!isSafePublicDisplayName(value)) {
     return null;
   }
 
-  return value!.trim();
+  return value.trim();
 }
 
 export type RemoteTypingActor = {
@@ -85,16 +83,12 @@ export type RemoteTypingActor = {
   expiresAt: number;
 };
 
-export function parseTypingBroadcastPayload(
-  raw: unknown,
-): TypingBroadcastPayload | null {
+export function parseTypingBroadcastPayload(raw: unknown): TypingBroadcastPayload | null {
   const parsed = typingBroadcastPayloadSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
 
-export function parsePresenceStatePayload(
-  raw: unknown,
-): PresenceStatePayload | null {
+export function parsePresenceStatePayload(raw: unknown): PresenceStatePayload | null {
   const parsed = presenceStateSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
@@ -213,9 +207,7 @@ export type PresencePeer = {
  * Reconcile Supabase presence state into role-aware peers.
  * Multi-tab: connectionCount > 1 keeps the peer online until the last tab leaves.
  */
-export function reconcilePresencePeers(
-  presenceState: Record<string, unknown[]>,
-): PresencePeer[] {
+export function reconcilePresencePeers(presenceState: Record<string, unknown[]>): PresencePeer[] {
   const peers: PresencePeer[] = [];
 
   for (const [key, metas] of Object.entries(presenceState)) {
@@ -262,9 +254,7 @@ export function isRoleOnline(
 ): boolean {
   return peers.some(
     (peer) =>
-      peer.role === role &&
-      peer.connectionCount > 0 &&
-      (!excludeKey || peer.key !== excludeKey),
+      peer.role === role && peer.connectionCount > 0 && (!excludeKey || peer.key !== excludeKey),
   );
 }
 
@@ -272,9 +262,7 @@ export function isRoleOnline(
  * Pure helper for throttled local typing emission decisions.
  */
 export type LocalTypingDecision =
-  | { action: "none" }
-  | { action: "started" }
-  | { action: "stopped" };
+  { action: "none" } | { action: "started" } | { action: "stopped" };
 
 export function decideLocalTypingEmit(input: {
   text: string;
@@ -297,10 +285,7 @@ export function decideLocalTypingEmit(input: {
     return { action: "started" };
   }
 
-  if (
-    input.lastStartedAt === null ||
-    input.nowMs - input.lastStartedAt >= throttle
-  ) {
+  if (input.lastStartedAt === null || input.nowMs - input.lastStartedAt >= throttle) {
     return { action: "started" };
   }
 
