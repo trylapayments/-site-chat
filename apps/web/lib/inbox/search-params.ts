@@ -88,6 +88,8 @@ export function formatConversationContactLabel(
 /** Deterministic locale/timeZone so SSR and browser hydration match. */
 export const INBOX_ACTIVITY_DATE_LOCALE = "en-US";
 export const INBOX_ACTIVITY_DATE_TIME_ZONE = "UTC";
+/** App-owned separator; avoids engine-specific Intl date-time glue ("at" vs ", "). */
+export const INBOX_ACTIVITY_DATE_TIME_SEPARATOR = ", ";
 
 export function formatRelativeTime(value: string | null): string {
   if (!value) {
@@ -99,11 +101,21 @@ export function formatRelativeTime(value: string | null): string {
     return "—";
   }
 
-  return new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
+  // Format date and time separately, then join with our literal separator.
+  // A single Intl.DateTimeFormat().format() call uses engine/ICU glue that
+  // differs between Node SSR ("Aug 5 at 10:43 PM") and browsers ("Aug 5, 10:43 PM").
+  const datePart = new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
     timeZone: INBOX_ACTIVITY_DATE_TIME_ZONE,
   }).format(date);
+
+  const timePart = new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: INBOX_ACTIVITY_DATE_TIME_ZONE,
+  }).format(date);
+
+  return `${datePart}${INBOX_ACTIVITY_DATE_TIME_SEPARATOR}${timePart}`;
 }
