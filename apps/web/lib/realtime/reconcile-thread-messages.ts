@@ -1,7 +1,4 @@
-import {
-  maxSequenceNumber,
-  type MessageView,
-} from "@site-chat/shared";
+import { maxSequenceNumber, type MessageView } from "@site-chat/shared";
 
 /**
  * Structural equality for thread message lists.
