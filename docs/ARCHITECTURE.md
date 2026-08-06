@@ -315,6 +315,10 @@ The iframe hosts the full widget UI, isolating styles and preventing host page J
 - Session token stored in iframe first-party storage, not accessible to host site.
 - Content Security Policy on widget routes: strict `script-src`, `frame-ancestors` controlled per workspace allowlist.
 
+### 7.3 Internationalization
+
+Visitor widget UI strings are localized via the shared locale registry and per-locale dictionaries. See `docs/WIDGET-I18N.md` for the LiveChat-aligned 48-locale list, resolution order, RTL rules, and `i18n:check` gate. Message bodies are never auto-translated.
+
 ---
 
 ## 8. Authentication and Session Management

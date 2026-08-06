@@ -1,0 +1,25 @@
+import type { WidgetMessages } from "../types";
+
+export const messages_hy: WidgetMessages = {
+  launcherLabel: "Բացել չաթը",
+  launcherOpenLabel: "Փակել չաթը",
+  closeLabel: "Փակել",
+  composerPlaceholder: "Մուտքագրեք ձեր հաղորդագրությունը…",
+  sendLabel: "Ուղարկել",
+  sendingLabel: "Ուղարկվում է…",
+  retryLabel: "Կրկին փորձել",
+  reconnectingLabel: "Կրկին միացում…",
+  offlineLabel: "Կապը կորել է։ Կրկին փորձ…",
+  connectionFailedLabel: "Ուղիղ թարմացումները հասանելի չեն։",
+  welcomeTitle: "Սկսել զրույց",
+  loadError: "Չհաջողվեց բեռնել չաթը։",
+  sessionError: "Նիստը սպառվել է։ Թարմացրեք էջը։",
+  sendError: "Հաղորդագրությունը չուղարկվեց։",
+  poweredBy: "Աշխատում է Site Chat-ով",
+  youLabel: "Դուք",
+  agentLabel: "Գործակալ",
+  systemLabel: "Համակարգ",
+  chatPanelLabel: "Չաթ",
+};
+
+export default messages_hy;

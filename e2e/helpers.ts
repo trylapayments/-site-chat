@@ -74,7 +74,7 @@ export async function openWidget(page: Page) {
   const launcher = frame.getByRole("button", { name: "Open chat" });
   await expect(launcher).toBeVisible({ timeout: 60_000 });
   await launcher.click();
-  await expect(frame.locator('section[aria-label="Site Chat"]')).toBeVisible({
+  await expect(frame.getByTestId("widget-realtime-ready")).toBeVisible({
     timeout: 60_000,
   });
   await expect(widgetComposer(page)).toBeVisible({ timeout: 60_000 });

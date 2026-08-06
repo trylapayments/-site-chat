@@ -1,0 +1,25 @@
+import type { WidgetMessages } from "../types";
+
+export const messages_fa: WidgetMessages = {
+  launcherLabel: "باز کردن گفتگو",
+  launcherOpenLabel: "بستن گفتگو",
+  closeLabel: "بستن",
+  composerPlaceholder: "پیام خود را بنویسید…",
+  sendLabel: "ارسال",
+  sendingLabel: "در حال ارسال…",
+  retryLabel: "تلاش دوباره",
+  reconnectingLabel: "در حال اتصال مجدد…",
+  offlineLabel: "اتصال قطع شد. در حال تلاش مجدد…",
+  connectionFailedLabel: "به‌روزرسانی زنده در دسترس نیست.",
+  welcomeTitle: "شروع گفتگو",
+  loadError: "بارگذاری گفتگو ممکن نشد.",
+  sessionError: "نشست منقضی شد. لطفاً صفحه را دوباره بارگذاری کنید.",
+  sendError: "ارسال پیام ناموفق بود.",
+  poweredBy: "قدرت‌گرفته از Site Chat",
+  youLabel: "شما",
+  agentLabel: "پشتیبان",
+  systemLabel: "سیستم",
+  chatPanelLabel: "گفتگو",
+};
+
+export default messages_fa;

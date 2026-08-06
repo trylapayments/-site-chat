@@ -4,6 +4,7 @@ import {
   mergeMessages,
   type ConnectionState,
   type MessageView,
+  type WidgetLocale,
 } from "@site-chat/shared";
 import {
   StrictMode,
@@ -18,11 +19,12 @@ import { createRoot } from "react-dom/client";
 
 import { WidgetApiClient, type BootstrapPayload, type WidgetPublicConfig } from "../api/client";
 import {
+  englishMessages,
   formatMessageTime,
   getWidgetDirection,
+  loadWidgetDictionary,
   resolveWidgetLocale,
-  widgetDictionaries,
-  type WidgetLocale,
+  type WidgetMessages,
 } from "../i18n";
 import { isMessageFromParent } from "../post-message";
 import { readParentOriginFromLocation } from "../parent-origin";
@@ -65,6 +67,22 @@ function resolveParentOrigin(init: InitPayload | null): string | null {
   return readParentOriginFromLocation(window.location);
 }
 
+function applyDocumentLocale(locale: WidgetLocale, direction: "ltr" | "rtl") {
+  document.documentElement.lang = locale;
+  document.documentElement.dir = direction;
+}
+
+function positionInsets(position: "bottom-right" | "bottom-left"): {
+  left?: string;
+  right?: string;
+} {
+  // Physical left/right so launcher/panel position is NOT mirrored in RTL.
+  if (position === "bottom-left") {
+    return { left: "1rem", right: "auto" };
+  }
+  return { right: "1rem", left: "auto" };
+}
+
 function WidgetApp() {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<WidgetState>({ status: "booting" });
@@ -74,6 +92,7 @@ function WidgetApp() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [failedClientMessageId, setFailedClientMessageId] = useState<string | null>(null);
+  const [messagesCopy, setMessagesCopy] = useState<WidgetMessages>(englishMessages);
   const initRef = useRef<InitPayload | null>(null);
   const parentOriginRef = useRef<string | null>(null);
   const transportRef = useRef<WidgetRealtimeTransport | null>(null);
@@ -82,6 +101,7 @@ function WidgetApp() {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const forceScrollRef = useRef(false);
   const nearBottomRef = useRef(true);
+  const sessionLocaleRef = useRef<WidgetLocale>("en");
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -118,9 +138,12 @@ function WidgetApp() {
 
   const api = useMemo(() => new WidgetApiClient(window.location.origin), []);
 
-  const locale = state.status === "ready" ? state.locale : "en";
-  const messagesCopy = widgetDictionaries[locale];
+  const locale = state.status === "ready" ? state.locale : sessionLocaleRef.current;
   const direction = getWidgetDirection(locale);
+
+  useEffect(() => {
+    applyDocumentLocale(locale, direction);
+  }, [locale, direction]);
 
   const config: WidgetPublicConfig | null =
     state.status === "ready" ? state.init.config : (initRef.current?.config ?? null);
@@ -135,8 +158,14 @@ function WidgetApp() {
 
       const resolvedLocale = resolveWidgetLocale({
         configLocale: init.config.locale,
-        browserLocale: navigator.language,
+        browserLanguages: typeof navigator !== "undefined" ? navigator.languages : undefined,
+        browserLocale: typeof navigator !== "undefined" ? navigator.language : undefined,
       });
+
+      sessionLocaleRef.current = resolvedLocale;
+      const dictionary = await loadWidgetDictionary(resolvedLocale);
+      setMessagesCopy(dictionary);
+      applyDocumentLocale(resolvedLocale, getWidgetDirection(resolvedLocale));
 
       try {
         const existingToken = readSessionToken(init.widgetPublicKey);
@@ -151,11 +180,20 @@ function WidgetApp() {
 
         writeSessionToken(init.widgetPublicKey, session.sessionToken);
 
+        // Prefer session-returned locale when supported; keep session-stable otherwise.
+        const sessionLocale = resolveWidgetLocale({ configLocale: session.locale });
+        sessionLocaleRef.current = sessionLocale;
+        if (sessionLocale !== resolvedLocale) {
+          const sessionDictionary = await loadWidgetDictionary(sessionLocale);
+          setMessagesCopy(sessionDictionary);
+          applyDocumentLocale(sessionLocale, getWidgetDirection(sessionLocale));
+        }
+
         setState({
           status: "ready",
           init,
           sessionToken: session.sessionToken,
-          locale: session.locale,
+          locale: sessionLocale,
         });
 
         if (session.hasConversation) {
@@ -170,10 +208,10 @@ function WidgetApp() {
         }
       } catch {
         clearSessionToken(init.widgetPublicKey);
-        setState({ status: "error", message: messagesCopy.loadError });
+        setState({ status: "error", message: dictionary.loadError });
       }
     },
-    [api, messagesCopy.loadError],
+    [api],
   );
 
   useEffect(() => {
@@ -364,11 +402,15 @@ function WidgetApp() {
 
   const primaryColor = config?.branding.primaryColor ?? "#0066FF";
   const position = config?.position ?? "bottom-right";
+  const insets = positionInsets(position);
+  const panelLabel = config?.branding.displayName ?? messagesCopy.chatPanelLabel;
 
   return (
     <div
       dir={direction}
       lang={locale}
+      data-widget-locale={locale}
+      data-widget-dir={direction}
       style={{
         fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif",
         color: "#111827",
@@ -383,11 +425,8 @@ function WidgetApp() {
         }}
         style={{
           position: "fixed",
-          insetInlineEnd: "1rem",
           bottom: "1rem",
-          ...(position === "bottom-left"
-            ? { insetInlineEnd: "auto", insetInlineStart: "1rem" }
-            : {}),
+          ...insets,
           width: "3.5rem",
           height: "3.5rem",
           borderRadius: "9999px",
@@ -404,16 +443,13 @@ function WidgetApp() {
 
       {open ? (
         <section
-          aria-label="Site Chat"
+          aria-label={panelLabel}
           data-testid="widget-realtime-ready"
           data-realtime-state={connectionState}
           style={{
             position: "fixed",
-            insetInlineEnd: "1rem",
             bottom: "5rem",
-            ...(position === "bottom-left"
-              ? { insetInlineEnd: "auto", insetInlineStart: "1rem" }
-              : {}),
+            ...insets,
             width: "min(100vw - 2rem, 24rem)",
             height: "min(100vh - 7rem, 32rem)",
             background: "#fff",
@@ -433,14 +469,19 @@ function WidgetApp() {
               color: "#fff",
             }}
           >
-            <div style={{ fontWeight: 600 }}>{config?.branding.displayName ?? "Site Chat"}</div>
+            <div style={{ fontWeight: 600 }}>
+              {config?.branding.displayName ?? messagesCopy.chatPanelLabel}
+            </div>
             {config?.greetingMessage ? (
               <div style={{ fontSize: "0.875rem", opacity: 0.95, marginTop: "0.25rem" }}>
                 {config.greetingMessage}
               </div>
             ) : null}
             {connectionState !== "connected" && connectionState !== "connecting" ? (
-              <div style={{ fontSize: "0.75rem", marginTop: "0.35rem", opacity: 0.9 }}>
+              <div
+                role="status"
+                style={{ fontSize: "0.75rem", marginTop: "0.35rem", opacity: 0.9 }}
+              >
                 {connectionState === "reconnecting"
                   ? messagesCopy.reconnectingLabel
                   : connectionState === "failed"
@@ -500,7 +541,7 @@ function WidgetApp() {
                   <div style={{ fontSize: "0.75rem", opacity: 0.85, marginBottom: "0.25rem" }}>
                     {label} · {formatMessageTime(message.createdAt, locale)}
                   </div>
-                  <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  <div dir="auto" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                     {message.body}
                   </div>
                   {message.status === "failed" ? (
@@ -546,6 +587,8 @@ function WidgetApp() {
                   setComposer(event.target.value);
                 }}
                 placeholder={messagesCopy.composerPlaceholder}
+                aria-label={messagesCopy.composerPlaceholder}
+                dir="auto"
                 rows={2}
                 disabled={state.status !== "ready" || sending}
                 onKeyDown={(event) => {
@@ -569,6 +612,7 @@ function WidgetApp() {
                   void handleSend();
                 }}
                 disabled={state.status !== "ready" || sending || !composer.trim()}
+                aria-label={sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
                 style={{
                   borderRadius: "0.75rem",
                   border: "none",

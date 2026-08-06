@@ -37,7 +37,18 @@ export default defineConfig({
           }
           return "assets/[name]-[hash].js";
         },
+        chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
+        // Keep locale dictionaries as separate hashed chunks for lazy load + CSP.
+        manualChunks(id) {
+          if (id.includes("/i18n/locales/")) {
+            const match = id.match(/locales\/([^/]+)\.ts$/);
+            if (match?.[1] && match[1] !== "en") {
+              return `locale-${match[1]}`;
+            }
+          }
+          return undefined;
+        },
       },
     },
   },

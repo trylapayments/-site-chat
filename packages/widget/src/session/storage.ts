@@ -1,4 +1,4 @@
-import type { WidgetLocale } from "../i18n";
+import { resolveWidgetLocale, type WidgetLocale } from "@site-chat/shared";
 
 const STORAGE_PREFIX = "sitechat:session:";
 const memoryStore = new Map<string, string>();
@@ -63,12 +63,11 @@ export function isStorageAvailable(): boolean {
 }
 
 export function resolveRuntimeLocale(configLocale: WidgetLocale | undefined): WidgetLocale {
-  if (configLocale === "en" || configLocale === "ru") {
-    return configLocale;
-  }
-
-  const browser = navigator.language.toLowerCase();
-  return browser.startsWith("ru") ? "ru" : "en";
+  return resolveWidgetLocale({
+    configLocale,
+    browserLanguages: typeof navigator !== "undefined" ? navigator.languages : undefined,
+    browserLocale: typeof navigator !== "undefined" ? navigator.language : undefined,
+  });
 }
 
 export function generateClientMessageId(): string {

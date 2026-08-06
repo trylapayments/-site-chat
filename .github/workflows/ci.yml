@@ -59,6 +59,9 @@ jobs:
       - name: Test widget package
         run: pnpm --filter @site-chat/widget test
 
+      - name: Check widget i18n completeness
+        run: pnpm --filter @site-chat/widget i18n:check
+
       - name: Format check
         run: pnpm format:check
 

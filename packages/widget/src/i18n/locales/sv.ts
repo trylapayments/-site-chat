@@ -1,0 +1,25 @@
+import type { WidgetMessages } from "../types";
+
+export const messages_sv: WidgetMessages = {
+  launcherLabel: "Öppna chatten",
+  launcherOpenLabel: "Stäng chatten",
+  closeLabel: "Stäng",
+  composerPlaceholder: "Skriv ditt meddelande…",
+  sendLabel: "Skicka",
+  sendingLabel: "Skickar…",
+  retryLabel: "Försök igen",
+  reconnectingLabel: "Återansluter…",
+  offlineLabel: "Anslutningen bröts. Försöker igen…",
+  connectionFailedLabel: "Liveuppdateringar är inte tillgängliga.",
+  welcomeTitle: "Starta en konversation",
+  loadError: "Kunde inte läsa in chatten.",
+  sessionError: "Sessionen har gått ut. Ladda om sidan.",
+  sendError: "Meddelandet kunde inte skickas.",
+  poweredBy: "Drivs av Site Chat",
+  youLabel: "Du",
+  agentLabel: "Agent",
+  systemLabel: "System",
+  chatPanelLabel: "Chatt",
+};
+
+export default messages_sv;
