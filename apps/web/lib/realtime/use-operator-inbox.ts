@@ -47,8 +47,8 @@ export function useLiveInboxList(input: {
         assignment: input.query.assignment ?? null,
         q: input.query.q ?? null,
         sort: input.query.sort ?? null,
-        page: input.query.page ?? null,
-        pageSize: input.query.pageSize ?? null,
+        page: input.query.page,
+        pageSize: input.query.pageSize,
       }),
     [input.query],
   );
