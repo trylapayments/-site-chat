@@ -46,14 +46,19 @@ export type OperatorEphemeralController = {
   unsubscribe: () => void;
 };
 
-async function applyOperatorRealtimeAuth(supabase: OperatorSupabaseClient) {
+async function applyOperatorRealtimeAuth(
+  supabase: OperatorSupabaseClient,
+): Promise<boolean> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session?.access_token) {
-    await supabase.realtime.setAuth(session.access_token);
+  if (!session?.access_token) {
+    return false;
   }
+
+  await supabase.realtime.setAuth(session.access_token);
+  return true;
 }
 
 /**
@@ -74,6 +79,7 @@ export function subscribeOperatorConversationEphemeral(input: {
 
   let channel: RealtimeChannel | null = null;
   let active = true;
+  const isActive = () => active;
   let remoteTyping = new Map<string, RemoteTypingActor>();
   let typingExpiryTimer: ReturnType<typeof setInterval> | null = null;
   let localTyping = false;
@@ -299,7 +305,11 @@ export function subscribeOperatorConversationEphemeral(input: {
     }, delayMs);
   }
 
-  function handleChannelStatus(status: string) {
+  function handleChannelStatus(status: string, source: RealtimeChannel) {
+    if (channel !== source) {
+      return;
+    }
+
     if (status === "SUBSCRIBED") {
       retryAttempt = 0;
       setStatus("connected");
@@ -308,15 +318,12 @@ export function subscribeOperatorConversationEphemeral(input: {
     }
 
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-      const failed = channel;
       channel = null;
       presenceTracked = false;
       clearRemoteTyping();
       input.onVisitorPresence({ online: false });
       setStatus("reconnecting");
-      if (failed) {
-        void supabase.removeChannel(failed);
-      }
+      void supabase.removeChannel(source);
       scheduleResubscribe();
       return;
     }
@@ -334,18 +341,33 @@ export function subscribeOperatorConversationEphemeral(input: {
   }
 
   async function startSubscription() {
-    await applyOperatorRealtimeAuth(supabase);
-    if (!active) {
+    clearRetryTimer();
+    const authed = await applyOperatorRealtimeAuth(supabase);
+    if (!isActive()) {
+      return;
+    }
+
+    // Private ephemeral topics are RLS-gated; wait for auth before joining.
+    if (!authed) {
       return;
     }
 
     if (channel) {
-      return;
+      const previous = channel;
+      channel = null;
+      presenceTracked = false;
+      if (currentStatus === "connected") {
+        setStatus("reconnecting");
+      }
+      await supabase.removeChannel(previous);
+      if (!isActive()) {
+        return;
+      }
     }
 
     setStatus(retryAttempt > 0 ? "reconnecting" : "connecting");
 
-    channel = supabase
+    const nextChannel = supabase
       .channel(input.ephemeralTopic, {
         config: {
           private: true,
@@ -355,20 +377,34 @@ export function subscribeOperatorConversationEphemeral(input: {
         },
       })
       .on("broadcast", { event: TYPING_BROADCAST_EVENT }, (payload) => {
+        if (channel !== nextChannel) {
+          return;
+        }
         handleTypingBroadcast(payload.payload);
       })
       .on("presence", { event: "sync" }, () => {
+        if (channel !== nextChannel) {
+          return;
+        }
         emitPresence();
       })
       .on("presence", { event: "join" }, () => {
+        if (channel !== nextChannel) {
+          return;
+        }
         emitPresence();
       })
       .on("presence", { event: "leave" }, () => {
+        if (channel !== nextChannel) {
+          return;
+        }
         emitPresence();
-      })
-      .subscribe((status) => {
-        handleChannelStatus(status);
       });
+
+    channel = nextChannel;
+    nextChannel.subscribe((status) => {
+      handleChannelStatus(status, nextChannel);
+    });
   }
 
   void startSubscription();
@@ -379,7 +415,15 @@ export function subscribeOperatorConversationEphemeral(input: {
     if (!session?.access_token) {
       return;
     }
-    void supabase.realtime.setAuth(session.access_token);
+
+    void (async () => {
+      await supabase.realtime.setAuth(session.access_token);
+      if (!active) {
+        return;
+      }
+      // Resubscribe so Presence/Broadcast bindings are authorized after auth.
+      void startSubscription();
+    })();
   });
 
   return {

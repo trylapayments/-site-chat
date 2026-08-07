@@ -479,13 +479,16 @@ export class WidgetRealtimeTransport {
 
     this.messageSubscribed = false;
 
-    this.messageChannel = this.client
+    const channel = this.client
       .channel(this.messageTopic, {
         config: {
           private: true,
         },
       })
       .on("broadcast", { event: "message.created" }, (payload) => {
+        if (this.messageChannel !== channel) {
+          return;
+        }
         const parsed = widgetBroadcastEventSchema.safeParse(payload.payload);
         if (!parsed.success) {
           return;
@@ -494,10 +497,12 @@ export class WidgetRealtimeTransport {
         const next = toMessageViewFromWidgetBroadcast(parsed.data.message);
         this.messages = mergeMessages(this.messages, [next], []);
         this.callbacks.onMessages(this.messages);
-      })
-      .subscribe((status) => {
-        this.handleMessageChannelStatus(status, embedToken, sessionToken);
       });
+
+    this.messageChannel = channel;
+    channel.subscribe((status) => {
+      this.handleMessageChannelStatus(status, embedToken, sessionToken, channel);
+    });
   }
 
   private subscribeEphemeralChannel(embedToken: string, sessionToken: string) {
@@ -508,7 +513,7 @@ export class WidgetRealtimeTransport {
     this.presenceTracked = false;
     this.ephemeralSubscribed = false;
 
-    this.ephemeralChannel = this.client
+    const channel = this.client
       .channel(this.ephemeralTopic, {
         config: {
           private: true,
@@ -518,20 +523,34 @@ export class WidgetRealtimeTransport {
         },
       })
       .on("broadcast", { event: TYPING_BROADCAST_EVENT }, (payload) => {
+        if (this.ephemeralChannel !== channel) {
+          return;
+        }
         this.handleTypingBroadcast(payload.payload);
       })
       .on("presence", { event: "sync" }, () => {
+        if (this.ephemeralChannel !== channel) {
+          return;
+        }
         this.emitPresenceFromChannel();
       })
       .on("presence", { event: "join" }, () => {
+        if (this.ephemeralChannel !== channel) {
+          return;
+        }
         this.emitPresenceFromChannel();
       })
       .on("presence", { event: "leave" }, () => {
+        if (this.ephemeralChannel !== channel) {
+          return;
+        }
         this.emitPresenceFromChannel();
-      })
-      .subscribe((status) => {
-        this.handleEphemeralChannelStatus(status, embedToken, sessionToken);
       });
+
+    this.ephemeralChannel = channel;
+    channel.subscribe((status) => {
+      this.handleEphemeralChannelStatus(status, embedToken, sessionToken, channel);
+    });
   }
 
   private handleTypingBroadcast(raw: unknown) {
@@ -693,7 +712,17 @@ export class WidgetRealtimeTransport {
     }
   }
 
-  private handleMessageChannelStatus(status: string, embedToken: string, sessionToken: string) {
+  private handleMessageChannelStatus(
+    status: string,
+    embedToken: string,
+    sessionToken: string,
+    channel: RealtimeChannel,
+  ) {
+    // Ignore callbacks from channels already replaced by offline/online recreate.
+    if (this.messageChannel !== channel) {
+      return;
+    }
+
     if (status === "SUBSCRIBED") {
       this.messageSubscribed = true;
       this.retryAttempt = 0;
@@ -703,12 +732,9 @@ export class WidgetRealtimeTransport {
     }
 
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-      const failed = this.messageChannel;
       this.messageChannel = null;
       this.messageSubscribed = false;
-      if (failed && this.client) {
-        void this.client.removeChannel(failed);
-      }
+      void this.client?.removeChannel(channel);
 
       this.callbacks.onConnectionState("reconnecting");
       this.scheduleSubscriptionRetry(embedToken, sessionToken);
@@ -725,7 +751,16 @@ export class WidgetRealtimeTransport {
     }
   }
 
-  private handleEphemeralChannelStatus(status: string, embedToken: string, sessionToken: string) {
+  private handleEphemeralChannelStatus(
+    status: string,
+    embedToken: string,
+    sessionToken: string,
+    channel: RealtimeChannel,
+  ) {
+    if (this.ephemeralChannel !== channel) {
+      return;
+    }
+
     if (status === "SUBSCRIBED") {
       this.ephemeralSubscribed = true;
       this.retryAttempt = 0;
@@ -735,13 +770,10 @@ export class WidgetRealtimeTransport {
     }
 
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-      const failed = this.ephemeralChannel;
       this.ephemeralChannel = null;
       this.ephemeralSubscribed = false;
       this.presenceTracked = false;
-      if (failed && this.client) {
-        void this.client.removeChannel(failed);
-      }
+      void this.client?.removeChannel(channel);
 
       this.clearRemoteTyping();
       this.callbacks.onPresence?.({ operatorsOnline: false });
