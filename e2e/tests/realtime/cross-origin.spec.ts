@@ -24,15 +24,16 @@ test.describe("PR 4C realtime cross-origin", () => {
 
     const operatorPage = await operatorContext.newPage();
     const widgetPage = await widgetContext.newPage();
+    const visitorMessage = `Hello from visitor e2e ${Date.now()}`;
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
     await waitForOperatorInboxRealtimeReady(operatorPage);
 
     await openWidget(widgetPage);
-    await sendWidgetMessage(widgetPage, "Hello from visitor e2e");
+    await sendWidgetMessage(widgetPage, visitorMessage);
 
-    await expect(operatorPage.getByText("Hello from visitor e2e")).toBeVisible({
+    await expect(operatorPage.getByText(visitorMessage)).toBeVisible({
       timeout: 20_000,
     });
 

@@ -39,18 +39,38 @@ export function useLiveInboxList(input: {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("connecting");
   const refreshTimerRef = useRef<number | null>(null);
+  const refreshGenerationRef = useRef(0);
+  const queryKey = useMemo(
+    () =>
+      JSON.stringify({
+        status: input.query.status ?? null,
+        assignment: input.query.assignment ?? null,
+        q: input.query.q ?? null,
+        sort: input.query.sort ?? null,
+        page: input.query.page ?? null,
+        pageSize: input.query.pageSize ?? null,
+      }),
+    [input.query],
+  );
 
+  // Reset from server props only when the list scope changes — not on every new
+  // initialItems array reference (RSC re-renders were clobbering live upserts).
   useEffect(() => {
     setItems(input.initialItems);
-  }, [input.initialItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped
+  }, [input.workspaceId, input.memberId, queryKey]);
 
   const refreshList = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current;
     const supabase = createClient() as AppSupabaseClient;
     const refreshed = await fetchConversations(
       supabase,
       input.workspaceId,
       input.query,
     );
+    if (generation !== refreshGenerationRef.current) {
+      return;
+    }
     setItems(refreshed.items);
   }, [input.query, input.workspaceId]);
 
