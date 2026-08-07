@@ -38,13 +38,16 @@ export const typingBroadcastPayloadSchema = z
 
 export type TypingBroadcastPayload = z.infer<typeof typingBroadcastPayloadSchema>;
 
-export const presenceStateSchema = z
-  .object({
-    v: z.literal(1),
-    role: ephemeralActorRoleSchema,
-    displayName: z.string().min(1).max(80).nullable().optional(),
-  })
-  .strict();
+/**
+ * Presence track payload. Not `.strict()`: Supabase/Phoenix Presence attaches
+ * `phx_ref` / `phx_ref_prev` (and similar) onto each meta. Rejecting those would
+ * drop every peer and leave operators/visitors stuck offline.
+ */
+export const presenceStateSchema = z.object({
+  v: z.literal(1),
+  role: ephemeralActorRoleSchema,
+  displayName: z.string().min(1).max(80).nullable().optional(),
+});
 
 export type PresenceStatePayload = z.infer<typeof presenceStateSchema>;
 
@@ -90,7 +93,17 @@ export function parseTypingBroadcastPayload(raw: unknown): TypingBroadcastPayloa
 }
 
 export function parsePresenceStatePayload(raw: unknown): PresenceStatePayload | null {
-  const parsed = presenceStateSchema.safeParse(raw);
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  // Pick only contract fields so Phoenix bookkeeping keys never break parsing.
+  const record = raw as Record<string, unknown>;
+  const parsed = presenceStateSchema.safeParse({
+    v: record.v,
+    role: record.role,
+    ...(record.displayName !== undefined ? { displayName: record.displayName } : {}),
+  });
   return parsed.success ? parsed.data : null;
 }
 

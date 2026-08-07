@@ -83,9 +83,14 @@ describe("presence payload schema", () => {
     });
   });
 
-  it("rejects malformed presence payloads", () => {
-    expect(parsePresenceStatePayload({ v: 1, role: "visitor", hack: 1 })).toBeNull();
+  it("ignores unknown keys and rejects malformed presence payloads", () => {
+    // Phoenix Presence attaches bookkeeping fields; strip/ignore rather than reject.
+    expect(parsePresenceStatePayload({ v: 1, role: "visitor", hack: 1, phx_ref: "F1" })).toEqual({
+      v: 1,
+      role: "visitor",
+    });
     expect(parsePresenceStatePayload({ role: "visitor" })).toBeNull();
+    expect(parsePresenceStatePayload(null)).toBeNull();
   });
 });
 
@@ -262,6 +267,28 @@ describe("presence multi-tab reconciliation", () => {
 
     expect(peers).toHaveLength(1);
     expect(peers[0]?.key).toBe("good");
+  });
+
+  it("accepts Phoenix Presence metas that include phx_ref bookkeeping fields", () => {
+    const peers = reconcilePresencePeers({
+      wr_tab_a: [
+        {
+          ...buildPresenceStatePayload({ role: "visitor" }),
+          phx_ref: "F123",
+          phx_ref_prev: "F122",
+        },
+      ],
+      wr_tab_b: [
+        {
+          ...buildPresenceStatePayload({ role: "visitor" }),
+          phx_ref: "F999",
+        },
+      ],
+    });
+
+    expect(peers).toHaveLength(2);
+    expect(isRoleOnline(peers, "visitor")).toBe(true);
+    expect(peers.reduce((sum, peer) => sum + peer.connectionCount, 0)).toBe(2);
   });
 
   it("produces stable opaque operator keys", () => {
