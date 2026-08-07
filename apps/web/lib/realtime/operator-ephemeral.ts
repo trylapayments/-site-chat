@@ -273,8 +273,35 @@ export function subscribeOperatorConversationEphemeral(input: {
     void emitTypingStopped();
   }
 
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let retryAttempt = 0;
+
+  function clearRetryTimer() {
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  }
+
+  function scheduleResubscribe() {
+    if (!active || retryTimer !== null) {
+      return;
+    }
+
+    const delayMs = Math.min(1_000 * 2 ** retryAttempt, 15_000);
+    retryAttempt += 1;
+    setStatus("reconnecting");
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (active) {
+        void startSubscription();
+      }
+    }, delayMs);
+  }
+
   function handleChannelStatus(status: string) {
     if (status === "SUBSCRIBED") {
+      retryAttempt = 0;
       setStatus("connected");
       void trackPresence();
       return;
@@ -286,10 +313,11 @@ export function subscribeOperatorConversationEphemeral(input: {
       presenceTracked = false;
       clearRemoteTyping();
       input.onVisitorPresence({ online: false });
-      setStatus(currentStatus === "connected" ? "reconnecting" : "failed");
+      setStatus("reconnecting");
       if (failed) {
         void supabase.removeChannel(failed);
       }
+      scheduleResubscribe();
       return;
     }
 
@@ -299,7 +327,8 @@ export function subscribeOperatorConversationEphemeral(input: {
       clearRemoteTyping();
       input.onVisitorPresence({ online: false });
       if (active) {
-        setStatus("disconnected");
+        setStatus("reconnecting");
+        scheduleResubscribe();
       }
     }
   }
@@ -309,6 +338,12 @@ export function subscribeOperatorConversationEphemeral(input: {
     if (!active) {
       return;
     }
+
+    if (channel) {
+      return;
+    }
+
+    setStatus(retryAttempt > 0 ? "reconnecting" : "connecting");
 
     channel = supabase
       .channel(input.ephemeralTopic, {
@@ -352,6 +387,7 @@ export function subscribeOperatorConversationEphemeral(input: {
     clearLocalTyping,
     unsubscribe: () => {
       active = false;
+      clearRetryTimer();
       authSubscription.unsubscribe();
       clearTypingIdleTimer();
       stopTypingExpiryLoop();

@@ -318,6 +318,27 @@ function WidgetApp() {
     };
   }, [api, open, readyEmbedToken, readySessionToken]);
 
+  // Multi-tab / race: panel may open before listMessages finishes. When the
+  // conversation snapshot arrives, promote connecting → subscribed.
+  useEffect(() => {
+    const init = initRef.current;
+    const transport = transportRef.current;
+    if (!open || !init || !readySessionToken || !readyEmbedToken || !transport) {
+      return;
+    }
+    if (messages.length === 0) {
+      return;
+    }
+
+    if (transport.getMessages().length === 0) {
+      transport.replaceMessages(messages);
+    }
+    void transport.ensureLiveConnection({
+      embedToken: init.embedToken,
+      sessionToken: readySessionToken,
+    });
+  }, [messages.length, open, readyEmbedToken, readySessionToken]);
+
   useEffect(() => {
     if (!open) {
       return;

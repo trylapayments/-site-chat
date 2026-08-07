@@ -96,6 +96,13 @@ export function resolveWidgetSupabaseConfig(input?: {
   return { url, key };
 }
 
+function createTabPresenceSuffix(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export class WidgetRealtimeTransport {
   private client: SupabaseClient | null = null;
   private messageChannel: RealtimeChannel | null = null;
@@ -105,6 +112,8 @@ export class WidgetRealtimeTransport {
   private messageTopic = "";
   private ephemeralTopic = "";
   private presenceKey = "";
+  /** Stable per transport/tab instance so multi-tab presence does not collide. */
+  private readonly tabPresenceSuffix = createTabPresenceSuffix();
   private running = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
@@ -117,6 +126,7 @@ export class WidgetRealtimeTransport {
   private typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
   private presenceTracked = false;
   private messageSubscribed = false;
+  private ephemeralSubscribed = false;
 
   constructor(
     private readonly api: WidgetApiClient,
@@ -258,16 +268,20 @@ export class WidgetRealtimeTransport {
     };
 
     const onOnline = () => {
-      if (this.running) {
-        void this.catchUp({ embedToken, sessionToken });
-        void this.ensureSubscription(embedToken, sessionToken);
+      if (!this.running) {
+        return;
       }
+      // Stale channel refs can still be non-null after offline; force recreate.
+      this.invalidateChannelsForReconnect();
+      void this.catchUp({ embedToken, sessionToken });
+      void this.ensureSubscription(embedToken, sessionToken);
     };
 
     const onOffline = () => {
       if (this.running) {
         void this.emitTypingStopped();
         this.clearRemoteTyping();
+        this.invalidateChannelsForReconnect();
         this.callbacks.onConnectionState("disconnected");
         this.callbacks.onPresence?.({ operatorsOnline: false });
       }
@@ -322,22 +336,56 @@ export class WidgetRealtimeTransport {
     return this.running && generation === this.subscribeGeneration;
   }
 
+  /**
+   * Drop live channel refs so the next ensureSubscription recreates them.
+   * Keeps the Supabase client + minted token when still valid.
+   */
+  private invalidateChannelsForReconnect() {
+    this.clearRetryTimer();
+    this.messageSubscribed = false;
+    this.ephemeralSubscribed = false;
+    this.presenceTracked = false;
+
+    const message = this.messageChannel;
+    const ephemeral = this.ephemeralChannel;
+    this.messageChannel = null;
+    this.ephemeralChannel = null;
+
+    if (this.client) {
+      if (message) {
+        void this.client.removeChannel(message);
+      }
+      if (ephemeral) {
+        void this.client.removeChannel(ephemeral);
+      }
+    }
+  }
+
   private async ensureSubscription(embedToken: string, sessionToken: string) {
     if (!this.running) {
       return;
     }
 
     const tokenStale = Date.now() > this.tokenExpiresAt - 60_000;
+    // Require actual SUBSCRIBED state — non-null zombie refs after offline must not
+    // short-circuit recovery.
     const channelsReady =
-      this.messageChannel !== null && this.ephemeralChannel !== null && !tokenStale;
+      this.messageChannel !== null &&
+      this.ephemeralChannel !== null &&
+      this.messageSubscribed &&
+      this.ephemeralSubscribed &&
+      !tokenStale;
 
     if (channelsReady) {
+      this.emitCombinedConnectionState();
       return;
     }
 
     // Token still valid: recreate only the missing channel(s) without reminting.
     if (!tokenStale && this.client && this.messageTopic && this.ephemeralTopic) {
-      this.callbacks.onConnectionState("connecting");
+      this.callbacks.onConnectionState(
+        this.messageSubscribed || this.ephemeralSubscribed ? "reconnecting" : "connecting",
+      );
       this.subscribeMissingChannels(embedToken, sessionToken);
       return;
     }
@@ -384,7 +432,8 @@ export class WidgetRealtimeTransport {
     this.retryAttempt = 0;
     this.messageTopic = credentials.messageTopic;
     this.ephemeralTopic = credentials.ephemeralTopic;
-    this.presenceKey = credentials.presenceKey;
+    // Session subject + per-tab suffix: multi-tab stays online until the last tab leaves.
+    this.presenceKey = `${credentials.presenceKey}:${this.tabPresenceSuffix}`;
     this.tokenExpiresAt = new Date(credentials.expiresAt).getTime();
 
     const supabase = resolveWidgetSupabaseConfig({
@@ -424,7 +473,7 @@ export class WidgetRealtimeTransport {
   }
 
   private subscribeMessageChannel(embedToken: string, sessionToken: string) {
-    if (!this.client || !this.messageTopic) {
+    if (!this.client || !this.messageTopic || this.messageChannel) {
       return;
     }
 
@@ -452,11 +501,12 @@ export class WidgetRealtimeTransport {
   }
 
   private subscribeEphemeralChannel(embedToken: string, sessionToken: string) {
-    if (!this.client || !this.ephemeralTopic) {
+    if (!this.client || !this.ephemeralTopic || this.ephemeralChannel) {
       return;
     }
 
     this.presenceTracked = false;
+    this.ephemeralSubscribed = false;
 
     this.ephemeralChannel = this.client
       .channel(this.ephemeralTopic, {
@@ -629,13 +679,17 @@ export class WidgetRealtimeTransport {
   }
 
   private emitCombinedConnectionState() {
-    if (this.messageSubscribed) {
+    // Aggregate: both channels must be live. One failure must not leave us stuck
+    // "connected" while presence/typing is dead, nor stuck "failed" when the other
+    // channel can still recover.
+    if (this.messageSubscribed && this.ephemeralSubscribed) {
       this.callbacks.onConnectionState("connected");
       return;
     }
 
     if (this.messageChannel || this.ephemeralChannel) {
-      this.callbacks.onConnectionState("connecting");
+      const recovering = this.messageSubscribed || this.ephemeralSubscribed;
+      this.callbacks.onConnectionState(recovering ? "reconnecting" : "connecting");
     }
   }
 
@@ -665,13 +719,16 @@ export class WidgetRealtimeTransport {
       this.messageChannel = null;
       this.messageSubscribed = false;
       if (this.running) {
-        this.callbacks.onConnectionState("disconnected");
+        this.callbacks.onConnectionState("reconnecting");
+        this.scheduleSubscriptionRetry(embedToken, sessionToken);
       }
     }
   }
 
   private handleEphemeralChannelStatus(status: string, embedToken: string, sessionToken: string) {
     if (status === "SUBSCRIBED") {
+      this.ephemeralSubscribed = true;
+      this.retryAttempt = 0;
       void this.trackVisitorPresence();
       this.emitCombinedConnectionState();
       return;
@@ -680,6 +737,7 @@ export class WidgetRealtimeTransport {
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
       const failed = this.ephemeralChannel;
       this.ephemeralChannel = null;
+      this.ephemeralSubscribed = false;
       this.presenceTracked = false;
       if (failed && this.client) {
         void this.client.removeChannel(failed);
@@ -688,15 +746,21 @@ export class WidgetRealtimeTransport {
       this.clearRemoteTyping();
       this.callbacks.onPresence?.({ operatorsOnline: false });
       // Recreate the missing ephemeral channel without blocking message channel recovery.
+      this.callbacks.onConnectionState("reconnecting");
       this.scheduleSubscriptionRetry(embedToken, sessionToken);
       return;
     }
 
     if (status === "CLOSED") {
       this.ephemeralChannel = null;
+      this.ephemeralSubscribed = false;
       this.presenceTracked = false;
       this.clearRemoteTyping();
       this.callbacks.onPresence?.({ operatorsOnline: false });
+      if (this.running) {
+        this.callbacks.onConnectionState("reconnecting");
+        this.scheduleSubscriptionRetry(embedToken, sessionToken);
+      }
     }
   }
 
@@ -721,6 +785,7 @@ export class WidgetRealtimeTransport {
     void this.emitTypingStopped();
     this.presenceTracked = false;
     this.messageSubscribed = false;
+    this.ephemeralSubscribed = false;
 
     const message = this.messageChannel;
     const ephemeral = this.ephemeralChannel;
