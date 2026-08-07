@@ -114,7 +114,7 @@ function subscribeWithOperatorAuth(input: {
           filter: binding.filter,
         },
         (payload) => {
-          binding.handler(payload.new as Record<string, unknown>);
+          binding.handler(payload.new);
         },
       );
     }
