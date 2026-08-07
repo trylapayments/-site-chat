@@ -83,6 +83,11 @@ export function useLiveInboxList(input: {
     }, 250);
   }, [refreshList]);
 
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   useEffect(() => {
     const unsubscribe = subscribeOperatorWorkspaceInbox({
       workspaceId: input.workspaceId,
@@ -93,19 +98,28 @@ export function useLiveInboxList(input: {
           return;
         }
 
+        // Side effects must not run inside setState updaters (React may invoke
+        // them more than once or discard them under concurrent rendering).
+        const existing = itemsRef.current.find(
+          (item) => item.id === parsed.data.conversation_id,
+        );
+        if (!existing) {
+          scheduleRefresh();
+          return;
+        }
+
         setItems((current) => {
-          const existing = current.find(
+          const currentExisting = current.find(
             (item) => item.id === parsed.data.conversation_id,
           );
-          if (!existing) {
-            scheduleRefresh();
+          if (!currentExisting) {
             return current;
           }
 
-          const next = patchConversationListItem(existing, {
+          const next = patchConversationListItem(currentExisting, {
             last_message_at: parsed.data.created_at,
             last_message_preview: parsed.data.body.slice(0, 200),
-            message_count: existing.message_count + 1,
+            message_count: currentExisting.message_count + 1,
             has_unread: parsed.data.sender_type === "visitor",
           });
 
@@ -126,14 +140,26 @@ export function useLiveInboxList(input: {
           return;
         }
 
+        const existing = itemsRef.current.find(
+          (item) => item.id === parsed.data.id,
+        );
+        if (!existing) {
+          scheduleRefresh();
+          return;
+        }
+
         setItems((current) => {
-          const existing = current.find((item) => item.id === parsed.data.id);
-          if (!existing) {
-            scheduleRefresh();
+          const currentExisting = current.find(
+            (item) => item.id === parsed.data.id,
+          );
+          if (!currentExisting) {
             return current;
           }
 
-          const patched = patchConversationListItem(existing, parsed.data);
+          const patched = patchConversationListItem(
+            currentExisting,
+            parsed.data,
+          );
           const matches = conversationMatchesFilters(patched, {
             status: input.query.status,
             assignment: input.query.assignment,
