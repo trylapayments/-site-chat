@@ -20,6 +20,10 @@ export const messages_fa: WidgetMessages = {
   agentLabel: "پشتیبان",
   systemLabel: "سیستم",
   chatPanelLabel: "گفتگو",
+  agentTyping: "{{name}} در حال نوشتن است…",
+  visitorTyping: "بازدیدکننده در حال نوشتن است…",
+  online: "آنلاین",
+  offline: "آفلاین",
 };
 
 export default messages_fa;

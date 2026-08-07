@@ -1,6 +1,6 @@
 # Widget Internationalization (i18n)
 
-**Status:** Foundation (PR 4D-1)  
+**Status:** Foundation (PR 4D-1) + typing/presence keys (PR 4D-2)  
 **Verified LiveChat language list:** 2026-08-06  
 **Source:** [Modify the chat widget language (LiveChat Help)](https://www.livechat.com/help/how-to-modify-chat-window-language/) (article updated Dec 5, 2024)  
 **Official language count:** **48**
@@ -10,7 +10,9 @@ This document covers **visitor widget interface localization** only. It does **n
 - translating visitor/agent message bodies
 - operator dashboard localization
 - AI / automatic message translation
-- typing indicators, presence, read receipts, or notifications
+- read receipts or notifications
+
+Typing indicators and basic presence chrome keys were added in PR 4D-2 (`agentTyping`, `visitorTyping`, `online`, `offline`).
 
 ---
 
@@ -21,13 +23,15 @@ Dictionary **key completeness** is enforced by `i18n:check` (every locale has ev
 | Source class | Locales |
 |--------------|---------|
 | Canonical / authored | `en` (source of truth) |
-| Prior product copy, reviewed | `ru` (pre-existing widget dictionary, retained/extended) |
-| Machine-assisted + manual UI review | `he`, `ar`, `fa` (RTL-critical), plus major LTR: `de`, `es`, `fr`, `it`, `pt-PT`, `pt-BR`, `nl`, `pl`, `uk`, `zh-CN`, `zh-TW`, `ja`, `ko` |
-| Machine-assisted (short UI chrome; needs native-speaker polish) | Remaining registry locales (`hy`, `az`, `bg`, `ca`, `hr`, `cs`, `da`, `et`, `fi`, `ka`, `el`, `hi`, `hu`, `is`, `id`, `kk`, `lv`, `lt`, `mg`, `ms`, `nb`, `nn`, `ro`, `sr`, `sk`, `sl`, `sv`, `th`, `tr`, `vi`) |
+| Prior product copy, reviewed | `ru` (pre-existing widget dictionary, retained/extended; typing/presence keys manually reviewed) |
+| Machine-assisted + manual UI review | `he`, `ar`, `fa` (RTL-critical), plus major LTR: `de`, `es`, `fr`, `it`, `pt-PT`, `pt-BR`, `nl`, `pl`, `uk`, `zh-CN`, `zh-TW`, `ja`, `ko` — typing/presence keys included; `he` / `ru` re-checked for natural UI wording |
+| Machine-assisted (short UI chrome; needs native-speaker polish) | Remaining registry locales (`hy`, `az`, `bg`, `ca`, `hr`, `cs`, `da`, `et`, `fi`, `ka`, `el`, `hi`, `hu`, `is`, `id`, `kk`, `lv`, `lt`, `mg`, `ms`, `nb`, `nn`, `ro`, `sr`, `sk`, `sl`, `sv`, `th`, `tr`, `vi`) including typing/presence keys |
 
 Do **not** describe machine-assisted dictionaries as “human-complete translations.” Prefer native-speaker review for customer-facing production of lower-resource locales.
 
-Legitimate English loanwords in some locales (`Send`, `Agent`, `System`, `Chat`) and brand-preserving `poweredBy` lines that keep “Site Chat” are intentional, not missing translations.
+Legitimate English loanwords in some locales (`Send`, `Agent`, `System`, `Chat`, `Online`/`Offline`) and brand-preserving `poweredBy` lines that keep “Site Chat” are intentional, not missing translations.
+
+`agentTyping` uses a `{{name}}` placeholder filled with a safe display name when available, otherwise the localized `agentLabel`. Presence strings are intentionally subtle and must not imply an immediate reply.
 
 ---
 
@@ -133,7 +137,7 @@ Invalid stored locales are normalized to English at the SQL and Zod boundaries. 
 3. Use the key from `messagesCopy` in `WidgetApp` — no hardcoded UI chrome strings.
 4. Run `pnpm --filter @site-chat/widget i18n:check`.
 
-Preserve interpolation placeholders exactly (none are required today; the checker enforces parity).
+Preserve interpolation placeholders exactly. `agentTyping` requires `{{name}}` (filled with a safe display name or localized `agentLabel`). The checker enforces placeholder parity against English.
 
 Do not translate brand name **Site Chat** or visitor/agent message bodies. Workspace greeting text is configuration, not dictionary copy.
 

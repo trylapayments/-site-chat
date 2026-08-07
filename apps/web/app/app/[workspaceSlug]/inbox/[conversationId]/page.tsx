@@ -7,6 +7,7 @@ import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPage
 import { ConversationSidebar } from "@/components/inbox/ConversationSidebar";
 import { LiveConversationThread } from "@/components/inbox/LiveConversationThread";
 import { MarkConversationRead } from "@/components/inbox/ConversationThread";
+import { requireUser } from "@/lib/auth/session";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
@@ -26,6 +27,20 @@ export default async function ConversationDetailPage({
   const { workspaceSlug, conversationId } = await params;
   const { workspace } = await requireInboxWorkspace(workspaceSlug);
   const supabase = await createClient();
+  const { user } = await requireUser(supabase);
+
+  let memberId = "";
+  let memberDisplayLabel: string | null = null;
+  if (user) {
+    const { data: memberRow } = await supabase
+      .from("workspace_members")
+      .select("id")
+      .eq("workspace_id", workspace.workspace_id)
+      .eq("user_id", user.id)
+      .maybeSingle<{ id: string }>();
+    memberId = memberRow?.id ?? "";
+    memberDisplayLabel = user.email ?? null;
+  }
 
   let conversation;
   let messages;
@@ -77,6 +92,9 @@ export default async function ConversationDetailPage({
             workspaceId={workspace.workspace_id}
             workspaceSlug={workspaceSlug}
             conversationId={conversationId}
+            ephemeralTopic={conversation.visitor_ephemeral_topic}
+            memberId={memberId}
+            memberDisplayLabel={memberDisplayLabel}
             initialMessages={messages.items}
             canSend={can(workspace.role, "send_messages")}
           />

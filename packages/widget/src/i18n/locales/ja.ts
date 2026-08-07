@@ -20,6 +20,10 @@ export const messages_ja: WidgetMessages = {
   agentLabel: "担当者",
   systemLabel: "システム",
   chatPanelLabel: "チャット",
+  agentTyping: "{{name}}が入力中…",
+  visitorTyping: "訪問者が入力中…",
+  online: "オンライン",
+  offline: "オフライン",
 };
 
 export default messages_ja;

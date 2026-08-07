@@ -6,10 +6,11 @@ import {
 } from "./realtime-token";
 
 describe("createWidgetRealtimeToken", () => {
-  it("creates a signed JWT with widget_realtime claims", () => {
+  it("creates a signed JWT with widget_realtime topic_key claims", () => {
+    const topicKey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const result = createWidgetRealtimeToken({
-      topic:
-        "widget-conversation:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      topicKey,
       subject: "wr_deadbeefcafebabe",
     });
 
@@ -25,7 +26,7 @@ describe("createWidgetRealtimeToken", () => {
     ) as {
       role: string;
       purpose: string;
-      topic: string;
+      topic_key: string;
       sub: string;
       exp: number;
       iat: number;
@@ -35,7 +36,9 @@ describe("createWidgetRealtimeToken", () => {
     expect(header.typ).toBe("JWT");
     expect(payload.role).toBe("widget_realtime");
     expect(payload.purpose).toBe("widget_realtime");
-    expect(payload.topic).toMatch(/^widget-conversation:[a-f0-9]{64}$/);
+    expect(payload.topic_key).toBe(topicKey);
+    expect(payload.topic_key).toMatch(/^[a-f0-9]{64}$/);
+    expect(payload).not.toHaveProperty("topic");
     expect(payload.sub).toBe("wr_deadbeefcafebabe");
     expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
     expect(payload.exp - payload.iat).toBe(WIDGET_REALTIME_TOKEN_TTL_MS / 1000);

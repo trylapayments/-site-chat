@@ -20,6 +20,10 @@ export const messages_zh_TW: WidgetMessages = {
   agentLabel: "客服",
   systemLabel: "系統",
   chatPanelLabel: "聊天",
+  agentTyping: "{{name}} 正在輸入…",
+  visitorTyping: "訪客正在輸入…",
+  online: "線上",
+  offline: "離線",
 };
 
 export default messages_zh_TW;

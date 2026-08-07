@@ -20,6 +20,10 @@ export const messages_mg: WidgetMessages = {
   agentLabel: "Mpikarakara",
   systemLabel: "Rafitra",
   chatPanelLabel: "Chat",
+  agentTyping: "{{name}} manoratra…",
+  visitorTyping: "Ny mpitsidika manoratra…",
+  online: "An-tserasera",
+  offline: "Tsy an-tserasera",
 };
 
 export default messages_mg;

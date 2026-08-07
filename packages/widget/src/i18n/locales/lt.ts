@@ -20,6 +20,10 @@ export const messages_lt: WidgetMessages = {
   agentLabel: "Agentas",
   systemLabel: "Sistema",
   chatPanelLabel: "Pokalbis",
+  agentTyping: "{{name}} rašo…",
+  visitorTyping: "Lankytojas rašo…",
+  online: "Prisijungęs",
+  offline: "Atsijungęs",
 };
 
 export default messages_lt;

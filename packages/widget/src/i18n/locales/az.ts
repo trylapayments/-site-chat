@@ -20,6 +20,10 @@ export const messages_az: WidgetMessages = {
   agentLabel: "Agent",
   systemLabel: "Sistem",
   chatPanelLabel: "Çat",
+  agentTyping: "{{name}} yazır…",
+  visitorTyping: "Ziyarətçi yazır…",
+  online: "Onlayn",
+  offline: "Oflayn",
 };
 
 export default messages_az;

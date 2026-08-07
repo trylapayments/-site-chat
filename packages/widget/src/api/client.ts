@@ -156,7 +156,9 @@ export class WidgetApiClient {
 
   async createRealtimeToken(input: { embedToken: string; sessionToken: string }): Promise<{
     token: string;
-    topic: string;
+    messageTopic: string;
+    ephemeralTopic: string;
+    presenceKey: string;
     expiresAt: string;
     supabaseUrl: string;
     supabaseAnonKey: string;

@@ -80,7 +80,20 @@ export const conversationDetailSchema = z
     assigned_to: assigneeSchema,
     contact: contactDetailSchema,
     visitor_session_id: z.string().uuid(),
+    /**
+     * Private Realtime topic for server-originated visitor-safe message Broadcast.
+     * Opaque `widget-conversation:{64-hex}` — never the conversation UUID.
+     * Operator-only (authorized workspace members). SELECT only for visitors.
+     */
+    visitor_realtime_topic: z.string().regex(/^widget-conversation:[a-f0-9]{64}$/),
+    /**
+     * Private Realtime topic for typing Broadcast + Presence.
+     * Opaque `widget-ephemeral:{64-hex}` — same topic key, separate channel.
+     * Operator-only (authorized workspace members).
+     */
+    visitor_ephemeral_topic: z.string().regex(/^widget-ephemeral:[a-f0-9]{64}$/),
     source_url: z.string().nullable(),
+
     message_count: z.number().int(),
     last_message_at: z.string().nullable(),
     has_unread: z.boolean(),

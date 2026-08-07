@@ -20,6 +20,10 @@ export const messages_hy: WidgetMessages = {
   agentLabel: "Գործակալ",
   systemLabel: "Համակարգ",
   chatPanelLabel: "Չաթ",
+  agentTyping: "{{name}}-ը գրում է…",
+  visitorTyping: "Այցելուն գրում է…",
+  online: "Առցանց",
+  offline: "Անցանց",
 };
 
 export default messages_hy;

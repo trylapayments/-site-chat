@@ -52,3 +52,10 @@ describe("formatMessageTime", () => {
     expect(formatMessageTime("", "he")).toBe("");
   });
 });
+
+describe("formatWidgetMessage", () => {
+  it("interpolates {{name}} placeholders", async () => {
+    const { formatWidgetMessage } = await import("./format");
+    expect(formatWidgetMessage("{{name}} is typing…", { name: "Agent" })).toBe("Agent is typing…");
+  });
+});

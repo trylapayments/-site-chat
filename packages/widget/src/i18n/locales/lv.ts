@@ -20,6 +20,10 @@ export const messages_lv: WidgetMessages = {
   agentLabel: "Aģents",
   systemLabel: "Sistēma",
   chatPanelLabel: "Čats",
+  agentTyping: "{{name}} raksta…",
+  visitorTyping: "Apmeklētājs raksta…",
+  online: "Tiešsaistē",
+  offline: "Bezsaistē",
 };
 
 export default messages_lv;

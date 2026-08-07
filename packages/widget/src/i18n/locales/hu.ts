@@ -20,6 +20,10 @@ export const messages_hu: WidgetMessages = {
   agentLabel: "Ügyintéző",
   systemLabel: "Rendszer",
   chatPanelLabel: "Chat",
+  agentTyping: "{{name}} gépel…",
+  visitorTyping: "A látogató gépel…",
+  online: "Elérhető",
+  offline: "Nem elérhető",
 };
 
 export default messages_hu;

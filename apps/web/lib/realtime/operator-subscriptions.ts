@@ -1,6 +1,7 @@
 "use client";
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js";
 import { useEffect, useRef } from "react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -12,14 +13,19 @@ export type RealtimeConnectionListener = (
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
 ) => void;
 
-async function applyOperatorRealtimeAuth(supabase: OperatorSupabaseClient) {
+async function applyOperatorRealtimeAuth(
+  supabase: OperatorSupabaseClient,
+): Promise<boolean> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session?.access_token) {
-    await supabase.realtime.setAuth(session.access_token);
+  if (!session?.access_token) {
+    return false;
   }
+
+  await supabase.realtime.setAuth(session.access_token);
+  return true;
 }
 
 function subscribeWithOperatorAuth(input: {
@@ -41,16 +47,63 @@ function subscribeWithOperatorAuth(input: {
     : never = "connecting";
   let channel: RealtimeChannel | null = null;
   let active = true;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let retryAttempt = 0;
+  let channelEpoch = 0;
 
   input.onConnectionChange?.(currentStatus);
 
+  function clearRetryTimer() {
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  }
+
+  function scheduleResubscribe() {
+    if (!active || retryTimer !== null) {
+      return;
+    }
+    const delayMs = Math.min(1_000 * 2 ** retryAttempt, 15_000);
+    retryAttempt += 1;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (active) {
+        void startSubscription();
+      }
+    }, delayMs);
+  }
+
   async function startSubscription() {
-    await applyOperatorRealtimeAuth(input.supabase);
+    clearRetryTimer();
+    const authed = await applyOperatorRealtimeAuth(input.supabase);
     if (!active) {
       return;
     }
 
-    let nextChannel = input.supabase.channel(input.channelName);
+    // postgres_changes is RLS-filtered; subscribing before setAuth reports
+    // SUBSCRIBED but delivers no rows. Wait for onAuthStateChange instead.
+    if (!authed) {
+      return;
+    }
+
+    if (channel) {
+      const previous = channel;
+      channel = null;
+      void input.supabase.removeChannel(previous);
+      // Surface a status transition so consumers refresh after auth-driven
+      // resubscribe (React ignores setState of the same "connected" value).
+      if (currentStatus === "connected") {
+        currentStatus = "reconnecting";
+        input.onConnectionChange?.(currentStatus);
+      }
+    }
+
+    const epoch = ++channelEpoch;
+    // Unique topic per subscribe attempt avoids colliding with a channel that is
+    // still being removed after StrictMode remount / CHANNEL_ERROR.
+    const topic = `${input.channelName}:${String(epoch)}:${Math.random().toString(36).slice(2, 8)}`;
+    let nextChannel = input.supabase.channel(topic);
     for (const binding of input.bindings) {
       nextChannel = nextChannel.on(
         "postgres_changes",
@@ -67,7 +120,41 @@ function subscribeWithOperatorAuth(input: {
     }
 
     channel = nextChannel.subscribe((status) => {
+      if (!active || epoch !== channelEpoch) {
+        return;
+      }
+
       const next = mapChannelStatus(status, currentStatus);
+
+      if (
+        status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
+        status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT
+      ) {
+        const failed = channel;
+        channel = null;
+        if (failed) {
+          void input.supabase.removeChannel(failed);
+        }
+        if (next !== currentStatus) {
+          currentStatus = next;
+          input.onConnectionChange?.(next);
+        }
+        scheduleResubscribe();
+        return;
+      }
+
+      if (status === REALTIME_SUBSCRIBE_STATES.CLOSED) {
+        channel = null;
+        if (next !== currentStatus) {
+          currentStatus = next;
+          input.onConnectionChange?.(next);
+        }
+        scheduleResubscribe();
+        return;
+      }
+
+      // Remaining subscribe callback status is SUBSCRIBED.
+      retryAttempt = 0;
       if (next !== currentStatus) {
         currentStatus = next;
         input.onConnectionChange?.(next);
@@ -84,14 +171,26 @@ function subscribeWithOperatorAuth(input: {
       return;
     }
 
-    void input.supabase.realtime.setAuth(session.access_token);
+    void (async () => {
+      await input.supabase.realtime.setAuth(session.access_token);
+      if (!active) {
+        return;
+      }
+      // Resubscribe after auth so CDC bindings are authorized. setAuth alone
+      // does not retrofit an already-joined postgres_changes channel.
+      void startSubscription();
+    })();
   });
 
   return () => {
     active = false;
+    clearRetryTimer();
+    channelEpoch += 1;
     authSubscription.unsubscribe();
     if (channel) {
-      void input.supabase.removeChannel(channel);
+      const current = channel;
+      channel = null;
+      void input.supabase.removeChannel(current);
     }
   };
 }
@@ -167,23 +266,21 @@ export function subscribeOperatorConversation(input: {
 }
 
 function mapChannelStatus(
-  status: string,
+  status: REALTIME_SUBSCRIBE_STATES,
   previous:
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
 ): "connecting" | "connected" | "reconnecting" | "disconnected" | "failed" {
-  if (status === "SUBSCRIBED") {
-    return "connected";
+  switch (status) {
+    case REALTIME_SUBSCRIBE_STATES.SUBSCRIBED:
+      return "connected";
+    case REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR:
+    case REALTIME_SUBSCRIBE_STATES.TIMED_OUT:
+      return previous === "connected" ? "reconnecting" : "failed";
+    case REALTIME_SUBSCRIBE_STATES.CLOSED:
+      return "disconnected";
+    default:
+      return previous === "connected" ? "reconnecting" : "connecting";
   }
-
-  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-    return previous === "connected" ? "reconnecting" : "failed";
-  }
-
-  if (status === "CLOSED") {
-    return "disconnected";
-  }
-
-  return previous === "connected" ? "reconnecting" : "connecting";
 }
 
 export function useOnlineStatus(onChange: (online: boolean) => void) {

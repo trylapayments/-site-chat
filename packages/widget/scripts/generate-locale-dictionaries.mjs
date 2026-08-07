@@ -37,6 +37,10 @@ const en = {
   agentLabel: "Agent",
   systemLabel: "System",
   chatPanelLabel: "Chat",
+  agentTyping: "{{name}} is typing…",
+  visitorTyping: "Visitor is typing…",
+  online: "Online",
+  offline: "Offline",
 };
 
 /** @type {Record<string, Dict>} */
@@ -62,6 +66,10 @@ const dictionaries = {
     agentLabel: "Оператор",
     systemLabel: "Система",
     chatPanelLabel: "Чат",
+    agentTyping: "{{name}} печатает…",
+    visitorTyping: "Посетитель печатает…",
+    online: "В сети",
+    offline: "Не в сети",
   },
   he: {
     // Reviewed for natural short UI Hebrew
@@ -84,6 +92,10 @@ const dictionaries = {
     agentLabel: "נציג",
     systemLabel: "מערכת",
     chatPanelLabel: "צ׳אט",
+    agentTyping: "{{name}} מקליד…",
+    visitorTyping: "האורח מקליד…",
+    online: "מחובר",
+    offline: "לא מחובר",
   },
   ar: {
     launcherLabel: "فتح المحادثة",

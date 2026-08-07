@@ -270,7 +270,12 @@ export async function listVisitorMessages(input: {
 export async function resolveWidgetRealtimeTopic(input: {
   workspaceId: string;
   sessionToken: string;
-}): Promise<{ topic: string; subject: string }> {
+}): Promise<{
+  topicKey: string;
+  messageTopic: string;
+  ephemeralTopic: string;
+  subject: string;
+}> {
   const supabase = createServiceClient();
   const { data, error } = await supabase.rpc("widget_resolve_realtime_topic", {
     p_workspace_id: input.workspaceId,
@@ -286,12 +291,19 @@ export async function resolveWidgetRealtimeTopic(input: {
   }
 
   const record = data as Record<string, unknown>;
-  if (typeof record.topic !== "string" || typeof record.subject !== "string") {
+  if (
+    typeof record.topic_key !== "string" ||
+    typeof record.message_topic !== "string" ||
+    typeof record.ephemeral_topic !== "string" ||
+    typeof record.subject !== "string"
+  ) {
     throw new Error("Invalid realtime topic response");
   }
 
   return {
-    topic: record.topic,
+    topicKey: record.topic_key,
+    messageTopic: record.message_topic,
+    ephemeralTopic: record.ephemeral_topic,
     subject: record.subject,
   };
 }

@@ -20,6 +20,10 @@ export const messages_et: WidgetMessages = {
   agentLabel: "Agent",
   systemLabel: "Süsteem",
   chatPanelLabel: "Vestlus",
+  agentTyping: "{{name}} kirjutab…",
+  visitorTyping: "Külastaja kirjutab…",
+  online: "Võrgus",
+  offline: "Võrguühenduseta",
 };
 
 export default messages_et;

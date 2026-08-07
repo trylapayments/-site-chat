@@ -1,5 +1,47 @@
 import type { ConversationListItem } from "../schemas/conversation.js";
-import type { OperatorConversationChange } from "../schemas/realtime.js";
+import type { OperatorConversationChange, OperatorMessageChange } from "../schemas/realtime.js";
+
+/**
+ * Build a list-row stub from a CDC conversation payload when the inbox does not
+ * yet have the conversation. Contact enrichment arrives via refreshList.
+ */
+export function conversationListItemFromChange(
+  change: OperatorConversationChange,
+): ConversationListItem {
+  return {
+    id: change.id,
+    status: change.status,
+    channel_type: "widget",
+    assigned_to: null,
+    contact: null,
+    last_message_at: change.last_message_at,
+    last_message_preview: change.last_message_preview,
+    message_count: change.message_count,
+    has_unread: true,
+    created_at: change.updated_at,
+  };
+}
+
+/**
+ * Build a list-row stub from the first message INSERT for an unknown conversation
+ * so the inbox can render the preview before list_conversations catch-up.
+ */
+export function conversationListItemFromMessage(
+  message: OperatorMessageChange,
+): ConversationListItem {
+  return {
+    id: message.conversation_id,
+    status: "open",
+    channel_type: "widget",
+    assigned_to: null,
+    contact: null,
+    last_message_at: message.created_at,
+    last_message_preview: message.body.slice(0, 200),
+    message_count: Math.max(1, message.sequence_number),
+    has_unread: message.sender_type === "visitor",
+    created_at: message.created_at,
+  };
+}
 
 export function patchConversationListItem(
   item: ConversationListItem,

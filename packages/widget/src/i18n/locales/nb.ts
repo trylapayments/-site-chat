@@ -20,6 +20,10 @@ export const messages_nb: WidgetMessages = {
   agentLabel: "Agent",
   systemLabel: "System",
   chatPanelLabel: "Chat",
+  agentTyping: "{{name}} skriver…",
+  visitorTyping: "Besøkende skriver…",
+  online: "Pålogget",
+  offline: "Frakoblet",
 };
 
 export default messages_nb;

@@ -20,6 +20,10 @@ export const messages_sr: WidgetMessages = {
   agentLabel: "Агент",
   systemLabel: "Систем",
   chatPanelLabel: "Ћаскање",
+  agentTyping: "{{name}} куца…",
+  visitorTyping: "Посетилац куца…",
+  online: "На мрежи",
+  offline: "Ван мреже",
 };
 
 export default messages_sr;

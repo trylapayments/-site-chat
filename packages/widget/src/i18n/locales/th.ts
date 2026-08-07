@@ -20,6 +20,10 @@ export const messages_th: WidgetMessages = {
   agentLabel: "เจ้าหน้าที่",
   systemLabel: "ระบบ",
   chatPanelLabel: "แชท",
+  agentTyping: "{{name}} กำลังพิมพ์…",
+  visitorTyping: "ผู้เยี่ยมชมกำลังพิมพ์…",
+  online: "ออนไลน์",
+  offline: "ออฟไลน์",
 };
 
 export default messages_th;

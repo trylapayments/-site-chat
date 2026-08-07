@@ -20,6 +20,10 @@ export const messages_bg: WidgetMessages = {
   agentLabel: "Агент",
   systemLabel: "Система",
   chatPanelLabel: "Чат",
+  agentTyping: "{{name}} пише…",
+  visitorTyping: "Посетителят пише…",
+  online: "На линия",
+  offline: "Извън линия",
 };
 
 export default messages_bg;

@@ -20,6 +20,10 @@ export const messages_ko: WidgetMessages = {
   agentLabel: "상담원",
   systemLabel: "시스템",
   chatPanelLabel: "채팅",
+  agentTyping: "{{name}}님이 입력 중…",
+  visitorTyping: "방문자가 입력 중…",
+  online: "온라인",
+  offline: "오프라인",
 };
 
 export default messages_ko;

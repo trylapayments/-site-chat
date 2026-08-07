@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     });
 
     const token = createWidgetRealtimeToken({
-      topic: resolved.topic,
+      topicKey: resolved.topicKey,
       subject: resolved.subject,
     });
 
@@ -127,7 +127,9 @@ export async function POST(request: Request) {
       widgetRealtimeTokenDataSchema,
       {
         token: token.token,
-        topic: resolved.topic,
+        messageTopic: resolved.messageTopic,
+        ephemeralTopic: resolved.ephemeralTopic,
+        presenceKey: resolved.subject,
         expiresAt: token.expiresAt.toISOString(),
         // Served at token-mint time so the committed widget bundle is not tied
         // to CI placeholder URL/key baked into public/widget/app.js.
