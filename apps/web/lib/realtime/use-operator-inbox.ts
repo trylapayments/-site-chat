@@ -66,8 +66,14 @@ export function useLiveInboxList(input: {
   const statusFilter = input.query.status;
   const assignmentFilter = input.query.assignment;
 
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   const refreshList = useCallback(async () => {
     const generation = ++refreshGenerationRef.current;
+    const itemsBeforeFetch = itemsRef.current;
     try {
       const supabase = createClient() as AppSupabaseClient;
       const refreshed = await fetchConversations(
@@ -78,11 +84,28 @@ export function useLiveInboxList(input: {
       if (generation !== refreshGenerationRef.current) {
         return;
       }
-      setItems(refreshed.items);
+      setItems((current) => {
+        // Preserve CDC stubs that landed while the RPC was in flight so a
+        // slightly-stale list_conversations response cannot wipe them.
+        const byId = new Map(
+          refreshed.items.map((item) => [item.id, item] as const),
+        );
+        for (const local of current) {
+          if (!byId.has(local.id)) {
+            byId.set(local.id, local);
+          }
+        }
+        for (const local of itemsBeforeFetch) {
+          if (!byId.has(local.id)) {
+            byId.set(local.id, local);
+          }
+        }
+        return sortConversationItems([...byId.values()], sort);
+      });
     } catch {
       // Keep the last good list; a later CDC event or reconnect will retry.
     }
-  }, [input.query, input.workspaceId]);
+  }, [input.query, input.workspaceId, sort]);
 
   const scheduleRefresh = useCallback(() => {
     if (refreshTimerRef.current !== null) {
@@ -92,11 +115,6 @@ export function useLiveInboxList(input: {
       void refreshList();
     }, 250);
   }, [refreshList]);
-
-  const itemsRef = useRef(items);
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
 
   useEffect(() => {
     const unsubscribe = subscribeOperatorWorkspaceInbox({

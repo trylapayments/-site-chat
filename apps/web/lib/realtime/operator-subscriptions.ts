@@ -13,14 +13,19 @@ export type RealtimeConnectionListener = (
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
 ) => void;
 
-async function applyOperatorRealtimeAuth(supabase: OperatorSupabaseClient) {
+async function applyOperatorRealtimeAuth(
+  supabase: OperatorSupabaseClient,
+): Promise<boolean> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session?.access_token) {
-    await supabase.realtime.setAuth(session.access_token);
+  if (!session?.access_token) {
+    return false;
   }
+
+  await supabase.realtime.setAuth(session.access_token);
+  return true;
 }
 
 function subscribeWithOperatorAuth(input: {
@@ -70,8 +75,15 @@ function subscribeWithOperatorAuth(input: {
   }
 
   async function startSubscription() {
-    await applyOperatorRealtimeAuth(input.supabase);
+    clearRetryTimer();
+    const authed = await applyOperatorRealtimeAuth(input.supabase);
     if (!active) {
+      return;
+    }
+
+    // postgres_changes is RLS-filtered; subscribing before setAuth reports
+    // SUBSCRIBED but delivers no rows. Wait for onAuthStateChange instead.
+    if (!authed) {
       return;
     }
 
@@ -79,6 +91,12 @@ function subscribeWithOperatorAuth(input: {
       const previous = channel;
       channel = null;
       void input.supabase.removeChannel(previous);
+      // Surface a status transition so consumers refresh after auth-driven
+      // resubscribe (React ignores setState of the same "connected" value).
+      if (currentStatus === "connected") {
+        currentStatus = "reconnecting";
+        input.onConnectionChange?.(currentStatus);
+      }
     }
 
     const epoch = ++channelEpoch;
@@ -96,7 +114,7 @@ function subscribeWithOperatorAuth(input: {
           filter: binding.filter,
         },
         (payload) => {
-          binding.handler(payload.new);
+          binding.handler(payload.new as Record<string, unknown>);
         },
       );
     }
@@ -153,7 +171,15 @@ function subscribeWithOperatorAuth(input: {
       return;
     }
 
-    void input.supabase.realtime.setAuth(session.access_token);
+    void (async () => {
+      await input.supabase.realtime.setAuth(session.access_token);
+      if (!active) {
+        return;
+      }
+      // Resubscribe after auth so CDC bindings are authorized. setAuth alone
+      // does not retrofit an already-joined postgres_changes channel.
+      void startSubscription();
+    })();
   });
 
   return () => {
