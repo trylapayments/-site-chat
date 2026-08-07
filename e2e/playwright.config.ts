@@ -23,13 +23,12 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
+  // Single project: previously operator-chromium duplicated every realtime spec
+  // with identical Desktop Chrome settings (no storageState / baseURL difference),
+  // which produced false "loginOperator waitForURL" failures on the first pass
+  // while the same flows passed under widget-chromium. Keep widget-chromium as
+  // the canonical runner; localization specs still guard on project.name.
   projects: [
-    {
-      name: "operator-chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-      },
-    },
     {
       name: "widget-chromium",
       use: {

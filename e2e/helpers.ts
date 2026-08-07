@@ -8,12 +8,15 @@ export const OPERATOR_PASSWORD = "local-dev-password";
 
 export async function loginOperator(page: Page) {
   await page.goto(`${APP_URL}/login`);
+  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 60_000 });
   await page.getByLabel("Email").fill(OPERATOR_EMAIL);
   await page.getByLabel("Password").fill(OPERATOR_PASSWORD);
   await Promise.all([
     page.waitForURL(/\/app\//, { timeout: 60_000 }),
     page.getByRole("button", { name: "Sign in" }).click(),
   ]);
+  // Ensure the post-auth redirect landed in the app shell before callers navigate.
+  await expect(page).toHaveURL(/\/app\//);
 }
 
 function widgetFrame(page: Page): FrameLocator {

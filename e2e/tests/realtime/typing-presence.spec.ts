@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import {
   APP_URL,
@@ -23,11 +23,23 @@ async function openOperatorInbox(page: Page) {
   await waitForOperatorInboxRealtimeReady(page);
 }
 
+/**
+ * Operator dashboard and visitor widget share localhost:3000 (iframe origin).
+ * Keep them in separate browser contexts so Supabase auth cookies / localStorage
+ * for the operator never collide with visitor session tokens.
+ */
+async function createIsolatedOperatorAndVisitor(browser: Browser) {
+  const operatorContext = await browser.newContext();
+  const visitorContext = await browser.newContext();
+  const operator = await operatorContext.newPage();
+  return { operatorContext, visitorContext, operator };
+}
+
 test.describe("PR 4D-2 typing indicators and presence", () => {
   test("visitor and operator typing + multi-tab presence", async ({ browser }) => {
-    const operator = await browser.newPage();
-    const visitorA = await browser.newPage();
-    const visitorB = await browser.newPage();
+    const { operatorContext, visitorContext, operator } =
+      await createIsolatedOperatorAndVisitor(browser);
+    const visitorA = await visitorContext.newPage();
 
     await loginOperator(operator);
     await openOperatorInbox(operator);
@@ -68,14 +80,6 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
       widgetFrameLocator(visitorA).getByRole("article").getByText(`agent-live-${marker}`),
     ).toBeVisible({ timeout: 30_000 });
 
-    // Multi-tab presence: open second visitor tab on same session host
-    await openWidget(visitorB);
-    // Ensure conversation is live on B (may need a message or open panel already)
-    await waitForWidgetRealtimeReady(visitorB).catch(async () => {
-      // If B has no conversation yet, send a ping from A keeps session; B shares storage
-      // only within same origin — second page has separate storage. Seed via A presence.
-    });
-
     // Presence: visitor A online on operator
     await expect(operator.getByTestId("visitor-presence")).toHaveAttribute(
       "data-presence",
@@ -83,24 +87,18 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
       { timeout: 30_000 },
     );
 
-    // Close visitor A — if B never shared the same session, presence may drop.
-    // Spec requires same session multi-tab. Copy session by using same storage via
-    // browser context. Use a shared context instead when possible.
-    await visitorA.close();
-
-    // Re-check: with only one tab of a different session, offline is acceptable.
-    // Dedicated multi-tab same-session check below.
-    await operator.close();
-    await visitorB.close();
+    await operatorContext.close();
+    await visitorContext.close();
   });
 
   test("same-session multi-tab presence stays online until final tab closes", async ({
     browser,
   }) => {
-    const context = await browser.newContext();
-    const operator = await context.newPage();
-    const tab1 = await context.newPage();
-    const tab2 = await context.newPage();
+    const operatorContext = await browser.newContext();
+    const visitorContext = await browser.newContext();
+    const operator = await operatorContext.newPage();
+    const tab1 = await visitorContext.newPage();
+    const tab2 = await visitorContext.newPage();
 
     await loginOperator(operator);
     await openOperatorInbox(operator);
@@ -112,12 +110,15 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
     await waitForOperatorThreadRealtimeReady(operator);
     await waitForWidgetRealtimeReady(tab1);
 
-    // Second tab same context → shared localStorage session token
+    // Second tab same visitor context → shared iframe-origin localStorage session
     await tab2.goto(HOST_URL);
     await expect(tab2.locator('iframe[title="Site Chat"]')).toBeAttached({
       timeout: 60_000,
     });
     const frame2 = tab2.frameLocator('iframe[title="Site Chat"]');
+    await expect(frame2.getByRole("button", { name: "Open chat" })).toBeVisible({
+      timeout: 60_000,
+    });
     await frame2.getByRole("button", { name: "Open chat" }).click();
     await expect(frame2.getByTestId("widget-realtime-ready")).toHaveAttribute(
       "data-realtime-state",
@@ -145,8 +146,8 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
       { timeout: 45_000 },
     );
 
-    await operator.close();
-    await context.close();
+    await operatorContext.close();
+    await visitorContext.close();
   });
 
   test("representative locales: English, Russian, Hebrew RTL", async ({ page }) => {
