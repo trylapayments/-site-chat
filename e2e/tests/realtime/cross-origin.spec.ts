@@ -26,14 +26,11 @@ test.describe("PR 4C realtime cross-origin", () => {
     const widgetPage = await widgetContext.newPage();
     const visitorMessage = `Hello from visitor e2e ${Date.now()}`;
 
-    // Warm the widget host first so the inbox is already subscribed before send
-    // (same ordering as the other live inbox assertions below).
-    await openWidget(widgetPage);
-
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
     await waitForOperatorInboxRealtimeReady(operatorPage);
 
+    await openWidget(widgetPage);
     await sendWidgetMessage(widgetPage, visitorMessage);
 
     await expect(operatorPage.getByText(visitorMessage)).toBeVisible({

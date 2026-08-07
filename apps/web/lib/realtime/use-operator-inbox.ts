@@ -5,6 +5,8 @@ import type {
   ListConversationsQuery,
 } from "@site-chat/shared";
 import {
+  conversationListItemFromChange,
+  conversationListItemFromMessage,
   conversationMatchesFilters,
   genericSenderLabel,
   mergeMessages,
@@ -60,18 +62,26 @@ export function useLiveInboxList(input: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped
   }, [input.workspaceId, input.memberId, queryKey]);
 
+  const sort = input.query.sort ?? "-last_message_at";
+  const statusFilter = input.query.status;
+  const assignmentFilter = input.query.assignment;
+
   const refreshList = useCallback(async () => {
     const generation = ++refreshGenerationRef.current;
-    const supabase = createClient() as AppSupabaseClient;
-    const refreshed = await fetchConversations(
-      supabase,
-      input.workspaceId,
-      input.query,
-    );
-    if (generation !== refreshGenerationRef.current) {
-      return;
+    try {
+      const supabase = createClient() as AppSupabaseClient;
+      const refreshed = await fetchConversations(
+        supabase,
+        input.workspaceId,
+        input.query,
+      );
+      if (generation !== refreshGenerationRef.current) {
+        return;
+      }
+      setItems(refreshed.items);
+    } catch {
+      // Keep the last good list; a later CDC event or reconnect will retry.
     }
-    setItems(refreshed.items);
   }, [input.query, input.workspaceId]);
 
   const scheduleRefresh = useCallback(() => {
@@ -103,35 +113,39 @@ export function useLiveInboxList(input: {
         const existing = itemsRef.current.find(
           (item) => item.id === parsed.data.conversation_id,
         );
-        if (!existing) {
-          scheduleRefresh();
-          return;
-        }
 
         setItems((current) => {
           const currentExisting = current.find(
             (item) => item.id === parsed.data.conversation_id,
           );
-          if (!currentExisting) {
-            return current;
-          }
-
-          const next = patchConversationListItem(currentExisting, {
+          const base =
+            currentExisting ?? conversationListItemFromMessage(parsed.data);
+          const next = patchConversationListItem(base, {
             last_message_at: parsed.data.created_at,
             last_message_preview: parsed.data.body.slice(0, 200),
-            message_count: currentExisting.message_count + 1,
+            message_count: currentExisting
+              ? currentExisting.message_count + 1
+              : base.message_count,
             has_unread: parsed.data.sender_type === "visitor",
           });
-
+          const matches = conversationMatchesFilters(next, {
+            status: statusFilter,
+            assignment: assignmentFilter,
+            memberId: input.memberId,
+          });
+          if (!matches) {
+            return current.filter((item) => item.id !== next.id);
+          }
           return sortConversationItems(
-            upsertConversationListItem(
-              current,
-              next,
-              input.query.sort ?? "-last_message_at",
-            ),
-            input.query.sort ?? "-last_message_at",
+            upsertConversationListItem(current, next, sort),
+            sort,
           );
         });
+
+        if (!existing) {
+          // Authoritative catch-up for contact/assignee enrichment.
+          void refreshList();
+        }
       },
       onConversationChange: (raw) => {
         const parsed = operatorConversationChangeSchema.safeParse(raw);
@@ -143,26 +157,17 @@ export function useLiveInboxList(input: {
         const existing = itemsRef.current.find(
           (item) => item.id === parsed.data.id,
         );
-        if (!existing) {
-          scheduleRefresh();
-          return;
-        }
 
         setItems((current) => {
           const currentExisting = current.find(
             (item) => item.id === parsed.data.id,
           );
-          if (!currentExisting) {
-            return current;
-          }
-
-          const patched = patchConversationListItem(
-            currentExisting,
-            parsed.data,
-          );
+          const base =
+            currentExisting ?? conversationListItemFromChange(parsed.data);
+          const patched = patchConversationListItem(base, parsed.data);
           const matches = conversationMatchesFilters(patched, {
-            status: input.query.status,
-            assignment: input.query.assignment,
+            status: statusFilter,
+            assignment: assignmentFilter,
             memberId: input.memberId,
           });
 
@@ -171,19 +176,29 @@ export function useLiveInboxList(input: {
           }
 
           return sortConversationItems(
-            upsertConversationListItem(
-              current,
-              patched,
-              input.query.sort ?? "-last_message_at",
-            ),
-            input.query.sort ?? "-last_message_at",
+            upsertConversationListItem(current, patched, sort),
+            sort,
           );
         });
+
+        if (!existing) {
+          void refreshList();
+        }
       },
     });
 
     return unsubscribe;
-  }, [input.memberId, input.query, input.workspaceId, scheduleRefresh]);
+    // queryKey captures list-scope fields; avoid resubscribing on object identity churn.
+  }, [
+    assignmentFilter,
+    input.memberId,
+    input.workspaceId,
+    queryKey,
+    refreshList,
+    scheduleRefresh,
+    sort,
+    statusFilter,
+  ]);
 
   useOnlineStatus((online) => {
     if (online) {
