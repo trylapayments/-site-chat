@@ -134,8 +134,12 @@ test.describe("attachments", () => {
     const visitor = await visitorContext.newPage();
     const operator = await operatorContext.newPage();
 
+    const seed = `visitor-img-seed-${Date.now()}`;
     const marker = `visitor-img-${Date.now()}`;
     await openWidget(visitor);
+    // Seed a text message first so realtime is connected (same pattern as other
+    // bidirectional specs). Attachment send itself is HTTP + Broadcast.
+    await sendWidgetMessage(visitor, seed);
     await waitForWidgetRealtimeReady(visitor);
     const frame = widgetFrameLocator(visitor);
 
@@ -149,16 +153,18 @@ test.describe("attachments", () => {
     await frame.getByRole("button", { name: "Send" }).click();
 
     await expect(frame.getByText(marker)).toBeVisible({ timeout: 60_000 });
-    await expect(frame.getByTestId("attachment-image")).toBeVisible({
+    // Durable preview: loaded <img>, not just the pending chip.
+    await expect(frame.getByTestId("attachment-image").locator("img")).toBeVisible({
       timeout: 60_000,
     });
+    await expect(frame.getByTestId("widget-upload-retry")).toHaveCount(0);
 
     await prepareOperatorInbox(operator);
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
     await expect(operator.getByText(marker)).toBeVisible({ timeout: 30_000 });
-    await expect(operator.getByTestId("operator-attachment-image")).toBeVisible({
-      timeout: 30_000,
+    await expect(operator.getByTestId("operator-attachment-image").locator("img")).toBeVisible({
+      timeout: 60_000,
     });
 
     await visitorContext.close();
@@ -184,18 +190,25 @@ test.describe("attachments", () => {
       .getByTestId("operator-file-input")
       .setInputFiles(path.join(fixturesDir, "sample.png"));
     await expect(operator.getByTestId("operator-pending-attachments")).toBeVisible();
-    const replyMarker = `ack-img-${marker}`;
+    const replyMarker = `ack-img-${Date.now()}`;
     await operatorReplyComposer(operator).fill(replyMarker);
     await operator.getByRole("button", { name: "Send reply" }).click();
 
+    // Wait for durable send (not optimistic placeholder).
+    await expect(operator.getByRole("button", { name: "Send reply" })).toBeEnabled({
+      timeout: 60_000,
+    });
+    await expect(operator.getByTestId("operator-upload-retry")).toHaveCount(0);
+    await expect(operator.getByTestId("operator-upload-status")).toHaveCount(0);
     await expect(operator.getByText(replyMarker)).toBeVisible({ timeout: 60_000 });
-    await expect(operator.getByTestId("operator-attachment-image")).toBeVisible({
+    await expect(operator.getByTestId("operator-attachment-image").locator("img")).toBeVisible({
       timeout: 60_000,
     });
 
     const frame = widgetFrameLocator(visitor);
+    await waitForWidgetRealtimeReady(visitor);
     await expect(frame.getByText(replyMarker)).toBeVisible({ timeout: 60_000 });
-    await expect(frame.getByTestId("attachment-image")).toBeVisible({
+    await expect(frame.getByTestId("attachment-image").locator("img")).toBeVisible({
       timeout: 60_000,
     });
 
@@ -209,8 +222,10 @@ test.describe("attachments", () => {
     const visitor = await visitorContext.newPage();
     const operator = await operatorContext.newPage();
 
+    const seed = `visitor-pdf-seed-${Date.now()}`;
     const marker = `visitor-pdf-${Date.now()}`;
     await openWidget(visitor);
+    await sendWidgetMessage(visitor, seed);
     await waitForWidgetRealtimeReady(visitor);
     const frame = widgetFrameLocator(visitor);
 
@@ -224,6 +239,7 @@ test.describe("attachments", () => {
       timeout: 60_000,
     });
     await expect(frame.getByTestId("attachment-download")).toBeVisible();
+    await expect(frame.getByTestId("widget-upload-retry")).toHaveCount(0);
 
     await prepareOperatorInbox(operator);
     await openOperatorConversation(operator, marker);
