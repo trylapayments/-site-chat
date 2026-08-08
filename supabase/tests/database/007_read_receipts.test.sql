@@ -72,10 +72,25 @@ BEGIN
 END;
 $$;
 
-SELECT has_table('public', 'conversation_visitor_reads');
-SELECT has_column('public', 'conversation_member_reads', 'unread_count');
-SELECT has_column('public', 'conversation_member_reads', 'last_delivered_sequence');
-SELECT has_column('public', 'conversations', 'visitor_message_count');
+SELECT has_table('public', 'conversation_visitor_reads', 'conversation_visitor_reads exists');
+SELECT has_column(
+  'public',
+  'conversation_member_reads',
+  'unread_count',
+  'member reads has unread_count'
+);
+SELECT has_column(
+  'public',
+  'conversation_member_reads',
+  'last_delivered_sequence',
+  'member reads has last_delivered_sequence'
+);
+SELECT has_column(
+  'public',
+  'conversations',
+  'visitor_message_count',
+  'conversations has visitor_message_count'
+);
 
 SELECT ok(
   has_function_privilege(
