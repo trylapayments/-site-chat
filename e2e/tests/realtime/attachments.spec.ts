@@ -7,6 +7,7 @@ import {
   openOperatorConversation,
   openWidget,
   sendOperatorReply,
+  sendWidgetMessage,
   waitForOperatorInboxRealtimeReady,
   waitForOperatorThreadRealtimeReady,
   waitForWidgetRealtimeReady,
@@ -27,7 +28,6 @@ test.describe("attachments", () => {
   test("widget file picker accepts image and shows pending attachment", async ({ browser }) => {
     const visitor = await browser.newPage();
     await openWidget(visitor);
-    await waitForWidgetRealtimeReady(visitor);
 
     const frame = widgetFrameLocator(visitor);
     const fileInput = frame.getByTestId("widget-file-input");
@@ -45,7 +45,6 @@ test.describe("attachments", () => {
   test("widget file picker accepts PDF document", async ({ browser }) => {
     const visitor = await browser.newPage();
     await openWidget(visitor);
-    await waitForWidgetRealtimeReady(visitor);
 
     const frame = widgetFrameLocator(visitor);
     await frame
@@ -62,7 +61,6 @@ test.describe("attachments", () => {
   test("widget supports drag highlight and paste target on composer", async ({ browser }) => {
     const visitor = await browser.newPage();
     await openWidget(visitor);
-    await waitForWidgetRealtimeReady(visitor);
     const frame = widgetFrameLocator(visitor);
     const composer = widgetComposer(visitor);
 
@@ -98,9 +96,8 @@ test.describe("attachments", () => {
 
     const marker = `attach-ready-${Date.now()}`;
     await openWidget(visitor);
+    await sendWidgetMessage(visitor, marker);
     await waitForWidgetRealtimeReady(visitor);
-    await widgetComposer(visitor).fill(marker);
-    await widgetFrameLocator(visitor).getByRole("button", { name: "Send" }).click();
     await expect(widgetFrameLocator(visitor).getByText(marker)).toBeVisible({
       timeout: 30_000,
     });

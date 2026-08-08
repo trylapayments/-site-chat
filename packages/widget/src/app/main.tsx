@@ -690,12 +690,16 @@ function WidgetApp() {
       );
       setComposer(body);
       setPendingFiles(filesForSend);
-      setUploadBatch((current) =>
-        reduceUploadBatch(current, {
-          type: "CONFIRM_FAILURE",
-          message: messagesCopy.uploadFailedLabel,
-        }),
-      );
+      // Text-only failures must not flip the upload state machine (would replace Send
+      // with "Retry upload" and break message-retry UX / a11y selectors).
+      if (filesForSend.length > 0) {
+        setUploadBatch((current) =>
+          reduceUploadBatch(current, {
+            type: "CONFIRM_FAILURE",
+            message: messagesCopy.uploadFailedLabel,
+          }),
+        );
+      }
       setSendError(messagesCopy.sendError);
     } finally {
       uploadAbortRef.current = null;
