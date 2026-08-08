@@ -221,5 +221,18 @@ SELECT results_eq(
   'attachment kind is image'
 );
 
+SELECT ok(
+  has_table_privilege('service_role', 'public.attachment_uploads', 'INSERT')
+    AND has_table_privilege('service_role', 'public.attachment_uploads', 'SELECT')
+    AND has_table_privilege('service_role', 'public.attachment_uploads', 'UPDATE')
+    AND has_table_privilege('service_role', 'public.attachment_uploads', 'DELETE'),
+  'service_role can CRUD attachment_uploads intents'
+);
+
+SELECT ok(
+  has_table_privilege('service_role', 'public.message_attachments', 'SELECT'),
+  'service_role can SELECT message_attachments for download minting'
+);
+
 SELECT * FROM finish();
 ROLLBACK;
