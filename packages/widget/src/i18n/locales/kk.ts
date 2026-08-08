@@ -24,6 +24,9 @@ export const messages_kk: WidgetMessages = {
   visitorTyping: "Қонақ теріп жатыр…",
   online: "Желіде",
   offline: "Желіде емес",
+  messageSent: "Жіберілді",
+  messageDelivered: "Жеткізілді",
+  messageSeen: "Қаралды",
 };
 
 export default messages_kk;

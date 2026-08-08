@@ -24,6 +24,9 @@ export const messages_hy: WidgetMessages = {
   visitorTyping: "Այցելուն գրում է…",
   online: "Առցանց",
   offline: "Անցանց",
+  messageSent: "Ուղարկված է",
+  messageDelivered: "Առաքված է",
+  messageSeen: "Դիտված է",
 };
 
 export default messages_hy;

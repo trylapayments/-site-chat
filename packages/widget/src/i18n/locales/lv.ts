@@ -24,6 +24,9 @@ export const messages_lv: WidgetMessages = {
   visitorTyping: "Apmeklētājs raksta…",
   online: "Tiešsaistē",
   offline: "Bezsaistē",
+  messageSent: "Nosūtīts",
+  messageDelivered: "Piegādāts",
+  messageSeen: "Redzēts",
 };
 
 export default messages_lv;

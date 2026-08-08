@@ -24,6 +24,9 @@ export const messages_nb: WidgetMessages = {
   visitorTyping: "Besøkende skriver…",
   online: "Pålogget",
   offline: "Frakoblet",
+  messageSent: "Sendt",
+  messageDelivered: "Levert",
+  messageSeen: "Sett",
 };
 
 export default messages_nb;

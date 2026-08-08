@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { MessageReceiptStatus } from "../realtime/receipts.js";
+
 export const widgetBroadcastMessageSchema = z.object({
   id: z.string().uuid(),
   sequenceNumber: z.coerce.number().int(),
@@ -109,6 +111,8 @@ export type MessageView = {
   isInternal?: boolean;
   status?: PendingMessageStatus;
   isOptimistic?: boolean;
+  /** sent → delivered → seen for local-party messages; omit for peer/system. */
+  receiptStatus?: MessageReceiptStatus;
 };
 
 export function genericSenderLabel(senderType: "visitor" | "agent" | "system"): string {

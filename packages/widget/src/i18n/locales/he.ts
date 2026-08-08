@@ -24,6 +24,9 @@ export const messages_he: WidgetMessages = {
   visitorTyping: "האורח מקליד…",
   online: "מחובר",
   offline: "לא מחובר",
+  messageSent: "נשלח",
+  messageDelivered: "נמסר",
+  messageSeen: "נצפה",
 };
 
 export default messages_he;

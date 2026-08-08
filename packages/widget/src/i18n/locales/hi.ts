@@ -24,6 +24,9 @@ export const messages_hi: WidgetMessages = {
   visitorTyping: "आगंतुक टाइप कर रहे हैं…",
   online: "ऑनलाइन",
   offline: "ऑफ़लाइन",
+  messageSent: "भेजा गया",
+  messageDelivered: "पहुँचा",
+  messageSeen: "देखा गया",
 };
 
 export default messages_hi;

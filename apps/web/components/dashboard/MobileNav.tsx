@@ -27,11 +27,13 @@ export function MobileNav({
   slug,
   workspaces,
   currentWorkspaceId,
+  memberId,
   email,
 }: {
   slug: string;
   workspaces: AccessibleWorkspace[];
   currentWorkspaceId: string;
+  memberId: string;
   email: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -69,6 +71,8 @@ export function MobileNav({
           <Separator />
           <DashboardNav
             slug={slug}
+            workspaceId={currentWorkspaceId}
+            memberId={memberId}
             onNavigate={() => {
               setOpen(false);
             }}

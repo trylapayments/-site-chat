@@ -24,6 +24,9 @@ export const messages_tr: WidgetMessages = {
   visitorTyping: "Ziyaretçi yazıyor…",
   online: "Çevrimiçi",
   offline: "Çevrimdışı",
+  messageSent: "Gönderildi",
+  messageDelivered: "İletildi",
+  messageSeen: "Görüldü",
 };
 
 export default messages_tr;

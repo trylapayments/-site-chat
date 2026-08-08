@@ -54,4 +54,55 @@ describe("WidgetApiClient", () => {
       [WIDGET_EMBED_TOKEN_HEADER]: "secret-embed-token",
     });
   });
+
+  it("posts markReceipt with bearer session and embed body", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(
+        Response.json({
+          data: {
+            last_delivered_sequence: 4,
+            last_read_sequence: 4,
+            updated: true,
+          },
+          meta: { requestId: "11111111-1111-1111-1111-111111111111" },
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new WidgetApiClient("https://app.example.com");
+    const result = await client.markReceipt({
+      embedToken: "secret-embed-token",
+      sessionToken: "secret-session-token",
+      kind: "read",
+      throughSequence: 4,
+    });
+
+    expect(result).toEqual({
+      last_delivered_sequence: 4,
+      last_read_sequence: 4,
+      updated: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call).toBeDefined();
+    if (!call) {
+      return;
+    }
+
+    expect(getRequestUrl(call[0])).toContain("/api/v1/widget/receipts");
+    expect(call[1]?.method).toBe("POST");
+    expect(call[1]?.headers).toMatchObject({
+      Authorization: "Bearer secret-session-token",
+      "Content-Type": "application/json",
+    });
+    const body = call[1]?.body;
+    expect(typeof body).toBe("string");
+    expect(JSON.parse(body as string)).toEqual({
+      embedToken: "secret-embed-token",
+      kind: "read",
+      throughSequence: 4,
+    });
+  });
 });

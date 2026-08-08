@@ -6,6 +6,7 @@
  * - agentLabel = human support agent (not AI)
  * - poweredBy keeps product name "Site Chat"
  * - Ellipsis uses locale-appropriate character when natural
+ * - messageSent / messageDelivered / messageSeen = short receipt tick labels
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -41,6 +42,9 @@ const en = {
   visitorTyping: "Visitor is typing…",
   online: "Online",
   offline: "Offline",
+  messageSent: "Sent",
+  messageDelivered: "Delivered",
+  messageSeen: "Seen",
 };
 
 /** @type {Record<string, Dict>} */
@@ -70,6 +74,9 @@ const dictionaries = {
     visitorTyping: "Посетитель печатает…",
     online: "В сети",
     offline: "Не в сети",
+    messageSent: "Отправлено",
+    messageDelivered: "Доставлено",
+    messageSeen: "Прочитано",
   },
   he: {
     // Reviewed for natural short UI Hebrew
@@ -96,6 +103,9 @@ const dictionaries = {
     visitorTyping: "האורח מקליד…",
     online: "מחובר",
     offline: "לא מחובר",
+    messageSent: "נשלח",
+    messageDelivered: "נמסר",
+    messageSeen: "נצפה",
   },
   ar: {
     launcherLabel: "فتح المحادثة",
@@ -117,6 +127,9 @@ const dictionaries = {
     agentLabel: "الوكيل",
     systemLabel: "النظام",
     chatPanelLabel: "محادثة",
+    messageSent: "تم الإرسال",
+    messageDelivered: "تم التسليم",
+    messageSeen: "تمت المشاهدة",
   },
   fa: {
     launcherLabel: "باز کردن گفتگو",
@@ -138,6 +151,9 @@ const dictionaries = {
     agentLabel: "پشتیبان",
     systemLabel: "سیستم",
     chatPanelLabel: "گفتگو",
+    messageSent: "ارسال شد",
+    messageDelivered: "تحویل شد",
+    messageSeen: "دیده شد",
   },
   fr: {
     launcherLabel: "Ouvrir le chat",
@@ -159,6 +175,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "Système",
     chatPanelLabel: "Chat",
+    messageSent: "Envoyé",
+    messageDelivered: "Distribué",
+    messageSeen: "Vu",
   },
   de: {
     launcherLabel: "Chat öffnen",
@@ -180,6 +199,9 @@ const dictionaries = {
     agentLabel: "Mitarbeiter",
     systemLabel: "System",
     chatPanelLabel: "Chat",
+    messageSent: "Gesendet",
+    messageDelivered: "Zugestellt",
+    messageSeen: "Gesehen",
   },
   es: {
     launcherLabel: "Abrir chat",
@@ -201,6 +223,9 @@ const dictionaries = {
     agentLabel: "Agente",
     systemLabel: "Sistema",
     chatPanelLabel: "Chat",
+    messageSent: "Enviado",
+    messageDelivered: "Entregado",
+    messageSeen: "Visto",
   },
   it: {
     launcherLabel: "Apri chat",
@@ -222,6 +247,9 @@ const dictionaries = {
     agentLabel: "Operatore",
     systemLabel: "Sistema",
     chatPanelLabel: "Chat",
+    messageSent: "Inviato",
+    messageDelivered: "Consegnato",
+    messageSeen: "Visualizzato",
   },
   "pt-PT": {
     launcherLabel: "Abrir chat",
@@ -285,6 +313,9 @@ const dictionaries = {
     agentLabel: "Medewerker",
     systemLabel: "Systeem",
     chatPanelLabel: "Chat",
+    messageSent: "Verzonden",
+    messageDelivered: "Afgeleverd",
+    messageSeen: "Gezien",
   },
   pl: {
     launcherLabel: "Otwórz czat",
@@ -306,6 +337,9 @@ const dictionaries = {
     agentLabel: "Konsultant",
     systemLabel: "System",
     chatPanelLabel: "Czat",
+    messageSent: "Wysłano",
+    messageDelivered: "Dostarczono",
+    messageSeen: "Wyświetlono",
   },
   uk: {
     launcherLabel: "Відкрити чат",
@@ -327,6 +361,9 @@ const dictionaries = {
     agentLabel: "Оператор",
     systemLabel: "Система",
     chatPanelLabel: "Чат",
+    messageSent: "Надіслано",
+    messageDelivered: "Доставлено",
+    messageSeen: "Переглянуто",
   },
   "zh-CN": {
     launcherLabel: "打开聊天",
@@ -390,6 +427,9 @@ const dictionaries = {
     agentLabel: "担当者",
     systemLabel: "システム",
     chatPanelLabel: "チャット",
+    messageSent: "送信済み",
+    messageDelivered: "配達済み",
+    messageSeen: "既読",
   },
   ko: {
     launcherLabel: "채팅 열기",
@@ -411,6 +451,9 @@ const dictionaries = {
     agentLabel: "상담원",
     systemLabel: "시스템",
     chatPanelLabel: "채팅",
+    messageSent: "전송됨",
+    messageDelivered: "전송 완료",
+    messageSeen: "읽음",
   },
   tr: {
     launcherLabel: "Sohbeti aç",
@@ -432,6 +475,9 @@ const dictionaries = {
     agentLabel: "Temsilci",
     systemLabel: "Sistem",
     chatPanelLabel: "Sohbet",
+    messageSent: "Gönderildi",
+    messageDelivered: "İletildi",
+    messageSeen: "Görüldü",
   },
   sv: {
     launcherLabel: "Öppna chatten",
@@ -453,6 +499,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "System",
     chatPanelLabel: "Chatt",
+    messageSent: "Skickat",
+    messageDelivered: "Levererat",
+    messageSeen: "Sett",
   },
   da: {
     launcherLabel: "Åbn chat",
@@ -474,6 +523,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "System",
     chatPanelLabel: "Chat",
+    messageSent: "Sendt",
+    messageDelivered: "Leveret",
+    messageSeen: "Set",
   },
   nb: {
     launcherLabel: "Åpne chat",
@@ -495,6 +547,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "System",
     chatPanelLabel: "Chat",
+    messageSent: "Sendt",
+    messageDelivered: "Levert",
+    messageSeen: "Sett",
   },
   nn: {
     launcherLabel: "Opne chat",
@@ -516,6 +571,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "System",
     chatPanelLabel: "Chat",
+    messageSent: "Sendt",
+    messageDelivered: "Levert",
+    messageSeen: "Sett",
   },
   fi: {
     launcherLabel: "Avaa chat",
@@ -537,6 +595,9 @@ const dictionaries = {
     agentLabel: "Asiakaspalvelija",
     systemLabel: "Järjestelmä",
     chatPanelLabel: "Chat",
+    messageSent: "Lähetetty",
+    messageDelivered: "Toimitettu",
+    messageSeen: "Nähty",
   },
   cs: {
     launcherLabel: "Otevřít chat",
@@ -558,6 +619,9 @@ const dictionaries = {
     agentLabel: "Operátor",
     systemLabel: "Systém",
     chatPanelLabel: "Chat",
+    messageSent: "Odesláno",
+    messageDelivered: "Doručeno",
+    messageSeen: "Zobrazeno",
   },
   sk: {
     launcherLabel: "Otvoriť chat",
@@ -579,6 +643,9 @@ const dictionaries = {
     agentLabel: "Operátor",
     systemLabel: "Systém",
     chatPanelLabel: "Chat",
+    messageSent: "Odoslané",
+    messageDelivered: "Doručené",
+    messageSeen: "Prečítané",
   },
   hu: {
     launcherLabel: "Chat megnyitása",
@@ -600,6 +667,9 @@ const dictionaries = {
     agentLabel: "Ügyintéző",
     systemLabel: "Rendszer",
     chatPanelLabel: "Chat",
+    messageSent: "Elküldve",
+    messageDelivered: "Kézbesítve",
+    messageSeen: "Megtekintve",
   },
   ro: {
     launcherLabel: "Deschide chatul",
@@ -621,6 +691,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "Sistem",
     chatPanelLabel: "Chat",
+    messageSent: "Trimis",
+    messageDelivered: "Livrat",
+    messageSeen: "Văzut",
   },
   bg: {
     launcherLabel: "Отвори чат",
@@ -642,6 +715,9 @@ const dictionaries = {
     agentLabel: "Агент",
     systemLabel: "Система",
     chatPanelLabel: "Чат",
+    messageSent: "Изпратено",
+    messageDelivered: "Доставено",
+    messageSeen: "Видяно",
   },
   hr: {
     launcherLabel: "Otvori chat",
@@ -663,6 +739,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "Sustav",
     chatPanelLabel: "Chat",
+    messageSent: "Poslano",
+    messageDelivered: "Dostavljeno",
+    messageSeen: "Viđeno",
   },
   sr: {
     launcherLabel: "Отвори ћаскање",
@@ -684,6 +763,9 @@ const dictionaries = {
     agentLabel: "Агент",
     systemLabel: "Систем",
     chatPanelLabel: "Ћаскање",
+    messageSent: "Послато",
+    messageDelivered: "Испоручено",
+    messageSeen: "Виђено",
   },
   sl: {
     launcherLabel: "Odpri klepet",
@@ -705,6 +787,9 @@ const dictionaries = {
     agentLabel: "Svetovalec",
     systemLabel: "Sistem",
     chatPanelLabel: "Klepet",
+    messageSent: "Poslano",
+    messageDelivered: "Dostavljeno",
+    messageSeen: "Videno",
   },
   et: {
     launcherLabel: "Ava vestlus",
@@ -726,6 +811,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "Süsteem",
     chatPanelLabel: "Vestlus",
+    messageSent: "Saadetud",
+    messageDelivered: "Kohale toimetatud",
+    messageSeen: "Nähtud",
   },
   lv: {
     launcherLabel: "Atvērt čatu",
@@ -747,6 +835,9 @@ const dictionaries = {
     agentLabel: "Aģents",
     systemLabel: "Sistēma",
     chatPanelLabel: "Čats",
+    messageSent: "Nosūtīts",
+    messageDelivered: "Piegādāts",
+    messageSeen: "Redzēts",
   },
   lt: {
     launcherLabel: "Atidaryti pokalbį",
@@ -768,6 +859,9 @@ const dictionaries = {
     agentLabel: "Agentas",
     systemLabel: "Sistema",
     chatPanelLabel: "Pokalbis",
+    messageSent: "Išsiųsta",
+    messageDelivered: "Pristatyta",
+    messageSeen: "Peržiūrėta",
   },
   el: {
     launcherLabel: "Άνοιγμα συνομιλίας",
@@ -789,6 +883,9 @@ const dictionaries = {
     agentLabel: "Σύμβουλος",
     systemLabel: "Σύστημα",
     chatPanelLabel: "Συνομιλία",
+    messageSent: "Εστάλη",
+    messageDelivered: "Παραδόθηκε",
+    messageSeen: "Διαβάστηκε",
   },
   th: {
     launcherLabel: "เปิดแชท",
@@ -810,6 +907,9 @@ const dictionaries = {
     agentLabel: "เจ้าหน้าที่",
     systemLabel: "ระบบ",
     chatPanelLabel: "แชท",
+    messageSent: "ส่งแล้ว",
+    messageDelivered: "ส่งถึงแล้ว",
+    messageSeen: "เห็นแล้ว",
   },
   vi: {
     launcherLabel: "Mở trò chuyện",
@@ -831,6 +931,9 @@ const dictionaries = {
     agentLabel: "Nhân viên",
     systemLabel: "Hệ thống",
     chatPanelLabel: "Trò chuyện",
+    messageSent: "Đã gửi",
+    messageDelivered: "Đã nhận",
+    messageSeen: "Đã xem",
   },
   id: {
     launcherLabel: "Buka chat",
@@ -852,6 +955,9 @@ const dictionaries = {
     agentLabel: "Agen",
     systemLabel: "Sistem",
     chatPanelLabel: "Chat",
+    messageSent: "Terkirim",
+    messageDelivered: "Tersampaikan",
+    messageSeen: "Dilihat",
   },
   ms: {
     launcherLabel: "Buka sembang",
@@ -873,6 +979,9 @@ const dictionaries = {
     agentLabel: "Ejen",
     systemLabel: "Sistem",
     chatPanelLabel: "Sembang",
+    messageSent: "Dihantar",
+    messageDelivered: "Disampaikan",
+    messageSeen: "Dilihat",
   },
   hi: {
     launcherLabel: "चैट खोलें",
@@ -894,6 +1003,9 @@ const dictionaries = {
     agentLabel: "एजेंट",
     systemLabel: "सिस्टम",
     chatPanelLabel: "चैट",
+    messageSent: "भेजा गया",
+    messageDelivered: "पहुँचा",
+    messageSeen: "देखा गया",
   },
   ca: {
     launcherLabel: "Obrir el xat",
@@ -915,6 +1027,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "Sistema",
     chatPanelLabel: "Xat",
+    messageSent: "Enviat",
+    messageDelivered: "Lliurat",
+    messageSeen: "Vist",
   },
   is: {
     launcherLabel: "Opna spjall",
@@ -936,6 +1051,9 @@ const dictionaries = {
     agentLabel: "Fulltrúi",
     systemLabel: "Kerfi",
     chatPanelLabel: "Spjall",
+    messageSent: "Sent",
+    messageDelivered: "Afhent",
+    messageSeen: "Séð",
   },
   hy: {
     launcherLabel: "Բացել չաթը",
@@ -957,6 +1075,9 @@ const dictionaries = {
     agentLabel: "Գործակալ",
     systemLabel: "Համակարգ",
     chatPanelLabel: "Չաթ",
+    messageSent: "Ուղարկված է",
+    messageDelivered: "Առաքված է",
+    messageSeen: "Դիտված է",
   },
   az: {
     launcherLabel: "Çatı aç",
@@ -978,6 +1099,9 @@ const dictionaries = {
     agentLabel: "Agent",
     systemLabel: "Sistem",
     chatPanelLabel: "Çat",
+    messageSent: "Göndərildi",
+    messageDelivered: "Çatdırıldı",
+    messageSeen: "Baxıldı",
   },
   ka: {
     launcherLabel: "ჩატის გახსნა",
@@ -999,6 +1123,9 @@ const dictionaries = {
     agentLabel: "აგენტი",
     systemLabel: "სისტემა",
     chatPanelLabel: "ჩატი",
+    messageSent: "გაგზავნილია",
+    messageDelivered: "მიწოდებულია",
+    messageSeen: "ნანახია",
   },
   kk: {
     launcherLabel: "Чатты ашу",
@@ -1020,6 +1147,9 @@ const dictionaries = {
     agentLabel: "Оператор",
     systemLabel: "Жүйе",
     chatPanelLabel: "Чат",
+    messageSent: "Жіберілді",
+    messageDelivered: "Жеткізілді",
+    messageSeen: "Қаралды",
   },
   mg: {
     launcherLabel: "Sokafy ny chat",
@@ -1041,6 +1171,9 @@ const dictionaries = {
     agentLabel: "Mpikarakara",
     systemLabel: "Rafitra",
     chatPanelLabel: "Chat",
+    messageSent: "Nalefa",
+    messageDelivered: "Tonga",
+    messageSeen: "Hita",
   },
 };
 

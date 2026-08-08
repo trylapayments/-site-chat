@@ -24,6 +24,9 @@ export const messages_ca: WidgetMessages = {
   visitorTyping: "El visitant està escrivint…",
   online: "En línia",
   offline: "Fora de línia",
+  messageSent: "Enviat",
+  messageDelivered: "Lliurat",
+  messageSeen: "Vist",
 };
 
 export default messages_ca;

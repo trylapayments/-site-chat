@@ -4,9 +4,13 @@ import { DashboardNavLink } from "@/components/dashboard/DashboardNavLink";
 
 export function DashboardNav({
   slug,
+  workspaceId,
+  memberId,
   onNavigate,
 }: {
   slug: string;
+  workspaceId: string;
+  memberId: string;
   onNavigate?: () => void;
 }) {
   const items = buildDashboardNavItems(slug);
@@ -18,6 +22,8 @@ export function DashboardNav({
           key={item.id}
           item={item}
           slug={slug}
+          workspaceId={workspaceId}
+          memberId={memberId}
           onNavigate={onNavigate}
         />
       ))}

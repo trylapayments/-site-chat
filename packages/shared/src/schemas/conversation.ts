@@ -45,7 +45,10 @@ export const conversationListItemSchema = z
     last_message_at: z.string().nullable(),
     last_message_preview: z.string().nullable(),
     message_count: z.number().int(),
+    /** Backward-compatible boolean derived from unread_count > 0. */
     has_unread: z.boolean(),
+    /** O(1) per-conversation unread badge (visitor messages beyond last_read). */
+    unread_count: z.number().int().nonnegative().default(0),
     created_at: z.string(),
   })
   .strict();
@@ -97,6 +100,15 @@ export const conversationDetailSchema = z
     message_count: z.number().int(),
     last_message_at: z.string().nullable(),
     has_unread: z.boolean(),
+    unread_count: z.number().int().nonnegative().default(0),
+    /** Caller's own read cursor (operator). */
+    member_last_read_sequence: z.number().int().nonnegative().default(0),
+    /** Visitor conversation-level receipt cursors (for agent message ticks). */
+    visitor_last_read_sequence: z.number().int().nonnegative().default(0),
+    visitor_last_delivered_sequence: z.number().int().nonnegative().default(0),
+    /** Max across operators — visitor derives ticks for their own messages. */
+    agent_last_read_sequence: z.number().int().nonnegative().default(0),
+    agent_last_delivered_sequence: z.number().int().nonnegative().default(0),
     created_at: z.string(),
     resolved_at: z.string().nullable(),
   })
@@ -168,10 +180,39 @@ export const markConversationReadResultSchema = z
   .object({
     last_read_sequence: z.number().int(),
     has_unread: z.boolean(),
+    unread_count: z.number().int().nonnegative().default(0),
+    /** false when reopening an already-read conversation (no DB write). */
+    updated: z.boolean().default(true),
   })
   .strict();
 
 export type MarkConversationReadResult = z.infer<typeof markConversationReadResultSchema>;
+
+export const markConversationDeliveredSchema = z
+  .object({
+    conversationId: z.string().uuid(),
+    throughSequence: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type MarkConversationDeliveredInput = z.infer<typeof markConversationDeliveredSchema>;
+
+export const markConversationDeliveredResultSchema = z
+  .object({
+    last_delivered_sequence: z.number().int().nonnegative(),
+    updated: z.boolean(),
+  })
+  .strict();
+
+export type MarkConversationDeliveredResult = z.infer<typeof markConversationDeliveredResultSchema>;
+
+export const inboxUnreadTotalResultSchema = z
+  .object({
+    unread_total: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type InboxUnreadTotalResult = z.infer<typeof inboxUnreadTotalResultSchema>;
 
 export const sendMessageSchema = z
   .object({

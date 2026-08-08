@@ -1,9 +1,12 @@
 import {
   createOptimisticMessage,
+  deriveMessageReceiptStatus,
   maxSequenceNumber,
   mergeMessages,
   type ConnectionState,
+  type MessageReceiptStatus,
   type MessageView,
+  type ReceiptCursors,
   type WidgetLocale,
 } from "@site-chat/shared";
 import {
@@ -29,6 +32,7 @@ import {
 } from "../i18n";
 import { isMessageFromParent } from "../post-message";
 import { readParentOriginFromLocation } from "../parent-origin";
+import { maxAgentMessageSequence, shouldMarkMessagesRead } from "../realtime/receipt-visibility";
 import {
   mapWidgetHttpMessages,
   WidgetRealtimeTransport,
@@ -41,6 +45,11 @@ import {
   writeSessionToken,
 } from "../session/storage";
 import { isNearBottom, scrollContainerToBottom, shouldAutoScroll } from "./scroll";
+
+const EMPTY_RECEIPTS: ReceiptCursors = {
+  lastDeliveredSequence: 0,
+  lastReadSequence: 0,
+};
 
 const MESSAGE_SOURCE = "sitechat-embed";
 
@@ -103,6 +112,7 @@ function WidgetApp() {
     displayName: null,
   });
   const [operatorsOnline, setOperatorsOnline] = useState(false);
+  const [agentReceipts, setAgentReceipts] = useState<ReceiptCursors>(EMPTY_RECEIPTS);
   const initRef = useRef<InitPayload | null>(null);
   const parentOriginRef = useRef<string | null>(null);
   const transportRef = useRef<WidgetRealtimeTransport | null>(null);
@@ -112,10 +122,16 @@ function WidgetApp() {
   const forceScrollRef = useRef(false);
   const nearBottomRef = useRef(true);
   const sessionLocaleRef = useRef<WidgetLocale>("en");
+  const visitorReceiptsRef = useRef<ReceiptCursors>(EMPTY_RECEIPTS);
+  const agentReceiptsRef = useRef<ReceiptCursors>(EMPTY_RECEIPTS);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    agentReceiptsRef.current = agentReceipts;
+  }, [agentReceipts]);
 
   useLayoutEffect(() => {
     const container = messagesContainerRef.current;
@@ -212,6 +228,16 @@ function WidgetApp() {
             sessionToken: session.sessionToken,
           });
           const initialMessages = mapWidgetHttpMessages(listed.items);
+          const nextAgentReceipts = {
+            lastDeliveredSequence: listed.agent_last_delivered_sequence,
+            lastReadSequence: listed.agent_last_read_sequence,
+          };
+          visitorReceiptsRef.current = {
+            lastDeliveredSequence: listed.visitor_last_delivered_sequence,
+            lastReadSequence: listed.visitor_last_read_sequence,
+          };
+          agentReceiptsRef.current = nextAgentReceipts;
+          setAgentReceipts(nextAgentReceipts);
           forceScrollRef.current = true;
           nearBottomRef.current = true;
           setMessages(initialMessages);
@@ -295,12 +321,18 @@ function WidgetApp() {
         onPresence: (presence) => {
           setOperatorsOnline(presence.operatorsOnline);
         },
+        onAgentReceipts: (cursors) => {
+          agentReceiptsRef.current = cursors;
+          setAgentReceipts(cursors);
+        },
       });
       transportRef.current = transport;
       await transport.start({
         embedToken: init.embedToken,
         sessionToken,
         initialMessages: snapshot,
+        initialAgentReceipts: agentReceiptsRef.current,
+        initialVisitorReceipts: visitorReceiptsRef.current,
       });
 
       // StrictMode/effect cleanup may have replaced or cleared this transport.
@@ -317,6 +349,43 @@ function WidgetApp() {
       setOperatorsOnline(false);
     };
   }, [api, open, readyEmbedToken, readySessionToken]);
+
+  // Read receipts: only while the panel is open AND the document is visible.
+  // Closing the panel or hiding the tab stops further mark-read calls.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const markVisibleAgentMessagesRead = () => {
+      if (
+        !shouldMarkMessagesRead({
+          panelOpen: open,
+          visibilityState: document.visibilityState,
+        })
+      ) {
+        return;
+      }
+
+      const maxSeq = maxAgentMessageSequence(messagesRef.current);
+      if (maxSeq > 0) {
+        transportRef.current?.notifyMessagesVisible(maxSeq);
+      }
+    };
+
+    markVisibleAgentMessagesRead();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markVisibleAgentMessagesRead();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [open, messages]);
 
   // Multi-tab / race: panel may open before listMessages finishes. When the
   // conversation snapshot arrives, promote connecting → subscribed.
@@ -417,12 +486,18 @@ function WidgetApp() {
           onPresence: (presence) => {
             setOperatorsOnline(presence.operatorsOnline);
           },
+          onAgentReceipts: (cursors) => {
+            agentReceiptsRef.current = cursors;
+            setAgentReceipts(cursors);
+          },
         });
         transportRef.current = transport;
         await transport.start({
           embedToken: state.init.embedToken,
           sessionToken: state.sessionToken,
           initialMessages: mergedMessages,
+          initialAgentReceipts: agentReceiptsRef.current,
+          initialVisitorReceipts: visitorReceiptsRef.current,
         });
       } else {
         transportRef.current.replaceMessages(mergedMessages);
@@ -595,10 +670,18 @@ function WidgetApp() {
                 : message.senderType === "agent"
                   ? messagesCopy.agentLabel
                   : messagesCopy.systemLabel;
+              const receiptStatus =
+                isVisitor && message.status !== "failed" && !message.isOptimistic
+                  ? deriveMessageReceiptStatus({
+                      sequenceNumber: message.sequenceNumber,
+                      peer: agentReceipts,
+                    })
+                  : null;
 
               return (
                 <article
                   key={message.id}
+                  data-testid={isVisitor ? "visitor-message" : "agent-message"}
                   style={{
                     alignSelf: isVisitor ? "flex-end" : "flex-start",
                     maxWidth: "85%",
@@ -616,6 +699,12 @@ function WidgetApp() {
                   <div dir="auto" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                     {message.body}
                   </div>
+                  {receiptStatus ? (
+                    <MessageReceiptTicks
+                      status={receiptStatus}
+                      label={receiptLabel(receiptStatus, messagesCopy)}
+                    />
+                  ) : null}
                   {message.status === "failed" ? (
                     <button
                       type="button"
@@ -735,6 +824,41 @@ function WidgetApp() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function receiptLabel(status: MessageReceiptStatus, copy: WidgetMessages): string {
+  if (status === "seen") {
+    return copy.messageSeen;
+  }
+  if (status === "delivered") {
+    return copy.messageDelivered;
+  }
+  return copy.messageSent;
+}
+
+function MessageReceiptTicks({ status, label }: { status: MessageReceiptStatus; label: string }) {
+  const glyph = status === "sent" ? "✓" : "✓✓";
+
+  return (
+    <span
+      data-testid="message-receipt"
+      data-receipt={status}
+      aria-label={label}
+      title={label}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.25rem",
+        marginTop: "0.35rem",
+        fontSize: "0.7rem",
+        opacity: status === "seen" ? 1 : 0.85,
+        letterSpacing: status === "sent" ? "0" : "-0.06em",
+      }}
+    >
+      <span aria-hidden="true">{glyph}</span>
+    </span>
   );
 }
 

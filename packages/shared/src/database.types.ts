@@ -118,9 +118,11 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          last_delivered_sequence: number
           last_read_at: string
           last_read_sequence: number
           member_id: string
+          unread_count: number
           updated_at: string
           workspace_id: string
         }
@@ -128,9 +130,11 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          last_delivered_sequence?: number
           last_read_at?: string
           last_read_sequence?: number
           member_id: string
+          unread_count?: number
           updated_at?: string
           workspace_id: string
         }
@@ -138,9 +142,11 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          last_delivered_sequence?: number
           last_read_at?: string
           last_read_sequence?: number
           member_id?: string
+          unread_count?: number
           updated_at?: string
           workspace_id?: string
         }
@@ -168,6 +174,67 @@ export type Database = {
           },
         ]
       }
+      conversation_visitor_reads: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          last_delivered_at: string | null
+          last_delivered_sequence: number
+          last_read_at: string | null
+          last_read_sequence: number
+          updated_at: string
+          visitor_session_id: string
+          workspace_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id?: string
+          last_delivered_at?: string | null
+          last_delivered_sequence?: number
+          last_read_at?: string | null
+          last_read_sequence?: number
+          updated_at?: string
+          visitor_session_id: string
+          workspace_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          last_delivered_at?: string | null
+          last_delivered_sequence?: number
+          last_read_at?: string | null
+          last_read_sequence?: number
+          updated_at?: string
+          visitor_session_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_visitor_reads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_conversation_visitor_reads_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_conversation_visitor_reads_session_workspace"
+            columns: ["visitor_session_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sessions"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           assigned_to: string | null
@@ -187,6 +254,7 @@ export type Database = {
           status: Database["public"]["Enums"]["app_conversation_status"]
           subject: string | null
           updated_at: string
+          visitor_message_count: number
           visitor_realtime_topic_key: string
           visitor_session_id: string
           workspace_id: string
@@ -209,6 +277,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["app_conversation_status"]
           subject?: string | null
           updated_at?: string
+          visitor_message_count?: number
           visitor_realtime_topic_key?: string
           visitor_session_id: string
           workspace_id: string
@@ -231,6 +300,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["app_conversation_status"]
           subject?: string | null
           updated_at?: string
+          visitor_message_count?: number
           visitor_realtime_topic_key?: string
           visitor_session_id?: string
           workspace_id?: string
@@ -634,6 +704,10 @@ export type Database = {
         Args: { p_conversation_id: string; p_workspace_id: string }
         Returns: Json
       }
+      get_inbox_unread_total: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
       list_accessible_workspaces: { Args: never; Returns: Json }
       list_assignable_members: {
         Args: { p_workspace_id: string }
@@ -647,6 +721,14 @@ export type Database = {
         Args: {
           p_conversation_id: string
           p_query?: Json
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      mark_conversation_delivered: {
+        Args: {
+          p_conversation_id: string
+          p_through_sequence: number
           p_workspace_id: string
         }
         Returns: Json
@@ -731,6 +813,15 @@ export type Database = {
           p_before_sequence?: number
           p_limit?: number
           p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_mark_conversation_receipt: {
+        Args: {
+          p_kind: string
+          p_session_token: string
+          p_through_sequence: number
           p_workspace_id: string
         }
         Returns: Json

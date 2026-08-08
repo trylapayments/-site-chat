@@ -5,6 +5,7 @@ import type {
   ListConversationsQuery,
 } from "@site-chat/shared";
 import {
+  computeUnreadAfterVisitorMessage,
   conversationListItemFromChange,
   conversationListItemFromMessage,
   conversationMatchesFilters,
@@ -19,6 +20,7 @@ import {
   type ConnectionState,
   type MessageView,
 } from "@site-chat/shared";
+import { z } from "zod";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchConversations } from "@/lib/inbox/queries";
@@ -116,9 +118,22 @@ export function useLiveInboxList(input: {
     }, 250);
   }, [refreshList]);
 
+  /** Gates optimistic unread +1 when mark-read CDC arrives before message INSERT. */
+  const lastReadByConversationRef = useRef(new Map<string, number>());
+
   useEffect(() => {
+    const memberReadSchema = z
+      .object({
+        conversation_id: z.string().uuid(),
+        member_id: z.string().uuid(),
+        unread_count: z.coerce.number().int().nonnegative(),
+        last_read_sequence: z.coerce.number().int().nonnegative(),
+      })
+      .passthrough();
+
     const unsubscribe = subscribeOperatorWorkspaceInbox({
       workspaceId: input.workspaceId,
+      memberId: input.memberId,
       onConnectionChange: setConnectionState,
       onMessageInsert: (raw) => {
         const parsed = operatorMessageChangeSchema.safeParse(raw);
@@ -131,6 +146,12 @@ export function useLiveInboxList(input: {
         const existing = itemsRef.current.find(
           (item) => item.id === parsed.data.conversation_id,
         );
+        const lastRead =
+          lastReadByConversationRef.current.get(parsed.data.conversation_id) ??
+          -1;
+        const shouldIncrementUnread =
+          parsed.data.sender_type === "visitor" &&
+          parsed.data.sequence_number > lastRead;
 
         setItems((current) => {
           const currentExisting = current.find(
@@ -138,13 +159,17 @@ export function useLiveInboxList(input: {
           );
           const base =
             currentExisting ?? conversationListItemFromMessage(parsed.data);
+          const nextUnread = shouldIncrementUnread
+            ? computeUnreadAfterVisitorMessage(base.unread_count)
+            : base.unread_count;
           const next = patchConversationListItem(base, {
             last_message_at: parsed.data.created_at,
             last_message_preview: parsed.data.body.slice(0, 200),
             message_count: currentExisting
               ? currentExisting.message_count + 1
               : base.message_count,
-            has_unread: parsed.data.sender_type === "visitor",
+            unread_count: nextUnread,
+            has_unread: nextUnread > 0,
           });
           const matches = conversationMatchesFilters(next, {
             status: statusFilter,
@@ -203,6 +228,39 @@ export function useLiveInboxList(input: {
           void refreshList();
         }
       },
+      onMemberReadChange: (raw) => {
+        const parsed = memberReadSchema.safeParse(raw);
+        if (!parsed.success || parsed.data.member_id !== input.memberId) {
+          return;
+        }
+
+        const previous =
+          lastReadByConversationRef.current.get(parsed.data.conversation_id) ??
+          0;
+        lastReadByConversationRef.current.set(
+          parsed.data.conversation_id,
+          Math.max(previous, parsed.data.last_read_sequence),
+        );
+
+        setItems((current) => {
+          const existing = current.find(
+            (item) => item.id === parsed.data.conversation_id,
+          );
+          if (!existing) {
+            return current;
+          }
+
+          const next = patchConversationListItem(existing, {
+            unread_count: parsed.data.unread_count,
+            has_unread: parsed.data.unread_count > 0,
+          });
+
+          return sortConversationItems(
+            upsertConversationListItem(current, next, sort),
+            sort,
+          );
+        });
+      },
     });
 
     return unsubscribe;
@@ -247,6 +305,11 @@ export function useLiveConversationThread(input: {
   workspaceSlug: string;
   conversationId: string;
   initialMessages: MessageView[];
+  /** Durable visitor receipt cursor CDC (conversation_visitor_reads). */
+  onVisitorReceiptCursors?: (cursors: {
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) => void;
 }) {
   const [messages, setMessages] = useState<MessageView[]>(
     input.initialMessages,
@@ -329,6 +392,9 @@ export function useLiveConversationThread(input: {
     }
   }, [input.conversationId, input.workspaceId]);
 
+  const onVisitorReceiptCursorsRef = useRef(input.onVisitorReceiptCursors);
+  onVisitorReceiptCursorsRef.current = input.onVisitorReceiptCursors;
+
   useEffect(() => {
     const unsubscribe = subscribeOperatorConversation({
       workspaceId: input.workspaceId,
@@ -366,6 +432,17 @@ export function useLiveConversationThread(input: {
       },
       onConversationChange: () => {
         // Sidebar/detail enrichment uses targeted RPC elsewhere.
+      },
+      onVisitorReceiptChange: (raw) => {
+        const delivered = Number(raw.last_delivered_sequence ?? 0);
+        const read = Number(raw.last_read_sequence ?? 0);
+        if (!Number.isFinite(delivered) || !Number.isFinite(read)) {
+          return;
+        }
+        onVisitorReceiptCursorsRef.current?.({
+          lastDeliveredSequence: Math.max(0, Math.floor(delivered)),
+          lastReadSequence: Math.max(0, Math.floor(read)),
+        });
       },
     });
 

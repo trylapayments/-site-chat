@@ -24,6 +24,9 @@ export const messages_ja: WidgetMessages = {
   visitorTyping: "訪問者が入力中…",
   online: "オンライン",
   offline: "オフライン",
+  messageSent: "送信済み",
+  messageDelivered: "配達済み",
+  messageSeen: "既読",
 };
 
 export default messages_ja;

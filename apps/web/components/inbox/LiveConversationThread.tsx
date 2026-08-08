@@ -1,19 +1,33 @@
 "use client";
 
-import type { MessageItem } from "@site-chat/shared";
+import type { MessageItem, ReceiptCursors } from "@site-chat/shared";
 import {
   createOptimisticMessage,
+  deriveMessageReceiptStatus,
   genericSenderLabel,
   maxSequenceNumber,
   mergeMessages,
+  mergeReceiptCursors,
   toMessageViewFromOperatorRow,
   type MessageView,
 } from "@site-chat/shared";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
-import { markConversationReadAction } from "@/lib/inbox/actions";
+import { MessageReceiptIndicator } from "@/components/inbox/MessageReceiptIndicator";
+import {
+  fetchVisitorReceiptCursorsAction,
+  markConversationDeliveredAction,
+  markConversationReadAction,
+} from "@/lib/inbox/actions";
 import { formatRelativeTime } from "@/lib/inbox/search-params";
 import {
   subscribeOperatorConversationEphemeral,
@@ -44,6 +58,7 @@ export function LiveConversationThread({
   memberId,
   memberDisplayLabel,
   initialMessages,
+  initialVisitorReceipts,
   canSend,
 }: {
   workspaceId: string;
@@ -53,6 +68,7 @@ export function LiveConversationThread({
   memberId: string;
   memberDisplayLabel?: string | null;
   initialMessages: MessageItem[];
+  initialVisitorReceipts: ReceiptCursors;
   canSend: boolean;
 }) {
   // Stabilize mapped props so useLiveConversationThread's effect does not see a
@@ -61,6 +77,15 @@ export function LiveConversationThread({
     () => mapInitialMessages(initialMessages),
     [initialMessages],
   );
+
+  const [visitorTyping, setVisitorTyping] = useState(false);
+  const [visitorOnline, setVisitorOnline] = useState(false);
+  const [visitorReceipts, setVisitorReceipts] = useState<ReceiptCursors>(
+    initialVisitorReceipts,
+  );
+  const ephemeralRef = useRef<OperatorEphemeralController | null>(null);
+  const lastReadBroadcastRef = useRef(0);
+  const lastDeliveredRef = useRef(0);
 
   const {
     messages,
@@ -74,11 +99,23 @@ export function LiveConversationThread({
     workspaceSlug,
     conversationId,
     initialMessages: mappedInitialMessages,
+    onVisitorReceiptCursors: (cursors) => {
+      setVisitorReceipts((current) => {
+        const merged = mergeReceiptCursors(current, cursors);
+        return merged.advanced ? merged.next : current;
+      });
+    },
   });
 
-  const [visitorTyping, setVisitorTyping] = useState(false);
-  const [visitorOnline, setVisitorOnline] = useState(false);
-  const ephemeralRef = useRef<OperatorEphemeralController | null>(null);
+  const initialDelivered = initialVisitorReceipts.lastDeliveredSequence;
+  const initialRead = initialVisitorReceipts.lastReadSequence;
+
+  useEffect(() => {
+    setVisitorReceipts({
+      lastDeliveredSequence: initialDelivered,
+      lastReadSequence: initialRead,
+    });
+  }, [conversationId, initialDelivered, initialRead]);
 
   useEffect(() => {
     setVisitorTyping(false);
@@ -92,11 +129,38 @@ export function LiveConversationThread({
       ephemeralTopic,
       memberId,
       displayLabel: memberDisplayLabel,
+      initialVisitorReceipts: {
+        lastDeliveredSequence: initialDelivered,
+        lastReadSequence: initialRead,
+      },
       onVisitorTyping: (indicator) => {
         setVisitorTyping(indicator.active);
       },
       onVisitorPresence: (presence) => {
         setVisitorOnline(presence.online);
+      },
+      onVisitorReceipts: (cursors) => {
+        // Monotonic merge — never replace with a stale receipt.v1 after CDC
+        // already advanced the durable watermark.
+        setVisitorReceipts((current) => {
+          const merged = mergeReceiptCursors(current, cursors);
+          return merged.advanced ? merged.next : current;
+        });
+      },
+      onSubscribed: () => {
+        // Durable catch-up after (re)subscribe — covers missed receipt.v1.
+        void (async () => {
+          const result = await fetchVisitorReceiptCursorsAction(workspaceSlug, {
+            conversationId,
+          });
+          if (!result.success) {
+            return;
+          }
+          setVisitorReceipts((current) => {
+            const merged = mergeReceiptCursors(current, result.data);
+            return merged.advanced ? merged.next : current;
+          });
+        })();
       },
     });
 
@@ -108,7 +172,96 @@ export function LiveConversationThread({
       setVisitorTyping(false);
       setVisitorOnline(false);
     };
-  }, [conversationId, ephemeralTopic, memberDisplayLabel, memberId]);
+  }, [
+    conversationId,
+    ephemeralTopic,
+    initialDelivered,
+    initialRead,
+    memberDisplayLabel,
+    memberId,
+    workspaceSlug,
+  ]);
+
+  const markReadThrough = useCallback(
+    (sequence: number) => {
+      if (sequence <= lastReadBroadcastRef.current) {
+        return;
+      }
+
+      void (async () => {
+        const result = await markConversationReadAction(workspaceSlug, {
+          conversationId,
+          throughSequence: sequence,
+        });
+
+        if (
+          !result.success ||
+          !result.data ||
+          !("last_read_sequence" in result.data)
+        ) {
+          return;
+        }
+
+        const readResult = result.data;
+        const watermark = readResult.last_read_sequence;
+        // Mirror durable watermark even when RPC no-ops (e.g. page-level
+        // MarkConversationRead already advanced the cursor) so the visitor
+        // still receives receipt.v1.
+        if (watermark <= lastReadBroadcastRef.current) {
+          return;
+        }
+
+        lastReadBroadcastRef.current = watermark;
+        lastDeliveredRef.current = Math.max(
+          lastDeliveredRef.current,
+          watermark,
+        );
+        ephemeralRef.current?.broadcastReceipt({
+          kind: "read",
+          lastDeliveredSequence: watermark,
+          lastReadSequence: watermark,
+        });
+      })();
+    },
+    [conversationId, workspaceSlug],
+  );
+
+  const markDeliveredThrough = useCallback(
+    (sequence: number) => {
+      if (sequence <= lastDeliveredRef.current) {
+        return;
+      }
+
+      void (async () => {
+        const result = await markConversationDeliveredAction(workspaceSlug, {
+          conversationId,
+          throughSequence: sequence,
+        });
+
+        if (
+          !result.success ||
+          !result.data ||
+          !("last_delivered_sequence" in result.data)
+        ) {
+          return;
+        }
+
+        const delivered = result.data;
+        const watermark = delivered.last_delivered_sequence;
+        if (watermark <= lastDeliveredRef.current) {
+          return;
+        }
+
+        lastDeliveredRef.current = watermark;
+        ephemeralRef.current?.broadcastReceipt({
+          kind: "delivered",
+          lastDeliveredSequence: watermark,
+          lastReadSequence: lastReadBroadcastRef.current,
+        });
+      })();
+    },
+    [conversationId, workspaceSlug],
+  );
 
   return (
     <div className="space-y-4">
@@ -140,7 +293,11 @@ export function LiveConversationThread({
           void catchUp();
         }}
       />
-      <MessageList messages={messages} bottomRef={observeBottom} />
+      <MessageList
+        messages={messages}
+        visitorReceipts={visitorReceipts}
+        bottomRef={observeBottom}
+      />
       {newMessagesBelow > 0 ? (
         <div className="flex justify-center">
           <Button
@@ -176,10 +333,8 @@ export function LiveConversationThread({
           ephemeralRef.current?.clearLocalTyping();
         }}
         onVisitorMessageDisplayed={(sequence) => {
-          void markConversationReadAction(workspaceSlug, {
-            conversationId,
-            throughSequence: sequence,
-          });
+          markDeliveredThrough(sequence);
+          markReadThrough(sequence);
         }}
       />
     </div>
@@ -188,9 +343,11 @@ export function LiveConversationThread({
 
 function MessageList({
   messages,
+  visitorReceipts,
   bottomRef,
 }: {
   messages: MessageView[];
+  visitorReceipts: ReceiptCursors;
   bottomRef: (node: HTMLDivElement | null) => void;
 }) {
   if (messages.length === 0) {
@@ -203,30 +360,44 @@ function MessageList({
 
   return (
     <div className="space-y-4">
-      {messages.map((message) => (
-        <article
-          key={message.id}
-          className={
-            message.senderType === "agent"
-              ? "bg-primary/5 ml-8 rounded-lg border px-4 py-3"
-              : "bg-muted/40 mr-8 rounded-lg border px-4 py-3"
-          }
-        >
-          <header className="mb-1 flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">{message.senderLabel}</span>
-            <time className="text-muted-foreground text-xs">
-              {formatRelativeTime(message.createdAt)}
-            </time>
-          </header>
-          <p className="text-sm whitespace-pre-wrap">{message.body}</p>
-          {message.status === "pending" ? (
-            <p className="text-muted-foreground mt-2 text-xs">Sending...</p>
-          ) : null}
-          {message.status === "failed" ? (
-            <p className="text-destructive mt-2 text-xs">Failed to send</p>
-          ) : null}
-        </article>
-      ))}
+      {messages.map((message) => {
+        const receiptStatus =
+          message.senderType === "agent" && !message.isOptimistic
+            ? deriveMessageReceiptStatus({
+                sequenceNumber: message.sequenceNumber,
+                peer: visitorReceipts,
+              })
+            : null;
+
+        return (
+          <article
+            key={message.id}
+            className={
+              message.senderType === "agent"
+                ? "bg-primary/5 ml-8 rounded-lg border px-4 py-3"
+                : "bg-muted/40 mr-8 rounded-lg border px-4 py-3"
+            }
+            data-sequence={message.sequenceNumber}
+          >
+            <header className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{message.senderLabel}</span>
+              <time className="text-muted-foreground text-xs">
+                {formatRelativeTime(message.createdAt)}
+              </time>
+            </header>
+            <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+            {message.status === "pending" ? (
+              <p className="text-muted-foreground mt-2 text-xs">Sending...</p>
+            ) : null}
+            {message.status === "failed" ? (
+              <p className="text-destructive mt-2 text-xs">Failed to send</p>
+            ) : null}
+            {receiptStatus ? (
+              <MessageReceiptIndicator status={receiptStatus} />
+            ) : null}
+          </article>
+        );
+      })}
       <div ref={bottomRef} aria-hidden="true" />
     </div>
   );
@@ -325,7 +496,7 @@ function LiveReplyComposer({
             clientMessageId,
           });
 
-          if (!result.success || !result.data) {
+          if (!result.success || !result.data || !("message" in result.data)) {
             setMessages((current) =>
               current.map((message) =>
                 message.clientMessageId === clientMessageId

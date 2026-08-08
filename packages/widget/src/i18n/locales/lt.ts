@@ -24,6 +24,9 @@ export const messages_lt: WidgetMessages = {
   visitorTyping: "Lankytojas rašo…",
   online: "Prisijungęs",
   offline: "Atsijungęs",
+  messageSent: "Išsiųsta",
+  messageDelivered: "Pristatyta",
+  messageSeen: "Peržiūrėta",
 };
 
 export default messages_lt;

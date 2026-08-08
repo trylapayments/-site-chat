@@ -96,6 +96,11 @@ export default async function ConversationDetailPage({
             memberId={memberId}
             memberDisplayLabel={memberDisplayLabel}
             initialMessages={messages.items}
+            initialVisitorReceipts={{
+              lastDeliveredSequence:
+                conversation.visitor_last_delivered_sequence,
+              lastReadSequence: conversation.visitor_last_read_sequence,
+            }}
             canSend={can(workspace.role, "send_messages")}
           />
         </section>

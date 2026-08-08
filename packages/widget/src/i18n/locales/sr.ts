@@ -24,6 +24,9 @@ export const messages_sr: WidgetMessages = {
   visitorTyping: "Посетилац куца…",
   online: "На мрежи",
   offline: "Ван мреже",
+  messageSent: "Послато",
+  messageDelivered: "Испоручено",
+  messageSeen: "Виђено",
 };
 
 export default messages_sr;

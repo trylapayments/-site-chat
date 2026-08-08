@@ -25,6 +25,7 @@ describe("conversation list stubs from CDC", () => {
       last_message_preview: "Hello from visitor",
       message_count: 1,
       has_unread: true,
+      unread_count: 1,
       contact: null,
       assigned_to: null,
     });
@@ -47,6 +48,7 @@ describe("conversation list stubs from CDC", () => {
       last_message_preview: "Hello from visitor e2e",
       message_count: 1,
       has_unread: true,
+      unread_count: 1,
       status: "open",
     });
   });

@@ -24,6 +24,9 @@ export const messages_vi: WidgetMessages = {
   visitorTyping: "Khách đang nhập…",
   online: "Trực tuyến",
   offline: "Ngoại tuyến",
+  messageSent: "Đã gửi",
+  messageDelivered: "Đã nhận",
+  messageSeen: "Đã xem",
 };
 
 export default messages_vi;

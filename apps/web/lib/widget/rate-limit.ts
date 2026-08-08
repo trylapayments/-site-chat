@@ -37,4 +37,5 @@ export const WIDGET_RATE_LIMITS = {
   messagesRead: { windowSeconds: 60, limit: 120 },
   messagesWrite: { windowSeconds: 60, limit: 60 },
   realtimeToken: { windowSeconds: 60, limit: 30 },
+  receipts: { windowSeconds: 60, limit: 120 },
 } as const;

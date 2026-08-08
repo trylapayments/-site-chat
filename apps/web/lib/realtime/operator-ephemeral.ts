@@ -2,26 +2,30 @@
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
+  RECEIPT_BROADCAST_EVENT,
   TYPING_BROADCAST_EVENT,
   TYPING_IDLE_STOP_MS,
+  applyRemoteReceiptEvent,
   applyRemoteTypingEvent,
   buildPresenceStatePayload,
+  buildReceiptBroadcastPayload,
   buildTypingBroadcastPayload,
   decideLocalTypingEmit,
   expireRemoteTypingActors,
   isAnyoneTyping,
   isRoleOnline,
   operatorEphemeralActorKey,
+  parseReceiptBroadcastPayload,
   parseTypingBroadcastPayload,
   reconcilePresencePeers,
   sanitizePublicDisplayName,
   type PresencePeer,
+  type ReceiptCursors,
+  type ReceiptKind,
   type RemoteTypingActor,
 } from "@site-chat/shared";
 
 import { createClient } from "@/lib/supabase/client";
-
-type OperatorSupabaseClient = ReturnType<typeof createClient>;
 
 export type OperatorTypingIndicator = {
   active: boolean;
@@ -34,6 +38,7 @@ export type OperatorVisitorPresence = {
 export type OperatorEphemeralCallbacks = {
   onVisitorTyping: (indicator: OperatorTypingIndicator) => void;
   onVisitorPresence: (presence: OperatorVisitorPresence) => void;
+  onVisitorReceipts?: (cursors: ReceiptCursors) => void;
   onConnectionChange?: (
     status:
       "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
@@ -43,35 +48,35 @@ export type OperatorEphemeralCallbacks = {
 export type OperatorEphemeralController = {
   notifyComposerChange: (text: string) => void;
   clearLocalTyping: () => void;
+  broadcastReceipt: (input: {
+    kind: ReceiptKind;
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) => void;
   unsubscribe: () => void;
 };
 
-async function applyOperatorRealtimeAuth(
-  supabase: OperatorSupabaseClient,
-): Promise<boolean> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    return false;
-  }
-
-  await supabase.realtime.setAuth(session.access_token);
-  return true;
-}
+type PendingReceiptBroadcast = {
+  kind: ReceiptKind;
+  lastDeliveredSequence: number;
+  lastReadSequence: number;
+};
 
 /**
- * Subscribe to private ephemeral topic for typing Broadcast + Presence.
+ * Subscribe to private ephemeral topic for typing Broadcast + Presence + receipts.
  * Does not replace CDC message subscriptions.
  */
 export function subscribeOperatorConversationEphemeral(input: {
   ephemeralTopic: string;
   memberId: string;
   displayLabel?: string | null;
+  initialVisitorReceipts?: ReceiptCursors;
   onVisitorTyping: (indicator: OperatorTypingIndicator) => void;
   onVisitorPresence: (presence: OperatorVisitorPresence) => void;
+  onVisitorReceipts?: (cursors: ReceiptCursors) => void;
   onConnectionChange?: OperatorEphemeralCallbacks["onConnectionChange"];
+  /** Fired once the ephemeral channel is SUBSCRIBED (including reconnect). */
+  onSubscribed?: () => void;
 }): OperatorEphemeralController {
   const supabase = createClient();
   const actorKey = operatorEphemeralActorKey(input.memberId);
@@ -86,6 +91,12 @@ export function subscribeOperatorConversationEphemeral(input: {
   let lastTypingStartedAt: number | null = null;
   let typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
   let presenceTracked = false;
+  let pendingReceipt: PendingReceiptBroadcast | null = null;
+  let appliedAuthToken: string | null = null;
+  let visitorReceipts: ReceiptCursors = input.initialVisitorReceipts ?? {
+    lastDeliveredSequence: 0,
+    lastReadSequence: 0,
+  };
   let currentStatus:
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed" =
     "connecting";
@@ -159,6 +170,90 @@ export function subscribeOperatorConversationEphemeral(input: {
     });
     emitVisitorTyping();
     ensureTypingExpiryLoop();
+  }
+
+  function handleReceiptBroadcast(raw: unknown) {
+    const parsed = parseReceiptBroadcastPayload(raw);
+    if (!parsed) {
+      return;
+    }
+
+    const applied = applyRemoteReceiptEvent({
+      cursors: visitorReceipts,
+      payload: parsed,
+      localActorKey: actorKey,
+      expectedRole: "visitor",
+    });
+
+    if (!applied.advanced) {
+      return;
+    }
+
+    visitorReceipts = applied.cursors;
+    input.onVisitorReceipts?.(visitorReceipts);
+  }
+
+  function queuePendingReceipt(inputReceipt: PendingReceiptBroadcast) {
+    if (!pendingReceipt) {
+      pendingReceipt = inputReceipt;
+      return;
+    }
+
+    // Keep the latest watermarks; prefer "read" when either side advances read.
+    pendingReceipt = {
+      kind:
+        inputReceipt.kind === "read" || pendingReceipt.kind === "read"
+          ? "read"
+          : "delivered",
+      lastDeliveredSequence: Math.max(
+        pendingReceipt.lastDeliveredSequence,
+        inputReceipt.lastDeliveredSequence,
+      ),
+      lastReadSequence: Math.max(
+        pendingReceipt.lastReadSequence,
+        inputReceipt.lastReadSequence,
+      ),
+    };
+  }
+
+  async function broadcastReceipt(inputReceipt: {
+    kind: ReceiptKind;
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) {
+    if (!channel || currentStatus !== "connected") {
+      queuePendingReceipt(inputReceipt);
+      return;
+    }
+
+    const payload = buildReceiptBroadcastPayload({
+      actorRole: "operator",
+      actorKey,
+      kind: inputReceipt.kind,
+      lastDeliveredSequence: inputReceipt.lastDeliveredSequence,
+      lastReadSequence: inputReceipt.lastReadSequence,
+    });
+
+    try {
+      await channel.send({
+        type: "broadcast",
+        event: RECEIPT_BROADCAST_EVENT,
+        payload,
+      });
+    } catch {
+      // Ephemeral — durable cursor already persisted via RPC. Retry on reconnect.
+      queuePendingReceipt(inputReceipt);
+    }
+  }
+
+  async function flushPendingReceipt() {
+    if (!pendingReceipt || !channel || currentStatus !== "connected") {
+      return;
+    }
+
+    const next = pendingReceipt;
+    pendingReceipt = null;
+    await broadcastReceipt(next);
   }
 
   function emitPresence() {
@@ -314,6 +409,8 @@ export function subscribeOperatorConversationEphemeral(input: {
       retryAttempt = 0;
       setStatus("connected");
       void trackPresence();
+      void flushPendingReceipt();
+      input.onSubscribed?.();
       return;
     }
 
@@ -340,17 +437,37 @@ export function subscribeOperatorConversationEphemeral(input: {
     }
   }
 
-  async function startSubscription() {
+  async function startSubscription(force = false) {
     clearRetryTimer();
-    const authed = await applyOperatorRealtimeAuth(supabase);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!isActive()) {
       return;
     }
 
     // Private ephemeral topics are RLS-gated; wait for auth before joining.
-    if (!authed) {
+    if (!session?.access_token) {
       return;
     }
+
+    await supabase.realtime.setAuth(session.access_token);
+    if (!isActive()) {
+      return;
+    }
+
+    // Same token + live channel: setAuth is enough — avoid reconnect storms that
+    // drop in-flight receipt.v1 broadcasts (common on INITIAL_SESSION).
+    if (
+      !force &&
+      appliedAuthToken === session.access_token &&
+      channel &&
+      (currentStatus === "connected" || currentStatus === "connecting")
+    ) {
+      return;
+    }
+
+    appliedAuthToken = session.access_token;
 
     if (channel) {
       const previous = channel;
@@ -381,6 +498,12 @@ export function subscribeOperatorConversationEphemeral(input: {
           return;
         }
         handleTypingBroadcast(payload.payload);
+      })
+      .on("broadcast", { event: RECEIPT_BROADCAST_EVENT }, (payload) => {
+        if (channel !== nextChannel) {
+          return;
+        }
+        handleReceiptBroadcast(payload.payload);
       })
       .on("presence", { event: "sync" }, () => {
         if (channel !== nextChannel) {
@@ -421,14 +544,17 @@ export function subscribeOperatorConversationEphemeral(input: {
       if (!active) {
         return;
       }
-      // Resubscribe so Presence/Broadcast bindings are authorized after auth.
-      void startSubscription();
+      // Resubscribe only when the access token actually changes (auth refresh).
+      void startSubscription(false);
     })();
   });
 
   return {
     notifyComposerChange,
     clearLocalTyping,
+    broadcastReceipt: (receipt) => {
+      void broadcastReceipt(receipt);
+    },
     unsubscribe: () => {
       active = false;
       clearRetryTimer();

@@ -2,17 +2,24 @@
 
 import {
   assignConversationSchema,
+  markConversationDeliveredSchema,
   markConversationReadSchema,
   sendMessageSchema,
   updateConversationStatusSchema,
+  type MarkConversationDeliveredResult,
+  type MarkConversationReadResult,
+  type ReceiptCursors,
   type SendOperatorMessageResult,
 } from "@site-chat/shared";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   assignConversation,
+  fetchConversation,
+  markConversationDelivered,
   markConversationRead,
   sendOperatorMessage,
   updateConversationStatus,
@@ -25,7 +32,13 @@ import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export type InboxActionResult =
-  | { success: true; data?: SendOperatorMessageResult }
+  | {
+      success: true;
+      data?:
+        | SendOperatorMessageResult
+        | MarkConversationReadResult
+        | MarkConversationDeliveredResult;
+    }
   | { success: false; message: string };
 
 function mapActionError(error: unknown): InboxActionResult {
@@ -167,15 +180,90 @@ export async function markConversationReadAction(
     const { workspace, supabase } =
       await requireInboxMutationContext(workspaceSlug);
 
-    await markConversationRead(
+    const result = await markConversationRead(
       supabase,
       workspace.workspace_id,
       parsed.data.conversationId,
       parsed.data.throughSequence,
     );
 
-    return { success: true };
+    return { success: true, data: result };
   } catch {
     return { success: false, message: "Unable to mark conversation read." };
+  }
+}
+
+export async function markConversationDeliveredAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    throughSequence: number;
+  },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = markConversationDeliveredSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid delivery request." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+
+    const result = await markConversationDelivered(
+      supabase,
+      workspace.workspace_id,
+      parsed.data.conversationId,
+      parsed.data.throughSequence,
+    );
+
+    return { success: true, data: result };
+  } catch {
+    return {
+      success: false,
+      message: "Unable to mark conversation delivered.",
+    };
+  }
+}
+
+const conversationIdSchema = z.object({
+  conversationId: z.string().uuid(),
+});
+
+/**
+ * One-shot catch-up of peer (visitor) receipt cursors after ephemeral
+ * (re)subscribe. Not a poll — called only on Realtime SUBSCRIBED.
+ */
+export async function fetchVisitorReceiptCursorsAction(
+  workspaceSlug: string,
+  input: { conversationId: string },
+): Promise<
+  { success: true; data: ReceiptCursors } | { success: false; message: string }
+> {
+  try {
+    const parsed = conversationIdSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid conversation." };
+    }
+
+    const { workspace } = await requireInboxWorkspace(workspaceSlug);
+    const supabase = await createClient();
+    const conversation = await fetchConversation(
+      supabase,
+      workspace.workspace_id,
+      parsed.data.conversationId,
+    );
+
+    return {
+      success: true,
+      data: {
+        lastDeliveredSequence: conversation.visitor_last_delivered_sequence,
+        lastReadSequence: conversation.visitor_last_read_sequence,
+      },
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Unable to load receipt cursors.",
+    };
   }
 }
