@@ -27,6 +27,21 @@ export const messages_hi: WidgetMessages = {
   messageSent: "भेजा गया",
   messageDelivered: "पहुँचा",
   messageSeen: "देखा गया",
+  attachLabel: "Attach files",
+  attachFilesLabel: "Choose files to attach",
+  uploadProgressLabel: "Uploading {{filename}} — {{percent}}%",
+  uploadCancelLabel: "Cancel upload",
+  uploadRetryLabel: "Retry upload",
+  uploadFailedLabel: "Upload failed",
+  uploadCompleteLabel: "Upload complete",
+  uploadUploadingLabel: "Uploading",
+  downloadLabel: "Download {{filename}}",
+  imagePreviewLabel: "Image attachment: {{filename}}",
+  imageEnlargeLabel: "Enlarge image",
+  dropFilesLabel: "Drop files to attach",
+  removeAttachmentLabel: "Remove {{filename}}",
+  attachmentTooLarge: "File is too large",
+  attachmentUnsupported: "File type is not supported",
 };
 
 export default messages_hi;

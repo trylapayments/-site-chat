@@ -1141,6 +1141,18 @@ export function mapWidgetHttpMessages(
     body: string;
     created_at: string;
     client_message_id?: string | null;
+    attachments?: Array<{
+      id: string;
+      filename: string;
+      mime_type: string;
+      size_bytes: number;
+      kind: "image" | "document";
+      width?: number | null;
+      height?: number | null;
+      duration_ms?: number | null;
+      sort_order?: number;
+      has_thumbnail?: boolean;
+    }>;
   }>,
 ): MessageView[] {
   return items.map((item) => toMessageViewFromWidgetHttp(item));

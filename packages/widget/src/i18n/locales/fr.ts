@@ -27,6 +27,21 @@ export const messages_fr: WidgetMessages = {
   messageSent: "Envoyé",
   messageDelivered: "Distribué",
   messageSeen: "Vu",
+  attachLabel: "Joindre des fichiers",
+  attachFilesLabel: "Choisir des fichiers à joindre",
+  uploadProgressLabel: "Envoi de {{filename}} — {{percent}} %",
+  uploadCancelLabel: "Annuler l’envoi",
+  uploadRetryLabel: "Réessayer l’envoi",
+  uploadFailedLabel: "Échec de l’envoi",
+  uploadCompleteLabel: "Envoi terminé",
+  uploadUploadingLabel: "Envoi en cours",
+  downloadLabel: "Télécharger {{filename}}",
+  imagePreviewLabel: "Pièce jointe image : {{filename}}",
+  imageEnlargeLabel: "Agrandir l’image",
+  dropFilesLabel: "Déposez des fichiers pour les joindre",
+  removeAttachmentLabel: "Retirer {{filename}}",
+  attachmentTooLarge: "Le fichier est trop volumineux",
+  attachmentUnsupported: "Type de fichier non pris en charge",
 };
 
 export default messages_fr;

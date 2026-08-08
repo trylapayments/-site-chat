@@ -197,10 +197,14 @@ test.describe("PR 4C realtime cross-origin", () => {
     await widgetComposer(widgetPage).fill(body);
     await frame.getByRole("button", { name: "Send" }).click();
 
-    await expect(frame.getByRole("button", { name: "Retry" })).toBeVisible({
+    const messageRetry = frame.getByTestId("visitor-message").getByRole("button", {
+      name: "Retry",
+      exact: true,
+    });
+    await expect(messageRetry).toBeVisible({
       timeout: 30_000,
     });
-    await frame.getByRole("button", { name: "Retry" }).click();
+    await messageRetry.click();
     await frame.getByRole("button", { name: "Send" }).click();
 
     await expect(frame.getByRole("article").getByText(body)).toHaveCount(1, {
@@ -230,10 +234,8 @@ test.describe("PR 4C realtime cross-origin", () => {
       "data-connection-state",
       /^(disconnected|reconnecting|failed)$/,
     );
-    await expect(frame.getByRole("status")).toHaveAttribute(
-      "data-testid",
-      "widget-connection-status",
-    );
+    await expect(connectionBanner).toHaveAttribute("role", "status");
+    await expect(frame.getByTestId("upload-status")).toHaveAttribute("role", "status");
 
     await widgetPage.context().setOffline(false);
 

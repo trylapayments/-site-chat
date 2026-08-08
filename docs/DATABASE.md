@@ -352,7 +352,7 @@ Individual messages within a conversation.
 
 ### 7.3 message_attachments
 
-File metadata linked to messages.
+File metadata linked to messages. See `docs/ATTACHMENTS.md` for upload flow and security.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -360,15 +360,28 @@ File metadata linked to messages.
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
 | message_id | UUID | NOT NULL, FK → messages | |
 | conversation_id | UUID | NOT NULL, FK → conversations | Denormalized |
-| storage_path | TEXT | NOT NULL | Path in Supabase Storage |
-| filename | TEXT | NOT NULL | Original filename |
+| storage_key | TEXT | NOT NULL, UNIQUE | Path in object storage |
+| thumbnail_storage_key | TEXT | NULL | Optional derived thumbnail key |
+| filename | TEXT | NOT NULL | Sanitized original filename |
 | mime_type | TEXT | NOT NULL | Validated MIME type |
 | size_bytes | BIGINT | NOT NULL | |
+| kind | app_attachment_kind | NOT NULL | `image` or `document` |
+| width | INTEGER | NULL | Image width px |
+| height | INTEGER | NULL | Image height px |
+| duration_ms | INTEGER | NULL | Reserved for future media |
+| scan_status | app_attachment_scan_status | NOT NULL | Antivirus seam |
+| sort_order | INTEGER | NOT NULL DEFAULT 0 | Preserve multi-file order |
+| metadata_json | JSONB | NOT NULL DEFAULT `{}` | Extensible metadata |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 **Indexes:**
 - `idx_message_attachments_message` ON `(message_id)`
 - `idx_message_attachments_conversation` ON `(conversation_id)`
+- `idx_message_attachments_workspace` ON `(workspace_id)`
+- `idx_message_attachments_message_sort` ON `(message_id, sort_order)`
+
+Pending uploads (before durable message creation) live in `attachment_uploads`.
 
 ---
 

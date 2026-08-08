@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { MessageReceiptStatus } from "../realtime/receipts.js";
+import { messageAttachmentViewSchema } from "./attachments.js";
 
 export const widgetBroadcastMessageSchema = z.object({
   id: z.string().uuid(),
@@ -9,6 +10,8 @@ export const widgetBroadcastMessageSchema = z.object({
   body: z.string(),
   createdAt: z.string(),
   clientMessageId: z.string().uuid().nullable(),
+  /** Optional for backward compatibility with older broadcasts. */
+  attachments: z.array(messageAttachmentViewSchema).max(10).optional().default([]),
 });
 
 export type WidgetBroadcastMessage = z.infer<typeof widgetBroadcastMessageSchema>;
@@ -78,6 +81,7 @@ export const operatorMessageChangeSchema = z.object({
   is_internal: z.coerce.boolean(),
   client_message_id: z.string().uuid().nullable().optional(),
   created_at: z.string(),
+  metadata_json: z.record(z.unknown()).optional(),
 });
 
 export type OperatorMessageChange = z.infer<typeof operatorMessageChangeSchema>;
@@ -100,6 +104,19 @@ export type ConnectionState =
 
 export type PendingMessageStatus = "pending" | "sent" | "failed";
 
+export type MessageAttachmentViewModel = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  kind: "image" | "document";
+  width?: number | null;
+  height?: number | null;
+  durationMs?: number | null;
+  sortOrder: number;
+  hasThumbnail: boolean;
+};
+
 export type MessageView = {
   id: string;
   sequenceNumber: number;
@@ -113,6 +130,7 @@ export type MessageView = {
   isOptimistic?: boolean;
   /** sent → delivered → seen for local-party messages; omit for peer/system. */
   receiptStatus?: MessageReceiptStatus;
+  attachments?: MessageAttachmentViewModel[];
 };
 
 export function genericSenderLabel(senderType: "visitor" | "agent" | "system"): string {
