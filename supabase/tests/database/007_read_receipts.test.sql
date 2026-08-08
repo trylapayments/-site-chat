@@ -6,11 +6,6 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 
 SELECT plan(22);
 
-CREATE TEMP TABLE read_receipt_fixtures (
-  key text PRIMARY KEY,
-  value text NOT NULL
-);
-
 DO $$
 DECLARE
   v_owner uuid;
@@ -22,6 +17,8 @@ DECLARE
   v_conversation uuid;
   v_token text := 'read-receipt-session-token';
 BEGIN
+  DELETE FROM tests.fixtures;
+
   v_owner := tests.create_auth_user('read-receipts-owner@test.local');
   v_outsider := tests.create_auth_user('read-receipts-outsider@test.local');
 
@@ -63,7 +60,7 @@ BEGIN
   )
   RETURNING id INTO v_conversation;
 
-  INSERT INTO read_receipt_fixtures (key, value) VALUES
+  INSERT INTO tests.fixtures (key, value) VALUES
     ('owner_id', v_owner::text),
     ('outsider_id', v_outsider::text),
     ('workspace_id', v_workspace::text),
@@ -118,7 +115,7 @@ SELECT ok(
   'conversation_visitor_reads published for CDC'
 );
 
--- Visitor message increments visitor_message_count + creates unread for members with rows
+-- Visitor message increments visitor_message_count
 SELECT lives_ok(
   format(
     $sql$
@@ -142,10 +139,10 @@ SELECT lives_ok(
       SET next_message_sequence = 2, message_count = 1, last_message_at = now(), last_message_preview = 'hello unread'
       WHERE id = %L::uuid;
     $sql$,
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'conversation_id'),
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'session_id'),
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'conversation_id')
+    tests.fixture('workspace_id'),
+    tests.fixture('conversation_id'),
+    tests.fixture('session_id'),
+    tests.fixture('conversation_id')
   ),
   'insert visitor message'
 );
@@ -154,7 +151,7 @@ SELECT is(
   (
     SELECT visitor_message_count
     FROM public.conversations
-    WHERE id = (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'conversation_id')
+    WHERE id = tests.fixture('conversation_id')::uuid
   ),
   1::bigint,
   'visitor_message_count increments on visitor message'
@@ -162,15 +159,15 @@ SELECT is(
 
 -- Operator mark read clears unread and is no-op on reopen
 SELECT tests.authenticate_as(
-  (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'owner_id'),
+  tests.fixture('owner_id')::uuid,
   'read-receipts-owner@test.local'
 );
 
 SELECT is(
   (
     SELECT (public.mark_conversation_read(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'conversation_id'),
+      tests.fixture('workspace_id')::uuid,
+      tests.fixture('conversation_id')::uuid,
       1
     ) ->> 'unread_count')::integer
   ),
@@ -181,8 +178,8 @@ SELECT is(
 SELECT is(
   (
     SELECT (public.mark_conversation_read(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'conversation_id'),
+      tests.fixture('workspace_id')::uuid,
+      tests.fixture('conversation_id')::uuid,
       1
     ) ->> 'updated')::boolean
   ),
@@ -193,12 +190,14 @@ SELECT is(
 SELECT is(
   (
     SELECT (public.get_inbox_unread_total(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id')
+      tests.fixture('workspace_id')::uuid
     ) ->> 'unread_total')::integer
   ),
   0,
   'global unread total is zero after read'
 );
+
+SELECT tests.clear_auth();
 
 -- Agent reply then visitor marks delivered + read via service_role RPC
 SELECT lives_ok(
@@ -224,67 +223,75 @@ SELECT lives_ok(
       SET next_message_sequence = 3, message_count = 2, last_message_at = now(), last_message_preview = 'agent reply'
       WHERE id = %L::uuid;
     $sql$,
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'conversation_id'),
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'member_id'),
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'conversation_id')
+    tests.fixture('workspace_id'),
+    tests.fixture('conversation_id'),
+    tests.fixture('member_id'),
+    tests.fixture('conversation_id')
   ),
   'insert agent reply'
 );
 
-SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_workspace uuid := tests.fixture('workspace_id')::uuid;
+  v_token text := tests.fixture('session_token');
+  v_delivered jsonb;
+  v_dup jsonb;
+  v_read jsonb;
+BEGIN
+  SET LOCAL ROLE service_role;
 
-SELECT is(
-  (
-    SELECT (public.widget_mark_conversation_receipt(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-      (SELECT value FROM read_receipt_fixtures WHERE key = 'session_token'),
-      'delivered',
-      2
-    ) ->> 'last_delivered_sequence')::bigint
-  ),
-  2::bigint,
-  'visitor delivered advances last_delivered_sequence'
-);
+  v_delivered := public.widget_mark_conversation_receipt(
+    v_workspace,
+    v_token,
+    'delivered',
+    2
+  );
 
-SELECT is(
-  (
-    SELECT (public.widget_mark_conversation_receipt(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-      (SELECT value FROM read_receipt_fixtures WHERE key = 'session_token'),
-      'delivered',
-      2
-    ) ->> 'updated')::boolean
-  ),
-  false,
-  'duplicate visitor delivered is a no-op'
-);
+  IF (v_delivered ->> 'last_delivered_sequence')::bigint IS DISTINCT FROM 2 THEN
+    RAISE EXCEPTION 'expected delivered sequence 2, got %', v_delivered;
+  END IF;
 
-SELECT is(
-  (
-    SELECT (public.widget_mark_conversation_receipt(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-      (SELECT value FROM read_receipt_fixtures WHERE key = 'session_token'),
-      'read',
-      2
-    ) ->> 'last_read_sequence')::bigint
-  ),
-  2::bigint,
-  'visitor read advances last_read_sequence'
-);
+  v_dup := public.widget_mark_conversation_receipt(
+    v_workspace,
+    v_token,
+    'delivered',
+    2
+  );
 
-RESET ROLE;
+  IF (v_dup ->> 'updated')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'expected delivered no-op, got %', v_dup;
+  END IF;
+
+  v_read := public.widget_mark_conversation_receipt(
+    v_workspace,
+    v_token,
+    'read',
+    2
+  );
+
+  IF (v_read ->> 'last_read_sequence')::bigint IS DISTINCT FROM 2 THEN
+    RAISE EXCEPTION 'expected read sequence 2, got %', v_read;
+  END IF;
+
+  RESET ROLE;
+END;
+$$;
+
+SELECT pass('visitor delivered advances last_delivered_sequence');
+SELECT pass('duplicate visitor delivered is a no-op');
+SELECT pass('visitor read advances last_read_sequence');
 
 SELECT tests.authenticate_as(
-  (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'owner_id'),
+  tests.fixture('owner_id')::uuid,
   'read-receipts-owner@test.local'
 );
 
 SELECT is(
   (
     SELECT (public.get_conversation(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'conversation_id')
+      tests.fixture('workspace_id')::uuid,
+      tests.fixture('conversation_id')::uuid
     ) ->> 'visitor_last_read_sequence')::bigint
   ),
   2::bigint,
@@ -294,7 +301,7 @@ SELECT is(
 SELECT is(
   (
     SELECT (public.list_conversations(
-      (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'workspace_id'),
+      tests.fixture('workspace_id')::uuid,
       '{}'::jsonb
     ) -> 'items' -> 0 ->> 'unread_count')::integer
   ),
@@ -305,7 +312,7 @@ SELECT is(
 -- Cross-workspace isolation: outsider cannot mark read
 SELECT tests.clear_auth();
 SELECT tests.authenticate_as(
-  (SELECT value::uuid FROM read_receipt_fixtures WHERE key = 'outsider_id'),
+  tests.fixture('outsider_id')::uuid,
   'read-receipts-outsider@test.local'
 );
 
@@ -314,8 +321,8 @@ SELECT throws_ok(
     $sql$
       SELECT public.mark_conversation_read(%L::uuid, %L::uuid, 2)
     $sql$,
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'workspace_id'),
-    (SELECT value FROM read_receipt_fixtures WHERE key = 'conversation_id')
+    tests.fixture('workspace_id'),
+    tests.fixture('conversation_id')
   ),
   'P0001',
   NULL,
