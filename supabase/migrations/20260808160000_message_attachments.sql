@@ -648,6 +648,7 @@ BEGIN
 
   RETURN jsonb_build_object(
     'conversation_id', v_conversation.id,
+    'visitor_session_id', v_session.id,
     'status', v_conversation.status
   );
 END;

@@ -152,8 +152,10 @@ test.describe("attachments", () => {
     await widgetComposer(visitor).fill(marker);
     await frame.getByRole("button", { name: "Send" }).click();
 
-    await expect(frame.getByText(marker)).toBeVisible({ timeout: 60_000 });
-    // Durable preview: loaded <img>, not just the pending chip.
+    // Durable preview: loaded <img> in a visitor message (not composer text).
+    await expect(frame.getByTestId("visitor-message").filter({ hasText: marker })).toBeVisible({
+      timeout: 60_000,
+    });
     await expect(frame.getByTestId("attachment-image").locator("img")).toBeVisible({
       timeout: 60_000,
     });
@@ -194,16 +196,14 @@ test.describe("attachments", () => {
     await operatorReplyComposer(operator).fill(replyMarker);
     await operator.getByRole("button", { name: "Send reply" }).click();
 
-    // Wait for durable send (not optimistic placeholder).
-    await expect(operator.getByRole("button", { name: "Send reply" })).toBeEnabled({
-      timeout: 60_000,
-    });
-    await expect(operator.getByTestId("operator-upload-retry")).toHaveCount(0);
-    await expect(operator.getByTestId("operator-upload-status")).toHaveCount(0);
-    await expect(operator.getByText(replyMarker)).toBeVisible({ timeout: 60_000 });
+    // Wait for durable send (Retry replaces Send on failure).
     await expect(operator.getByTestId("operator-attachment-image").locator("img")).toBeVisible({
       timeout: 60_000,
     });
+    await expect(operator.getByText(replyMarker)).toBeVisible({ timeout: 30_000 });
+    await expect(operator.getByTestId("operator-upload-retry")).toHaveCount(0);
+    await expect(operator.getByTestId("operator-upload-status")).toHaveCount(0);
+    await expect(operator.getByRole("button", { name: "Send reply" })).toBeEnabled();
 
     const frame = widgetFrameLocator(visitor);
     await waitForWidgetRealtimeReady(visitor);
@@ -235,6 +235,13 @@ test.describe("attachments", () => {
     await widgetComposer(visitor).fill(marker);
     await frame.getByRole("button", { name: "Send" }).click();
 
+    // Receipt ticks only render on confirmed (non-optimistic) visitor messages.
+    await expect(
+      frame
+        .getByTestId("visitor-message")
+        .filter({ hasText: marker })
+        .getByTestId("message-receipt"),
+    ).toBeVisible({ timeout: 60_000 });
     await expect(frame.getByTestId("attachment-document")).toBeVisible({
       timeout: 60_000,
     });

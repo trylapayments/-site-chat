@@ -253,6 +253,29 @@ function attachmentActionError(error: unknown): AttachmentActionResult {
   if (error instanceof CapabilityError) {
     return { success: false, message: error.message };
   }
+
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : error &&
+          typeof error === "object" &&
+          "message" in error &&
+          typeof (error as { message: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : null;
+
+  if (rawMessage) {
+    // Surface actionable storage/RPC/Zod failures in UI/E2E without leaking secrets.
+    // Do not treat "foreign key" / schema paths containing "token" as secrets.
+    const safe = rawMessage.replace(/\s+/g, " ").trim().slice(0, 180);
+    if (
+      !/password|secret|service[_ -]?role|api[_ -]?key|bearer\s+[a-z0-9._-]+/i.test(
+        safe,
+      )
+    ) {
+      return { success: false, message: safe };
+    }
+  }
   return { success: false, message: "Something went wrong. Please try again." };
 }
 
@@ -306,7 +329,14 @@ export async function initiateOperatorUploadsAction(
       clientMessageId: parsed.data.clientMessageId,
     });
 
-    return { success: true, data: initiateUploadsDataSchema.parse(result) };
+    const validated = initiateUploadsDataSchema.safeParse(result);
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "Upload initiate response was invalid.",
+      };
+    }
+    return { success: true, data: validated.data };
   } catch (error) {
     if (error instanceof AttachmentValidationError) {
       return { success: false, message: error.message };

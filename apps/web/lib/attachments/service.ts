@@ -48,12 +48,12 @@ function getAntivirus(deps?: AttachmentServiceDeps): AntivirusScanner {
   return deps?.antivirus ?? new StubAntivirusScanner();
 }
 
-async function resolveVisitorConversationId(input: {
+async function resolveVisitorConversationContext(input: {
   workspaceId: string;
   sessionToken: string;
   pageUrl?: string | null;
   referrer?: string | null;
-}): Promise<string> {
+}): Promise<{ conversationId: string; visitorSessionId: string }> {
   const supabase = createServiceClient();
   const { data, error } = await supabase.rpc(
     "widget_ensure_conversation_for_attachments",
@@ -66,6 +66,10 @@ async function resolveVisitorConversationId(input: {
   );
 
   if (error) {
+    const message = error.message ?? "";
+    if (/session invalid or expired/i.test(message)) {
+      throw new Error("SESSION_EXPIRED");
+    }
     throw error;
   }
 
@@ -73,9 +77,15 @@ async function resolveVisitorConversationId(input: {
     data &&
     typeof data === "object" &&
     !Array.isArray(data) &&
-    typeof (data as Record<string, unknown>).conversation_id === "string"
+    typeof (data as Record<string, unknown>).conversation_id === "string" &&
+    typeof (data as Record<string, unknown>).visitor_session_id === "string"
   ) {
-    return (data as Record<string, unknown>).conversation_id as string;
+    return {
+      conversationId: (data as Record<string, unknown>)
+        .conversation_id as string,
+      visitorSessionId: (data as Record<string, unknown>)
+        .visitor_session_id as string,
+    };
   }
 
   throw new Error("Unable to resolve conversation for attachments");
@@ -105,12 +115,13 @@ export async function initiateVisitorUploads(
     throw new AttachmentValidationError(batch.error.code, batch.error.message);
   }
 
-  const conversationId = await resolveVisitorConversationId({
-    workspaceId: input.workspaceId,
-    sessionToken: input.sessionToken,
-    pageUrl: input.pageUrl,
-    referrer: input.referrer,
-  });
+  const { conversationId, visitorSessionId } =
+    await resolveVisitorConversationContext({
+      workspaceId: input.workspaceId,
+      sessionToken: input.sessionToken,
+      pageUrl: input.pageUrl,
+      referrer: input.referrer,
+    });
 
   return createUploadIntents(
     {
@@ -119,7 +130,7 @@ export async function initiateVisitorUploads(
       files: input.files,
       validated: batch.value,
       actorRole: "visitor",
-      sessionToken: input.sessionToken,
+      visitorSessionId,
       clientMessageId: input.clientMessageId,
       bodyDraft: input.body ?? "",
     },
@@ -172,7 +183,7 @@ async function createUploadIntents(
     files: InitiateUploadFileInput[];
     validated: ValidatedAttachmentFile[];
     actorRole: "visitor" | "operator";
-    sessionToken?: string;
+    visitorSessionId?: string;
     memberId?: string;
     clientMessageId?: string;
     bodyDraft: string;
@@ -183,12 +194,10 @@ async function createUploadIntents(
   const supabase = createServiceClient();
   const batchId = randomUUID();
 
-  let visitorSessionId: string | null = null;
-  if (input.actorRole === "visitor" && input.sessionToken) {
-    visitorSessionId = await resolveVisitorSessionId(
-      input.workspaceId,
-      input.sessionToken,
-    );
+  const visitorSessionId =
+    input.actorRole === "visitor" ? (input.visitorSessionId ?? null) : null;
+  if (input.actorRole === "visitor" && !visitorSessionId) {
+    throw new Error("SESSION_EXPIRED");
   }
 
   const uploads = [];
@@ -242,7 +251,7 @@ async function createUploadIntents(
     });
 
     if (error) {
-      throw error;
+      throw new Error(error.message || "Failed to create upload intent");
     }
 
     uploads.push({
@@ -251,7 +260,7 @@ async function createUploadIntents(
       attachmentId,
       storageKey,
       uploadUrl: signed.url,
-      uploadToken: signed.token,
+      uploadToken: signed.token ?? null,
       expiresAt: signed.expiresAt,
       headers: signed.headers,
       filename: validated.filename,
@@ -268,26 +277,17 @@ async function createUploadIntents(
   };
 }
 
-async function resolveVisitorSessionId(
+export async function resolveVisitorSessionId(
   workspaceId: string,
   sessionToken: string,
 ): Promise<string> {
-  const supabase = createServiceClient();
-  // widget_resolve_realtime_topic validates the token; session id via digest match.
-  const { createHash } = await import("node:crypto");
-  const hash = createHash("sha256").update(sessionToken).digest("hex");
-  const { data, error } = await supabase
-    .from("visitor_sessions")
-    .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("session_token_hash", hash)
-    .maybeSingle();
-
-  if (error || !data) {
-    throw new Error("SESSION_EXPIRED");
-  }
-
-  return data.id;
+  // Prefer the same SECURITY DEFINER resolver used by messaging RPCs so hash
+  // encoding stays consistent with app_private.hash_visitor_session_token.
+  const { visitorSessionId } = await resolveVisitorConversationContext({
+    workspaceId,
+    sessionToken,
+  });
+  return visitorSessionId;
 }
 
 async function uploadsAlreadyConfirmed(input: {

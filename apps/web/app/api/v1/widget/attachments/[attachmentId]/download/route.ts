@@ -1,6 +1,9 @@
 import { attachmentDownloadDataSchema } from "@site-chat/shared";
 
-import { createAttachmentDownloadUrl } from "@/lib/attachments/service";
+import {
+  createAttachmentDownloadUrl,
+  resolveVisitorSessionId,
+} from "@/lib/attachments/service";
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
 import { getEmbedTokenFromRequest } from "@/lib/widget/constants";
 import { createRequestId } from "@/lib/widget/embed-token";
@@ -80,17 +83,14 @@ export async function GET(
     }
 
     // Ensure the attachment belongs to a conversation visible to this visitor.
-    const supabase = createServiceClient();
-    const { createHash } = await import("node:crypto");
-    const hash = createHash("sha256").update(sessionToken).digest("hex");
-    const { data: session } = await supabase
-      .from("visitor_sessions")
-      .select("id")
-      .eq("workspace_id", embedContext.workspaceId)
-      .eq("session_token_hash", hash)
-      .maybeSingle();
-
-    if (!session) {
+    // Resolve session via the same SECURITY DEFINER path as messaging/uploads.
+    let visitorSessionId: string;
+    try {
+      visitorSessionId = await resolveVisitorSessionId(
+        embedContext.workspaceId,
+        sessionToken,
+      );
+    } catch {
       return widgetJsonError(
         "SESSION_EXPIRED",
         GENERIC_SESSION_MESSAGE,
@@ -100,6 +100,7 @@ export async function GET(
       );
     }
 
+    const supabase = createServiceClient();
     const { data: attachment } = await supabase
       .from("message_attachments")
       .select("id, conversation_id")
@@ -122,7 +123,7 @@ export async function GET(
       .select("id")
       .eq("workspace_id", embedContext.workspaceId)
       .eq("id", attachment.conversation_id)
-      .eq("visitor_session_id", session.id)
+      .eq("visitor_session_id", visitorSessionId)
       .maybeSingle();
 
     if (!conversation) {
