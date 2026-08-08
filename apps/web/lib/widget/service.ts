@@ -1,9 +1,11 @@
 import {
   widgetListMessagesDataSchema,
+  widgetMarkReceiptDataSchema,
   widgetPublicConfigSchema,
   widgetSendMessageDataSchema,
   widgetSessionDataSchema,
   type WidgetListMessagesData,
+  type WidgetMarkReceiptData,
   type WidgetPublicConfig,
   type WidgetSendMessageData,
   type WidgetSessionData,
@@ -100,6 +102,11 @@ function mapListMessagesFromRpc(data: Json): unknown {
     items: record.items ?? [],
     has_older: record.has_older ?? false,
     oldest_sequence: record.oldest_sequence ?? null,
+    agent_last_read_sequence: record.agent_last_read_sequence ?? 0,
+    agent_last_delivered_sequence: record.agent_last_delivered_sequence ?? 0,
+    visitor_last_read_sequence: record.visitor_last_read_sequence ?? 0,
+    visitor_last_delivered_sequence:
+      record.visitor_last_delivered_sequence ?? 0,
   };
 }
 
@@ -264,6 +271,34 @@ export async function listVisitorMessages(input: {
     "widget list messages",
     data as Json,
     widgetListMessagesDataSchema,
+  );
+}
+
+export async function markVisitorConversationReceipt(input: {
+  workspaceId: string;
+  sessionToken: string;
+  kind: "delivered" | "read";
+  throughSequence: number;
+}): Promise<WidgetMarkReceiptData> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc(
+    "widget_mark_conversation_receipt",
+    {
+      p_workspace_id: input.workspaceId,
+      p_session_token: input.sessionToken,
+      p_kind: input.kind,
+      p_through_sequence: input.throughSequence,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return parseRpcResult(
+    "widget mark receipt",
+    data as Json,
+    widgetMarkReceiptDataSchema,
   );
 }
 

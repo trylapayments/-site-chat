@@ -24,6 +24,9 @@ export const messages_et: WidgetMessages = {
   visitorTyping: "Külastaja kirjutab…",
   online: "Võrgus",
   offline: "Võrguühenduseta",
+  messageSent: "Saadetud",
+  messageDelivered: "Kohale toimetatud",
+  messageSeen: "Nähtud",
 };
 
 export default messages_et;

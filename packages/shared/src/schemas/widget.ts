@@ -148,10 +148,34 @@ export const widgetListMessagesDataSchema = z
     items: z.array(widgetMessageItemSchema),
     has_older: z.boolean(),
     oldest_sequence: z.number().int().nullable(),
+    agent_last_read_sequence: z.number().int().nonnegative().default(0),
+    agent_last_delivered_sequence: z.number().int().nonnegative().default(0),
+    visitor_last_read_sequence: z.number().int().nonnegative().default(0),
+    visitor_last_delivered_sequence: z.number().int().nonnegative().default(0),
   })
   .strict();
 
 export type WidgetListMessagesData = z.infer<typeof widgetListMessagesDataSchema>;
+
+export const widgetMarkReceiptRequestSchema = z
+  .object({
+    embedToken: z.string().min(1),
+    kind: z.enum(["delivered", "read"]),
+    throughSequence: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type WidgetMarkReceiptRequest = z.infer<typeof widgetMarkReceiptRequestSchema>;
+
+export const widgetMarkReceiptDataSchema = z
+  .object({
+    last_delivered_sequence: z.number().int().nonnegative(),
+    last_read_sequence: z.number().int().nonnegative(),
+    updated: z.boolean(),
+  })
+  .strict();
+
+export type WidgetMarkReceiptData = z.infer<typeof widgetMarkReceiptDataSchema>;
 
 export const widgetApiErrorSchema = z
   .object({

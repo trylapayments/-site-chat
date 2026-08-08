@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { InboxUnreadBadge } from "@/components/inbox/InboxUnreadBadge";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_NAV_ICONS } from "@/lib/dashboard/icons";
@@ -12,16 +13,21 @@ import type { DashboardNavLinkItem } from "@/lib/dashboard/navigation";
 export function DashboardNavLink({
   item,
   slug,
+  workspaceId,
+  memberId,
   onNavigate,
 }: {
   item: DashboardNavLinkItem;
   slug: string;
+  workspaceId: string;
+  memberId: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const activeNavItemId = resolveActiveNavItemId(pathname, slug);
   const isActive = activeNavItemId === item.id;
   const Icon = DASHBOARD_NAV_ICONS[item.icon];
+  const showUnread = item.id === "inbox" && workspaceId && memberId;
 
   return (
     <Link
@@ -37,6 +43,9 @@ export function DashboardNavLink({
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
       <span>{item.label}</span>
+      {showUnread ? (
+        <InboxUnreadBadge workspaceId={workspaceId} memberId={memberId} />
+      ) : null}
     </Link>
   );
 }

@@ -24,6 +24,9 @@ export const messages_hu: WidgetMessages = {
   visitorTyping: "A látogató gépel…",
   online: "Elérhető",
   offline: "Nem elérhető",
+  messageSent: "Elküldve",
+  messageDelivered: "Kézbesítve",
+  messageSeen: "Megtekintve",
 };
 
 export default messages_hu;

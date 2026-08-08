@@ -24,6 +24,9 @@ export const messages_hr: WidgetMessages = {
   visitorTyping: "Posjetitelj tipka…",
   online: "Online",
   offline: "Offline",
+  messageSent: "Poslano",
+  messageDelivered: "Dostavljeno",
+  messageSeen: "Viđeno",
 };
 
 export default messages_hr;

@@ -39,11 +39,19 @@ export default async function WorkspaceLayout({
     notFound();
   }
 
+  const { data: memberRow } = await supabase
+    .from("workspace_members")
+    .select("id")
+    .eq("workspace_id", guard.workspace.workspace_id)
+    .eq("user_id", user.id)
+    .maybeSingle<{ id: string }>();
+
   return (
     <DashboardShell
       slug={guard.workspace.slug}
       workspaceName={guard.workspace.name}
       workspaceId={guard.workspace.workspace_id}
+      memberId={memberRow?.id ?? ""}
       workspaces={membership.accessible_workspaces}
       email={user.email ?? "Signed in"}
     >

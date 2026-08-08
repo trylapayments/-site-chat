@@ -24,6 +24,9 @@ export const messages_ru: WidgetMessages = {
   visitorTyping: "Посетитель печатает…",
   online: "В сети",
   offline: "Не в сети",
+  messageSent: "Отправлено",
+  messageDelivered: "Доставлено",
+  messageSeen: "Прочитано",
 };
 
 export default messages_ru;

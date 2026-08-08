@@ -24,6 +24,9 @@ export const messages_mg: WidgetMessages = {
   visitorTyping: "Ny mpitsidika manoratra…",
   online: "An-tserasera",
   offline: "Tsy an-tserasera",
+  messageSent: "Nalefa",
+  messageDelivered: "Tonga",
+  messageSeen: "Hita",
 };
 
 export default messages_mg;

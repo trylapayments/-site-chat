@@ -24,6 +24,9 @@ export const messages_el: WidgetMessages = {
   visitorTyping: "Ο επισκέπτης πληκτρολογεί…",
   online: "Σε σύνδεση",
   offline: "Εκτός σύνδεσης",
+  messageSent: "Εστάλη",
+  messageDelivered: "Παραδόθηκε",
+  messageSeen: "Διαβάστηκε",
 };
 
 export default messages_el;

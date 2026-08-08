@@ -5,6 +5,7 @@ import type {
   ListConversationsQuery,
 } from "@site-chat/shared";
 import {
+  computeUnreadAfterVisitorMessage,
   conversationListItemFromChange,
   conversationListItemFromMessage,
   conversationMatchesFilters,
@@ -19,6 +20,7 @@ import {
   type ConnectionState,
   type MessageView,
 } from "@site-chat/shared";
+import { z } from "zod";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchConversations } from "@/lib/inbox/queries";
@@ -117,8 +119,18 @@ export function useLiveInboxList(input: {
   }, [refreshList]);
 
   useEffect(() => {
+    const memberReadSchema = z
+      .object({
+        conversation_id: z.string().uuid(),
+        member_id: z.string().uuid(),
+        unread_count: z.coerce.number().int().nonnegative(),
+        last_read_sequence: z.coerce.number().int().nonnegative(),
+      })
+      .passthrough();
+
     const unsubscribe = subscribeOperatorWorkspaceInbox({
       workspaceId: input.workspaceId,
+      memberId: input.memberId,
       onConnectionChange: setConnectionState,
       onMessageInsert: (raw) => {
         const parsed = operatorMessageChangeSchema.safeParse(raw);
@@ -138,13 +150,18 @@ export function useLiveInboxList(input: {
           );
           const base =
             currentExisting ?? conversationListItemFromMessage(parsed.data);
+          const nextUnread =
+            parsed.data.sender_type === "visitor"
+              ? computeUnreadAfterVisitorMessage(base.unread_count)
+              : base.unread_count;
           const next = patchConversationListItem(base, {
             last_message_at: parsed.data.created_at,
             last_message_preview: parsed.data.body.slice(0, 200),
             message_count: currentExisting
               ? currentExisting.message_count + 1
               : base.message_count,
-            has_unread: parsed.data.sender_type === "visitor",
+            unread_count: nextUnread,
+            has_unread: nextUnread > 0,
           });
           const matches = conversationMatchesFilters(next, {
             status: statusFilter,
@@ -202,6 +219,31 @@ export function useLiveInboxList(input: {
         if (!existing) {
           void refreshList();
         }
+      },
+      onMemberReadChange: (raw) => {
+        const parsed = memberReadSchema.safeParse(raw);
+        if (!parsed.success || parsed.data.member_id !== input.memberId) {
+          return;
+        }
+
+        setItems((current) => {
+          const existing = current.find(
+            (item) => item.id === parsed.data.conversation_id,
+          );
+          if (!existing) {
+            return current;
+          }
+
+          const next = patchConversationListItem(existing, {
+            unread_count: parsed.data.unread_count,
+            has_unread: parsed.data.unread_count > 0,
+          });
+
+          return sortConversationItems(
+            upsertConversationListItem(current, next, sort),
+            sort,
+          );
+        });
       },
     });
 

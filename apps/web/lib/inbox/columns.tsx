@@ -43,11 +43,21 @@ export function createInboxColumns(
             className="hover:text-primary block font-medium"
           >
             <span className="inline-flex items-center gap-2">
-              {conversation.has_unread ? (
+              {conversation.unread_count > 0 || conversation.has_unread ? (
                 <span
-                  aria-label="Unread"
-                  className="bg-primary size-2 shrink-0 rounded-full"
-                />
+                  className="bg-primary text-primary-foreground inline-flex min-w-5 shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+                  data-testid="conversation-unread-badge"
+                  data-unread-count={Math.max(1, conversation.unread_count)}
+                  aria-label={
+                    conversation.unread_count > 0
+                      ? `${String(conversation.unread_count)} unread`
+                      : "Unread"
+                  }
+                >
+                  {conversation.unread_count > 99
+                    ? "99+"
+                    : String(Math.max(1, conversation.unread_count))}
+                </span>
               ) : null}
               {label}
             </span>

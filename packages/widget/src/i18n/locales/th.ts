@@ -24,6 +24,9 @@ export const messages_th: WidgetMessages = {
   visitorTyping: "ผู้เยี่ยมชมกำลังพิมพ์…",
   online: "ออนไลน์",
   offline: "ออฟไลน์",
+  messageSent: "ส่งแล้ว",
+  messageDelivered: "ส่งถึงแล้ว",
+  messageSeen: "เห็นแล้ว",
 };
 
 export default messages_th;

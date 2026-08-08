@@ -2,9 +2,12 @@
 
 import {
   assignConversationSchema,
+  markConversationDeliveredSchema,
   markConversationReadSchema,
   sendMessageSchema,
   updateConversationStatusSchema,
+  type MarkConversationDeliveredResult,
+  type MarkConversationReadResult,
   type SendOperatorMessageResult,
 } from "@site-chat/shared";
 import { revalidatePath } from "next/cache";
@@ -13,6 +16,7 @@ import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   assignConversation,
+  markConversationDelivered,
   markConversationRead,
   sendOperatorMessage,
   updateConversationStatus,
@@ -25,7 +29,13 @@ import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export type InboxActionResult =
-  | { success: true; data?: SendOperatorMessageResult }
+  | {
+      success: true;
+      data?:
+        | SendOperatorMessageResult
+        | MarkConversationReadResult
+        | MarkConversationDeliveredResult;
+    }
   | { success: false; message: string };
 
 function mapActionError(error: unknown): InboxActionResult {
@@ -167,15 +177,47 @@ export async function markConversationReadAction(
     const { workspace, supabase } =
       await requireInboxMutationContext(workspaceSlug);
 
-    await markConversationRead(
+    const result = await markConversationRead(
       supabase,
       workspace.workspace_id,
       parsed.data.conversationId,
       parsed.data.throughSequence,
     );
 
-    return { success: true };
+    return { success: true, data: result };
   } catch {
     return { success: false, message: "Unable to mark conversation read." };
+  }
+}
+
+export async function markConversationDeliveredAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    throughSequence: number;
+  },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = markConversationDeliveredSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid delivery request." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+
+    const result = await markConversationDelivered(
+      supabase,
+      workspace.workspace_id,
+      parsed.data.conversationId,
+      parsed.data.throughSequence,
+    );
+
+    return { success: true, data: result };
+  } catch {
+    return {
+      success: false,
+      message: "Unable to mark conversation delivered.",
+    };
   }
 }

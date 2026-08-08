@@ -24,6 +24,9 @@ export const messages_fi: WidgetMessages = {
   visitorTyping: "Vierailija kirjoittaa…",
   online: "Paikalla",
   offline: "Poissa",
+  messageSent: "Lähetetty",
+  messageDelivered: "Toimitettu",
+  messageSeen: "Nähty",
 };
 
 export default messages_fi;

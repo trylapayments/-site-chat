@@ -1,17 +1,21 @@
 import {
   conversationDetailSchema,
+  inboxUnreadTotalResultSchema,
   listConversationsQuerySchema,
   listConversationsResultSchema,
   listMessagesQuerySchema,
   listMessagesResultSchema,
+  markConversationDeliveredResultSchema,
   markConversationReadResultSchema,
   sendOperatorMessageResultSchema,
   workspaceMemberOptionSchema,
   type ConversationDetail,
+  type InboxUnreadTotalResult,
   type ListConversationsQuery,
   type ListConversationsResult,
   type ListMessagesQuery,
   type ListMessagesResult,
+  type MarkConversationDeliveredResult,
   type MarkConversationReadResult,
   type SendOperatorMessageResult,
   type WorkspaceMemberOption,
@@ -193,6 +197,56 @@ export async function markConversationRead(
     markConversationReadResultSchema,
     data,
     "mark_conversation_read",
+  );
+}
+
+export async function markConversationDelivered(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  conversationId: string,
+  throughSequence: number,
+): Promise<MarkConversationDeliveredResult> {
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "mark_conversation_delivered",
+    {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+      p_through_sequence: throughSequence,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return parseRpcResult(
+    markConversationDeliveredResultSchema,
+    data,
+    "mark_conversation_delivered",
+  );
+}
+
+export async function fetchInboxUnreadTotal(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+): Promise<InboxUnreadTotalResult> {
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "get_inbox_unread_total",
+    {
+      p_workspace_id: workspaceId,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return parseRpcResult(
+    inboxUnreadTotalResultSchema,
+    data,
+    "get_inbox_unread_total",
   );
 }
 

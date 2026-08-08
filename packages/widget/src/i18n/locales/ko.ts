@@ -24,6 +24,9 @@ export const messages_ko: WidgetMessages = {
   visitorTyping: "방문자가 입력 중…",
   online: "온라인",
   offline: "오프라인",
+  messageSent: "전송됨",
+  messageDelivered: "전송 완료",
+  messageSeen: "읽음",
 };
 
 export default messages_ko;

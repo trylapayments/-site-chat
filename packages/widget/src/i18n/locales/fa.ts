@@ -24,6 +24,9 @@ export const messages_fa: WidgetMessages = {
   visitorTyping: "بازدیدکننده در حال نوشتن است…",
   online: "آنلاین",
   offline: "آفلاین",
+  messageSent: "ارسال شد",
+  messageDelivered: "تحویل شد",
+  messageSeen: "دیده شد",
 };
 
 export default messages_fa;

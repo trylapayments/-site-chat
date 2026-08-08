@@ -1,16 +1,21 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import {
+  RECEIPT_BROADCAST_EVENT,
   TYPING_BROADCAST_EVENT,
   TYPING_IDLE_STOP_MS,
   TYPING_REMOTE_TTL_MS,
+  applyRemoteReceiptEvent,
   applyRemoteTypingEvent,
   buildPresenceStatePayload,
+  buildReceiptBroadcastPayload,
   buildTypingBroadcastPayload,
   decideLocalTypingEmit,
   expireRemoteTypingActors,
   isAnyoneTyping,
   isRoleOnline,
   mergeMessages,
+  mergeReceiptCursors,
+  parseReceiptBroadcastPayload,
   parseTypingBroadcastPayload,
   reconcilePresencePeers,
   resolveTypingDisplayName,
@@ -20,10 +25,13 @@ import {
   type ConnectionState,
   type MessageView,
   type PresencePeer,
+  type ReceiptCursors,
+  type ReceiptKind,
   type RemoteTypingActor,
 } from "@site-chat/shared";
 
-import type { WidgetApiClient } from "../api/client";
+import type { ListMessagesPayload, WidgetApiClient } from "../api/client";
+import { maxAgentMessageSequence } from "./receipt-visibility";
 
 declare const __SITECHAT_SUPABASE_URL__: string;
 declare const __SITECHAT_SUPABASE_KEY__: string;
@@ -42,6 +50,8 @@ export type WidgetTransportCallbacks = {
   onConnectionState: (state: ConnectionState) => void;
   onAgentTyping?: (indicator: WidgetTypingIndicator) => void;
   onPresence?: (presence: WidgetPresenceView) => void;
+  /** Peer (operator) receipt cursors for visitor-owned message ticks. */
+  onAgentReceipts?: (cursors: ReceiptCursors) => void;
 };
 
 type RealtimeCredentials = {
@@ -127,19 +137,54 @@ export class WidgetRealtimeTransport {
   private presenceTracked = false;
   private messageSubscribed = false;
   private ephemeralSubscribed = false;
+  private embedToken = "";
+  private sessionToken = "";
+  /** Local visitor cursors — used for monotonic delivered/read writes. */
+  private localReceipts: ReceiptCursors = {
+    lastDeliveredSequence: 0,
+    lastReadSequence: 0,
+  };
+  /** Operator peer cursors — drive ticks on the visitor's own messages. */
+  private agentReceipts: ReceiptCursors = {
+    lastDeliveredSequence: 0,
+    lastReadSequence: 0,
+  };
+  private deliveredInFlightThrough = 0;
+  private readInFlightThrough = 0;
 
   constructor(
     private readonly api: WidgetApiClient,
     private readonly callbacks: WidgetTransportCallbacks,
   ) {}
 
-  async start(input: { embedToken: string; sessionToken: string; initialMessages: MessageView[] }) {
+  async start(input: {
+    embedToken: string;
+    sessionToken: string;
+    initialMessages: MessageView[];
+    initialAgentReceipts?: ReceiptCursors;
+    initialVisitorReceipts?: ReceiptCursors;
+  }) {
     this.running = true;
+    this.embedToken = input.embedToken;
+    this.sessionToken = input.sessionToken;
     this.messages = input.initialMessages;
+
+    if (input.initialAgentReceipts) {
+      this.setAgentReceipts(input.initialAgentReceipts);
+    }
+    if (input.initialVisitorReceipts) {
+      this.localReceipts = mergeReceiptCursors(
+        this.localReceipts,
+        input.initialVisitorReceipts,
+      ).next;
+    }
+
     this.callbacks.onMessages(this.messages);
 
     if (input.initialMessages.length > 0) {
       await this.ensureSubscription(input.embedToken, input.sessionToken);
+      // Delivered may advance while the tab is hidden; never auto-mark read here.
+      this.markDeliveredThrough(maxAgentMessageSequence(this.messages));
     } else {
       this.callbacks.onConnectionState("connecting");
     }
@@ -167,6 +212,32 @@ export class WidgetRealtimeTransport {
     return this.presenceKey;
   }
 
+  getAgentReceipts(): ReceiptCursors {
+    return this.agentReceipts;
+  }
+
+  /**
+   * Seed / merge durable cursors from HTTP listMessages (source of truth on catch-up).
+   */
+  applyListReceiptCursors(
+    listed: Pick<
+      ListMessagesPayload,
+      | "agent_last_delivered_sequence"
+      | "agent_last_read_sequence"
+      | "visitor_last_delivered_sequence"
+      | "visitor_last_read_sequence"
+    >,
+  ) {
+    this.setAgentReceipts({
+      lastDeliveredSequence: listed.agent_last_delivered_sequence,
+      lastReadSequence: listed.agent_last_read_sequence,
+    });
+    this.localReceipts = mergeReceiptCursors(this.localReceipts, {
+      lastDeliveredSequence: listed.visitor_last_delivered_sequence,
+      lastReadSequence: listed.visitor_last_read_sequence,
+    }).next;
+  }
+
   replaceMessages(messages: MessageView[]) {
     this.messages = messages;
     this.callbacks.onMessages(this.messages);
@@ -180,6 +251,19 @@ export class WidgetRealtimeTransport {
   mergePending(pending: MessageView[]) {
     this.messages = mergeMessages(this.messages, [], pending);
     this.callbacks.onMessages(this.messages);
+  }
+
+  /**
+   * Mark agent messages as read through `sequence` (durable + ephemeral).
+   * UI must gate on panel-open + document visible — transport does not.
+   */
+  markReadThrough(sequence: number) {
+    void this.persistReceipt("read", sequence);
+  }
+
+  /** Alias for UI: messages currently shown in the open panel are viewed. */
+  notifyMessagesVisible(maxAgentSequence: number) {
+    this.markReadThrough(maxAgentSequence);
   }
 
   /**
@@ -226,6 +310,9 @@ export class WidgetRealtimeTransport {
   }
 
   async catchUp(input: { embedToken: string; sessionToken: string }) {
+    this.embedToken = input.embedToken;
+    this.sessionToken = input.sessionToken;
+
     let afterSequence = this.messages.reduce(
       (max, message) => Math.max(max, message.sequenceNumber),
       0,
@@ -235,8 +322,11 @@ export class WidgetRealtimeTransport {
       const listed = await this.api.listMessages({
         embedToken: input.embedToken,
         sessionToken: input.sessionToken,
-        afterSequence,
+        afterSequence: afterSequence > 0 ? afterSequence : undefined,
       });
+
+      // Durable cursors are authoritative on catch-up (including empty pages).
+      this.applyListReceiptCursors(listed);
 
       if (listed.items.length === 0) {
         break;
@@ -255,6 +345,9 @@ export class WidgetRealtimeTransport {
     }
 
     this.callbacks.onMessages(this.messages);
+
+    // Catch-up / reconnect: mark delivered for agent messages; never auto-mark read.
+    this.markDeliveredThrough(maxAgentMessageSequence(this.messages));
   }
 
   private attachLifecycle(embedToken: string, sessionToken: string) {
@@ -497,6 +590,11 @@ export class WidgetRealtimeTransport {
         const next = toMessageViewFromWidgetBroadcast(parsed.data.message);
         this.messages = mergeMessages(this.messages, [next], []);
         this.callbacks.onMessages(this.messages);
+
+        // Delivered advances when the agent message arrives (even if tab hidden).
+        if (next.senderType === "agent") {
+          this.markDeliveredThrough(next.sequenceNumber);
+        }
       });
 
     this.messageChannel = channel;
@@ -527,6 +625,12 @@ export class WidgetRealtimeTransport {
           return;
         }
         this.handleTypingBroadcast(payload.payload);
+      })
+      .on("broadcast", { event: RECEIPT_BROADCAST_EVENT }, (payload) => {
+        if (this.ephemeralChannel !== channel) {
+          return;
+        }
+        this.handleReceiptBroadcast(payload.payload);
       })
       .on("presence", { event: "sync" }, () => {
         if (this.ephemeralChannel !== channel) {
@@ -567,6 +671,126 @@ export class WidgetRealtimeTransport {
     });
     this.emitAgentTyping();
     this.ensureTypingExpiryLoop();
+  }
+
+  private handleReceiptBroadcast(raw: unknown) {
+    const parsed = parseReceiptBroadcastPayload(raw);
+    if (!parsed) {
+      return;
+    }
+
+    const applied = applyRemoteReceiptEvent({
+      cursors: this.agentReceipts,
+      payload: parsed,
+      localActorKey: this.presenceKey,
+      expectedRole: "operator",
+    });
+
+    if (!applied.advanced) {
+      return;
+    }
+
+    this.setAgentReceipts(applied.cursors);
+  }
+
+  private setAgentReceipts(cursors: ReceiptCursors) {
+    const merged = mergeReceiptCursors(this.agentReceipts, cursors);
+    if (!merged.advanced) {
+      return;
+    }
+
+    this.agentReceipts = merged.next;
+    this.callbacks.onAgentReceipts?.(this.agentReceipts);
+  }
+
+  private markDeliveredThrough(sequence: number) {
+    void this.persistReceipt("delivered", sequence);
+  }
+
+  private async persistReceipt(kind: ReceiptKind, throughSequence: number) {
+    if (!this.running || throughSequence <= 0 || !this.embedToken || !this.sessionToken) {
+      return;
+    }
+
+    if (kind === "delivered") {
+      if (
+        throughSequence <= this.localReceipts.lastDeliveredSequence ||
+        throughSequence <= this.deliveredInFlightThrough
+      ) {
+        return;
+      }
+      this.deliveredInFlightThrough = throughSequence;
+    } else {
+      if (
+        throughSequence <= this.localReceipts.lastReadSequence ||
+        throughSequence <= this.readInFlightThrough
+      ) {
+        return;
+      }
+      this.readInFlightThrough = throughSequence;
+    }
+
+    try {
+      const result = await this.api.markReceipt({
+        embedToken: this.embedToken,
+        sessionToken: this.sessionToken,
+        kind,
+        throughSequence,
+      });
+
+      const merged = mergeReceiptCursors(this.localReceipts, {
+        lastDeliveredSequence: result.last_delivered_sequence,
+        lastReadSequence: result.last_read_sequence,
+      });
+      this.localReceipts = merged.next;
+
+      if (!result.updated) {
+        return;
+      }
+
+      await this.broadcastReceipt({
+        kind,
+        lastDeliveredSequence: this.localReceipts.lastDeliveredSequence,
+        lastReadSequence: this.localReceipts.lastReadSequence,
+      });
+    } catch {
+      // Durable write failed — next catch-up / visible pass can retry.
+    } finally {
+      if (kind === "delivered" && this.deliveredInFlightThrough === throughSequence) {
+        this.deliveredInFlightThrough = 0;
+      }
+      if (kind === "read" && this.readInFlightThrough === throughSequence) {
+        this.readInFlightThrough = 0;
+      }
+    }
+  }
+
+  private async broadcastReceipt(input: {
+    kind: ReceiptKind;
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) {
+    if (!this.ephemeralChannel || !this.presenceKey) {
+      return;
+    }
+
+    const payload = buildReceiptBroadcastPayload({
+      actorRole: "visitor",
+      actorKey: this.presenceKey,
+      kind: input.kind,
+      lastDeliveredSequence: input.lastDeliveredSequence,
+      lastReadSequence: input.lastReadSequence,
+    });
+
+    try {
+      await this.ephemeralChannel.send({
+        type: "broadcast",
+        event: RECEIPT_BROADCAST_EVENT,
+        payload,
+      });
+    } catch {
+      // Ephemeral — durable cursor already persisted via API.
+    }
   }
 
   private emitAgentTyping() {

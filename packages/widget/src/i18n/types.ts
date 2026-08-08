@@ -9,6 +9,8 @@
  * - agentTyping: use {{name}} (agentLabel or safe display name)
  * - visitorTyping: reserved for parity / future visitor-facing copy
  * - online / offline: subtle presence; do not imply instant reply
+ * - messageSent / messageDelivered / messageSeen: short receipt tick labels
+ *   (aria-label / tooltip for visitor-owned messages only)
  */
 
 export const WIDGET_MESSAGE_KEYS = [
@@ -35,6 +37,9 @@ export const WIDGET_MESSAGE_KEYS = [
   "visitorTyping",
   "online",
   "offline",
+  "messageSent",
+  "messageDelivered",
+  "messageSeen",
 ] as const;
 
 export type WidgetMessageKey = (typeof WIDGET_MESSAGE_KEYS)[number];

@@ -12,11 +12,13 @@ export function DashboardTopBar({
   slug,
   workspaces,
   currentWorkspaceId,
+  memberId,
   email,
 }: {
   slug: string;
   workspaces: AccessibleWorkspace[];
   currentWorkspaceId: string;
+  memberId: string;
   email: string;
 }) {
   const pathname = usePathname();
@@ -27,6 +29,7 @@ export function DashboardTopBar({
         slug={slug}
         workspaces={workspaces}
         currentWorkspaceId={currentWorkspaceId}
+        memberId={memberId}
         email={email}
       />
       <div className="ml-auto flex items-center gap-2">

@@ -24,6 +24,9 @@ export const messages_sl: WidgetMessages = {
   visitorTyping: "Obiskovalec tipka…",
   online: "Na spletu",
   offline: "Nepovezan",
+  messageSent: "Poslano",
+  messageDelivered: "Dostavljeno",
+  messageSeen: "Videno",
 };
 
 export default messages_sl;

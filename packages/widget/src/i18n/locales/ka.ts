@@ -24,6 +24,9 @@ export const messages_ka: WidgetMessages = {
   visitorTyping: "ვიზიტორი ბეჭდავს…",
   online: "ონლაინ",
   offline: "ოფლაინ",
+  messageSent: "გაგზავნილია",
+  messageDelivered: "მიწოდებულია",
+  messageSeen: "ნანახია",
 };
 
 export default messages_ka;

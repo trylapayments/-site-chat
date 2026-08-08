@@ -24,6 +24,9 @@ export const messages_ms: WidgetMessages = {
   visitorTyping: "Pelawat sedang menaip…",
   online: "Dalam talian",
   offline: "Luar talian",
+  messageSent: "Dihantar",
+  messageDelivered: "Disampaikan",
+  messageSeen: "Dilihat",
 };
 
 export default messages_ms;

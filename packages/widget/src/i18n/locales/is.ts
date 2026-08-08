@@ -24,6 +24,9 @@ export const messages_is: WidgetMessages = {
   visitorTyping: "Gestur er að skrifa…",
   online: "Á netinu",
   offline: "Ótengdur",
+  messageSent: "Sent",
+  messageDelivered: "Afhent",
+  messageSeen: "Séð",
 };
 
 export default messages_is;

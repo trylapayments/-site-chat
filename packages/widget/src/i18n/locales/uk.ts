@@ -24,6 +24,9 @@ export const messages_uk: WidgetMessages = {
   visitorTyping: "Відвідувач друкує…",
   online: "Онлайн",
   offline: "Офлайн",
+  messageSent: "Надіслано",
+  messageDelivered: "Доставлено",
+  messageSeen: "Переглянуто",
 };
 
 export default messages_uk;

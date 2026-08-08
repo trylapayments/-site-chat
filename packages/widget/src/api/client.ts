@@ -40,6 +40,25 @@ export type MessagePayload = {
   created_at: string;
 };
 
+export type WidgetReceiptCursorsPayload = {
+  agent_last_read_sequence: number;
+  agent_last_delivered_sequence: number;
+  visitor_last_read_sequence: number;
+  visitor_last_delivered_sequence: number;
+};
+
+export type ListMessagesPayload = {
+  items: MessagePayload[];
+  has_older: boolean;
+  oldest_sequence: number | null;
+} & WidgetReceiptCursorsPayload;
+
+export type MarkReceiptPayload = {
+  last_delivered_sequence: number;
+  last_read_sequence: number;
+  updated: boolean;
+};
+
 export type ApiSuccess<T> = {
   data: T;
   meta: { requestId: string };
@@ -103,7 +122,7 @@ export class WidgetApiClient {
     sessionToken: string;
     beforeSequence?: number;
     afterSequence?: number;
-  }): Promise<{ items: MessagePayload[]; has_older: boolean; oldest_sequence: number | null }> {
+  }): Promise<ListMessagesPayload> {
     const url = new URL("/api/v1/widget/messages", this.apiBase);
     if (input.beforeSequence) {
       url.searchParams.set("beforeSequence", String(input.beforeSequence));
@@ -119,6 +138,29 @@ export class WidgetApiClient {
         [WIDGET_EMBED_TOKEN_HEADER]: input.embedToken,
       },
       credentials: "omit",
+    });
+
+    return this.parseResponse(response);
+  }
+
+  async markReceipt(input: {
+    embedToken: string;
+    sessionToken: string;
+    kind: "delivered" | "read";
+    throughSequence: number;
+  }): Promise<MarkReceiptPayload> {
+    const response = await fetch(new URL("/api/v1/widget/receipts", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify({
+        embedToken: input.embedToken,
+        kind: input.kind,
+        throughSequence: input.throughSequence,
+      }),
     });
 
     return this.parseResponse(response);

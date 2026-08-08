@@ -1,19 +1,31 @@
 "use client";
 
-import type { MessageItem } from "@site-chat/shared";
+import type { MessageItem, ReceiptCursors } from "@site-chat/shared";
 import {
   createOptimisticMessage,
+  deriveMessageReceiptStatus,
   genericSenderLabel,
   maxSequenceNumber,
   mergeMessages,
   toMessageViewFromOperatorRow,
   type MessageView,
 } from "@site-chat/shared";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
-import { markConversationReadAction } from "@/lib/inbox/actions";
+import { MessageReceiptIndicator } from "@/components/inbox/MessageReceiptIndicator";
+import {
+  markConversationDeliveredAction,
+  markConversationReadAction,
+} from "@/lib/inbox/actions";
 import { formatRelativeTime } from "@/lib/inbox/search-params";
 import {
   subscribeOperatorConversationEphemeral,
@@ -44,6 +56,7 @@ export function LiveConversationThread({
   memberId,
   memberDisplayLabel,
   initialMessages,
+  initialVisitorReceipts,
   canSend,
 }: {
   workspaceId: string;
@@ -53,6 +66,7 @@ export function LiveConversationThread({
   memberId: string;
   memberDisplayLabel?: string | null;
   initialMessages: MessageItem[];
+  initialVisitorReceipts: ReceiptCursors;
   canSend: boolean;
 }) {
   // Stabilize mapped props so useLiveConversationThread's effect does not see a
@@ -78,7 +92,22 @@ export function LiveConversationThread({
 
   const [visitorTyping, setVisitorTyping] = useState(false);
   const [visitorOnline, setVisitorOnline] = useState(false);
+  const [visitorReceipts, setVisitorReceipts] = useState<ReceiptCursors>(
+    initialVisitorReceipts,
+  );
   const ephemeralRef = useRef<OperatorEphemeralController | null>(null);
+  const lastReadBroadcastRef = useRef(0);
+  const lastDeliveredRef = useRef(0);
+
+  const initialDelivered = initialVisitorReceipts.lastDeliveredSequence;
+  const initialRead = initialVisitorReceipts.lastReadSequence;
+
+  useEffect(() => {
+    setVisitorReceipts({
+      lastDeliveredSequence: initialDelivered,
+      lastReadSequence: initialRead,
+    });
+  }, [conversationId, initialDelivered, initialRead]);
 
   useEffect(() => {
     setVisitorTyping(false);
@@ -92,11 +121,18 @@ export function LiveConversationThread({
       ephemeralTopic,
       memberId,
       displayLabel: memberDisplayLabel,
+      initialVisitorReceipts: {
+        lastDeliveredSequence: initialDelivered,
+        lastReadSequence: initialRead,
+      },
       onVisitorTyping: (indicator) => {
         setVisitorTyping(indicator.active);
       },
       onVisitorPresence: (presence) => {
         setVisitorOnline(presence.online);
+      },
+      onVisitorReceipts: (cursors) => {
+        setVisitorReceipts(cursors);
       },
     });
 
@@ -108,7 +144,94 @@ export function LiveConversationThread({
       setVisitorTyping(false);
       setVisitorOnline(false);
     };
-  }, [conversationId, ephemeralTopic, memberDisplayLabel, memberId]);
+  }, [
+    conversationId,
+    ephemeralTopic,
+    initialDelivered,
+    initialRead,
+    memberDisplayLabel,
+    memberId,
+  ]);
+
+  const markReadThrough = useCallback(
+    (sequence: number) => {
+      if (sequence <= lastReadBroadcastRef.current) {
+        return;
+      }
+
+      void (async () => {
+        const result = await markConversationReadAction(workspaceSlug, {
+          conversationId,
+          throughSequence: sequence,
+        });
+
+        if (
+          !result.success ||
+          !result.data ||
+          !("last_read_sequence" in result.data)
+        ) {
+          return;
+        }
+
+        const readResult = result.data;
+        if (!readResult.updated) {
+          lastReadBroadcastRef.current = Math.max(
+            lastReadBroadcastRef.current,
+            readResult.last_read_sequence,
+          );
+          return;
+        }
+
+        lastReadBroadcastRef.current = readResult.last_read_sequence;
+        ephemeralRef.current?.broadcastReceipt({
+          kind: "read",
+          lastDeliveredSequence: readResult.last_read_sequence,
+          lastReadSequence: readResult.last_read_sequence,
+        });
+      })();
+    },
+    [conversationId, workspaceSlug],
+  );
+
+  const markDeliveredThrough = useCallback(
+    (sequence: number) => {
+      if (sequence <= lastDeliveredRef.current) {
+        return;
+      }
+
+      void (async () => {
+        const result = await markConversationDeliveredAction(workspaceSlug, {
+          conversationId,
+          throughSequence: sequence,
+        });
+
+        if (
+          !result.success ||
+          !result.data ||
+          !("last_delivered_sequence" in result.data)
+        ) {
+          return;
+        }
+
+        const delivered = result.data;
+        if (!delivered.updated) {
+          lastDeliveredRef.current = Math.max(
+            lastDeliveredRef.current,
+            delivered.last_delivered_sequence,
+          );
+          return;
+        }
+
+        lastDeliveredRef.current = delivered.last_delivered_sequence;
+        ephemeralRef.current?.broadcastReceipt({
+          kind: "delivered",
+          lastDeliveredSequence: delivered.last_delivered_sequence,
+          lastReadSequence: lastReadBroadcastRef.current,
+        });
+      })();
+    },
+    [conversationId, workspaceSlug],
+  );
 
   return (
     <div className="space-y-4">
@@ -140,7 +263,11 @@ export function LiveConversationThread({
           void catchUp();
         }}
       />
-      <MessageList messages={messages} bottomRef={observeBottom} />
+      <MessageList
+        messages={messages}
+        visitorReceipts={visitorReceipts}
+        bottomRef={observeBottom}
+      />
       {newMessagesBelow > 0 ? (
         <div className="flex justify-center">
           <Button
@@ -176,10 +303,8 @@ export function LiveConversationThread({
           ephemeralRef.current?.clearLocalTyping();
         }}
         onVisitorMessageDisplayed={(sequence) => {
-          void markConversationReadAction(workspaceSlug, {
-            conversationId,
-            throughSequence: sequence,
-          });
+          markDeliveredThrough(sequence);
+          markReadThrough(sequence);
         }}
       />
     </div>
@@ -188,9 +313,11 @@ export function LiveConversationThread({
 
 function MessageList({
   messages,
+  visitorReceipts,
   bottomRef,
 }: {
   messages: MessageView[];
+  visitorReceipts: ReceiptCursors;
   bottomRef: (node: HTMLDivElement | null) => void;
 }) {
   if (messages.length === 0) {
@@ -203,30 +330,44 @@ function MessageList({
 
   return (
     <div className="space-y-4">
-      {messages.map((message) => (
-        <article
-          key={message.id}
-          className={
-            message.senderType === "agent"
-              ? "bg-primary/5 ml-8 rounded-lg border px-4 py-3"
-              : "bg-muted/40 mr-8 rounded-lg border px-4 py-3"
-          }
-        >
-          <header className="mb-1 flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">{message.senderLabel}</span>
-            <time className="text-muted-foreground text-xs">
-              {formatRelativeTime(message.createdAt)}
-            </time>
-          </header>
-          <p className="text-sm whitespace-pre-wrap">{message.body}</p>
-          {message.status === "pending" ? (
-            <p className="text-muted-foreground mt-2 text-xs">Sending...</p>
-          ) : null}
-          {message.status === "failed" ? (
-            <p className="text-destructive mt-2 text-xs">Failed to send</p>
-          ) : null}
-        </article>
-      ))}
+      {messages.map((message) => {
+        const receiptStatus =
+          message.senderType === "agent" && !message.isOptimistic
+            ? deriveMessageReceiptStatus({
+                sequenceNumber: message.sequenceNumber,
+                peer: visitorReceipts,
+              })
+            : null;
+
+        return (
+          <article
+            key={message.id}
+            className={
+              message.senderType === "agent"
+                ? "bg-primary/5 ml-8 rounded-lg border px-4 py-3"
+                : "bg-muted/40 mr-8 rounded-lg border px-4 py-3"
+            }
+            data-sequence={message.sequenceNumber}
+          >
+            <header className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{message.senderLabel}</span>
+              <time className="text-muted-foreground text-xs">
+                {formatRelativeTime(message.createdAt)}
+              </time>
+            </header>
+            <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+            {message.status === "pending" ? (
+              <p className="text-muted-foreground mt-2 text-xs">Sending...</p>
+            ) : null}
+            {message.status === "failed" ? (
+              <p className="text-destructive mt-2 text-xs">Failed to send</p>
+            ) : null}
+            {receiptStatus ? (
+              <MessageReceiptIndicator status={receiptStatus} />
+            ) : null}
+          </article>
+        );
+      })}
       <div ref={bottomRef} aria-hidden="true" />
     </div>
   );
@@ -325,7 +466,7 @@ function LiveReplyComposer({
             clientMessageId,
           });
 
-          if (!result.success || !result.data) {
+          if (!result.success || !result.data || !("message" in result.data)) {
             setMessages((current) =>
               current.map((message) =>
                 message.clientMessageId === clientMessageId

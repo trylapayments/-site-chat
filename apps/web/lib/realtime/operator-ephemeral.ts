@@ -2,20 +2,26 @@
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
+  RECEIPT_BROADCAST_EVENT,
   TYPING_BROADCAST_EVENT,
   TYPING_IDLE_STOP_MS,
+  applyRemoteReceiptEvent,
   applyRemoteTypingEvent,
   buildPresenceStatePayload,
+  buildReceiptBroadcastPayload,
   buildTypingBroadcastPayload,
   decideLocalTypingEmit,
   expireRemoteTypingActors,
   isAnyoneTyping,
   isRoleOnline,
   operatorEphemeralActorKey,
+  parseReceiptBroadcastPayload,
   parseTypingBroadcastPayload,
   reconcilePresencePeers,
   sanitizePublicDisplayName,
   type PresencePeer,
+  type ReceiptCursors,
+  type ReceiptKind,
   type RemoteTypingActor,
 } from "@site-chat/shared";
 
@@ -34,6 +40,7 @@ export type OperatorVisitorPresence = {
 export type OperatorEphemeralCallbacks = {
   onVisitorTyping: (indicator: OperatorTypingIndicator) => void;
   onVisitorPresence: (presence: OperatorVisitorPresence) => void;
+  onVisitorReceipts?: (cursors: ReceiptCursors) => void;
   onConnectionChange?: (
     status:
       "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
@@ -43,6 +50,11 @@ export type OperatorEphemeralCallbacks = {
 export type OperatorEphemeralController = {
   notifyComposerChange: (text: string) => void;
   clearLocalTyping: () => void;
+  broadcastReceipt: (input: {
+    kind: ReceiptKind;
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) => void;
   unsubscribe: () => void;
 };
 
@@ -69,8 +81,10 @@ export function subscribeOperatorConversationEphemeral(input: {
   ephemeralTopic: string;
   memberId: string;
   displayLabel?: string | null;
+  initialVisitorReceipts?: ReceiptCursors;
   onVisitorTyping: (indicator: OperatorTypingIndicator) => void;
   onVisitorPresence: (presence: OperatorVisitorPresence) => void;
+  onVisitorReceipts?: (cursors: ReceiptCursors) => void;
   onConnectionChange?: OperatorEphemeralCallbacks["onConnectionChange"];
 }): OperatorEphemeralController {
   const supabase = createClient();
@@ -86,6 +100,10 @@ export function subscribeOperatorConversationEphemeral(input: {
   let lastTypingStartedAt: number | null = null;
   let typingIdleTimer: ReturnType<typeof setTimeout> | null = null;
   let presenceTracked = false;
+  let visitorReceipts: ReceiptCursors = input.initialVisitorReceipts ?? {
+    lastDeliveredSequence: 0,
+    lastReadSequence: 0,
+  };
   let currentStatus:
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed" =
     "connecting";
@@ -159,6 +177,55 @@ export function subscribeOperatorConversationEphemeral(input: {
     });
     emitVisitorTyping();
     ensureTypingExpiryLoop();
+  }
+
+  function handleReceiptBroadcast(raw: unknown) {
+    const parsed = parseReceiptBroadcastPayload(raw);
+    if (!parsed) {
+      return;
+    }
+
+    const applied = applyRemoteReceiptEvent({
+      cursors: visitorReceipts,
+      payload: parsed,
+      localActorKey: actorKey,
+      expectedRole: "visitor",
+    });
+
+    if (!applied.advanced) {
+      return;
+    }
+
+    visitorReceipts = applied.cursors;
+    input.onVisitorReceipts?.(visitorReceipts);
+  }
+
+  async function broadcastReceipt(inputReceipt: {
+    kind: ReceiptKind;
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) {
+    if (!channel) {
+      return;
+    }
+
+    const payload = buildReceiptBroadcastPayload({
+      actorRole: "operator",
+      actorKey,
+      kind: inputReceipt.kind,
+      lastDeliveredSequence: inputReceipt.lastDeliveredSequence,
+      lastReadSequence: inputReceipt.lastReadSequence,
+    });
+
+    try {
+      await channel.send({
+        type: "broadcast",
+        event: RECEIPT_BROADCAST_EVENT,
+        payload,
+      });
+    } catch {
+      // Ephemeral — durable cursor already persisted via RPC.
+    }
   }
 
   function emitPresence() {
@@ -382,6 +449,12 @@ export function subscribeOperatorConversationEphemeral(input: {
         }
         handleTypingBroadcast(payload.payload);
       })
+      .on("broadcast", { event: RECEIPT_BROADCAST_EVENT }, (payload) => {
+        if (channel !== nextChannel) {
+          return;
+        }
+        handleReceiptBroadcast(payload.payload);
+      })
       .on("presence", { event: "sync" }, () => {
         if (channel !== nextChannel) {
           return;
@@ -429,6 +502,9 @@ export function subscribeOperatorConversationEphemeral(input: {
   return {
     notifyComposerChange,
     clearLocalTyping,
+    broadcastReceipt: (receipt) => {
+      void broadcastReceipt(receipt);
+    },
     unsubscribe: () => {
       active = false;
       clearRetryTimer();

@@ -32,7 +32,14 @@ export function MarkConversationRead({
         throughSequence,
       });
 
-      if (result.success) {
+      // Only refresh when a write occurred so reopening a read conversation
+      // stays write-free and avoids unnecessary RSC churn.
+      if (
+        result.success &&
+        result.data &&
+        "updated" in result.data &&
+        result.data.updated
+      ) {
         router.refresh();
       }
     });

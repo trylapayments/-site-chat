@@ -24,6 +24,9 @@ export const messages_sk: WidgetMessages = {
   visitorTyping: "Návštevník píše…",
   online: "Online",
   offline: "Offline",
+  messageSent: "Odoslané",
+  messageDelivered: "Doručené",
+  messageSeen: "Prečítané",
 };
 
 export default messages_sk;

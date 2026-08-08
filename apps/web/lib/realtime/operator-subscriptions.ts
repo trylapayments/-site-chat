@@ -197,39 +197,68 @@ function subscribeWithOperatorAuth(input: {
 
 export function subscribeOperatorWorkspaceInbox(input: {
   workspaceId: string;
+  memberId: string;
   onMessageInsert: (payload: Record<string, unknown>) => void;
   onConversationChange: (payload: Record<string, unknown>) => void;
+  onMemberReadChange?: (payload: Record<string, unknown>) => void;
   onConnectionChange?: RealtimeConnectionListener;
 }): () => void {
   const supabase = createClient();
+
+  const bindings: Array<{
+    event: "INSERT" | "UPDATE";
+    schema: string;
+    table: string;
+    filter: string;
+    handler: (payload: Record<string, unknown>) => void;
+  }> = [
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "messages",
+      filter: `workspace_id=eq.${input.workspaceId}`,
+      handler: input.onMessageInsert,
+    },
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "conversations",
+      filter: `workspace_id=eq.${input.workspaceId}`,
+      handler: input.onConversationChange,
+    },
+    {
+      event: "UPDATE",
+      schema: "public",
+      table: "conversations",
+      filter: `workspace_id=eq.${input.workspaceId}`,
+      handler: input.onConversationChange,
+    },
+  ];
+
+  if (input.onMemberReadChange) {
+    bindings.push(
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "conversation_member_reads",
+        filter: `member_id=eq.${input.memberId}`,
+        handler: input.onMemberReadChange,
+      },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "conversation_member_reads",
+        filter: `member_id=eq.${input.memberId}`,
+        handler: input.onMemberReadChange,
+      },
+    );
+  }
 
   return subscribeWithOperatorAuth({
     supabase,
     channelName: `workspace:${input.workspaceId}:inbox`,
     onConnectionChange: input.onConnectionChange,
-    bindings: [
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "messages",
-        filter: `workspace_id=eq.${input.workspaceId}`,
-        handler: input.onMessageInsert,
-      },
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "conversations",
-        filter: `workspace_id=eq.${input.workspaceId}`,
-        handler: input.onConversationChange,
-      },
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "conversations",
-        filter: `workspace_id=eq.${input.workspaceId}`,
-        handler: input.onConversationChange,
-      },
-    ],
+    bindings,
   });
 }
 

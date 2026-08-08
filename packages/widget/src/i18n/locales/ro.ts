@@ -24,6 +24,9 @@ export const messages_ro: WidgetMessages = {
   visitorTyping: "Vizitatorul tastează…",
   online: "Online",
   offline: "Offline",
+  messageSent: "Trimis",
+  messageDelivered: "Livrat",
+  messageSeen: "Văzut",
 };
 
 export default messages_ro;

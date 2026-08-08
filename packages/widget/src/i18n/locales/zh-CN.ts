@@ -24,6 +24,9 @@ export const messages_zh_CN: WidgetMessages = {
   visitorTyping: "访客正在输入…",
   online: "在线",
   offline: "离线",
+  messageSent: "已发送",
+  messageDelivered: "已送达",
+  messageSeen: "已读",
 };
 
 export default messages_zh_CN;

@@ -273,11 +273,29 @@ Message inserts trigger Realtime events filtered by `conversation_id`. Both widg
 | `conversation:{id}` | New messages, status changes (postgres_changes) | Agents (dashboard) |
 | `workspace:{id}:inbox` | New conversations, assignment changes | All online agents in workspace |
 | `widget-conversation:{topic_key}` | Server-originated visitor-safe `message.created` Broadcast | Visitor (scoped JWT, SELECT only) + authorized operators (SELECT) |
-| `widget-ephemeral:{topic_key}` | Typing Broadcast (`typing.v1`) + Presence | Visitor (scoped JWT, SELECT+INSERT) + authorized operators (SELECT+INSERT) |
+| `widget-ephemeral:{topic_key}` | Typing (`typing.v1`), Presence, receipt cursors (`receipt.v1`) | Visitor (scoped JWT, SELECT+INSERT) + authorized operators (SELECT+INSERT) |
+| `workspace:{id}:inbox` | Message/conversation CDC + `conversation_member_reads` CDC for multi-tab unread | Online operators in workspace |
 
-Postgres changes are used for persistent events (messages, conversation updates). Private Broadcast on `widget-conversation` delivers durable visitor-safe messages. Typing and Presence use a **separate** private ephemeral topic so visitors cannot INSERT forged `message.created` events onto the message transport.
+Postgres changes are used for persistent events (messages, conversation updates, operator read cursors). Private Broadcast on `widget-conversation` delivers durable visitor-safe messages. Typing, Presence, and receipt cursor mirrors use a **separate** private ephemeral topic so visitors cannot INSERT forged `message.created` events onto the message transport.
 
-Operators continue to receive durable messages via `postgres_changes`. Typing and presence use the opaque visitor topic key (`visitor_realtime_topic_key`) derived into both topic names — never raw conversation, workspace, session, or member IDs in the widget JWT.
+Operators continue to receive durable messages via `postgres_changes`. Typing, presence, and receipts use the opaque visitor topic key (`visitor_realtime_topic_key`) derived into both topic names — never raw conversation, workspace, session, or member IDs in the widget JWT.
+
+### 6.2.1 Read receipts and unread counters
+
+Message lifecycle is **sent → delivered → seen**, derived from conversation-level cursors (no per-message writes):
+
+| Cursor | Table | Meaning |
+|--------|-------|---------|
+| Operator `last_read_sequence` / `last_delivered_sequence` / `unread_count` | `conversation_member_reads` | Per-member operator read position + O(1) unread |
+| Visitor `last_read_sequence` / `last_delivered_sequence` | `conversation_visitor_reads` | One visitor cursor per conversation |
+
+Derivation: `message.sequence <= peer.last_delivered_sequence` → delivered; `<= peer.last_read_sequence` → seen.
+
+- **Delivered** advances when the peer client actually receives the message (Realtime Broadcast/CDC or HTTP catch-up). Websocket connect alone does not imply seen.
+- **Seen** advances only when the peer views the active conversation (operator opens thread; visitor has panel open **and** `document.visibilityState === "visible"`).
+- Mark RPCs are monotonic (`GREATEST`) and **no-op** when the watermark does not advance (reopening an already-read conversation performs no write).
+- Live UX: clients broadcast `receipt.v1` on the ephemeral topic after a successful cursor write. Multi-tab operator inbox unread sync uses CDC on `conversation_member_reads`.
+- Catch-up: `get_conversation` / `widget_list_visitor_messages` return peer cursors so reconnect/offline recovery rehydrates receipt UI without polling.
 
 ### 6.3 Ordering and Idempotency
 

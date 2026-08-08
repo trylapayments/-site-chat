@@ -24,6 +24,9 @@ export const messages_id: WidgetMessages = {
   visitorTyping: "Pengunjung sedang mengetik…",
   online: "Online",
   offline: "Offline",
+  messageSent: "Terkirim",
+  messageDelivered: "Tersampaikan",
+  messageSeen: "Dilihat",
 };
 
 export default messages_id;

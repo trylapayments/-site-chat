@@ -24,6 +24,9 @@ export const messages_bg: WidgetMessages = {
   visitorTyping: "Посетителят пише…",
   online: "На линия",
   offline: "Извън линия",
+  messageSent: "Изпратено",
+  messageDelivered: "Доставено",
+  messageSeen: "Видяно",
 };
 
 export default messages_bg;

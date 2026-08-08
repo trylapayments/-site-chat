@@ -24,6 +24,9 @@ export const messages_ar: WidgetMessages = {
   visitorTyping: "الزائر يكتب…",
   online: "متصل",
   offline: "غير متصل",
+  messageSent: "تم الإرسال",
+  messageDelivered: "تم التسليم",
+  messageSeen: "تمت المشاهدة",
 };
 
 export default messages_ar;

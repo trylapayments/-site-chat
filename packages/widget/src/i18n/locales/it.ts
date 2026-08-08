@@ -24,6 +24,9 @@ export const messages_it: WidgetMessages = {
   visitorTyping: "Il visitatore sta scrivendo…",
   online: "Online",
   offline: "Offline",
+  messageSent: "Inviato",
+  messageDelivered: "Consegnato",
+  messageSeen: "Visualizzato",
 };
 
 export default messages_it;
