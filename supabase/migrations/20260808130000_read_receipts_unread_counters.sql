@@ -125,7 +125,7 @@ CREATE POLICY conversation_visitor_reads_select_authenticated
   ON public.conversation_visitor_reads
   FOR SELECT
   TO authenticated
-  USING (public.workspace_is_accessible(workspace_id));
+  USING (app_private.workspace_is_accessible(workspace_id));
 
 GRANT SELECT ON TABLE public.conversation_visitor_reads TO authenticated;
 REVOKE ALL ON TABLE public.conversation_visitor_reads FROM anon;
