@@ -254,15 +254,15 @@ function attachmentActionError(error: unknown): AttachmentActionResult {
     return { success: false, message: error.message };
   }
 
-  const rawMessage =
-    error instanceof Error
-      ? error.message
-      : error &&
-          typeof error === "object" &&
-          "message" in error &&
-          typeof (error as { message: unknown }).message === "string"
-        ? (error as { message: string }).message
-        : null;
+  let rawMessage: string | null = null;
+  if (error instanceof Error) {
+    rawMessage = error.message;
+  } else if (error && typeof error === "object" && "message" in error) {
+    const candidate = Reflect.get(error, "message");
+    if (typeof candidate === "string") {
+      rawMessage = candidate;
+    }
+  }
 
   if (rawMessage) {
     // Surface actionable storage/RPC/Zod failures in UI/E2E without leaking secrets.

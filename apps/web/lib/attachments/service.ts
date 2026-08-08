@@ -66,8 +66,7 @@ async function resolveVisitorConversationContext(input: {
   );
 
   if (error) {
-    const message = error.message ?? "";
-    if (/session invalid or expired/i.test(message)) {
+    if (/session invalid or expired/i.test(error.message)) {
       throw new Error("SESSION_EXPIRED");
     }
     throw error;
