@@ -335,7 +335,9 @@ SELECT is(
 );
 
 -- Concurrent losing writer must not clobber unread after a higher watermark won.
--- Direct table write requires elevated role (authenticated has no INSERT).
+-- Run as migration role (not authenticated — no INSERT grant on member reads).
+SELECT tests.clear_auth();
+
 DO $$
 DECLARE
   v_workspace uuid := tests.fixture('workspace_id')::uuid;
@@ -343,9 +345,6 @@ DECLARE
   v_member uuid := tests.fixture('member_id')::uuid;
   v_unread integer;
 BEGIN
-  -- Resolve fixtures before elevating — service_role cannot read tests schema.
-  SET LOCAL ROLE service_role;
-
   INSERT INTO public.conversation_member_reads (
     workspace_id,
     conversation_id,
@@ -389,15 +388,12 @@ BEGIN
   IF v_unread IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION 'expected unread_count 0 after losing writer, got %', v_unread;
   END IF;
-
-  RESET ROLE;
 END;
 $$;
 
 SELECT pass('losing concurrent mark-read writer does not inflate unread_count');
 
 -- Cross-workspace isolation: outsider cannot mark read
-SELECT tests.clear_auth();
 SELECT tests.authenticate_as(
   tests.fixture('outsider_id')::uuid,
   'read-receipts-outsider@test.local'
