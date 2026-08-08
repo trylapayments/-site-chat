@@ -335,60 +335,62 @@ SELECT is(
 );
 
 -- Concurrent losing writer must not clobber unread after a higher watermark won.
-SELECT lives_ok(
-  format(
-    $sql$
-      INSERT INTO public.conversation_member_reads (
-        workspace_id,
-        conversation_id,
-        member_id,
-        last_read_sequence,
-        last_delivered_sequence,
-        unread_count,
-        last_read_at
-      )
-      VALUES (
-        %L::uuid,
-        %L::uuid,
-        %L::uuid,
-        1,
-        1,
-        2,
-        now()
-      )
-      ON CONFLICT (conversation_id, member_id) DO UPDATE
-      SET
-        last_read_sequence = GREATEST(
-          public.conversation_member_reads.last_read_sequence,
-          EXCLUDED.last_read_sequence
-        ),
-        last_delivered_sequence = GREATEST(
-          public.conversation_member_reads.last_delivered_sequence,
-          EXCLUDED.last_delivered_sequence
-        ),
-        unread_count = CASE
-          WHEN EXCLUDED.last_read_sequence > public.conversation_member_reads.last_read_sequence
-            THEN EXCLUDED.unread_count
-          ELSE public.conversation_member_reads.unread_count
-        END;
-    $sql$,
-    tests.fixture('workspace_id'),
-    tests.fixture('conversation_id'),
-    tests.fixture('member_id')
-  ),
-  'simulate losing concurrent mark-read writer'
-);
+-- Direct table write requires elevated role (authenticated has no INSERT).
+DO $$
+DECLARE
+  v_unread integer;
+BEGIN
+  SET LOCAL ROLE service_role;
 
-SELECT is(
-  (
-    SELECT r.unread_count
-    FROM public.conversation_member_reads r
-    WHERE r.conversation_id = tests.fixture('conversation_id')::uuid
-      AND r.member_id = tests.fixture('member_id')::uuid
-  ),
-  0,
-  'losing concurrent writer does not inflate unread_count'
-);
+  INSERT INTO public.conversation_member_reads (
+    workspace_id,
+    conversation_id,
+    member_id,
+    last_read_sequence,
+    last_delivered_sequence,
+    unread_count,
+    last_read_at
+  )
+  VALUES (
+    tests.fixture('workspace_id')::uuid,
+    tests.fixture('conversation_id')::uuid,
+    tests.fixture('member_id')::uuid,
+    1,
+    1,
+    2,
+    now()
+  )
+  ON CONFLICT (conversation_id, member_id) DO UPDATE
+  SET
+    last_read_sequence = GREATEST(
+      public.conversation_member_reads.last_read_sequence,
+      EXCLUDED.last_read_sequence
+    ),
+    last_delivered_sequence = GREATEST(
+      public.conversation_member_reads.last_delivered_sequence,
+      EXCLUDED.last_delivered_sequence
+    ),
+    unread_count = CASE
+      WHEN EXCLUDED.last_read_sequence > public.conversation_member_reads.last_read_sequence
+        THEN EXCLUDED.unread_count
+      ELSE public.conversation_member_reads.unread_count
+    END;
+
+  SELECT r.unread_count
+  INTO v_unread
+  FROM public.conversation_member_reads r
+  WHERE r.conversation_id = tests.fixture('conversation_id')::uuid
+    AND r.member_id = tests.fixture('member_id')::uuid;
+
+  IF v_unread IS DISTINCT FROM 0 THEN
+    RAISE EXCEPTION 'expected unread_count 0 after losing writer, got %', v_unread;
+  END IF;
+
+  RESET ROLE;
+END;
+$$;
+
+SELECT pass('losing concurrent mark-read writer does not inflate unread_count');
 
 -- Cross-workspace isolation: outsider cannot mark read
 SELECT tests.clear_auth();
