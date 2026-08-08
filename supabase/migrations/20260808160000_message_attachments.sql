@@ -175,6 +175,10 @@ CREATE POLICY message_attachments_select_authenticated
 REVOKE ALL ON public.attachment_uploads FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON public.message_attachments FROM PUBLIC, anon;
 GRANT SELECT ON public.message_attachments TO authenticated;
+-- Service role performs intent CRUD + download metadata lookups from Next.js
+-- (SECURITY DEFINER finalize RPCs still own message inserts).
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.attachment_uploads TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.message_attachments TO service_role;
 
 -- ---------------------------------------------------------------------------
 -- Private storage bucket (never public)

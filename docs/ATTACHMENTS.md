@@ -59,7 +59,7 @@ sequenceDiagram
 
 `attachment_uploads`: pending intents keyed by `batch_id` until confirm/cancel/expiry.
 
-RLS: workspace members SELECT attachments for accessible non-internal messages; upload intents are service-role only.
+RLS: workspace members SELECT attachments for accessible non-internal messages; upload intents have no anon/authenticated grants (service_role CRUD only).
 
 ---
 
