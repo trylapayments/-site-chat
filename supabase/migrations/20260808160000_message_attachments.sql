@@ -1280,6 +1280,68 @@ REVOKE ALL ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[], uuid
 REVOKE ALL ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[], uuid, uuid) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[], uuid, uuid) TO service_role;
 
+-- Authorize visitor download without relying on direct table SELECT grants.
+CREATE OR REPLACE FUNCTION app_private.widget_authorize_visitor_attachment(
+  p_workspace_id uuid,
+  p_session_token text,
+  p_attachment_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_session public.visitor_sessions;
+  v_attachment public.message_attachments;
+BEGIN
+  v_session := app_private.resolve_visitor_session(p_workspace_id, p_session_token);
+
+  SELECT *
+  INTO v_attachment
+  FROM public.message_attachments a
+  WHERE a.workspace_id = p_workspace_id
+    AND a.id = p_attachment_id;
+
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.conversations c
+    WHERE c.id = v_attachment.conversation_id
+      AND c.workspace_id = p_workspace_id
+      AND c.visitor_session_id = v_session.id
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.widget_authorize_visitor_attachment(
+  p_workspace_id uuid,
+  p_session_token text,
+  p_attachment_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  RETURN app_private.widget_authorize_visitor_attachment(
+    p_workspace_id,
+    p_session_token,
+    p_attachment_id
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.widget_authorize_visitor_attachment(uuid, text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.widget_authorize_visitor_attachment(uuid, text, uuid) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.widget_authorize_visitor_attachment(uuid, text, uuid) TO service_role;
+
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM PUBLIC;
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM anon;
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM authenticated;

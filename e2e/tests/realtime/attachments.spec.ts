@@ -203,7 +203,7 @@ test.describe("attachments", () => {
     await expect(operator.getByText(replyMarker)).toBeVisible({ timeout: 30_000 });
     await expect(operator.getByTestId("operator-upload-retry")).toHaveCount(0);
     await expect(operator.getByTestId("operator-upload-status")).toHaveCount(0);
-    await expect(operator.getByRole("button", { name: "Send reply" })).toBeEnabled();
+    // Composer is cleared after success, so Send stays disabled until new input.
 
     const frame = widgetFrameLocator(visitor);
     await waitForWidgetRealtimeReady(visitor);

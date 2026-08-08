@@ -1,9 +1,6 @@
 import { attachmentDownloadDataSchema } from "@site-chat/shared";
 
-import {
-  createAttachmentDownloadUrl,
-  resolveVisitorSessionId,
-} from "@/lib/attachments/service";
+import { createAttachmentDownloadUrl } from "@/lib/attachments/service";
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
 import { getEmbedTokenFromRequest } from "@/lib/widget/constants";
 import { createRequestId } from "@/lib/widget/embed-token";
@@ -82,51 +79,30 @@ export async function GET(
       );
     }
 
-    // Ensure the attachment belongs to a conversation visible to this visitor.
-    // Resolve session via the same SECURITY DEFINER path as messaging/uploads.
-    let visitorSessionId: string;
-    try {
-      visitorSessionId = await resolveVisitorSessionId(
-        embedContext.workspaceId,
-        sessionToken,
-      );
-    } catch {
-      return widgetJsonError(
-        "SESSION_EXPIRED",
-        GENERIC_SESSION_MESSAGE,
-        401,
-        requestId,
-        corsHeaders(corsOrigin),
-      );
-    }
-
     const supabase = createServiceClient();
-    const { data: attachment } = await supabase
-      .from("message_attachments")
-      .select("id, conversation_id")
-      .eq("workspace_id", embedContext.workspaceId)
-      .eq("id", attachmentId)
-      .maybeSingle();
+    const { data: allowed, error: authError } = await supabase.rpc(
+      "widget_authorize_visitor_attachment",
+      {
+        p_workspace_id: embedContext.workspaceId,
+        p_session_token: sessionToken,
+        p_attachment_id: attachmentId,
+      },
+    );
 
-    if (!attachment) {
-      return widgetJsonError(
-        "FORBIDDEN",
-        GENERIC_FORBIDDEN_MESSAGE,
-        403,
-        requestId,
-        corsHeaders(corsOrigin),
-      );
+    if (authError) {
+      if (/session invalid or expired/i.test(authError.message)) {
+        return widgetJsonError(
+          "SESSION_EXPIRED",
+          GENERIC_SESSION_MESSAGE,
+          401,
+          requestId,
+          corsHeaders(corsOrigin),
+        );
+      }
+      throw authError;
     }
 
-    const { data: conversation } = await supabase
-      .from("conversations")
-      .select("id")
-      .eq("workspace_id", embedContext.workspaceId)
-      .eq("id", attachment.conversation_id)
-      .eq("visitor_session_id", visitorSessionId)
-      .maybeSingle();
-
-    if (!conversation) {
+    if (allowed !== true) {
       return widgetJsonError(
         "FORBIDDEN",
         GENERIC_FORBIDDEN_MESSAGE,

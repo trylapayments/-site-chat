@@ -1046,6 +1046,14 @@ export type Database = {
         }
         Returns: Json
       }
+      widget_authorize_visitor_attachment: {
+        Args: {
+          p_attachment_id: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: boolean
+      }
       widget_ensure_conversation_for_attachments: {
         Args: {
           p_page_url?: string
