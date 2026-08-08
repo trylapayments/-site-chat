@@ -444,6 +444,7 @@ BEGIN
       'widget-ephemeral:' || p_conversation.visitor_realtime_topic_key,
     'source_url', p_conversation.source_url,
     'message_count', p_conversation.message_count,
+    'last_message_at', p_conversation.last_message_at,
     'has_unread', v_unread > 0,
     'unread_count', v_unread,
     'member_last_read_sequence', COALESCE(p_last_read_sequence, 0),

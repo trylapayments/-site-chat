@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(20);
+SELECT plan(21);
 
 DO $$
 DECLARE
@@ -311,6 +311,16 @@ SELECT is(
   ),
   2::bigint,
   'get_conversation exposes visitor_last_read_sequence'
+);
+
+SELECT ok(
+  (
+    SELECT public.get_conversation(
+      tests.fixture('workspace_id')::uuid,
+      tests.fixture('conversation_id')::uuid
+    ) ? 'last_message_at'
+  ),
+  'get_conversation includes last_message_at for detail schema compatibility'
 );
 
 SELECT is(
