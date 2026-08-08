@@ -32,12 +32,54 @@ export type SessionPayload = {
   conversationStatus: "open" | "pending" | "resolved" | "closed" | null;
 };
 
+export type AttachmentPayload = {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  kind: "image" | "document";
+  width?: number | null;
+  height?: number | null;
+  duration_ms?: number | null;
+  sort_order?: number;
+  has_thumbnail?: boolean;
+};
+
 export type MessagePayload = {
   id: string;
   sequence_number: number;
   sender_type: "visitor" | "agent" | "system";
   body: string;
   created_at: string;
+  client_message_id?: string | null;
+  attachments?: AttachmentPayload[];
+};
+
+export type InitiateUploadsPayload = {
+  batchId: string;
+  conversationId: string;
+  uploads: Array<{
+    localId: string;
+    uploadId: string;
+    attachmentId: string;
+    storageKey: string;
+    uploadUrl: string;
+    uploadToken: string | null;
+    expiresAt: string;
+    headers?: Record<string, string>;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    kind: "image" | "document";
+  }>;
+};
+
+export type AttachmentDownloadPayload = {
+  url: string;
+  expiresAt: string;
+  filename: string;
+  mimeType: string;
+  contentDisposition: string;
 };
 
 export type WidgetReceiptCursorsPayload = {
@@ -215,6 +257,131 @@ export class WidgetApiClient {
       body: JSON.stringify({
         embedToken: input.embedToken,
       }),
+    });
+
+    return this.parseResponse(response);
+  }
+
+  async initiateUploads(input: {
+    embedToken: string;
+    sessionToken: string;
+    files: Array<{
+      localId: string;
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+      width?: number | null;
+      height?: number | null;
+    }>;
+    body?: string;
+    clientMessageId?: string;
+    pageUrl?: string;
+    referrer?: string;
+  }): Promise<InitiateUploadsPayload> {
+    const response = await fetch(new URL("/api/v1/widget/attachments/uploads", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.sessionToken}`,
+        "Content-Type": "application/json",
+        [WIDGET_EMBED_TOKEN_HEADER]: input.embedToken,
+      },
+      credentials: "omit",
+      body: JSON.stringify({
+        embedToken: input.embedToken,
+        files: input.files,
+        body: input.body ?? "",
+        clientMessageId: input.clientMessageId,
+        pageUrl: input.pageUrl ?? null,
+        referrer: input.referrer ?? null,
+      }),
+    });
+
+    return this.parseResponse(response);
+  }
+
+  async completeUploads(input: {
+    embedToken: string;
+    sessionToken: string;
+    batchId: string;
+    uploadIds: string[];
+    body?: string;
+    clientMessageId?: string;
+    pageUrl?: string;
+    referrer?: string;
+  }): Promise<{
+    message: MessagePayload;
+    conversationStatus: SessionPayload["conversationStatus"];
+  }> {
+    const response = await fetch(
+      new URL("/api/v1/widget/attachments/uploads/complete", this.apiBase),
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.sessionToken}`,
+          "Content-Type": "application/json",
+          [WIDGET_EMBED_TOKEN_HEADER]: input.embedToken,
+        },
+        credentials: "omit",
+        body: JSON.stringify({
+          embedToken: input.embedToken,
+          batchId: input.batchId,
+          uploadIds: input.uploadIds,
+          body: input.body ?? "",
+          clientMessageId: input.clientMessageId,
+          pageUrl: input.pageUrl ?? null,
+          referrer: input.referrer ?? null,
+        }),
+      },
+    );
+
+    return this.parseResponse(response);
+  }
+
+  async cancelUploads(input: {
+    embedToken: string;
+    sessionToken: string;
+    batchId: string;
+    uploadIds?: string[];
+  }): Promise<{ cancelled: number }> {
+    const response = await fetch(
+      new URL("/api/v1/widget/attachments/uploads/cancel", this.apiBase),
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.sessionToken}`,
+          "Content-Type": "application/json",
+          [WIDGET_EMBED_TOKEN_HEADER]: input.embedToken,
+        },
+        credentials: "omit",
+        body: JSON.stringify({
+          embedToken: input.embedToken,
+          batchId: input.batchId,
+          uploadIds: input.uploadIds,
+        }),
+      },
+    );
+
+    return this.parseResponse(response);
+  }
+
+  async getAttachmentDownloadUrl(input: {
+    embedToken: string;
+    sessionToken: string;
+    attachmentId: string;
+    variant?: "full" | "thumbnail";
+  }): Promise<AttachmentDownloadPayload> {
+    const url = new URL(`/api/v1/widget/attachments/${input.attachmentId}/download`, this.apiBase);
+    if (input.variant) {
+      url.searchParams.set("variant", input.variant);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${input.sessionToken}`,
+        [WIDGET_EMBED_TOKEN_HEADER]: input.embedToken,
+      },
+      credentials: "omit",
     });
 
     return this.parseResponse(response);

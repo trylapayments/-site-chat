@@ -90,6 +90,8 @@ function mapSendMessageFromRpc(data: Json): unknown {
       sender_type: message.sender_type,
       body: message.body,
       created_at: message.created_at,
+      client_message_id: message.client_message_id ?? null,
+      attachments: message.attachments ?? [],
     },
     conversationStatus: record.conversation_status,
   };
@@ -166,7 +168,7 @@ export async function validateWidgetOrigin(
     throw error;
   }
 
-  return Boolean(data);
+  return data;
 }
 
 export async function consumeWidgetRateLimit(
@@ -185,7 +187,7 @@ export async function consumeWidgetRateLimit(
     throw error;
   }
 
-  return Boolean(data);
+  return data;
 }
 
 export async function createOrResumeVisitorSession(input: {
@@ -211,11 +213,7 @@ export async function createOrResumeVisitorSession(input: {
     throw error;
   }
 
-  return parseRpcResult(
-    "widget session",
-    data as Json,
-    widgetSessionDataSchema,
-  );
+  return parseRpcResult("widget session", data, widgetSessionDataSchema);
 }
 
 export async function sendVisitorMessage(input: {
@@ -242,7 +240,7 @@ export async function sendVisitorMessage(input: {
 
   return parseRpcResult(
     "widget send message",
-    data as Json,
+    data,
     widgetSendMessageDataSchema,
   );
 }
@@ -269,7 +267,7 @@ export async function listVisitorMessages(input: {
 
   return parseRpcResult(
     "widget list messages",
-    data as Json,
+    data,
     widgetListMessagesDataSchema,
   );
 }
@@ -297,7 +295,7 @@ export async function markVisitorConversationReceipt(input: {
 
   return parseRpcResult(
     "widget mark receipt",
-    data as Json,
+    data,
     widgetMarkReceiptDataSchema,
   );
 }

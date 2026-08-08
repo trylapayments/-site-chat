@@ -189,6 +189,9 @@ BEGIN
   WHERE wm.workspace_id = v_workspace
   LIMIT 1;
 
+  -- Broadcast trigger is DEFERRABLE; flush so internal-skip is verified.
+  EXECUTE 'SET CONSTRAINTS ALL IMMEDIATE';
+
   SELECT count(*) INTO v_after
   FROM realtime.messages
   WHERE topic = v_topic;
@@ -230,6 +233,9 @@ BEGIN
   WHERE wm.workspace_id = v_workspace
   LIMIT 1;
 
+  -- Deferred broadcast fires with attachments at constraint flush / commit.
+  EXECUTE 'SET CONSTRAINTS ALL IMMEDIATE';
+
   SELECT payload INTO v_payload
   FROM realtime.messages
   WHERE topic = v_topic
@@ -249,6 +255,10 @@ BEGIN
      OR v_payload -> 'message' ? 'agent_member_id'
      OR v_payload -> 'message' ? 'is_internal' THEN
     RAISE EXCEPTION 'Broadcast payload leaked sensitive fields';
+  END IF;
+
+  IF NOT (v_payload -> 'message' ? 'attachments') THEN
+    RAISE EXCEPTION 'Broadcast payload missing attachments array';
   END IF;
 END;
 $$;

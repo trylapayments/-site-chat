@@ -27,6 +27,21 @@ export const messages_ko: WidgetMessages = {
   messageSent: "전송됨",
   messageDelivered: "전송 완료",
   messageSeen: "읽음",
+  attachLabel: "Attach files",
+  attachFilesLabel: "Choose files to attach",
+  uploadProgressLabel: "Uploading {{filename}} — {{percent}}%",
+  uploadCancelLabel: "Cancel upload",
+  uploadRetryLabel: "Retry upload",
+  uploadFailedLabel: "Upload failed",
+  uploadCompleteLabel: "Upload complete",
+  uploadUploadingLabel: "Uploading",
+  downloadLabel: "Download {{filename}}",
+  imagePreviewLabel: "Image attachment: {{filename}}",
+  imageEnlargeLabel: "Enlarge image",
+  dropFilesLabel: "Drop files to attach",
+  removeAttachmentLabel: "Remove {{filename}}",
+  attachmentTooLarge: "File is too large",
+  attachmentUnsupported: "File type is not supported",
 };
 
 export default messages_ko;

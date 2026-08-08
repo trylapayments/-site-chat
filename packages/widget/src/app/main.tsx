@@ -3,10 +3,14 @@ import {
   deriveMessageReceiptStatus,
   maxSequenceNumber,
   mergeMessages,
+  reduceUploadBatch,
+  uploadBatchAriaStatus,
+  createEmptyUploadBatch,
   type ConnectionState,
   type MessageReceiptStatus,
   type MessageView,
   type ReceiptCursors,
+  type UploadBatchState,
   type WidgetLocale,
 } from "@site-chat/shared";
 import {
@@ -21,6 +25,14 @@ import {
 import { createRoot } from "react-dom/client";
 
 import { WidgetApiClient, type BootstrapPayload, type WidgetPublicConfig } from "../api/client";
+import { MessageAttachments } from "../attachments/AttachmentViews";
+import {
+  acceptAttributeForAttachments,
+  fileToSelectedLocalFile,
+  revokePreviewUrls,
+  uploadBlobWithProgress,
+  type SelectedLocalFile,
+} from "../attachments/upload-file";
 import {
   englishMessages,
   formatMessageTime,
@@ -113,6 +125,11 @@ function WidgetApp() {
   });
   const [operatorsOnline, setOperatorsOnline] = useState(false);
   const [agentReceipts, setAgentReceipts] = useState<ReceiptCursors>(EMPTY_RECEIPTS);
+  const [pendingFiles, setPendingFiles] = useState<SelectedLocalFile[]>([]);
+  const [uploadBatch, setUploadBatch] = useState<UploadBatchState>(createEmptyUploadBatch());
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const initRef = useRef<InitPayload | null>(null);
   const parentOriginRef = useRef<string | null>(null);
   const transportRef = useRef<WidgetRealtimeTransport | null>(null);
@@ -423,12 +440,87 @@ function WidgetApp() {
     };
   }, [open]);
 
+  const addLocalFiles = useCallback(
+    async (fileList: FileList | File[]) => {
+      const incoming = Array.from(fileList);
+      const accepted: SelectedLocalFile[] = [];
+      for (const file of incoming) {
+        const result = await fileToSelectedLocalFile(file);
+        if (!result.ok) {
+          setSendError(
+            result.message.toLowerCase().includes("large")
+              ? messagesCopy.attachmentTooLarge
+              : messagesCopy.attachmentUnsupported,
+          );
+          continue;
+        }
+        accepted.push(result.value);
+      }
+      if (accepted.length === 0) {
+        return;
+      }
+      setPendingFiles((current) => [...current, ...accepted].slice(0, 10));
+      setSendError(null);
+    },
+    [messagesCopy.attachmentTooLarge, messagesCopy.attachmentUnsupported],
+  );
+
+  useEffect(() => {
+    const preventNavigation = (event: DragEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("dragover", preventNavigation);
+    window.addEventListener("drop", preventNavigation);
+    return () => {
+      window.removeEventListener("dragover", preventNavigation);
+      window.removeEventListener("drop", preventNavigation);
+    };
+  }, []);
+
+  const reconcileTransport = async (
+    readyState: Extract<WidgetState, { status: "ready" }>,
+    mergedMessages: MessageView[],
+  ) => {
+    if (!transportRef.current) {
+      const transport = new WidgetRealtimeTransport(api, {
+        onMessages: setMessages,
+        onConnectionState: setConnectionState,
+        onAgentTyping: setAgentTyping,
+        onPresence: (presence) => {
+          setOperatorsOnline(presence.operatorsOnline);
+        },
+        onAgentReceipts: (cursors) => {
+          agentReceiptsRef.current = cursors;
+          setAgentReceipts(cursors);
+        },
+      });
+      transportRef.current = transport;
+      await transport.start({
+        embedToken: readyState.init.embedToken,
+        sessionToken: readyState.sessionToken,
+        initialMessages: mergedMessages,
+        initialAgentReceipts: agentReceiptsRef.current,
+        initialVisitorReceipts: visitorReceiptsRef.current,
+      });
+    } else {
+      transportRef.current.replaceMessages(mergedMessages);
+      await transportRef.current.ensureLiveConnection({
+        embedToken: readyState.init.embedToken,
+        sessionToken: readyState.sessionToken,
+      });
+    }
+  };
+
   const handleSend = async () => {
-    if (state.status !== "ready" || !composer.trim() || sending) {
+    if (state.status !== "ready" || sending) {
+      return;
+    }
+    if (!composer.trim() && pendingFiles.length === 0) {
       return;
     }
 
     const body = composer.trim();
+    const filesForSend = pendingFiles;
     const clientMessageId = pendingClientMessageIdRef.current ?? generateClientMessageId();
     pendingClientMessageIdRef.current = clientMessageId;
     const tempId = crypto.randomUUID();
@@ -439,29 +531,140 @@ function WidgetApp() {
       senderType: "visitor",
       senderLabel: messagesCopy.youLabel,
       nextSequence: maxSequenceNumber(messages) + 1,
+      attachments: filesForSend.map((file, index) => ({
+        id: file.localId,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        kind: file.kind,
+        width: file.width,
+        height: file.height,
+        sortOrder: index,
+        hasThumbnail: file.kind === "image",
+      })),
     });
 
     forceScrollRef.current = true;
     nearBottomRef.current = true;
     setMessages((current) => mergeMessages(current, [], [optimistic]));
     setComposer("");
+    setPendingFiles([]);
     transportRef.current?.clearLocalTyping();
     setSending(true);
     setSendError(null);
     setFailedClientMessageId(null);
 
+    let activeBatchId: string | null = null;
     try {
-      const result = await api.sendMessage({
-        embedToken: state.init.embedToken,
-        sessionToken: state.sessionToken,
-        body,
-        clientMessageId,
-        pageUrl: state.init.parentOrigin,
-        referrer: document.referrer || undefined,
-      });
+      let resultMessage;
+      if (filesForSend.length > 0) {
+        let batch = reduceUploadBatch(createEmptyUploadBatch(body), {
+          type: "SELECT_FILES",
+          clientMessageId,
+          body,
+          items: filesForSend.map((file) => ({
+            localId: file.localId,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            sizeBytes: file.sizeBytes,
+            kind: file.kind,
+            previewUrl: file.previewUrl,
+            width: file.width,
+            height: file.height,
+          })),
+        });
+        setUploadBatch(batch);
+
+        const initiated = await api.initiateUploads({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+          files: filesForSend.map((file) => ({
+            localId: file.localId,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            sizeBytes: file.sizeBytes,
+            width: file.width,
+            height: file.height,
+          })),
+          body,
+          clientMessageId,
+          pageUrl: state.init.parentOrigin,
+          referrer: document.referrer || undefined,
+        });
+        activeBatchId = initiated.batchId;
+
+        batch = reduceUploadBatch(batch, {
+          type: "PREPARE_SUCCESS",
+          batchId: initiated.batchId,
+          uploads: initiated.uploads.map((upload) => ({
+            localId: upload.localId,
+            uploadId: upload.uploadId,
+            attachmentId: upload.attachmentId,
+          })),
+        });
+        setUploadBatch(batch);
+
+        const abort = new AbortController();
+        uploadAbortRef.current = abort;
+
+        for (const upload of initiated.uploads) {
+          const local = filesForSend.find((file) => file.localId === upload.localId);
+          if (!local) {
+            continue;
+          }
+          await uploadBlobWithProgress({
+            url: upload.uploadUrl,
+            token: upload.uploadToken,
+            file: local.file,
+            contentType: upload.mimeType,
+            signal: abort.signal,
+            onProgress: (percent) => {
+              setUploadBatch((current) =>
+                reduceUploadBatch(current, {
+                  type: "UPLOAD_PROGRESS",
+                  localId: upload.localId,
+                  progress: percent,
+                }),
+              );
+            },
+          });
+          batch = reduceUploadBatch(batch, {
+            type: "UPLOAD_ITEM_SUCCESS",
+            localId: upload.localId,
+          });
+          setUploadBatch(batch);
+        }
+
+        batch = reduceUploadBatch(batch, { type: "CONFIRM_START" });
+        setUploadBatch(batch);
+
+        const completed = await api.completeUploads({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+          batchId: initiated.batchId,
+          uploadIds: initiated.uploads.map((upload) => upload.uploadId),
+          body,
+          clientMessageId,
+          pageUrl: state.init.parentOrigin,
+          referrer: document.referrer || undefined,
+        });
+        resultMessage = completed.message;
+        setUploadBatch(reduceUploadBatch(batch, { type: "CONFIRM_SUCCESS" }));
+        revokePreviewUrls(filesForSend);
+      } else {
+        const result = await api.sendMessage({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+          body,
+          clientMessageId,
+          pageUrl: state.init.parentOrigin,
+          referrer: document.referrer || undefined,
+        });
+        resultMessage = result.message;
+      }
 
       pendingClientMessageIdRef.current = null;
-      const confirmedMessages = mapWidgetHttpMessages([result.message]).map((message) => ({
+      const confirmedMessages = mapWidgetHttpMessages([resultMessage]).map((message) => ({
         ...message,
         clientMessageId: message.clientMessageId ?? clientMessageId,
       }));
@@ -477,35 +680,8 @@ function WidgetApp() {
       forceScrollRef.current = true;
       nearBottomRef.current = true;
       setMessages(mergedMessages);
-
-      if (!transportRef.current) {
-        const transport = new WidgetRealtimeTransport(api, {
-          onMessages: setMessages,
-          onConnectionState: setConnectionState,
-          onAgentTyping: setAgentTyping,
-          onPresence: (presence) => {
-            setOperatorsOnline(presence.operatorsOnline);
-          },
-          onAgentReceipts: (cursors) => {
-            agentReceiptsRef.current = cursors;
-            setAgentReceipts(cursors);
-          },
-        });
-        transportRef.current = transport;
-        await transport.start({
-          embedToken: state.init.embedToken,
-          sessionToken: state.sessionToken,
-          initialMessages: mergedMessages,
-          initialAgentReceipts: agentReceiptsRef.current,
-          initialVisitorReceipts: visitorReceiptsRef.current,
-        });
-      } else {
-        transportRef.current.replaceMessages(mergedMessages);
-        await transportRef.current.ensureLiveConnection({
-          embedToken: state.init.embedToken,
-          sessionToken: state.sessionToken,
-        });
-      }
+      setUploadBatch(createEmptyUploadBatch());
+      await reconcileTransport(state, mergedMessages);
     } catch {
       pendingClientMessageIdRef.current = clientMessageId;
       setFailedClientMessageId(clientMessageId);
@@ -515,8 +691,28 @@ function WidgetApp() {
         ),
       );
       setComposer(body);
+      setPendingFiles(filesForSend);
+      // Text-only failures must not flip the upload state machine (would replace Send
+      // with "Retry upload" and break message-retry UX / a11y selectors).
+      if (filesForSend.length > 0) {
+        setUploadBatch((current) =>
+          reduceUploadBatch(current, {
+            type: "CONFIRM_FAILURE",
+            message: messagesCopy.uploadFailedLabel,
+          }),
+        );
+        // Mid-batch PUT/complete failure: cancel leftover intents + storage objects.
+        if (activeBatchId) {
+          void api.cancelUploads({
+            embedToken: state.init.embedToken,
+            sessionToken: state.sessionToken,
+            batchId: activeBatchId,
+          });
+        }
+      }
       setSendError(messagesCopy.sendError);
     } finally {
+      uploadAbortRef.current = null;
       setSending(false);
     }
   };
@@ -696,9 +892,23 @@ function WidgetApp() {
                   <div style={{ fontSize: "0.75rem", opacity: 0.85, marginBottom: "0.25rem" }}>
                     {label} · {formatMessageTime(message.createdAt, locale)}
                   </div>
-                  <div dir="auto" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {message.body}
-                  </div>
+                  {message.body ? (
+                    <div dir="auto" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      {message.body}
+                    </div>
+                  ) : null}
+                  {state.status === "ready" &&
+                  message.attachments &&
+                  message.attachments.length > 0 ? (
+                    <MessageAttachments
+                      attachments={message.attachments}
+                      isVisitor={isVisitor}
+                      api={api}
+                      embedToken={state.init.embedToken}
+                      sessionToken={state.sessionToken}
+                      copy={messagesCopy}
+                    />
+                  ) : null}
                   {receiptStatus ? (
                     <MessageReceiptTicks
                       status={receiptStatus}
@@ -751,7 +961,52 @@ function WidgetApp() {
               : null}
           </div>
 
-          <footer style={{ borderTop: "1px solid #e5e7eb", padding: "0.75rem" }}>
+          <footer
+            style={{
+              borderTop: "1px solid #e5e7eb",
+              padding: "0.75rem",
+              position: "relative",
+              outline: dragActive ? `2px solid ${primaryColor}` : undefined,
+              background: dragActive ? "#eff6ff" : undefined,
+            }}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              if (event.dataTransfer.files.length > 0) {
+                void addLocalFiles(event.dataTransfer.files);
+              }
+            }}
+          >
+            {dragActive ? (
+              <div
+                role="status"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(239,246,255,0.92)",
+                  zIndex: 2,
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                }}
+              >
+                {messagesCopy.dropFilesLabel}
+              </div>
+            ) : null}
             {sendError ? (
               <p
                 role="alert"
@@ -760,13 +1015,147 @@ function WidgetApp() {
                 {sendError}
               </p>
             ) : null}
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            {pendingFiles.length > 0 ? (
+              <ul
+                data-testid="pending-attachments"
+                style={{
+                  listStyle: "none",
+                  margin: "0 0 0.5rem",
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.35rem",
+                }}
+              >
+                {pendingFiles.map((file) => (
+                  <li
+                    key={file.localId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    {file.previewUrl ? (
+                      <img
+                        src={file.previewUrl}
+                        alt=""
+                        width={32}
+                        height={32}
+                        style={{ objectFit: "cover", borderRadius: "0.25rem" }}
+                      />
+                    ) : null}
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {file.filename}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={formatWidgetMessage(messagesCopy.removeAttachmentLabel, {
+                        filename: file.filename,
+                      })}
+                      onClick={() => {
+                        setPendingFiles((current) => {
+                          const next = current.filter((item) => item.localId !== file.localId);
+                          revokePreviewUrls(
+                            current.filter((item) => item.localId === file.localId),
+                          );
+                          return next;
+                        });
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        color: "#6b7280",
+                      }}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div
+              role="status"
+              aria-live="polite"
+              data-testid="upload-status"
+              data-upload-status={uploadBatchAriaStatus(uploadBatch.status)}
+              style={{
+                fontSize: "0.75rem",
+                color: "#6b7280",
+                minHeight: uploadBatch.status === "idle" ? 0 : "1rem",
+                marginBottom: uploadBatch.status === "idle" ? 0 : "0.35rem",
+              }}
+            >
+              {uploadBatch.status === "uploading" || uploadBatch.status === "confirming"
+                ? messagesCopy.uploadUploadingLabel
+                : uploadBatch.status === "failed"
+                  ? messagesCopy.uploadFailedLabel
+                  : uploadBatch.status === "complete"
+                    ? messagesCopy.uploadCompleteLabel
+                    : null}
+              {(() => {
+                const uploading = uploadBatch.items.find((item) => item.status === "uploading");
+                return uploading ? ` ${String(uploading.progress)}%` : null;
+              })()}
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={acceptAttributeForAttachments()}
+                capture="environment"
+                aria-label={messagesCopy.attachFilesLabel}
+                data-testid="widget-file-input"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  if (event.target.files) {
+                    void addLocalFiles(event.target.files);
+                    event.target.value = "";
+                  }
+                }}
+              />
+              <button
+                type="button"
+                data-testid="widget-attach-button"
+                aria-label={messagesCopy.attachLabel}
+                disabled={state.status !== "ready" || sending}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  borderRadius: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  color: "#111827",
+                  padding: "0.625rem 0.75rem",
+                  cursor: "pointer",
+                }}
+              >
+                +
+              </button>
               <textarea
                 value={composer}
                 onChange={(event) => {
                   const next = event.target.value;
                   setComposer(next);
                   transportRef.current?.notifyComposerChange(next);
+                }}
+                onPaste={(event) => {
+                  const items = event.clipboardData.items;
+                  const files: File[] = [];
+                  for (const item of Array.from(items)) {
+                    if (item.kind === "file") {
+                      const file = item.getAsFile();
+                      if (file) {
+                        files.push(file);
+                      }
+                    }
+                  }
+                  if (files.length > 0) {
+                    event.preventDefault();
+                    void addLocalFiles(files);
+                  }
                 }}
                 placeholder={messagesCopy.composerPlaceholder}
                 aria-label={messagesCopy.composerPlaceholder}
@@ -788,25 +1177,79 @@ function WidgetApp() {
                   font: "inherit",
                 }}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  void handleSend();
-                }}
-                disabled={state.status !== "ready" || sending || !composer.trim()}
-                aria-label={sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
-                style={{
-                  borderRadius: "0.75rem",
-                  border: "none",
-                  background: primaryColor,
-                  color: "#fff",
-                  padding: "0 1rem",
-                  cursor: "pointer",
-                  minWidth: "4.5rem",
-                }}
-              >
-                {sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
-              </button>
+              {uploadBatch.status === "uploading" || uploadBatch.status === "confirming" ? (
+                <button
+                  type="button"
+                  data-testid="widget-upload-cancel"
+                  aria-label={messagesCopy.uploadCancelLabel}
+                  onClick={() => {
+                    uploadAbortRef.current?.abort();
+                    setUploadBatch((current) => reduceUploadBatch(current, { type: "CANCEL" }));
+                    if (uploadBatch.batchId && state.status === "ready") {
+                      void api.cancelUploads({
+                        embedToken: state.init.embedToken,
+                        sessionToken: state.sessionToken,
+                        batchId: uploadBatch.batchId,
+                      });
+                    }
+                    setSending(false);
+                  }}
+                  style={{
+                    borderRadius: "0.75rem",
+                    border: "1px solid #d1d5db",
+                    background: "#fff",
+                    padding: "0 0.75rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕
+                </button>
+              ) : null}
+              {uploadBatch.status === "failed" ? (
+                <button
+                  type="button"
+                  data-testid="widget-upload-retry"
+                  aria-label={messagesCopy.uploadRetryLabel}
+                  onClick={() => {
+                    setUploadBatch((current) => reduceUploadBatch(current, { type: "RETRY" }));
+                    void handleSend();
+                  }}
+                  style={{
+                    borderRadius: "0.75rem",
+                    border: "none",
+                    background: primaryColor,
+                    color: "#fff",
+                    padding: "0 1rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  {messagesCopy.uploadRetryLabel}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleSend();
+                  }}
+                  disabled={
+                    state.status !== "ready" ||
+                    sending ||
+                    (!composer.trim() && pendingFiles.length === 0)
+                  }
+                  aria-label={sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
+                  style={{
+                    borderRadius: "0.75rem",
+                    border: "none",
+                    background: primaryColor,
+                    color: "#fff",
+                    padding: "0 1rem",
+                    cursor: "pointer",
+                    minWidth: "4.5rem",
+                  }}
+                >
+                  {sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
+                </button>
+              )}
             </div>
             {config?.branding.showPoweredBy !== false ? (
               <div

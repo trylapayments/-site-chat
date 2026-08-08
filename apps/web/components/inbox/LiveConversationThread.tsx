@@ -22,6 +22,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
+import { OperatorMessageAttachments } from "@/components/inbox/MessageAttachments";
 import { MessageReceiptIndicator } from "@/components/inbox/MessageReceiptIndicator";
 import {
   fetchVisitorReceiptCursorsAction,
@@ -46,6 +47,7 @@ function mapInitialMessages(messages: MessageItem[]): MessageView[] {
       created_at: message.created_at,
       client_message_id: message.client_message_id ?? null,
       is_internal: message.is_internal,
+      attachments: message.attachments,
     }),
   );
 }
@@ -294,6 +296,7 @@ export function LiveConversationThread({
         }}
       />
       <MessageList
+        workspaceId={workspaceId}
         messages={messages}
         visitorReceipts={visitorReceipts}
         bottomRef={observeBottom}
@@ -342,10 +345,12 @@ export function LiveConversationThread({
 }
 
 function MessageList({
+  workspaceId,
   messages,
   visitorReceipts,
   bottomRef,
 }: {
+  workspaceId: string;
   messages: MessageView[];
   visitorReceipts: ReceiptCursors;
   bottomRef: (node: HTMLDivElement | null) => void;
@@ -385,7 +390,15 @@ function MessageList({
                 {formatRelativeTime(message.createdAt)}
               </time>
             </header>
-            <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+            {message.body ? (
+              <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+            ) : null}
+            {message.attachments && message.attachments.length > 0 ? (
+              <OperatorMessageAttachments
+                workspaceId={workspaceId}
+                attachments={message.attachments}
+              />
+            ) : null}
             {message.status === "pending" ? (
               <p className="text-muted-foreground mt-2 text-xs">Sending...</p>
             ) : null}
@@ -425,6 +438,12 @@ function LiveReplyComposer({
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [uploadFailed, setUploadFailed] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const clientMessageIdRef = useRef<string | null>(null);
   const lastMarkedVisitorSequenceRef = useRef(0);
 
@@ -461,11 +480,22 @@ function LiveReplyComposer({
   return (
     <form
       className="border-t pt-4"
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        if (event.dataTransfer.files.length > 0) {
+          setPendingFiles((current) =>
+            [...current, ...Array.from(event.dataTransfer.files)].slice(0, 10),
+          );
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);
         const trimmed = body.trim();
-        if (!trimmed || isPending) {
+        if ((!trimmed && pendingFiles.length === 0) || isPending) {
           return;
         }
 
@@ -475,6 +505,7 @@ function LiveReplyComposer({
 
         const clientMessageId = clientMessageIdRef.current;
         const tempId = crypto.randomUUID();
+        const filesForSend = pendingFiles;
         const optimistic = createOptimisticMessage({
           tempId,
           clientMessageId,
@@ -482,21 +513,201 @@ function LiveReplyComposer({
           senderType: "agent",
           senderLabel: genericSenderLabel("agent"),
           nextSequence: maxSequenceNumber(messages) + 1,
+          attachments: filesForSend.map((file, index) => ({
+            id: `op-pending-${String(index)}`,
+            filename: file.name,
+            mimeType: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+            kind: file.type.startsWith("image/") ? "image" : "document",
+            sortOrder: index,
+            hasThumbnail: file.type.startsWith("image/"),
+          })),
         });
 
         setMessages((current) => mergeMessages(current, [], [optimistic]));
         setBody("");
+        setPendingFiles([]);
+        setUploadFailed(false);
         onClearTyping();
 
         startTransition(async () => {
-          const { sendMessageAction } = await import("@/lib/inbox/actions");
-          const result = await sendMessageAction(workspaceSlug, {
-            conversationId,
-            body: trimmed,
-            clientMessageId,
-          });
+          let batchIdForCleanup: string | null = null;
+          try {
+            if (filesForSend.length > 0) {
+              const {
+                initiateOperatorUploadsAction,
+                completeOperatorUploadsAction,
+              } = await import("@/lib/inbox/actions");
 
-          if (!result.success || !result.data || !("message" in result.data)) {
+              setUploadProgress(`Uploading 0/${String(filesForSend.length)}…`);
+              const initiated = await initiateOperatorUploadsAction(
+                workspaceSlug,
+                {
+                  conversationId,
+                  body: trimmed,
+                  clientMessageId,
+                  files: filesForSend.map((file, index) => ({
+                    localId: `op-${String(index)}-${file.name}`,
+                    filename: file.name,
+                    mimeType: file.type || "application/octet-stream",
+                    sizeBytes: file.size,
+                  })),
+                },
+              );
+
+              if (!initiated.success || !("uploads" in initiated.data)) {
+                throw new Error(
+                  !initiated.success ? initiated.message : "Upload failed",
+                );
+              }
+
+              batchIdForCleanup = initiated.data.batchId;
+              setActiveBatchId(initiated.data.batchId);
+              const abort = new AbortController();
+              uploadAbortRef.current = abort;
+
+              let uploadedCount = 0;
+              for (const upload of initiated.data.uploads) {
+                if (abort.signal.aborted) {
+                  throw new Error("Upload cancelled");
+                }
+                const fileIndex = filesForSend.findIndex(
+                  (candidate, index) =>
+                    `op-${String(index)}-${candidate.name}` === upload.localId,
+                );
+                const file =
+                  fileIndex >= 0 ? filesForSend[fileIndex] : undefined;
+                if (!file) continue;
+                const response = await fetch(upload.uploadUrl, {
+                  method: "PUT",
+                  headers: {
+                    "Content-Type": upload.mimeType,
+                    ...(upload.uploadToken
+                      ? { Authorization: `Bearer ${upload.uploadToken}` }
+                      : {}),
+                  },
+                  body: file,
+                  signal: abort.signal,
+                });
+                if (!response.ok) {
+                  throw new Error("Upload failed");
+                }
+                uploadedCount += 1;
+                setUploadProgress(
+                  `Uploading ${String(uploadedCount)}/${String(filesForSend.length)}…`,
+                );
+              }
+
+              setUploadProgress("Confirming…");
+              const completed = await completeOperatorUploadsAction(
+                workspaceSlug,
+                {
+                  conversationId,
+                  batchId: initiated.data.batchId,
+                  uploadIds: initiated.data.uploads.map(
+                    (item) => item.uploadId,
+                  ),
+                  body: trimmed,
+                  clientMessageId,
+                },
+              );
+
+              if (!completed.success || !("message" in completed.data)) {
+                throw new Error(
+                  !completed.success
+                    ? completed.message
+                    : "Something went wrong.",
+                );
+              }
+
+              const sent = completed.data;
+              clientMessageIdRef.current = null;
+              setUploadProgress(null);
+              setActiveBatchId(null);
+              setUploadFailed(false);
+              setMessages((current) =>
+                mergeMessages(
+                  current.filter((message) => message.id !== tempId),
+                  [
+                    toMessageViewFromOperatorRow({
+                      id: sent.message.id,
+                      sequence_number: sent.message.sequence_number,
+                      sender_type: "agent",
+                      sender_label: genericSenderLabel("agent"),
+                      body: sent.message.body,
+                      created_at: sent.message.created_at,
+                      client_message_id: clientMessageId,
+                      is_internal: false,
+                      attachments: sent.message.attachments,
+                    }),
+                  ],
+                  [],
+                ),
+              );
+              return;
+            }
+
+            const { sendMessageAction } = await import("@/lib/inbox/actions");
+            const result = await sendMessageAction(workspaceSlug, {
+              conversationId,
+              body: trimmed,
+              clientMessageId,
+            });
+
+            if (
+              !result.success ||
+              !result.data ||
+              !("message" in result.data)
+            ) {
+              setMessages((current) =>
+                current.map((message) =>
+                  message.clientMessageId === clientMessageId
+                    ? { ...message, status: "failed" }
+                    : message,
+                ),
+              );
+              setError(
+                !result.success ? result.message : "Something went wrong.",
+              );
+              setBody(trimmed);
+              setPendingFiles(filesForSend);
+              return;
+            }
+
+            const sent = result.data;
+            clientMessageIdRef.current = null;
+            setMessages((current) =>
+              mergeMessages(
+                current.filter((message) => message.id !== tempId),
+                [
+                  toMessageViewFromOperatorRow({
+                    id: sent.message.id,
+                    sequence_number: sent.message.sequence_number,
+                    sender_type: "agent",
+                    sender_label: genericSenderLabel("agent"),
+                    body: sent.message.body,
+                    created_at: sent.message.created_at,
+                    client_message_id: clientMessageId,
+                    is_internal: false,
+                    attachments: sent.message.attachments,
+                  }),
+                ],
+                [],
+              ),
+            );
+          } catch (uploadError) {
+            setUploadProgress(null);
+            setActiveBatchId(null);
+            if (filesForSend.length > 0) {
+              setUploadFailed(true);
+              if (batchIdForCleanup) {
+                const { cancelOperatorUploadsAction } =
+                  await import("@/lib/inbox/actions");
+                void cancelOperatorUploadsAction(workspaceSlug, {
+                  batchId: batchIdForCleanup,
+                });
+              }
+            }
             setMessages((current) =>
               current.map((message) =>
                 message.clientMessageId === clientMessageId
@@ -505,38 +716,74 @@ function LiveReplyComposer({
               ),
             );
             setError(
-              !result.success ? result.message : "Something went wrong.",
+              uploadError instanceof Error
+                ? uploadError.message
+                : "Something went wrong.",
             );
             setBody(trimmed);
-            return;
+            setPendingFiles(filesForSend);
+          } finally {
+            uploadAbortRef.current = null;
           }
-
-          const sent = result.data;
-          clientMessageIdRef.current = null;
-          setMessages((current) =>
-            mergeMessages(
-              current.filter((message) => message.id !== tempId),
-              [
-                toMessageViewFromOperatorRow({
-                  id: sent.message.id,
-                  sequence_number: sent.message.sequence_number,
-                  sender_type: "agent",
-                  sender_label: genericSenderLabel("agent"),
-                  body: sent.message.body,
-                  created_at: sent.message.created_at,
-                  client_message_id: clientMessageId,
-                  is_internal: false,
-                }),
-              ],
-              [],
-            ),
-          );
         });
       }}
     >
       <label className="sr-only" htmlFor="reply-body">
         Reply
       </label>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        data-testid="operator-file-input"
+        accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+        onChange={(event) => {
+          const selected = event.target.files;
+          if (selected) {
+            setPendingFiles((current) =>
+              [...current, ...Array.from(selected)].slice(0, 10),
+            );
+            event.target.value = "";
+          }
+        }}
+      />
+      {pendingFiles.length > 0 ? (
+        <ul
+          className="mb-2 space-y-1 text-xs"
+          data-testid="operator-pending-attachments"
+        >
+          {pendingFiles.map((file) => (
+            <li
+              key={`${file.name}-${String(file.size)}`}
+              className="flex items-center gap-2"
+            >
+              <span className="truncate">{file.name}</span>
+              <button
+                type="button"
+                className="text-muted-foreground underline"
+                onClick={() => {
+                  setPendingFiles((current) =>
+                    current.filter((item) => item !== file),
+                  );
+                }}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {uploadProgress ? (
+        <p
+          className="text-muted-foreground mb-2 text-xs"
+          role="status"
+          aria-live="polite"
+          data-testid="operator-upload-status"
+        >
+          {uploadProgress}
+        </p>
+      ) : null}
       <textarea
         id="reply-body"
         value={body}
@@ -545,6 +792,16 @@ function LiveReplyComposer({
           setBody(next);
           onComposerChange(next);
         }}
+        onPaste={(event) => {
+          const files = Array.from(event.clipboardData.items)
+            .filter((item) => item.kind === "file")
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => file !== null);
+          if (files.length > 0) {
+            event.preventDefault();
+            setPendingFiles((current) => [...current, ...files].slice(0, 10));
+          }
+        }}
         rows={4}
         maxLength={4000}
         placeholder="Write a reply..."
@@ -552,10 +809,62 @@ function LiveReplyComposer({
         className="border-input bg-background w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm"
       />
       {error ? <p className="text-destructive mt-2 text-sm">{error}</p> : null}
-      <div className="mt-3 flex justify-end">
-        <Button type="submit" disabled={isPending || body.trim().length === 0}>
-          {isPending ? "Sending..." : "Send reply"}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isPending}
+          aria-label="Attach files"
+          data-testid="operator-attach-button"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Attach
         </Button>
+        <div className="flex items-center gap-2">
+          {activeBatchId && isPending ? (
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Cancel upload"
+              data-testid="operator-upload-cancel"
+              onClick={() => {
+                uploadAbortRef.current?.abort();
+                const batchId = activeBatchId;
+                setActiveBatchId(null);
+                setUploadProgress(null);
+                void import("@/lib/inbox/actions").then(
+                  ({ cancelOperatorUploadsAction }) => {
+                    void cancelOperatorUploadsAction(workspaceSlug, {
+                      batchId,
+                    });
+                  },
+                );
+              }}
+            >
+              Cancel
+            </Button>
+          ) : null}
+          {uploadFailed && !isPending ? (
+            <Button
+              type="submit"
+              variant="outline"
+              aria-label="Retry upload"
+              data-testid="operator-upload-retry"
+            >
+              Retry upload
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              disabled={
+                isPending ||
+                (body.trim().length === 0 && pendingFiles.length === 0)
+              }
+            >
+              {isPending ? "Sending..." : "Send reply"}
+            </Button>
+          )}
+        </div>
       </div>
     </form>
   );

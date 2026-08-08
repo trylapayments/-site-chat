@@ -140,8 +140,8 @@ The MVP is complete when:
 - [ ] Contact creation (manual + auto on visitor identification)
 - [ ] Contact list page with linked conversations
 - [ ] Visitor identification flow in widget (name/email prompt)
-- [ ] File attachment upload (widget + dashboard)
-- [ ] Attachment display (inline images, download links)
+- [x] File attachment upload (widget + dashboard)
+- [x] Attachment display (inline images, download links)
 - [ ] Storage quota enforcement
 - [ ] Notification center (in-app, unread count)
 - [ ] Email notifications via Resend (configurable per agent)

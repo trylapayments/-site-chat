@@ -1,4 +1,4 @@
-import type { MessageView } from "../schemas/realtime.js";
+import type { MessageAttachmentViewModel, MessageView } from "../schemas/realtime.js";
 import { genericSenderLabel } from "../schemas/realtime.js";
 
 function bySequence(a: MessageView, b: MessageView): number {
@@ -6,6 +6,45 @@ function bySequence(a: MessageView, b: MessageView): number {
     return a.sequenceNumber - b.sequenceNumber;
   }
   return a.createdAt.localeCompare(b.createdAt);
+}
+
+export function toAttachmentViewModel(raw: {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  kind: "image" | "document";
+  width?: number | null;
+  height?: number | null;
+  duration_ms?: number | null;
+  sort_order?: number;
+  has_thumbnail?: boolean;
+}): MessageAttachmentViewModel {
+  return {
+    id: raw.id,
+    filename: raw.filename,
+    mimeType: raw.mime_type,
+    sizeBytes: raw.size_bytes,
+    kind: raw.kind,
+    width: raw.width ?? null,
+    height: raw.height ?? null,
+    durationMs: raw.duration_ms ?? null,
+    sortOrder: raw.sort_order ?? 0,
+    hasThumbnail: raw.has_thumbnail ?? false,
+  };
+}
+
+function mergeAttachmentLists(
+  prior?: MessageAttachmentViewModel[],
+  next?: MessageAttachmentViewModel[],
+): MessageAttachmentViewModel[] | undefined {
+  if (next && next.length > 0) {
+    return next;
+  }
+  if (prior && prior.length > 0) {
+    return prior;
+  }
+  return next ?? prior;
 }
 
 export function mergeMessages(
@@ -17,7 +56,13 @@ export function mergeMessages(
   const byClientId = new Map<string, MessageView>();
 
   for (const message of [...existing, ...pending, ...incoming]) {
-    if (byId.has(message.id)) {
+    const priorById = byId.get(message.id);
+    if (priorById) {
+      byId.set(message.id, {
+        ...priorById,
+        ...message,
+        attachments: mergeAttachmentLists(priorById.attachments, message.attachments),
+      });
       continue;
     }
 
@@ -29,6 +74,12 @@ export function mergeMessages(
         (prior.isOptimistic || prior.status === "failed" || prior.status === "pending")
       ) {
         byId.delete(prior.id);
+        byId.set(message.id, {
+          ...message,
+          attachments: mergeAttachmentLists(prior.attachments, message.attachments),
+        });
+        byClientId.set(message.clientMessageId, message);
+        continue;
       }
       byClientId.set(message.clientMessageId, message);
     }
@@ -69,7 +120,22 @@ export function toMessageViewFromOperatorRow(row: {
   created_at: string;
   client_message_id?: string | null;
   is_internal?: boolean;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    kind: "image" | "document";
+    width?: number | null;
+    height?: number | null;
+    duration_ms?: number | null;
+    sort_order?: number;
+    has_thumbnail?: boolean;
+  }>;
+  metadata_json?: Record<string, unknown> | null;
 }): MessageView {
+  const fromRow = (row.attachments ?? []).map(toAttachmentViewModel);
+  const fromMeta = extractAttachmentsFromMetadata(row.metadata_json);
   return {
     id: row.id,
     sequenceNumber: row.sequence_number,
@@ -79,7 +145,51 @@ export function toMessageViewFromOperatorRow(row: {
     createdAt: row.created_at,
     clientMessageId: row.client_message_id ?? null,
     isInternal: row.is_internal ?? false,
+    attachments: fromRow.length > 0 ? fromRow : fromMeta,
   };
+}
+
+export function extractAttachmentsFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): MessageAttachmentViewModel[] {
+  if (!metadata || typeof metadata !== "object") {
+    return [];
+  }
+  const raw = metadata.attachments;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const result: MessageAttachmentViewModel[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    if (
+      typeof record.id !== "string" ||
+      typeof record.filename !== "string" ||
+      typeof record.mime_type !== "string" ||
+      typeof record.size_bytes !== "number" ||
+      (record.kind !== "image" && record.kind !== "document")
+    ) {
+      continue;
+    }
+    result.push(
+      toAttachmentViewModel({
+        id: record.id,
+        filename: record.filename,
+        mime_type: record.mime_type,
+        size_bytes: record.size_bytes,
+        kind: record.kind,
+        width: typeof record.width === "number" ? record.width : null,
+        height: typeof record.height === "number" ? record.height : null,
+        duration_ms: typeof record.duration_ms === "number" ? record.duration_ms : null,
+        sort_order: typeof record.sort_order === "number" ? record.sort_order : 0,
+        has_thumbnail: Boolean(record.has_thumbnail),
+      }),
+    );
+  }
+  return result;
 }
 
 export function toMessageViewFromWidgetBroadcast(message: {
@@ -89,6 +199,18 @@ export function toMessageViewFromWidgetBroadcast(message: {
   body: string;
   createdAt: string;
   clientMessageId: string | null;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    kind: "image" | "document";
+    width?: number | null;
+    height?: number | null;
+    duration_ms?: number | null;
+    sort_order?: number;
+    has_thumbnail?: boolean;
+  }>;
 }): MessageView {
   return {
     id: message.id,
@@ -98,6 +220,7 @@ export function toMessageViewFromWidgetBroadcast(message: {
     body: message.body,
     createdAt: message.createdAt,
     clientMessageId: message.clientMessageId,
+    attachments: (message.attachments ?? []).map(toAttachmentViewModel),
   };
 }
 
@@ -108,6 +231,18 @@ export function toMessageViewFromWidgetHttp(message: {
   body: string;
   created_at: string;
   client_message_id?: string | null;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    kind: "image" | "document";
+    width?: number | null;
+    height?: number | null;
+    duration_ms?: number | null;
+    sort_order?: number;
+    has_thumbnail?: boolean;
+  }>;
 }): MessageView {
   return {
     id: message.id,
@@ -117,6 +252,7 @@ export function toMessageViewFromWidgetHttp(message: {
     body: message.body,
     createdAt: message.created_at,
     clientMessageId: message.client_message_id ?? null,
+    attachments: (message.attachments ?? []).map(toAttachmentViewModel),
   };
 }
 
@@ -127,6 +263,7 @@ export function createOptimisticMessage(input: {
   senderType: "visitor" | "agent";
   senderLabel?: string;
   nextSequence: number;
+  attachments?: MessageAttachmentViewModel[];
 }): MessageView {
   return {
     id: input.tempId,
@@ -138,5 +275,6 @@ export function createOptimisticMessage(input: {
     clientMessageId: input.clientMessageId,
     status: "pending",
     isOptimistic: true,
+    attachments: input.attachments ?? [],
   };
 }

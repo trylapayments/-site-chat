@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { messageAttachmentViewSchema } from "./attachments";
 import { listQuerySchema } from "./list-query";
 
 export const conversationStatusSchema = z.enum(["open", "pending", "resolved", "closed"]);
@@ -126,6 +127,8 @@ export const messageItemSchema = z
     is_internal: z.boolean(),
     client_message_id: z.string().uuid().nullable().optional(),
     created_at: z.string(),
+    /** Optional — absent on legacy text-only payloads. */
+    attachments: z.array(messageAttachmentViewSchema).max(10).optional().default([]),
   })
   .strict();
 
@@ -162,6 +165,7 @@ export const sendOperatorMessageResultSchema = z
         sequence_number: z.number().int(),
         body: z.string(),
         created_at: z.string(),
+        attachments: z.array(messageAttachmentViewSchema).max(10).optional().default([]),
       })
       .strict(),
     conversation: z

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { WIDGET_LOCALE_CODES, type WidgetLocale } from "../i18n/widget-locales";
 import { normalizeStoredWidgetLocale } from "../i18n/resolve-widget-locale";
+import { messageAttachmentViewSchema } from "./attachments";
 
 export const widgetLocaleSchema = z.enum(WIDGET_LOCALE_CODES);
 
@@ -96,6 +97,8 @@ export const widgetMessageItemSchema = z
     body: z.string(),
     created_at: z.string(),
     client_message_id: z.string().uuid().nullable().optional(),
+    /** Optional — absent on legacy text-only payloads. */
+    attachments: z.array(messageAttachmentViewSchema).max(10).optional().default([]),
   })
   .strict();
 
