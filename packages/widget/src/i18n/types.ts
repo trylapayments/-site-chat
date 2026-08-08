@@ -40,6 +40,21 @@ export const WIDGET_MESSAGE_KEYS = [
   "messageSent",
   "messageDelivered",
   "messageSeen",
+  "attachLabel",
+  "attachFilesLabel",
+  "uploadProgressLabel",
+  "uploadCancelLabel",
+  "uploadRetryLabel",
+  "uploadFailedLabel",
+  "uploadCompleteLabel",
+  "uploadUploadingLabel",
+  "downloadLabel",
+  "imagePreviewLabel",
+  "imageEnlargeLabel",
+  "dropFilesLabel",
+  "removeAttachmentLabel",
+  "attachmentTooLarge",
+  "attachmentUnsupported",
 ] as const;
 
 export type WidgetMessageKey = (typeof WIDGET_MESSAGE_KEYS)[number];

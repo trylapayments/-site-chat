@@ -415,6 +415,7 @@ export function useLiveConversationThread(input: {
           created_at: parsed.data.created_at,
           client_message_id: parsed.data.client_message_id,
           is_internal: parsed.data.is_internal,
+          metadata_json: parsed.data.metadata_json ?? null,
         });
 
         setMessages((current) => {

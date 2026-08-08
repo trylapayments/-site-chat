@@ -27,6 +27,21 @@ export const messages_es: WidgetMessages = {
   messageSent: "Enviado",
   messageDelivered: "Entregado",
   messageSeen: "Visto",
+  attachLabel: "Adjuntar archivos",
+  attachFilesLabel: "Elegir archivos para adjuntar",
+  uploadProgressLabel: "Subiendo {{filename}} — {{percent}}%",
+  uploadCancelLabel: "Cancelar subida",
+  uploadRetryLabel: "Reintentar subida",
+  uploadFailedLabel: "Error al subir",
+  uploadCompleteLabel: "Subida completa",
+  uploadUploadingLabel: "Subiendo",
+  downloadLabel: "Descargar {{filename}}",
+  imagePreviewLabel: "Imagen adjunta: {{filename}}",
+  imageEnlargeLabel: "Ampliar imagen",
+  dropFilesLabel: "Suelta archivos para adjuntar",
+  removeAttachmentLabel: "Quitar {{filename}}",
+  attachmentTooLarge: "El archivo es demasiado grande",
+  attachmentUnsupported: "Tipo de archivo no admitido",
 };
 
 export default messages_es;

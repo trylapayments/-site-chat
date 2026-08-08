@@ -66,6 +66,116 @@ export type Database = {
           },
         ]
       }
+      attachment_uploads: {
+        Row: {
+          actor_role: string
+          agent_member_id: string | null
+          attachment_id: string
+          batch_id: string
+          body_draft: string
+          client_message_id: string | null
+          conversation_id: string
+          created_at: string
+          error_code: string | null
+          expires_at: string
+          filename: string
+          height: number | null
+          id: string
+          kind: Database["public"]["Enums"]["app_attachment_kind"]
+          metadata_json: Json
+          mime_type: string
+          size_bytes: number
+          sort_order: number
+          status: Database["public"]["Enums"]["app_attachment_upload_status"]
+          storage_key: string
+          updated_at: string
+          visitor_session_id: string | null
+          width: number | null
+          workspace_id: string
+        }
+        Insert: {
+          actor_role: string
+          agent_member_id?: string | null
+          attachment_id?: string
+          batch_id: string
+          body_draft?: string
+          client_message_id?: string | null
+          conversation_id: string
+          created_at?: string
+          error_code?: string | null
+          expires_at?: string
+          filename: string
+          height?: number | null
+          id?: string
+          kind: Database["public"]["Enums"]["app_attachment_kind"]
+          metadata_json?: Json
+          mime_type: string
+          size_bytes: number
+          sort_order?: number
+          status?: Database["public"]["Enums"]["app_attachment_upload_status"]
+          storage_key: string
+          updated_at?: string
+          visitor_session_id?: string | null
+          width?: number | null
+          workspace_id: string
+        }
+        Update: {
+          actor_role?: string
+          agent_member_id?: string | null
+          attachment_id?: string
+          batch_id?: string
+          body_draft?: string
+          client_message_id?: string | null
+          conversation_id?: string
+          created_at?: string
+          error_code?: string | null
+          expires_at?: string
+          filename?: string
+          height?: number | null
+          id?: string
+          kind?: Database["public"]["Enums"]["app_attachment_kind"]
+          metadata_json?: Json
+          mime_type?: string
+          size_bytes?: number
+          sort_order?: number
+          status?: Database["public"]["Enums"]["app_attachment_upload_status"]
+          storage_key?: string
+          updated_at?: string
+          visitor_session_id?: string | null
+          width?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachment_uploads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_attachment_uploads_agent_member_workspace"
+            columns: ["agent_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_attachment_uploads_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_attachment_uploads_visitor_session_workspace"
+            columns: ["visitor_session_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sessions"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string
@@ -340,6 +450,91 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "visitor_sessions"
             referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
+      message_attachments: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          duration_ms: number | null
+          filename: string
+          height: number | null
+          id: string
+          kind: Database["public"]["Enums"]["app_attachment_kind"]
+          message_id: string
+          metadata_json: Json
+          mime_type: string
+          scan_status: Database["public"]["Enums"]["app_attachment_scan_status"]
+          size_bytes: number
+          sort_order: number
+          storage_key: string
+          thumbnail_storage_key: string | null
+          updated_at: string
+          width: number | null
+          workspace_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          duration_ms?: number | null
+          filename: string
+          height?: number | null
+          id?: string
+          kind: Database["public"]["Enums"]["app_attachment_kind"]
+          message_id: string
+          metadata_json?: Json
+          mime_type: string
+          scan_status?: Database["public"]["Enums"]["app_attachment_scan_status"]
+          size_bytes: number
+          sort_order?: number
+          storage_key: string
+          thumbnail_storage_key?: string | null
+          updated_at?: string
+          width?: number | null
+          workspace_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          filename?: string
+          height?: number | null
+          id?: string
+          kind?: Database["public"]["Enums"]["app_attachment_kind"]
+          message_id?: string
+          metadata_json?: Json
+          mime_type?: string
+          scan_status?: Database["public"]["Enums"]["app_attachment_scan_status"]
+          size_bytes?: number
+          sort_order?: number
+          storage_key?: string
+          thumbnail_storage_key?: string | null
+          updated_at?: string
+          width?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_message_attachments_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_message_attachments_message_workspace"
+            columns: ["message_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "message_attachments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -677,6 +872,14 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_attachment_uploads: {
+        Args: {
+          p_batch_id: string
+          p_upload_ids?: string[]
+          p_workspace_id: string
+        }
+        Returns: number
+      }
       create_workspace: {
         Args: { p_name: string; p_slug: string }
         Returns: Json
@@ -699,6 +902,32 @@ export type Database = {
           p_new_role: Database["public"]["Enums"]["app_member_role"]
         }
         Returns: undefined
+      }
+      finalize_operator_attachment_message: {
+        Args: {
+          p_attachments?: Json
+          p_batch_id: string
+          p_body?: string
+          p_client_message_id?: string
+          p_conversation_id: string
+          p_upload_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      finalize_visitor_attachment_message: {
+        Args: {
+          p_attachments?: Json
+          p_batch_id: string
+          p_body?: string
+          p_client_message_id?: string
+          p_page_url?: string
+          p_referrer?: string
+          p_session_token: string
+          p_upload_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       get_conversation: {
         Args: { p_conversation_id: string; p_workspace_id: string }
@@ -724,6 +953,14 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: Json
+      }
+      mark_attachment_uploads_uploaded: {
+        Args: {
+          p_batch_id: string
+          p_upload_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: number
       }
       mark_conversation_delivered: {
         Args: {
@@ -807,6 +1044,15 @@ export type Database = {
         }
         Returns: Json
       }
+      widget_ensure_conversation_for_attachments: {
+        Args: {
+          p_page_url?: string
+          p_referrer?: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       widget_list_visitor_messages: {
         Args: {
           p_after_sequence?: number
@@ -855,6 +1101,20 @@ export type Database = {
       }
     }
     Enums: {
+      app_attachment_kind: "image" | "document"
+      app_attachment_scan_status:
+        | "pending"
+        | "clean"
+        | "infected"
+        | "skipped"
+        | "error"
+      app_attachment_upload_status:
+        | "pending"
+        | "uploaded"
+        | "confirmed"
+        | "failed"
+        | "cancelled"
+        | "expired"
       app_channel_type: "widget"
       app_conversation_status: "open" | "pending" | "resolved" | "closed"
       app_member_role: "owner" | "admin" | "agent" | "viewer"
@@ -992,6 +1252,22 @@ export const Constants = {
   },
   public: {
     Enums: {
+      app_attachment_kind: ["image", "document"],
+      app_attachment_scan_status: [
+        "pending",
+        "clean",
+        "infected",
+        "skipped",
+        "error",
+      ],
+      app_attachment_upload_status: [
+        "pending",
+        "uploaded",
+        "confirmed",
+        "failed",
+        "cancelled",
+        "expired",
+      ],
       app_channel_type: ["widget"],
       app_conversation_status: ["open", "pending", "resolved", "closed"],
       app_member_role: ["owner", "admin", "agent", "viewer"],
