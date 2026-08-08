@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(21);
+SELECT plan(22);
 
 DO $$
 DECLARE
@@ -338,8 +338,12 @@ SELECT is(
 -- Direct table write requires elevated role (authenticated has no INSERT).
 DO $$
 DECLARE
+  v_workspace uuid := tests.fixture('workspace_id')::uuid;
+  v_conversation uuid := tests.fixture('conversation_id')::uuid;
+  v_member uuid := tests.fixture('member_id')::uuid;
   v_unread integer;
 BEGIN
+  -- Resolve fixtures before elevating — service_role cannot read tests schema.
   SET LOCAL ROLE service_role;
 
   INSERT INTO public.conversation_member_reads (
@@ -352,9 +356,9 @@ BEGIN
     last_read_at
   )
   VALUES (
-    tests.fixture('workspace_id')::uuid,
-    tests.fixture('conversation_id')::uuid,
-    tests.fixture('member_id')::uuid,
+    v_workspace,
+    v_conversation,
+    v_member,
     1,
     1,
     2,
@@ -379,8 +383,8 @@ BEGIN
   SELECT r.unread_count
   INTO v_unread
   FROM public.conversation_member_reads r
-  WHERE r.conversation_id = tests.fixture('conversation_id')::uuid
-    AND r.member_id = tests.fixture('member_id')::uuid;
+  WHERE r.conversation_id = v_conversation
+    AND r.member_id = v_member;
 
   IF v_unread IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION 'expected unread_count 0 after losing writer, got %', v_unread;
