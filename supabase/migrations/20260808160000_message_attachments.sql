@@ -211,11 +211,20 @@ SET
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- Deny direct anon/authenticated storage access — only signed URLs / service role.
--- No SELECT/INSERT/UPDATE/DELETE policies for authenticated or anon on this bucket.
--- Workspace members download via app-minted short-lived signed URLs (service role).
+-- Storage access model:
+-- - No SELECT for anon/authenticated (downloads only via app-minted signed URLs / service role)
+-- - INSERT allowed for signed upload URLs (Supabase still evaluates RLS on signed uploads)
+-- - Finalize only links server-minted paths from attachment_uploads (orphan uploads cannot
+--   become messages; cleanup cancels intents + deletes objects)
 DROP POLICY IF EXISTS attachments_storage_deny_all ON storage.objects;
 DROP POLICY IF EXISTS attachments_storage_select_authenticated ON storage.objects;
+DROP POLICY IF EXISTS attachments_storage_insert_signed ON storage.objects;
+
+CREATE POLICY attachments_storage_insert_signed
+  ON storage.objects
+  FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (bucket_id = 'attachments');
 
 -- ---------------------------------------------------------------------------
 -- Helpers

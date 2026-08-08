@@ -114,12 +114,25 @@ export function uploadBlobWithProgress(input: {
 }): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", input.url);
+    // Prefer the signed URL as returned (includes ?token=). Do not send the
+    // storage upload token as Authorization Bearer — that confuses GoTrue auth
+    // and is unnecessary when the token is already a query param.
+    const uploadUrl = (() => {
+      if (!input.token) {
+        return input.url;
+      }
+      try {
+        const parsed = new URL(input.url);
+        if (!parsed.searchParams.get("token")) {
+          parsed.searchParams.set("token", input.token);
+        }
+        return parsed.toString();
+      } catch {
+        return input.url;
+      }
+    })();
+    xhr.open("PUT", uploadUrl);
     xhr.setRequestHeader("Content-Type", input.contentType);
-    if (input.token) {
-      xhr.setRequestHeader("Authorization", `Bearer ${input.token}`);
-      // Supabase signed upload also accepts x-upsert / token query; token is in URL.
-    }
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) {

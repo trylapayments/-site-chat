@@ -43,7 +43,7 @@ sequenceDiagram
 | Concern | Design |
 |--------|--------|
 | Path | `{workspace_id}/{conversation_id}/{attachment_id}/{safe_filename}` |
-| Access | Signed upload + signed download only (no authenticated Storage SELECT) |
+| Access | Signed upload + signed download; Storage SELECT denied; INSERT allowed for signed-upload RLS |
 | Upload TTL | Supabase upload tokens are fixed at **2 hours**; app enforces `attachment_uploads.expires_at` (default 30 min intent / 10 min advertised) on complete |
 | Download TTL | Signed download URLs expire in **15 minutes** (server-enforced) |
 | Bucket | Private; no anon/authenticated object policies |

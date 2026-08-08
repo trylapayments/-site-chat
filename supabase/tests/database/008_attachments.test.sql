@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(12);
+SELECT plan(13);
 
 DO $$
 DECLARE
@@ -137,6 +137,18 @@ SELECT is(
   ),
   0,
   'no authenticated SELECT policy on attachments bucket (signed URLs only)'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND policyname = 'attachments_storage_insert_signed'
+  ),
+  1,
+  'signed-upload INSERT policy exists (required by Storage RLS)'
 );
 
 SELECT results_eq(

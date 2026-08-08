@@ -578,13 +578,24 @@ function LiveReplyComposer({
                 const file =
                   fileIndex >= 0 ? filesForSend[fileIndex] : undefined;
                 if (!file) continue;
-                const response = await fetch(upload.uploadUrl, {
+                // Token is already on the signed URL (?token=). Do not send it
+                // as Authorization Bearer — that is interpreted as a user JWT.
+                let uploadUrl = upload.uploadUrl;
+                if (upload.uploadToken) {
+                  try {
+                    const parsed = new URL(upload.uploadUrl);
+                    if (!parsed.searchParams.get("token")) {
+                      parsed.searchParams.set("token", upload.uploadToken);
+                    }
+                    uploadUrl = parsed.toString();
+                  } catch {
+                    uploadUrl = upload.uploadUrl;
+                  }
+                }
+                const response = await fetch(uploadUrl, {
                   method: "PUT",
                   headers: {
                     "Content-Type": upload.mimeType,
-                    ...(upload.uploadToken
-                      ? { Authorization: `Bearer ${upload.uploadToken}` }
-                      : {}),
                   },
                   body: file,
                   signal: abort.signal,
