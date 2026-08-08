@@ -167,10 +167,9 @@ test.describe("PR 4D-3 read receipts and unread counters", () => {
     const reply = `offline-reply-${marker}`;
     await sendOperatorReply(operator, reply);
 
+    // Recover in-place (same pattern as cross-origin offline tests). Reloading
+    // via openWidget races waitForResponse against a cached loader.js fetch.
     await visitor.context().setOffline(false);
-    // openWidget navigates to HOST_URL; avoid a prior goto that races the
-    // loader.js waitForResponse against a cached second navigation.
-    await openWidget(visitor);
     await waitForWidgetRealtimeReady(visitor);
 
     const frame = widgetFrameLocator(visitor);
