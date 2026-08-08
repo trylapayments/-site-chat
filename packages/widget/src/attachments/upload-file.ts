@@ -132,7 +132,11 @@ export function uploadBlobWithProgress(input: {
       }
     })();
     xhr.open("PUT", uploadUrl);
-    xhr.setRequestHeader("Content-Type", input.contentType);
+    // Match supabase-js uploadToSignedUrl: Blobs go as multipart FormData.
+    // Setting Content-Type manually would omit the multipart boundary.
+    const body = new FormData();
+    body.append("cacheControl", "3600");
+    body.append("", input.file, "file");
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) {
@@ -172,7 +176,7 @@ export function uploadBlobWithProgress(input: {
       );
     }
 
-    xhr.send(input.file);
+    xhr.send(body);
   });
 }
 

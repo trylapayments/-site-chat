@@ -592,16 +592,17 @@ function LiveReplyComposer({
                     uploadUrl = upload.uploadUrl;
                   }
                 }
+                // Match supabase-js uploadToSignedUrl multipart shape.
+                const body = new FormData();
+                body.append("cacheControl", "3600");
+                body.append("", file, file.name);
                 const response = await fetch(uploadUrl, {
                   method: "PUT",
-                  headers: {
-                    "Content-Type": upload.mimeType,
-                  },
-                  body: file,
+                  body,
                   signal: abort.signal,
                 });
                 if (!response.ok) {
-                  throw new Error("Upload failed");
+                  throw new Error(`Upload failed (${String(response.status)})`);
                 }
                 uploadedCount += 1;
                 setUploadProgress(
