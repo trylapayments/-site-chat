@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   APP_URL,
@@ -15,8 +14,8 @@ import {
   widgetFrameLocator,
 } from "../../helpers";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fixturesDir = path.join(__dirname, "../../fixtures");
+// Playwright loads specs as CommonJS in this repo — avoid import.meta.
+const fixturesDir = path.join(process.cwd(), "e2e/fixtures");
 
 async function prepareOperatorInbox(page: Page) {
   await loginOperator(page);
@@ -39,6 +38,23 @@ test.describe("attachments", () => {
       timeout: 15_000,
     });
     await expect(frame.getByText("sample.png")).toBeVisible();
+
+    await visitor.close();
+  });
+
+  test("widget file picker accepts PDF document", async ({ browser }) => {
+    const visitor = await browser.newPage();
+    await openWidget(visitor);
+    await waitForWidgetRealtimeReady(visitor);
+
+    const frame = widgetFrameLocator(visitor);
+    await frame
+      .getByTestId("widget-file-input")
+      .setInputFiles(path.join(fixturesDir, "sample.pdf"));
+    await expect(frame.getByTestId("pending-attachments")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(frame.getByText("sample.pdf")).toBeVisible();
 
     await visitor.close();
   });
