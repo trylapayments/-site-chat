@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchInboxUnreadTotal } from "@/lib/inbox/queries";
 import { subscribeOperatorWorkspaceInbox } from "@/lib/realtime/operator-subscriptions";
@@ -22,6 +22,8 @@ export function InboxUnreadBadge({
   className?: string;
 }) {
   const [total, setTotal] = useState(0);
+  /** Per-conversation last_read watermark — gates optimistic +1 after mark-read. */
+  const lastReadByConversationRef = useRef(new Map<string, number>());
 
   const refresh = useCallback(async () => {
     try {
@@ -45,14 +47,45 @@ export function InboxUnreadBadge({
         const senderType =
           typeof raw.sender_type === "string" ? raw.sender_type : null;
         const isInternal = Boolean(raw.is_internal);
-        if (senderType === "visitor" && !isInternal) {
+        if (senderType !== "visitor" || isInternal) {
+          return;
+        }
+
+        const conversationId =
+          typeof raw.conversation_id === "string" ? raw.conversation_id : null;
+        const sequence = Number(raw.sequence_number);
+        if (!conversationId || !Number.isFinite(sequence)) {
+          void refresh();
+          return;
+        }
+
+        // If mark-read CDC already advanced past this sequence, do not inflate.
+        const lastRead =
+          lastReadByConversationRef.current.get(conversationId) ?? -1;
+        if (sequence > lastRead) {
           setTotal((current) => current + 1);
         }
       },
       onConversationChange: () => {
         // Assignment/status filters do not change global unread; ignore.
       },
-      onMemberReadChange: () => {
+      onMemberReadChange: (raw) => {
+        const conversationId =
+          typeof raw.conversation_id === "string" ? raw.conversation_id : null;
+        const lastRead = Number(raw.last_read_sequence);
+        if (
+          conversationId &&
+          Number.isFinite(lastRead) &&
+          typeof raw.member_id === "string" &&
+          raw.member_id === memberId
+        ) {
+          const previous =
+            lastReadByConversationRef.current.get(conversationId) ?? 0;
+          lastReadByConversationRef.current.set(
+            conversationId,
+            Math.max(previous, Math.floor(lastRead)),
+          );
+        }
         void refresh();
       },
       onConnectionChange: (state) => {
@@ -79,7 +112,7 @@ export function InboxUnreadBadge({
       )}
       data-testid="inbox-unread-total"
       data-unread-total={total}
-      aria-label={`${String(total)} unread conversations`}
+      aria-label={`${String(total)} unread messages`}
     >
       {label}
     </span>

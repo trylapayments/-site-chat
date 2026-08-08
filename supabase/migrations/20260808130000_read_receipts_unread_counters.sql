@@ -751,17 +751,33 @@ BEGIN
       public.conversation_member_reads.last_delivered_sequence,
       EXCLUDED.last_delivered_sequence
     ),
-    unread_count = EXCLUDED.unread_count,
-    last_read_at = now(),
-    updated_at = now();
-
-  v_updated := true;
+    -- Never let a losing concurrent writer clobber unread after GREATEST kept
+    -- a higher last_read_sequence from the existing row.
+    unread_count = CASE
+      WHEN EXCLUDED.last_read_sequence > public.conversation_member_reads.last_read_sequence
+        THEN EXCLUDED.unread_count
+      ELSE public.conversation_member_reads.unread_count
+    END,
+    last_read_at = CASE
+      WHEN EXCLUDED.last_read_sequence > public.conversation_member_reads.last_read_sequence
+        THEN EXCLUDED.last_read_at
+      ELSE public.conversation_member_reads.last_read_at
+    END,
+    updated_at = CASE
+      WHEN EXCLUDED.last_read_sequence > public.conversation_member_reads.last_read_sequence
+        OR EXCLUDED.last_delivered_sequence >
+          public.conversation_member_reads.last_delivered_sequence
+        THEN now()
+      ELSE public.conversation_member_reads.updated_at
+    END;
 
   SELECT r.last_read_sequence, r.unread_count
   INTO v_through, v_unread
   FROM public.conversation_member_reads r
   WHERE r.conversation_id = p_conversation_id
     AND r.member_id = v_member_id;
+
+  v_updated := v_through > COALESCE(v_existing_sequence, 0);
 
   RETURN jsonb_build_object(
     'last_read_sequence', v_through,

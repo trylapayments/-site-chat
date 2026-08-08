@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(21);
+SELECT plan(22);
 
 DO $$
 DECLARE
@@ -332,6 +332,62 @@ SELECT is(
   ),
   0,
   'list_conversations includes unread_count'
+);
+
+-- Concurrent losing writer must not clobber unread after a higher watermark won.
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.conversation_member_reads (
+        workspace_id,
+        conversation_id,
+        member_id,
+        last_read_sequence,
+        last_delivered_sequence,
+        unread_count,
+        last_read_at
+      )
+      VALUES (
+        %L::uuid,
+        %L::uuid,
+        %L::uuid,
+        1,
+        1,
+        2,
+        now()
+      )
+      ON CONFLICT (conversation_id, member_id) DO UPDATE
+      SET
+        last_read_sequence = GREATEST(
+          public.conversation_member_reads.last_read_sequence,
+          EXCLUDED.last_read_sequence
+        ),
+        last_delivered_sequence = GREATEST(
+          public.conversation_member_reads.last_delivered_sequence,
+          EXCLUDED.last_delivered_sequence
+        ),
+        unread_count = CASE
+          WHEN EXCLUDED.last_read_sequence > public.conversation_member_reads.last_read_sequence
+            THEN EXCLUDED.unread_count
+          ELSE public.conversation_member_reads.unread_count
+        END;
+    $sql$,
+    tests.fixture('workspace_id'),
+    tests.fixture('conversation_id'),
+    tests.fixture('member_id')
+  ),
+  'simulate losing concurrent mark-read writer'
+);
+
+SELECT is(
+  (
+    SELECT r.unread_count
+    FROM public.conversation_member_reads r
+    WHERE r.conversation_id = tests.fixture('conversation_id')::uuid
+      AND r.member_id = tests.fixture('member_id')::uuid
+  ),
+  0,
+  'losing concurrent writer does not inflate unread_count'
 );
 
 -- Cross-workspace isolation: outsider cannot mark read

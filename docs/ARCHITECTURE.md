@@ -289,12 +289,18 @@ Message lifecycle is **sent → delivered → seen**, derived from conversation-
 | Operator `last_read_sequence` / `last_delivered_sequence` / `unread_count` | `conversation_member_reads` | Per-member operator read position + O(1) unread |
 | Visitor `last_read_sequence` / `last_delivered_sequence` | `conversation_visitor_reads` | One visitor cursor per conversation |
 
-Derivation: `message.sequence <= peer.last_delivered_sequence` → delivered; `<= peer.last_read_sequence` → seen.
+Derivation: `message.sequence <= peer.last_delivered_sequence` → delivered; `<= peer.last_read_sequence` → seen. **Sent** means the durable message write succeeded (optimistic/pending UI is not “sent” for receipt ticks). Cursors never regress (client merge + SQL `GREATEST`).
+
+Unread (operator, per member, O(1)):
+
+- Denormalized `conversation_member_reads.unread_count` (+ bootstrap from `conversations.visitor_message_count` when no read row).
+- Formula: with a read row → `unread_count`; without → `visitor_message_count`. Trigger `+1` only for non-internal visitor inserts with `sequence > last_read`. Mark-read clears/recomputes; CHECK `unread_count >= 0`.
+- Operator unread is **per-member**. Visitor ticks for agent messages use `max()` across member cursors (shared-team “someone on the team has seen this”), which does **not** overwrite another member’s unread row.
 
 - **Delivered** advances when the peer client actually receives the message (Realtime Broadcast/CDC or HTTP catch-up). Websocket connect alone does not imply seen.
-- **Seen** advances only when the peer views the active conversation (operator opens thread; visitor has panel open **and** `document.visibilityState === "visible"`).
-- Mark RPCs are monotonic (`GREATEST`) and **no-op** when the watermark does not advance (reopening an already-read conversation performs no write).
-- Live UX: clients broadcast `receipt.v1` on the ephemeral topic after a durable cursor advance (including no-op RPC mirrors when the watermark was already written). Pending broadcasts flush on ephemeral `SUBSCRIBED`.
+- **Seen** advances only when the peer views the active conversation (operator opens thread; visitor has panel open **and** `document.visibilityState === "visible"`). This is **panel + document visibility**, not per-message IntersectionObserver viewport checks — messages loaded into the open visible panel are marked seen through the max agent sequence.
+- Mark RPCs are monotonic (`GREATEST`) and **no-op** when the watermark does not advance (reopening an already-read conversation performs no write). Concurrent mark-read upserts keep unread from the winning (higher) watermark.
+- Live UX: clients broadcast `receipt.v1` on the ephemeral topic after a durable cursor advance (including no-op RPC mirrors when the watermark was already written). Pending broadcasts flush on ephemeral `SUBSCRIBED`. Clients **merge** remote receipts monotonically so a stale `receipt.v1` cannot regress CDC/HTTP truth.
 - Operator open-thread also applies CDC on `conversation_visitor_reads` so visitor delivered/seen cannot be lost if an ephemeral event is missed. Multi-tab inbox unread sync uses CDC on `conversation_member_reads`.
 - Catch-up: `get_conversation` / `widget_list_visitor_messages` return peer cursors so reconnect/offline recovery rehydrates receipt UI without polling.
 

@@ -140,7 +140,12 @@ export function LiveConversationThread({
         setVisitorOnline(presence.online);
       },
       onVisitorReceipts: (cursors) => {
-        setVisitorReceipts(cursors);
+        // Monotonic merge — never replace with a stale receipt.v1 after CDC
+        // already advanced the durable watermark.
+        setVisitorReceipts((current) => {
+          const merged = mergeReceiptCursors(current, cursors);
+          return merged.advanced ? merged.next : current;
+        });
       },
       onSubscribed: () => {
         // Durable catch-up after (re)subscribe — covers missed receipt.v1.

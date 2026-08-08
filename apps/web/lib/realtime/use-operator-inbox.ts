@@ -118,6 +118,9 @@ export function useLiveInboxList(input: {
     }, 250);
   }, [refreshList]);
 
+  /** Gates optimistic unread +1 when mark-read CDC arrives before message INSERT. */
+  const lastReadByConversationRef = useRef(new Map<string, number>());
+
   useEffect(() => {
     const memberReadSchema = z
       .object({
@@ -143,6 +146,12 @@ export function useLiveInboxList(input: {
         const existing = itemsRef.current.find(
           (item) => item.id === parsed.data.conversation_id,
         );
+        const lastRead =
+          lastReadByConversationRef.current.get(parsed.data.conversation_id) ??
+          -1;
+        const shouldIncrementUnread =
+          parsed.data.sender_type === "visitor" &&
+          parsed.data.sequence_number > lastRead;
 
         setItems((current) => {
           const currentExisting = current.find(
@@ -150,10 +159,9 @@ export function useLiveInboxList(input: {
           );
           const base =
             currentExisting ?? conversationListItemFromMessage(parsed.data);
-          const nextUnread =
-            parsed.data.sender_type === "visitor"
-              ? computeUnreadAfterVisitorMessage(base.unread_count)
-              : base.unread_count;
+          const nextUnread = shouldIncrementUnread
+            ? computeUnreadAfterVisitorMessage(base.unread_count)
+            : base.unread_count;
           const next = patchConversationListItem(base, {
             last_message_at: parsed.data.created_at,
             last_message_preview: parsed.data.body.slice(0, 200),
@@ -225,6 +233,14 @@ export function useLiveInboxList(input: {
         if (!parsed.success || parsed.data.member_id !== input.memberId) {
           return;
         }
+
+        const previous =
+          lastReadByConversationRef.current.get(parsed.data.conversation_id) ??
+          0;
+        lastReadByConversationRef.current.set(
+          parsed.data.conversation_id,
+          Math.max(previous, parsed.data.last_read_sequence),
+        );
 
         setItems((current) => {
           const existing = current.find(

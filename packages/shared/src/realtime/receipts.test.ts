@@ -19,6 +19,12 @@ describe("deriveMessageReceiptStatus", () => {
     expect(deriveMessageReceiptStatus({ sequenceNumber: 2, peer })).toBe("delivered");
     expect(deriveMessageReceiptStatus({ sequenceNumber: 3, peer })).toBe("sent");
   });
+
+  it("never regresses from seen when delivered watermark lags read", () => {
+    const peer = { lastDeliveredSequence: 1, lastReadSequence: 3 };
+    expect(deriveMessageReceiptStatus({ sequenceNumber: 2, peer })).toBe("seen");
+    expect(deriveMessageReceiptStatus({ sequenceNumber: 3, peer })).toBe("seen");
+  });
 });
 
 describe("mergeReceiptCursors", () => {
