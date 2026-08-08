@@ -102,7 +102,7 @@ export async function GET(
       throw authError;
     }
 
-    if (allowed !== true) {
+    if (!allowed) {
       return widgetJsonError(
         "FORBIDDEN",
         GENERIC_FORBIDDEN_MESSAGE,
