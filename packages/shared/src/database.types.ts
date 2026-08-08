@@ -1028,6 +1028,14 @@ export type Database = {
         Args: { p_token: string }
         Returns: Json
       }
+      widget_authorize_visitor_attachment: {
+        Args: {
+          p_attachment_id: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: boolean
+      }
       widget_consume_rate_limit: {
         Args: {
           p_bucket_key: string
@@ -1045,14 +1053,6 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: Json
-      }
-      widget_authorize_visitor_attachment: {
-        Args: {
-          p_attachment_id: string
-          p_session_token: string
-          p_workspace_id: string
-        }
-        Returns: boolean
       }
       widget_ensure_conversation_for_attachments: {
         Args: {
