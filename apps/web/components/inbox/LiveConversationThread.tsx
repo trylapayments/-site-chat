@@ -440,7 +440,10 @@ function LiveReplyComposer({
   const [isPending, startTransition] = useTransition();
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [uploadFailed, setUploadFailed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const clientMessageIdRef = useRef<string | null>(null);
   const lastMarkedVisitorSequenceRef = useRef(0);
 
@@ -510,14 +513,25 @@ function LiveReplyComposer({
           senderType: "agent",
           senderLabel: genericSenderLabel("agent"),
           nextSequence: maxSequenceNumber(messages) + 1,
+          attachments: filesForSend.map((file, index) => ({
+            id: `op-pending-${String(index)}`,
+            filename: file.name,
+            mimeType: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+            kind: file.type.startsWith("image/") ? "image" : "document",
+            sortOrder: index,
+            hasThumbnail: file.type.startsWith("image/"),
+          })),
         });
 
         setMessages((current) => mergeMessages(current, [], [optimistic]));
         setBody("");
         setPendingFiles([]);
+        setUploadFailed(false);
         onClearTyping();
 
         startTransition(async () => {
+          let batchIdForCleanup: string | null = null;
           try {
             if (filesForSend.length > 0) {
               const {
@@ -525,7 +539,7 @@ function LiveReplyComposer({
                 completeOperatorUploadsAction,
               } = await import("@/lib/inbox/actions");
 
-              setUploadProgress("Uploading…");
+              setUploadProgress(`Uploading 0/${String(filesForSend.length)}…`);
               const initiated = await initiateOperatorUploadsAction(
                 workspaceSlug,
                 {
@@ -547,7 +561,16 @@ function LiveReplyComposer({
                 );
               }
 
+              batchIdForCleanup = initiated.data.batchId;
+              setActiveBatchId(initiated.data.batchId);
+              const abort = new AbortController();
+              uploadAbortRef.current = abort;
+
+              let uploadedCount = 0;
               for (const upload of initiated.data.uploads) {
+                if (abort.signal.aborted) {
+                  throw new Error("Upload cancelled");
+                }
                 const fileIndex = filesForSend.findIndex(
                   (candidate, index) =>
                     `op-${String(index)}-${candidate.name}` === upload.localId,
@@ -564,12 +587,18 @@ function LiveReplyComposer({
                       : {}),
                   },
                   body: file,
+                  signal: abort.signal,
                 });
                 if (!response.ok) {
                   throw new Error("Upload failed");
                 }
+                uploadedCount += 1;
+                setUploadProgress(
+                  `Uploading ${String(uploadedCount)}/${String(filesForSend.length)}…`,
+                );
               }
 
+              setUploadProgress("Confirming…");
               const completed = await completeOperatorUploadsAction(
                 workspaceSlug,
                 {
@@ -594,6 +623,8 @@ function LiveReplyComposer({
               const sent = completed.data;
               clientMessageIdRef.current = null;
               setUploadProgress(null);
+              setActiveBatchId(null);
+              setUploadFailed(false);
               setMessages((current) =>
                 mergeMessages(
                   current.filter((message) => message.id !== tempId),
@@ -666,6 +697,17 @@ function LiveReplyComposer({
             );
           } catch (uploadError) {
             setUploadProgress(null);
+            setActiveBatchId(null);
+            if (filesForSend.length > 0) {
+              setUploadFailed(true);
+              if (batchIdForCleanup) {
+                const { cancelOperatorUploadsAction } =
+                  await import("@/lib/inbox/actions");
+                void cancelOperatorUploadsAction(workspaceSlug, {
+                  batchId: batchIdForCleanup,
+                });
+              }
+            }
             setMessages((current) =>
               current.map((message) =>
                 message.clientMessageId === clientMessageId
@@ -680,6 +722,8 @@ function LiveReplyComposer({
             );
             setBody(trimmed);
             setPendingFiles(filesForSend);
+          } finally {
+            uploadAbortRef.current = null;
           }
         });
       }}
@@ -734,6 +778,7 @@ function LiveReplyComposer({
         <p
           className="text-muted-foreground mb-2 text-xs"
           role="status"
+          aria-live="polite"
           data-testid="operator-upload-status"
         >
           {uploadProgress}
@@ -775,14 +820,51 @@ function LiveReplyComposer({
         >
           Attach
         </Button>
-        <Button
-          type="submit"
-          disabled={
-            isPending || (body.trim().length === 0 && pendingFiles.length === 0)
-          }
-        >
-          {isPending ? "Sending..." : "Send reply"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {activeBatchId && isPending ? (
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Cancel upload"
+              data-testid="operator-upload-cancel"
+              onClick={() => {
+                uploadAbortRef.current?.abort();
+                const batchId = activeBatchId;
+                setActiveBatchId(null);
+                setUploadProgress(null);
+                void import("@/lib/inbox/actions").then(
+                  ({ cancelOperatorUploadsAction }) => {
+                    void cancelOperatorUploadsAction(workspaceSlug, {
+                      batchId,
+                    });
+                  },
+                );
+              }}
+            >
+              Cancel
+            </Button>
+          ) : null}
+          {uploadFailed && !isPending ? (
+            <Button
+              type="submit"
+              variant="outline"
+              aria-label="Retry upload"
+              data-testid="operator-upload-retry"
+            >
+              Retry upload
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              disabled={
+                isPending ||
+                (body.trim().length === 0 && pendingFiles.length === 0)
+              }
+            >
+              {isPending ? "Sending..." : "Send reply"}
+            </Button>
+          )}
+        </div>
       </div>
     </form>
   );

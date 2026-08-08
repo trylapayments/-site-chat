@@ -98,6 +98,7 @@ export async function POST(request: Request) {
       workspaceId: embedContext.workspaceId,
       batchId: parsed.data.batchId,
       uploadIds: parsed.data.uploadIds,
+      sessionToken,
     });
 
     return widgetJsonSuccess(cancelDataSchema, { cancelled }, requestId, {

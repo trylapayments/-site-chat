@@ -25,6 +25,9 @@ export function createSupabaseObjectStorage(
     async createSignedUploadUrl(
       options: CreateSignedUploadOptions,
     ): Promise<SignedUploadUrl> {
+      // Supabase signed upload tokens are fixed at 2 hours; the SDK does not
+      // accept expiresIn. App-level upload intent expiry (attachment_uploads
+      // .expires_at) is enforced on complete/cancel and is the real TTL.
       const { data, error } = await supabase.storage
         .from(bucket)
         .createSignedUploadUrl(options.path, {
@@ -35,8 +38,14 @@ export function createSupabaseObjectStorage(
         throw new Error(error.message || "Failed to create signed upload URL");
       }
 
+      const SUPABASE_SIGNED_UPLOAD_TTL_SECONDS = 2 * 60 * 60;
       const expiresAt = new Date(
-        Date.now() + options.expiresInSeconds * 1000,
+        Date.now() +
+          Math.min(
+            options.expiresInSeconds,
+            SUPABASE_SIGNED_UPLOAD_TTL_SECONDS,
+          ) *
+            1000,
       ).toISOString();
 
       return {

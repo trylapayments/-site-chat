@@ -212,20 +212,10 @@ SET
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 -- Deny direct anon/authenticated storage access — only signed URLs / service role.
+-- No SELECT/INSERT/UPDATE/DELETE policies for authenticated or anon on this bucket.
+-- Workspace members download via app-minted short-lived signed URLs (service role).
 DROP POLICY IF EXISTS attachments_storage_deny_all ON storage.objects;
-CREATE POLICY attachments_storage_select_authenticated
-  ON storage.objects
-  FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'attachments'
-    AND (storage.foldername(name))[1]::uuid IN (
-      SELECT app_private.user_workspace_ids()
-    )
-  );
-
--- No INSERT/UPDATE/DELETE for authenticated on attachments bucket.
--- Uploads go through signed upload URLs minted by the service role.
+DROP POLICY IF EXISTS attachments_storage_select_authenticated ON storage.objects;
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -1228,10 +1218,14 @@ REVOKE ALL ON FUNCTION public.mark_attachment_uploads_uploaded(uuid, uuid, uuid[
 REVOKE ALL ON FUNCTION public.mark_attachment_uploads_uploaded(uuid, uuid, uuid[]) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.mark_attachment_uploads_uploaded(uuid, uuid, uuid[]) TO service_role;
 
+DROP FUNCTION IF EXISTS public.cancel_attachment_uploads(uuid, uuid, uuid[]);
+
 CREATE OR REPLACE FUNCTION public.cancel_attachment_uploads(
   p_workspace_id uuid,
   p_batch_id uuid,
-  p_upload_ids uuid[] DEFAULT NULL
+  p_upload_ids uuid[] DEFAULT NULL,
+  p_visitor_session_id uuid DEFAULT NULL,
+  p_agent_member_id uuid DEFAULT NULL
 )
 RETURNS integer
 LANGUAGE plpgsql
@@ -1241,6 +1235,10 @@ AS $$
 DECLARE
   v_count integer;
 BEGIN
+  IF p_visitor_session_id IS NULL AND p_agent_member_id IS NULL THEN
+    RAISE EXCEPTION 'Cancel requires actor scope';
+  END IF;
+
   UPDATE public.attachment_uploads u
   SET
     status = 'cancelled',
@@ -1248,17 +1246,25 @@ BEGIN
   WHERE u.workspace_id = p_workspace_id
     AND u.batch_id = p_batch_id
     AND (p_upload_ids IS NULL OR u.id = ANY (p_upload_ids))
-    AND u.status IN ('pending', 'uploaded');
+    AND u.status IN ('pending', 'uploaded')
+    AND (
+      (p_visitor_session_id IS NOT NULL
+        AND u.actor_role = 'visitor'
+        AND u.visitor_session_id = p_visitor_session_id)
+      OR
+      (p_agent_member_id IS NOT NULL
+        AND u.actor_role = 'operator'
+        AND u.agent_member_id = p_agent_member_id)
+    );
 
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[]) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[]) FROM anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[]) TO service_role;
-GRANT EXECUTE ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[]) TO authenticated;
+REVOKE ALL ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[], uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[], uuid, uuid) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.cancel_attachment_uploads(uuid, uuid, uuid[], uuid, uuid) TO service_role;
 
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM PUBLIC;
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM anon;

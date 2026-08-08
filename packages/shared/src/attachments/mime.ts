@@ -309,11 +309,13 @@ export function detectMimeFromMagicBytes(bytes: Uint8Array, filenameHint?: strin
     return "application/zip";
   }
 
-  // Text/CSV — only when extension claims text and content looks textual
+  // Text/CSV — only when extension claims text and content looks textual.
+  // Reject HTML/SVG/JS payloads renamed as .txt/.csv (Content-Disposition
+  // attachment mitigates execution, but we still refuse active content).
   if (filenameHint) {
     const byExt = lookupAttachmentTypeByExtension(filenameHint);
     if (byExt && (byExt.mimeType === "text/plain" || byExt.mimeType === "text/csv")) {
-      if (looksLikeText(bytes)) {
+      if (looksLikeText(bytes) && !looksLikeActiveTextContent(bytes)) {
         return byExt.mimeType;
       }
       return null;
@@ -340,6 +342,32 @@ function looksLikeText(bytes: Uint8Array): boolean {
     }
   }
   return suspicious / sample.length < 0.1;
+}
+
+function looksLikeActiveTextContent(bytes: Uint8Array): boolean {
+  const sample = bytes.subarray(0, Math.min(bytes.length, 4096));
+  const text = new TextDecoder("utf-8", { fatal: false })
+    .decode(sample)
+    .toLowerCase()
+    .replace(/^\uFEFF/, "")
+    .trimStart();
+
+  if (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.startsWith("<svg") ||
+    text.startsWith("<?xml")
+  ) {
+    return true;
+  }
+
+  // Scriptable markup / JS disguised as plain text.
+  return (
+    /<\s*script[\s>]/i.test(text) ||
+    /<\s*svg[\s>]/i.test(text) ||
+    /<\s*html[\s>]/i.test(text) ||
+    /javascript\s*:/i.test(text)
+  );
 }
 
 /**

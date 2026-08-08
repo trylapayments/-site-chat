@@ -374,13 +374,28 @@ export async function cancelOperatorUploadsAction(
       return { success: false, message: "Invalid cancel request." };
     }
 
-    const { workspace } = await requireInboxMutationContext(workspaceSlug);
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
     requireCapability(workspace.role, "send_messages");
+    const { user } = await requireUser(supabase);
+    if (!user) {
+      return { success: false, message: "Unauthorized." };
+    }
+
+    const memberId = await resolveMemberId(
+      supabase,
+      workspace.workspace_id,
+      user.id,
+    );
+    if (!memberId) {
+      return { success: false, message: "Unauthorized." };
+    }
 
     const cancelled = await cancelUploads({
       workspaceId: workspace.workspace_id,
       batchId: parsed.data.batchId,
       uploadIds: parsed.data.uploadIds,
+      memberId,
     });
 
     return { success: true, data: { cancelled } };

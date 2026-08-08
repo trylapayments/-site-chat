@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(11);
+SELECT plan(12);
 
 DO $$
 DECLARE
@@ -125,6 +125,18 @@ SELECT is(
   (SELECT public FROM storage.buckets WHERE id = 'attachments'),
   false,
   'attachments bucket is private'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND policyname = 'attachments_storage_select_authenticated'
+  ),
+  0,
+  'no authenticated SELECT policy on attachments bucket (signed URLs only)'
 );
 
 SELECT results_eq(

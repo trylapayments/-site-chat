@@ -44,4 +44,15 @@ describe("attachment mime registry", () => {
     const svg = new TextEncoder().encode("<svg xmlns='http://www.w3.org/2000/svg'></svg>");
     expect(detectMimeFromMagicBytes(svg, "icon.svg")).toBeNull();
   });
+
+  it("rejects HTML/SVG renamed as plain text", () => {
+    const html = new TextEncoder().encode("<!DOCTYPE html><html><script>alert(1)</script></html>");
+    expect(detectMimeFromMagicBytes(html, "notes.txt")).toBeNull();
+
+    const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>');
+    expect(detectMimeFromMagicBytes(svg, "notes.txt")).toBeNull();
+
+    const plain = new TextEncoder().encode("hello,world\n1,2\n");
+    expect(detectMimeFromMagicBytes(plain, "data.csv")).toBe("text/csv");
+  });
 });

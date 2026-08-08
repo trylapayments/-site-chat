@@ -874,8 +874,10 @@ export type Database = {
       }
       cancel_attachment_uploads: {
         Args: {
+          p_agent_member_id?: string
           p_batch_id: string
           p_upload_ids?: string[]
+          p_visitor_session_id?: string
           p_workspace_id: string
         }
         Returns: number

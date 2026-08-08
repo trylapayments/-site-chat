@@ -34,6 +34,8 @@ sequenceDiagram
 
 **Durability rule:** `messages` rows are created only in `finalize_*` after object validation. Failed/cancelled uploads never create ghost messages.
 
+**Partial multi-file failure:** A batch is atomic at finalize — all files in the batch must upload and validate before a message is created. If any PUT fails mid-batch, the client cancels the batch (deletes remaining intents + uploaded objects) and no durable message is created. Retry starts a new batch with new object keys (idempotent via `client_message_id` only after a successful finalize).
+
 ---
 
 ## Storage design
@@ -41,10 +43,13 @@ sequenceDiagram
 | Concern | Design |
 |--------|--------|
 | Path | `{workspace_id}/{conversation_id}/{attachment_id}/{safe_filename}` |
-| Access | Signed upload (10 min) / signed download (15 min) |
-| Bucket | Private; no public policies for anon writes |
+| Access | Signed upload + signed download only (no authenticated Storage SELECT) |
+| Upload TTL | Supabase upload tokens are fixed at **2 hours**; app enforces `attachment_uploads.expires_at` (default 30 min intent / 10 min advertised) on complete |
+| Download TTL | Signed download URLs expire in **15 minutes** (server-enforced) |
+| Bucket | Private; no anon/authenticated object policies |
 | Abstraction | `ObjectStorage` interface — Supabase today, S3-compatible later |
 | Thumbnails | Supabase image transforms via signed URL `variant=thumbnail` |
+| Orphans | Cancel + failed-finalize delete objects; expired pending intents indexed by `expires_at` for a future cleanup job (not yet scheduled) |
 
 ---
 
@@ -78,9 +83,11 @@ Message ordering preserved via `sequence_number`. Idempotent via `client_message
 | HTML / SVG script | Reject `image/svg+xml`, `text/html`, executables |
 | MIME spoofing | Magic-byte verification on complete |
 | Public bucket leakage | Bucket `public=false`; no anon upload policies |
-| Signed URL expiry | 10m upload / 15m download |
+| Signed URL expiry | Download 15m (enforced); upload token ≤2h (Supabase); intent expiry enforced on complete |
 | Ghost messages | Finalize after storage validation only |
-| Antivirus | `AntivirusScanner` port; stub returns `skipped` |
+| Confirmed re-complete | Idempotent via `client_message_id`; never deletes confirmed objects |
+| Antivirus | `AntivirusScanner` port; stub returns `skipped` (UI never claims a file was scanned) |
+| Cancel scope | Cancel requires visitor session or operator member ownership |
 
 ---
 

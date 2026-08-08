@@ -290,6 +290,26 @@ async function resolveVisitorSessionId(
   return data.id;
 }
 
+async function uploadsAlreadyConfirmed(input: {
+  workspaceId: string;
+  batchId: string;
+  uploadIds: string[];
+}): Promise<boolean> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("attachment_uploads")
+    .select("status")
+    .eq("workspace_id", input.workspaceId)
+    .eq("batch_id", input.batchId)
+    .in("id", input.uploadIds);
+
+  if (error || data.length !== input.uploadIds.length) {
+    return false;
+  }
+
+  return data.every((row) => row.status === "confirmed");
+}
+
 export async function completeVisitorUploads(
   input: {
     workspaceId: string;
@@ -303,6 +323,38 @@ export async function completeVisitorUploads(
   },
   deps?: AttachmentServiceDeps,
 ) {
+  const supabase = createServiceClient();
+
+  // Idempotent retry: if uploads are already confirmed, finalize returns the
+  // existing message via client_message_id without re-validating storage.
+  if (
+    input.clientMessageId &&
+    (await uploadsAlreadyConfirmed({
+      workspaceId: input.workspaceId,
+      batchId: input.batchId,
+      uploadIds: input.uploadIds,
+    }))
+  ) {
+    const { data, error } = await supabase.rpc(
+      "finalize_visitor_attachment_message",
+      {
+        p_workspace_id: input.workspaceId,
+        p_session_token: input.sessionToken,
+        p_batch_id: input.batchId,
+        p_upload_ids: input.uploadIds,
+        p_body: input.body ?? "",
+        p_client_message_id: input.clientMessageId,
+        p_page_url: input.pageUrl ?? undefined,
+        p_referrer: input.referrer ?? undefined,
+        p_attachments: [],
+      },
+    );
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+
   const prepared = await prepareUploadsForFinalize(
     {
       workspaceId: input.workspaceId,
@@ -312,7 +364,6 @@ export async function completeVisitorUploads(
     deps,
   );
 
-  const supabase = createServiceClient();
   const { data, error } = await supabase.rpc(
     "finalize_visitor_attachment_message",
     {
@@ -329,6 +380,7 @@ export async function completeVisitorUploads(
   );
 
   if (error) {
+    // Only delete objects that were not yet confirmed as durable attachments.
     await cleanupFailedObjects(prepared.storageKeys, deps);
     throw error;
   }
@@ -349,6 +401,33 @@ export async function completeOperatorUploads(
   },
   deps?: AttachmentServiceDeps,
 ) {
+  if (
+    input.clientMessageId &&
+    (await uploadsAlreadyConfirmed({
+      workspaceId: input.workspaceId,
+      batchId: input.batchId,
+      uploadIds: input.uploadIds,
+    }))
+  ) {
+    const { data, error } = await callPublicRpc(
+      input.authedClient,
+      "finalize_operator_attachment_message",
+      {
+        p_workspace_id: input.workspaceId,
+        p_conversation_id: input.conversationId,
+        p_batch_id: input.batchId,
+        p_upload_ids: input.uploadIds,
+        p_body: input.body ?? "",
+        p_client_message_id: input.clientMessageId,
+        p_attachments: [] as Json,
+      },
+    );
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+
   const prepared = await prepareUploadsForFinalize(
     {
       workspaceId: input.workspaceId,
@@ -420,6 +499,15 @@ async function prepareUploadsForFinalize(
   const storageKeys: string[] = [];
 
   for (const row of rows) {
+    if (row.status === "confirmed") {
+      // Confirmed uploads are already linked to a durable message. Never
+      // re-validate or delete their objects from a subsequent complete call.
+      throw new AttachmentValidationError(
+        "ALREADY_CONFIRMED",
+        "Upload already confirmed",
+      );
+    }
+
     if (
       row.status === "cancelled" ||
       row.status === "expired" ||
@@ -565,19 +653,56 @@ export async function cancelUploads(input: {
   workspaceId: string;
   batchId: string;
   uploadIds?: string[];
+  /** Required for visitor cancel — scopes deletion to the owning session. */
+  sessionToken?: string;
+  /** Required for operator cancel — scopes deletion to the owning member. */
+  memberId?: string;
 }): Promise<number> {
+  if (!input.sessionToken && !input.memberId) {
+    throw new AttachmentValidationError(
+      "INVALID_UPLOAD",
+      "Cancel requires actor scope",
+    );
+  }
+
   const supabase = createServiceClient();
-  const { data: rows } = await supabase
+  let visitorSessionId: string | null = null;
+  if (input.sessionToken) {
+    visitorSessionId = await resolveVisitorSessionId(
+      input.workspaceId,
+      input.sessionToken,
+    );
+  }
+
+  let query = supabase
     .from("attachment_uploads")
     .select("storage_key")
     .eq("workspace_id", input.workspaceId)
     .eq("batch_id", input.batchId)
     .in("status", ["pending", "uploaded"]);
 
+  if (visitorSessionId) {
+    query = query
+      .eq("actor_role", "visitor")
+      .eq("visitor_session_id", visitorSessionId);
+  } else if (input.memberId) {
+    query = query
+      .eq("actor_role", "operator")
+      .eq("agent_member_id", input.memberId);
+  }
+
+  if (input.uploadIds && input.uploadIds.length > 0) {
+    query = query.in("id", input.uploadIds);
+  }
+
+  const { data: rows } = await query;
+
   const { data, error } = await supabase.rpc("cancel_attachment_uploads", {
     p_workspace_id: input.workspaceId,
     p_batch_id: input.batchId,
     p_upload_ids: input.uploadIds ?? undefined,
+    p_visitor_session_id: visitorSessionId ?? undefined,
+    p_agent_member_id: input.memberId ?? undefined,
   });
 
   if (error) {

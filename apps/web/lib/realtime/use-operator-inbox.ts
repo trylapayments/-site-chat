@@ -519,6 +519,7 @@ async function fetchConversationsMessages(
       created_at: item.created_at,
       client_message_id: item.client_message_id ?? null,
       is_internal: item.is_internal,
+      attachments: item.attachments,
     }),
   );
 }

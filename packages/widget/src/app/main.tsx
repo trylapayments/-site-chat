@@ -554,6 +554,7 @@ function WidgetApp() {
     setSendError(null);
     setFailedClientMessageId(null);
 
+    let activeBatchId: string | null = null;
     try {
       let resultMessage;
       if (filesForSend.length > 0) {
@@ -590,6 +591,7 @@ function WidgetApp() {
           pageUrl: state.init.parentOrigin,
           referrer: document.referrer || undefined,
         });
+        activeBatchId = initiated.batchId;
 
         batch = reduceUploadBatch(batch, {
           type: "PREPARE_SUCCESS",
@@ -699,6 +701,14 @@ function WidgetApp() {
             message: messagesCopy.uploadFailedLabel,
           }),
         );
+        // Mid-batch PUT/complete failure: cancel leftover intents + storage objects.
+        if (activeBatchId) {
+          void api.cancelUploads({
+            embedToken: state.init.embedToken,
+            sessionToken: state.sessionToken,
+            batchId: activeBatchId,
+          });
+        }
       }
       setSendError(messagesCopy.sendError);
     } finally {
