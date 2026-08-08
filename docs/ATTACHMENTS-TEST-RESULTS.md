@@ -33,7 +33,14 @@ Covers: image picker pending state, PDF picker, paste into composer, operator at
 
 Existing realtime suite updated for upload status / retry selector specificity (`cross-origin.spec.ts`).
 
-> Latest full suite status is recorded in the PR CI checks for this branch.
+**CI run `31268103948`:** **27 passed** (includes 5 attachment specs + full realtime suite).
+
+| Check | Result |
+|-------|--------|
+| Lint & Typecheck | pass |
+| Build | pass |
+| Database | pass |
+| Playwright Realtime E2E | **27 passed** |
 
 ## SQL / RLS
 
