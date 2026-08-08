@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(22);
+SELECT plan(20);
 
 DO $$
 DECLARE
