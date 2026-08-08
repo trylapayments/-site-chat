@@ -294,7 +294,8 @@ Derivation: `message.sequence <= peer.last_delivered_sequence` → delivered; `<
 - **Delivered** advances when the peer client actually receives the message (Realtime Broadcast/CDC or HTTP catch-up). Websocket connect alone does not imply seen.
 - **Seen** advances only when the peer views the active conversation (operator opens thread; visitor has panel open **and** `document.visibilityState === "visible"`).
 - Mark RPCs are monotonic (`GREATEST`) and **no-op** when the watermark does not advance (reopening an already-read conversation performs no write).
-- Live UX: clients broadcast `receipt.v1` on the ephemeral topic after a successful cursor write. Multi-tab operator inbox unread sync uses CDC on `conversation_member_reads`.
+- Live UX: clients broadcast `receipt.v1` on the ephemeral topic after a durable cursor advance (including no-op RPC mirrors when the watermark was already written). Pending broadcasts flush on ephemeral `SUBSCRIBED`.
+- Operator open-thread also applies CDC on `conversation_visitor_reads` so visitor delivered/seen cannot be lost if an ephemeral event is missed. Multi-tab inbox unread sync uses CDC on `conversation_member_reads`.
 - Catch-up: `get_conversation` / `widget_list_visitor_messages` return peer cursors so reconnect/offline recovery rehydrates receipt UI without polling.
 
 ### 6.3 Ordering and Idempotency

@@ -267,30 +267,59 @@ export function subscribeOperatorConversation(input: {
   conversationId: string;
   onMessageInsert: (payload: Record<string, unknown>) => void;
   onConversationChange: (payload: Record<string, unknown>) => void;
+  /** Durable visitor receipt cursor advances (INSERT/UPDATE). */
+  onVisitorReceiptChange?: (payload: Record<string, unknown>) => void;
   onConnectionChange?: RealtimeConnectionListener;
 }): () => void {
   const supabase = createClient();
+
+  const bindings: Array<{
+    event: "INSERT" | "UPDATE";
+    schema: string;
+    table: string;
+    filter: string;
+    handler: (payload: Record<string, unknown>) => void;
+  }> = [
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "messages",
+      filter: `conversation_id=eq.${input.conversationId}`,
+      handler: input.onMessageInsert,
+    },
+    {
+      event: "UPDATE",
+      schema: "public",
+      table: "conversations",
+      filter: `id=eq.${input.conversationId}`,
+      handler: input.onConversationChange,
+    },
+  ];
+
+  if (input.onVisitorReceiptChange) {
+    bindings.push(
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "conversation_visitor_reads",
+        filter: `conversation_id=eq.${input.conversationId}`,
+        handler: input.onVisitorReceiptChange,
+      },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "conversation_visitor_reads",
+        filter: `conversation_id=eq.${input.conversationId}`,
+        handler: input.onVisitorReceiptChange,
+      },
+    );
+  }
 
   return subscribeWithOperatorAuth({
     supabase,
     channelName: `conversation:${input.conversationId}`,
     onConnectionChange: input.onConnectionChange,
-    bindings: [
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${input.conversationId}`,
-        handler: input.onMessageInsert,
-      },
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "conversations",
-        filter: `id=eq.${input.conversationId}`,
-        handler: input.onConversationChange,
-      },
-    ],
+    bindings,
   });
 }
 

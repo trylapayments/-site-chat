@@ -151,6 +151,16 @@ export class WidgetRealtimeTransport {
   };
   private deliveredInFlightThrough = 0;
   private readInFlightThrough = 0;
+  /** Last receipt.v1 watermarks successfully queued/sent to peers. */
+  private lastBroadcastReceipts: ReceiptCursors = {
+    lastDeliveredSequence: 0,
+    lastReadSequence: 0,
+  };
+  private pendingReceiptBroadcast: {
+    kind: ReceiptKind;
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  } | null = null;
 
   constructor(
     private readonly api: WidgetApiClient,
@@ -744,12 +754,22 @@ export class WidgetRealtimeTransport {
       });
       this.localReceipts = merged.next;
 
-      if (!result.updated) {
+      // Mirror durable cursors even when the RPC no-ops, so peers still get
+      // receipt.v1 after reconnect / race with an earlier writer.
+      const needsBroadcast =
+        this.localReceipts.lastDeliveredSequence >
+          this.lastBroadcastReceipts.lastDeliveredSequence ||
+        this.localReceipts.lastReadSequence > this.lastBroadcastReceipts.lastReadSequence;
+
+      if (!needsBroadcast) {
         return;
       }
 
       await this.broadcastReceipt({
-        kind,
+        kind:
+          this.localReceipts.lastReadSequence > this.lastBroadcastReceipts.lastReadSequence
+            ? "read"
+            : kind,
         lastDeliveredSequence: this.localReceipts.lastDeliveredSequence,
         lastReadSequence: this.localReceipts.lastReadSequence,
       });
@@ -765,12 +785,39 @@ export class WidgetRealtimeTransport {
     }
   }
 
+  private queuePendingReceiptBroadcast(input: {
+    kind: ReceiptKind;
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) {
+    if (!this.pendingReceiptBroadcast) {
+      this.pendingReceiptBroadcast = input;
+      return;
+    }
+
+    this.pendingReceiptBroadcast = {
+      kind:
+        input.kind === "read" || this.pendingReceiptBroadcast.kind === "read"
+          ? "read"
+          : "delivered",
+      lastDeliveredSequence: Math.max(
+        this.pendingReceiptBroadcast.lastDeliveredSequence,
+        input.lastDeliveredSequence,
+      ),
+      lastReadSequence: Math.max(
+        this.pendingReceiptBroadcast.lastReadSequence,
+        input.lastReadSequence,
+      ),
+    };
+  }
+
   private async broadcastReceipt(input: {
     kind: ReceiptKind;
     lastDeliveredSequence: number;
     lastReadSequence: number;
   }) {
-    if (!this.ephemeralChannel || !this.presenceKey) {
+    if (!this.ephemeralChannel || !this.presenceKey || !this.ephemeralSubscribed) {
+      this.queuePendingReceiptBroadcast(input);
       return;
     }
 
@@ -788,9 +835,30 @@ export class WidgetRealtimeTransport {
         event: RECEIPT_BROADCAST_EVENT,
         payload,
       });
+      this.lastBroadcastReceipts = {
+        lastDeliveredSequence: Math.max(
+          this.lastBroadcastReceipts.lastDeliveredSequence,
+          input.lastDeliveredSequence,
+        ),
+        lastReadSequence: Math.max(
+          this.lastBroadcastReceipts.lastReadSequence,
+          input.lastReadSequence,
+        ),
+      };
     } catch {
-      // Ephemeral — durable cursor already persisted via API.
+      // Ephemeral — durable cursor already persisted via API. Retry on SUBSCRIBED.
+      this.queuePendingReceiptBroadcast(input);
     }
+  }
+
+  private async flushPendingReceiptBroadcast() {
+    if (!this.pendingReceiptBroadcast) {
+      return;
+    }
+
+    const next = this.pendingReceiptBroadcast;
+    this.pendingReceiptBroadcast = null;
+    await this.broadcastReceipt(next);
   }
 
   private emitAgentTyping() {
@@ -989,6 +1057,17 @@ export class WidgetRealtimeTransport {
       this.ephemeralSubscribed = true;
       this.retryAttempt = 0;
       void this.trackVisitorPresence();
+      // Re-announce durable cursors after (re)subscribe so peers that missed
+      // an earlier receipt.v1 can catch up without polling.
+      if (this.localReceipts.lastDeliveredSequence > 0 || this.localReceipts.lastReadSequence > 0) {
+        void this.broadcastReceipt({
+          kind: this.localReceipts.lastReadSequence > 0 ? "read" : "delivered",
+          lastDeliveredSequence: this.localReceipts.lastDeliveredSequence,
+          lastReadSequence: this.localReceipts.lastReadSequence,
+        });
+      } else {
+        void this.flushPendingReceiptBroadcast();
+      }
       this.emitCombinedConnectionState();
       return;
     }

@@ -7,6 +7,7 @@ import {
   genericSenderLabel,
   maxSequenceNumber,
   mergeMessages,
+  mergeReceiptCursors,
   toMessageViewFromOperatorRow,
   type MessageView,
 } from "@site-chat/shared";
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
 import { MessageReceiptIndicator } from "@/components/inbox/MessageReceiptIndicator";
 import {
+  fetchVisitorReceiptCursorsAction,
   markConversationDeliveredAction,
   markConversationReadAction,
 } from "@/lib/inbox/actions";
@@ -76,6 +78,15 @@ export function LiveConversationThread({
     [initialMessages],
   );
 
+  const [visitorTyping, setVisitorTyping] = useState(false);
+  const [visitorOnline, setVisitorOnline] = useState(false);
+  const [visitorReceipts, setVisitorReceipts] = useState<ReceiptCursors>(
+    initialVisitorReceipts,
+  );
+  const ephemeralRef = useRef<OperatorEphemeralController | null>(null);
+  const lastReadBroadcastRef = useRef(0);
+  const lastDeliveredRef = useRef(0);
+
   const {
     messages,
     setMessages,
@@ -88,16 +99,13 @@ export function LiveConversationThread({
     workspaceSlug,
     conversationId,
     initialMessages: mappedInitialMessages,
+    onVisitorReceiptCursors: (cursors) => {
+      setVisitorReceipts((current) => {
+        const merged = mergeReceiptCursors(current, cursors);
+        return merged.advanced ? merged.next : current;
+      });
+    },
   });
-
-  const [visitorTyping, setVisitorTyping] = useState(false);
-  const [visitorOnline, setVisitorOnline] = useState(false);
-  const [visitorReceipts, setVisitorReceipts] = useState<ReceiptCursors>(
-    initialVisitorReceipts,
-  );
-  const ephemeralRef = useRef<OperatorEphemeralController | null>(null);
-  const lastReadBroadcastRef = useRef(0);
-  const lastDeliveredRef = useRef(0);
 
   const initialDelivered = initialVisitorReceipts.lastDeliveredSequence;
   const initialRead = initialVisitorReceipts.lastReadSequence;
@@ -134,6 +142,21 @@ export function LiveConversationThread({
       onVisitorReceipts: (cursors) => {
         setVisitorReceipts(cursors);
       },
+      onSubscribed: () => {
+        // Durable catch-up after (re)subscribe — covers missed receipt.v1.
+        void (async () => {
+          const result = await fetchVisitorReceiptCursorsAction(workspaceSlug, {
+            conversationId,
+          });
+          if (!result.success) {
+            return;
+          }
+          setVisitorReceipts((current) => {
+            const merged = mergeReceiptCursors(current, result.data);
+            return merged.advanced ? merged.next : current;
+          });
+        })();
+      },
     });
 
     ephemeralRef.current = controller;
@@ -151,6 +174,7 @@ export function LiveConversationThread({
     initialRead,
     memberDisplayLabel,
     memberId,
+    workspaceSlug,
   ]);
 
   const markReadThrough = useCallback(
@@ -174,19 +198,23 @@ export function LiveConversationThread({
         }
 
         const readResult = result.data;
-        if (!readResult.updated) {
-          lastReadBroadcastRef.current = Math.max(
-            lastReadBroadcastRef.current,
-            readResult.last_read_sequence,
-          );
+        const watermark = readResult.last_read_sequence;
+        // Mirror durable watermark even when RPC no-ops (e.g. page-level
+        // MarkConversationRead already advanced the cursor) so the visitor
+        // still receives receipt.v1.
+        if (watermark <= lastReadBroadcastRef.current) {
           return;
         }
 
-        lastReadBroadcastRef.current = readResult.last_read_sequence;
+        lastReadBroadcastRef.current = watermark;
+        lastDeliveredRef.current = Math.max(
+          lastDeliveredRef.current,
+          watermark,
+        );
         ephemeralRef.current?.broadcastReceipt({
           kind: "read",
-          lastDeliveredSequence: readResult.last_read_sequence,
-          lastReadSequence: readResult.last_read_sequence,
+          lastDeliveredSequence: watermark,
+          lastReadSequence: watermark,
         });
       })();
     },
@@ -214,18 +242,15 @@ export function LiveConversationThread({
         }
 
         const delivered = result.data;
-        if (!delivered.updated) {
-          lastDeliveredRef.current = Math.max(
-            lastDeliveredRef.current,
-            delivered.last_delivered_sequence,
-          );
+        const watermark = delivered.last_delivered_sequence;
+        if (watermark <= lastDeliveredRef.current) {
           return;
         }
 
-        lastDeliveredRef.current = delivered.last_delivered_sequence;
+        lastDeliveredRef.current = watermark;
         ephemeralRef.current?.broadcastReceipt({
           kind: "delivered",
-          lastDeliveredSequence: delivered.last_delivered_sequence,
+          lastDeliveredSequence: watermark,
           lastReadSequence: lastReadBroadcastRef.current,
         });
       })();

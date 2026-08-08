@@ -2,7 +2,6 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import {
   APP_URL,
-  HOST_URL,
   WORKSPACE_SLUG,
   loginOperator,
   openOperatorConversation,
@@ -65,7 +64,7 @@ test.describe("PR 4D-3 read receipts and unread counters", () => {
 
     // Visitor's own prior message should become delivered/seen after operator open
     await expect(widgetFrame.getByTestId("message-receipt").first()).toHaveAttribute(
-      /data-receipt/,
+      "data-receipt",
       /delivered|seen/,
       { timeout: 30_000 },
     );
@@ -169,7 +168,8 @@ test.describe("PR 4D-3 read receipts and unread counters", () => {
     await sendOperatorReply(operator, reply);
 
     await visitor.context().setOffline(false);
-    await visitor.goto(HOST_URL);
+    // openWidget navigates to HOST_URL; avoid a prior goto that races the
+    // loader.js waitForResponse against a cached second navigation.
     await openWidget(visitor);
     await waitForWidgetRealtimeReady(visitor);
 

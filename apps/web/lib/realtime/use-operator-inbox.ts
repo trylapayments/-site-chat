@@ -289,6 +289,11 @@ export function useLiveConversationThread(input: {
   workspaceSlug: string;
   conversationId: string;
   initialMessages: MessageView[];
+  /** Durable visitor receipt cursor CDC (conversation_visitor_reads). */
+  onVisitorReceiptCursors?: (cursors: {
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) => void;
 }) {
   const [messages, setMessages] = useState<MessageView[]>(
     input.initialMessages,
@@ -371,6 +376,9 @@ export function useLiveConversationThread(input: {
     }
   }, [input.conversationId, input.workspaceId]);
 
+  const onVisitorReceiptCursorsRef = useRef(input.onVisitorReceiptCursors);
+  onVisitorReceiptCursorsRef.current = input.onVisitorReceiptCursors;
+
   useEffect(() => {
     const unsubscribe = subscribeOperatorConversation({
       workspaceId: input.workspaceId,
@@ -408,6 +416,17 @@ export function useLiveConversationThread(input: {
       },
       onConversationChange: () => {
         // Sidebar/detail enrichment uses targeted RPC elsewhere.
+      },
+      onVisitorReceiptChange: (raw) => {
+        const delivered = Number(raw.last_delivered_sequence ?? 0);
+        const read = Number(raw.last_read_sequence ?? 0);
+        if (!Number.isFinite(delivered) || !Number.isFinite(read)) {
+          return;
+        }
+        onVisitorReceiptCursorsRef.current?.({
+          lastDeliveredSequence: Math.max(0, Math.floor(delivered)),
+          lastReadSequence: Math.max(0, Math.floor(read)),
+        });
       },
     });
 
