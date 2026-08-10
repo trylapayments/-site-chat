@@ -56,8 +56,10 @@ import {
 import {
   clearSessionToken,
   generateClientMessageId,
+  getOrCreateTabId,
+  readContinuityToken,
   readSessionToken,
-  readVisitorPublicId,
+  writeContinuityToken,
   writeSessionToken,
   writeVisitorPublicId,
 } from "../session/storage";
@@ -247,7 +249,7 @@ function WidgetApp() {
 
       try {
         const existingToken = readSessionToken(init.widgetPublicKey);
-        const visitorPublicId = readVisitorPublicId(init.widgetPublicKey);
+        const continuityToken = readContinuityToken(init.widgetPublicKey);
         const pageUrl = pageContextRef.current.url ?? init.pageUrl ?? null;
         const pageTitle = pageContextRef.current.title ?? init.pageTitle ?? null;
         const referrer = pageContextRef.current.referrer ?? init.referrer ?? null;
@@ -267,12 +269,15 @@ function WidgetApp() {
           pageUrl,
           pageTitle,
           referrer,
-          visitorPublicId,
+          continuityToken,
           timezone,
           language,
         });
 
         writeSessionToken(init.widgetPublicKey, session.sessionToken);
+        if (session.continuityToken) {
+          writeContinuityToken(init.widgetPublicKey, session.continuityToken);
+        }
         if (session.visitorPublicId) {
           writeVisitorPublicId(init.widgetPublicKey, session.visitorPublicId);
         }
@@ -435,6 +440,7 @@ function WidgetApp() {
             url: nextUrl,
             title: nextTitle,
             referrer: nextReferrer,
+            tabId: getOrCreateTabId(),
           })
           .catch(() => {
             // Page views are best-effort; keep messaging healthy on failure.

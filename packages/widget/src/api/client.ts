@@ -30,7 +30,14 @@ export type SessionPayload = {
   locale: WidgetLocale;
   hasConversation: boolean;
   conversationStatus: "open" | "pending" | "resolved" | "closed" | null;
+  /** Opaque public visitor id — display/correlation only, never authorization. */
   visitorPublicId?: string | null;
+  /**
+   * Plaintext continuity token, present only the first time it is minted for
+   * this contact. Persist it and replay it as `continuityToken` on future
+   * `createSession` calls to resume the same contact.
+   */
+  continuityToken?: string | null;
 };
 
 export type IdentifyPayload = {
@@ -152,7 +159,12 @@ export class WidgetApiClient {
     pageUrl?: string | null;
     pageTitle?: string | null;
     referrer?: string | null;
-    visitorPublicId?: string | null;
+    /**
+     * Opaque continuity token from a prior session, used to resume the same
+     * contact across browsers/sessions. `visitorPublicId` must never be sent
+     * here — it is a display id, not an authorization secret.
+     */
+    continuityToken?: string | null;
     timezone?: string | null;
     language?: string | null;
   }): Promise<SessionPayload> {
@@ -174,7 +186,7 @@ export class WidgetApiClient {
         pageUrl: input.pageUrl ?? null,
         pageTitle: input.pageTitle ?? null,
         referrer: input.referrer ?? null,
-        visitorPublicId: input.visitorPublicId ?? null,
+        continuityToken: input.continuityToken ?? null,
         timezone: input.timezone ?? null,
         language: input.language ?? null,
       }),
@@ -218,6 +230,8 @@ export class WidgetApiClient {
     referrer?: string | null;
     timezone?: string | null;
     language?: string | null;
+    /** Distinguishes concurrent tabs within one session; not sent when omitted. */
+    tabId?: string | null;
   }): Promise<PageViewPayload> {
     const response = await fetch(new URL("/api/v1/widget/page-view", this.apiBase), {
       method: "POST",
@@ -233,6 +247,7 @@ export class WidgetApiClient {
         referrer: input.referrer ?? null,
         timezone: input.timezone ?? null,
         language: input.language ?? null,
+        tabId: input.tabId ?? null,
       }),
     });
 

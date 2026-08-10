@@ -109,7 +109,7 @@ describe("WidgetApiClient", () => {
     });
   });
 
-  it("posts createSession with visitor context fields", async () => {
+  it("posts createSession with continuity token, never visitorPublicId", async () => {
     const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(
         Response.json({
@@ -120,6 +120,7 @@ describe("WidgetApiClient", () => {
             hasConversation: false,
             conversationStatus: null,
             visitorPublicId: "vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            continuityToken: "continuity-token-value-with-enough-length",
           },
           meta: { requestId: "11111111-1111-1111-1111-111111111111" },
         }),
@@ -133,26 +134,29 @@ describe("WidgetApiClient", () => {
       pageUrl: "https://customer.example.com/pricing?utm_source=ads",
       pageTitle: "Pricing",
       referrer: "https://google.com/",
-      visitorPublicId: "vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      continuityToken: "continuity-token-value-with-enough-length",
       timezone: "America/New_York",
       language: "en-US",
     });
 
     expect(result.visitorPublicId).toBe("vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect(result.continuityToken).toBe("continuity-token-value-with-enough-length");
     const body = fetchMock.mock.calls[0]?.[1]?.body;
     expect(typeof body).toBe("string");
-    expect(JSON.parse(body as string)).toMatchObject({
+    const parsedBody = JSON.parse(body as string) as Record<string, unknown>;
+    expect(parsedBody).toMatchObject({
       embedToken: "secret-embed-token",
       pageUrl: "https://customer.example.com/pricing?utm_source=ads",
       pageTitle: "Pricing",
-      visitorPublicId: "vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      continuityToken: "continuity-token-value-with-enough-length",
       timezone: "America/New_York",
       language: "en-US",
     });
+    expect(parsedBody).not.toHaveProperty("visitorPublicId");
   });
 
   it("posts identify and recordPageView with bearer session", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = getRequestUrl(input);
       if (url.includes("/identify")) {
         return Promise.resolve(
@@ -197,10 +201,19 @@ describe("WidgetApiClient", () => {
       sessionToken: "secret-session-token",
       url: "https://customer.example.com/docs",
       title: "Docs",
+      tabId: "tab-11111111-1111-1111-1111-111111111111",
     });
     expect(pageView.recorded).toBe(true);
 
     expect(getRequestUrl(fetchMock.mock.calls[0]?.[0])).toContain("/api/v1/widget/identify");
     expect(getRequestUrl(fetchMock.mock.calls[1]?.[0])).toContain("/api/v1/widget/page-view");
+
+    const pageViewBody = fetchMock.mock.calls[1]?.[1]?.body;
+    expect(typeof pageViewBody).toBe("string");
+    expect(JSON.parse(pageViewBody as string)).toMatchObject({
+      url: "https://customer.example.com/docs",
+      title: "Docs",
+      tabId: "tab-11111111-1111-1111-1111-111111111111",
+    });
   });
 });
