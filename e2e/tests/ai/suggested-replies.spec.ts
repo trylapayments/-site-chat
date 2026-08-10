@@ -89,11 +89,12 @@ test.describe("AI suggested replies", () => {
     const visitorPage = await visitorContext.newPage();
     const operatorPage = await operatorContext.newPage();
 
+    const preview = `AI suggest ${Date.now()}`;
     await openWidget(visitorPage);
+    await sendWidgetMessage(visitorPage, preview);
     await waitForWidgetRealtimeReady(visitorPage);
-    await sendWidgetMessage(visitorPage, PREVIEW);
 
-    await openSeededConversation(operatorPage, PREVIEW);
+    await openSeededConversation(operatorPage, preview);
 
     const suggestButton = operatorPage.getByTestId("suggest-reply-button");
     await expect(suggestButton).toBeVisible();
