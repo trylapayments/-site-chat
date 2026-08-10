@@ -58,18 +58,19 @@ export function getRequestOrigin(request: Request): string | null {
 }
 
 /**
- * Verify a browser-supplied Origin header against the embed token's bound
- * `parentOrigin`. Widget requests are same-origin-embedded, so a browser that
- * sends an `Origin` header MUST match the embed context — a mismatch means
- * the embed token (issued for a different parent origin) is being replayed
- * from elsewhere and must be denied.
+ * Verify a browser-supplied Origin header against allowed embed origins.
  *
- * Requests with NO `Origin` header (non-browser/server-to-server clients,
- * or browsers that omit it for same-origin navigations) are allowed through
- * here — they still must carry a valid embed token + session, which are
- * checked separately. This mirrors the stricter policy note in the task:
- * "Origin present + mismatch -> deny; Origin absent -> allow" (defense in
- * depth on top of, not instead of, embed-token verification).
+ * Allowed when Origin is present:
+ * 1. `parentOrigin` from the embed token (host page / CORS callers)
+ * 2. The Site Chat widget API origin (`request.url`) — the embed iframe is
+ *    hosted on the app origin and issues same-origin fetches from there.
+ *    Comparing only to parentOrigin incorrectly blocks all iframe API calls.
+ *
+ * Denied when Origin is present and matches neither (token replay from an
+ * unrelated site).
+ *
+ * Requests with NO `Origin` header (non-browser / some same-site cases) are
+ * allowed here; they still require a valid embed token + session.
  */
 export function requestOriginMatchesEmbed(
   request: Request,
@@ -86,7 +87,16 @@ export function requestOriginMatchesEmbed(
     return false;
   }
 
-  return normalizedOrigin === normalizedParent;
+  if (normalizedOrigin === normalizedParent) {
+    return true;
+  }
+
+  try {
+    const apiOrigin = normalizeParentOrigin(new URL(request.url).origin);
+    return apiOrigin !== null && normalizedOrigin === apiOrigin;
+  } catch {
+    return false;
+  }
 }
 
 export function getClientIp(request: Request): string | null {

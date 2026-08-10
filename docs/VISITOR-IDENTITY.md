@@ -286,7 +286,10 @@ Host pages must not invent or override visitor/workspace identifiers. The correl
 
 Every widget mutation endpoint (`POST /api/v1/widget/session`, `/identify`, `/page-view`) applies the same check, in addition to embed-token verification:
 
-- If the request carries a browser `Origin` header, it **must** match the `parentOrigin` bound to the caller's embed token (`requestOriginMatchesEmbed` in `apps/web/lib/widget/origin.ts`). A mismatch is rejected with `403 FORBIDDEN` — this catches an embed token issued for one site being replayed from another.
+- If the request carries a browser `Origin` header, it **must** match either:
+  1. the `parentOrigin` bound to the embed token (host-page / CORS callers), or
+  2. the Site Chat widget API origin (`request.url`) — the embed iframe is hosted on the app origin and issues same-origin fetches from there.
+  A third-party Origin matching neither is rejected with `403 FORBIDDEN` (`requestOriginMatchesEmbed` in `apps/web/lib/widget/origin.ts`). This catches an embed token issued for one site being replayed from another, without blocking legitimate iframe API calls.
 - Requests with **no** `Origin` header (some non-browser or same-origin-navigation cases) are allowed through this specific check — they still must carry a valid embed token and session, checked separately. Origin validation is defense in depth on top of, not a replacement for, embed-token + session-token verification.
 - In development/test, a same-origin `localhost`/`127.0.0.1` fallback derived from `Referer` is permitted; this path is disabled outside `NODE_ENV=development|test`.
 

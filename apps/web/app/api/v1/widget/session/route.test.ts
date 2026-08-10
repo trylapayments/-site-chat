@@ -87,6 +87,40 @@ describe("widget session route", () => {
     );
   });
 
+  it("allows iframe same-origin API calls (Origin = widget host, not parent)", async () => {
+    verifyEmbedContext.mockResolvedValue({
+      workspaceId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      parentOrigin: "http://localhost:4173",
+      widgetPublicKey: "wk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+    consumeWidgetRateLimit.mockResolvedValue(true);
+    createOrResumeVisitorSession.mockResolvedValue({
+      sessionToken: "session-token",
+      expiresAt: new Date().toISOString(),
+      locale: "en",
+      hasConversation: false,
+      conversationStatus: null,
+      visitorPublicId: "vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      continuityToken: null,
+    });
+
+    const request = new Request("http://localhost:3000/api/v1/widget/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Embed iframe is served from the app origin and fetches same-origin.
+        Origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({
+        embedToken: "embed-token",
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect(createOrResumeVisitorSession).toHaveBeenCalled();
+  });
+
   it("denies requests whose Origin does not match the embed's parentOrigin", async () => {
     verifyEmbedContext.mockResolvedValue({
       workspaceId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
