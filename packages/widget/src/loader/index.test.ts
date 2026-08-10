@@ -1,12 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { VISITOR_PAGE_VIEW_CLIENT_THROTTLE_MS } from "@site-chat/shared";
+import { VISITOR_PAGE_VIEW_CLIENT_THROTTLE_MS as SHARED_PAGE_VIEW_THROTTLE_MS } from "@site-chat/shared";
 
 import type * as LoaderNamespace from "./index";
+
+/** Loader inlines this constant — assert it stays aligned with shared. */
+const VISITOR_PAGE_VIEW_CLIENT_THROTTLE_MS = SHARED_PAGE_VIEW_THROTTLE_MS;
 
 const WIDGET_MOUNTED_KEY = "__siteChatWidgetMounted";
 
 type LoaderModule = typeof LoaderNamespace;
+
+describe("loader shared constant alignment", () => {
+  it("matches VISITOR_PAGE_VIEW_CLIENT_THROTTLE_MS from @site-chat/shared", () => {
+    // Loader intentionally inlines 1_000 — keep this assertion if shared changes.
+    expect(SHARED_PAGE_VIEW_THROTTLE_MS).toBe(1_000);
+  });
+});
 
 function bootstrapResponse(widgetPublicKey: string) {
   return Response.json({

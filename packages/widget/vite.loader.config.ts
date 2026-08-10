@@ -3,12 +3,9 @@ import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
 /**
- * Default `vite build` entry used by package scripts.
- * Prefer the dual-pass scripts (loader IIFE then app ESM) via package.json `build`.
- * This file remains for Vitest / tooling that expects vite.config.ts.
- *
- * IMPORTANT: Do not use a multi-entry ESM build for loader+app together — shared
- * chunks emit `import` into loader.js, which breaks classic <script> embeds.
+ * Classic-script IIFE build for loader.js.
+ * Host pages load this without type="module"; ESM imports would silently fail.
+ * Built first (emptyOutDir: true). See vite.app.config.ts for the app pass.
  */
 export default defineConfig({
   plugins: [

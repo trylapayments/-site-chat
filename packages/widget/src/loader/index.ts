@@ -1,4 +1,12 @@
-import { VISITOR_PAGE_VIEW_CLIENT_THROTTLE_MS } from "@site-chat/shared";
+/**
+ * Keep in sync with `VISITOR_PAGE_VIEW_CLIENT_THROTTLE_MS` in
+ * packages/shared/src/visitor/constants.ts.
+ *
+ * The loader must NOT import `@site-chat/shared`: host pages load loader.js as a
+ * classic <script>, so it is built as a self-contained IIFE. Importing the shared
+ * barrel pulls Zod/schemas into that IIFE and blows past the loader size budget.
+ */
+const VISITOR_PAGE_VIEW_CLIENT_THROTTLE_MS = 1_000;
 
 const IFRAME_PATH = "/widget/embed";
 const MESSAGE_SOURCE = "sitechat-loader";

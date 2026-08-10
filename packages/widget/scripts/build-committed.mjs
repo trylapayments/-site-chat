@@ -16,9 +16,18 @@ const env = {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "placeholder-anon-key-for-ci-build",
 };
 
-const result = spawnSync("pnpm", ["exec", "vite", "build"], {
-  env,
-  stdio: "inherit",
-  shell: false,
-});
-process.exit(result.status ?? 1);
+function runVite(configFile) {
+  const result = spawnSync("pnpm", ["exec", "vite", "build", "--config", configFile], {
+    env,
+    stdio: "inherit",
+    shell: false,
+  });
+  if ((result.status ?? 1) !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}
+
+// Loader must be a classic-script IIFE; app is ESM with locale chunks.
+runVite("vite.loader.config.ts");
+runVite("vite.app.config.ts");
+process.exit(0);

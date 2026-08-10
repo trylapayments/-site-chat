@@ -6,7 +6,7 @@
   "type": "module",
   "description": "Site Chat embeddable widget bundle",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build --config vite.loader.config.ts && vite build --config vite.app.config.ts",
     "verify:bundle-paths": "node scripts/verify-bundle-paths.mjs",
     "i18n:check": "node scripts/i18n-check.mjs",
     "typecheck": "tsc --noEmit",
