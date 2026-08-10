@@ -244,6 +244,8 @@ Visitor identity semantics: [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md). Privac
 
 **Doc/code gap closed:** Session metadata columns documented below match the schema (locale, URLs, UTM, parsed device fields, timezone, language, `last_seen_at`). **Raw IP is intentionally omitted** — there is no `ip_address` / `ip_address_hash` column on `visitor_sessions`. Raw User-Agent is also not stored; only parsed `browser_*` / `os_family` / `device_type`.
 
+**URL storage policy:** `current_url`, `initial_url`, `landing_url`, `referrer` (here) and `url` / `referrer` on `visitor_page_views` are all written through the same allowlist sanitizer (`app_private.sanitize_page_url`, mirrored in `packages/shared/src/visitor/page-context.ts`): keep `scheme://host[:port]` + `pathname` + only `utm_source` / `utm_medium` / `utm_campaign` / `utm_content` / `utm_term`; the URL fragment and every other query parameter are stripped before the row is written. See [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md) §5.
+
 ### 6.1 visitor_sessions
 
 Browser-scoped visitor session (auth token + page/device context).
@@ -268,7 +270,9 @@ Browser-scoped visitor session (auth token + page/device context).
 | timezone | TEXT | NULL | IANA timezone (≤ 64) |
 | language | TEXT | NULL | BCP 47 language tag (≤ 35) |
 | country_code | CHAR(2) | NULL | Reserved for future trusted platform headers; never from IP geo |
-| last_seen_at | TIMESTAMPTZ | NOT NULL | Last activity (init, page view, message) |
+| active_tab_id | TEXT | NULL | Most recently reported `tab_id` from a page-view POST (≤ 64); `current_url`/`current_title` reflect this tab, not a locked "primary" tab |
+| active_tab_seen_at | TIMESTAMPTZ | NULL | Timestamp `active_tab_id` was last reported |
+| last_seen_at | TIMESTAMPTZ | NOT NULL | Last **visitor** activity (session create/resume, identify, page view) — never bumped by operator edits |
 | expires_at | TIMESTAMPTZ | NOT NULL | Session expiration |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
@@ -277,6 +281,8 @@ Browser-scoped visitor session (auth token + page/device context).
 - `idx_visitor_sessions_workspace_id` ON `(workspace_id)`
 - `idx_visitor_sessions_token_hash` ON `(session_token_hash)` (widget foundation)
 - `idx_visitor_sessions_contact_id` ON `(contact_id)` WHERE `contact_id IS NOT NULL`
+
+**Auth token:** `session_token_hash` is a SHA-256 hash of an opaque, randomly generated Bearer token — **not** a JWT; the visitor DB role never receives identity as JWT claims. See [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md) §10.
 
 **Intentionally absent:** `ip_address`, `ip_address_hash`, raw `user_agent`.
 
@@ -288,20 +294,22 @@ Persistent visitor identity records (anonymous or identified). Table name remain
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
-| public_id | TEXT | NOT NULL | Opaque `vis_` + 32 hex; UNIQUE per workspace |
-| email | TEXT | NULL | Unique per workspace when present (`lower(email)`) |
+| public_id | TEXT | NOT NULL, `DEFAULT 'vis_' \|\| encode(gen_random_bytes(16), 'hex')` | Opaque `vis_` + 32 hex; UNIQUE per workspace. **Display/correlation id only — never authorization.** No RPC resolves or binds a session by this value. |
+| continuity_token_hash | TEXT | NULL, `CHECK` matches `^[a-f0-9]{64}$` | SHA-256 hex of the opaque continuity credential (`^[a-f0-9]{64}$`). **This — not `public_id` — is the cross-session binder.** Plaintext is returned to the client once (on mint) and never stored server-side. |
+| email | TEXT | NULL | Unique per workspace when present (`lower(email)`); unsigned identify enforces this as a write-time conflict, never a merge |
 | name | TEXT | NULL | |
 | phone | TEXT | NULL | Display phone |
 | phone_e164 | TEXT | NULL | Normalized `+digits` (≤ 20) |
 | custom_attributes_json | JSONB | NOT NULL DEFAULT `'{}'` | Host attributes (bounded primitives) |
-| visit_count | INTEGER | NOT NULL DEFAULT 1 | Sessions linked via public_id resume (≥ 1) |
+| visit_count | INTEGER | NOT NULL DEFAULT 1 | Increments only when a **new** session links to this contact via a valid `continuity_token` (≥ 1) |
 | first_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | Visitor activity only — `update_visitor_profile` (operator edit) does **not** bump this |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 **Indexes:**
 - `uq_contacts_workspace_public_id` UNIQUE ON `(workspace_id, public_id)`
+- `uq_contacts_workspace_continuity_token_hash` UNIQUE ON `(workspace_id, continuity_token_hash)` WHERE `continuity_token_hash IS NOT NULL`
 - `idx_contacts_workspace_email` UNIQUE ON `(workspace_id, lower(email))` WHERE `email IS NOT NULL`
 - `idx_contacts_workspace_name` ON `(workspace_id, name)`
 
@@ -315,10 +323,11 @@ Bounded page-view trail for operator context.
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
 | visitor_session_id | UUID | NOT NULL | Composite FK → visitor_sessions `(id, workspace_id)` **ON DELETE CASCADE** |
 | contact_id | UUID | NULL | Composite FK → contacts; **ON DELETE SET NULL** |
-| url | TEXT | NOT NULL | Page URL (1–2048) |
+| url | TEXT | NOT NULL | Page URL (1–2048), sanitized to origin + path + allowlisted UTM (see URL storage policy above) |
 | title | TEXT | NULL | ≤ 500 |
-| referrer | TEXT | NULL | ≤ 2048 |
+| referrer | TEXT | NULL | ≤ 2048, sanitized the same way as `url` |
 | utm_* | TEXT | NULL | ≤ 200 each |
+| tab_id | TEXT | NULL | ≤ 64; client-generated tab activity id (`sessionStorage`); distinguishes concurrent tabs in one session |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 **Indexes:**
