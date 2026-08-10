@@ -1,18 +1,20 @@
 import {
-  buildPageContext,
-  parseUserAgent,
-  widgetSessionDataSchema,
-  widgetSessionRequestSchema,
+  normalizeVisitorAttributes,
+  normalizeVisitorEmail,
+  normalizeVisitorName,
+  normalizeVisitorPhone,
+  visitorIdentifyDataSchema,
+  visitorIdentifyRequestSchema,
+  VisitorIdentityError,
 } from "@site-chat/shared";
 
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
+import { getRequestOrigin } from "@/lib/widget/origin";
 import {
-  hashSessionIpRateLimitKey,
-  hashSessionRateLimitKey,
+  hashIdentifyRateLimitKey,
   WIDGET_RATE_LIMITS,
 } from "@/lib/widget/rate-limit";
-import { getClientIp, getRequestOrigin } from "@/lib/widget/origin";
 import {
   GENERIC_FORBIDDEN_MESSAGE,
   GENERIC_INTERNAL_MESSAGE,
@@ -23,10 +25,7 @@ import {
   widgetJsonSuccess,
   widgetOptionsResponse,
 } from "@/lib/widget/responses";
-import {
-  consumeWidgetRateLimit,
-  createOrResumeVisitorSession,
-} from "@/lib/widget/service";
+import { consumeWidgetRateLimit, identifyVisitor } from "@/lib/widget/service";
 
 function requireJsonContentType(request: Request): boolean {
   const contentType = request.headers.get("content-type") ?? "";
@@ -47,13 +46,23 @@ export async function POST(request: Request) {
     }
 
     const json = (await request.json()) as unknown;
-    const parsed = widgetSessionRequestSchema.safeParse(json);
+    const parsed = visitorIdentifyRequestSchema.safeParse(json);
 
     if (!parsed.success) {
       return widgetJsonError(
         "VALIDATION_ERROR",
         GENERIC_VALIDATION_MESSAGE,
         400,
+        requestId,
+      );
+    }
+
+    const sessionToken = getBearerToken(request);
+    if (!sessionToken) {
+      return widgetJsonError(
+        "SESSION_EXPIRED",
+        GENERIC_SESSION_MESSAGE,
+        401,
         requestId,
       );
     }
@@ -74,13 +83,13 @@ export async function POST(request: Request) {
       return options;
     }
 
-    const ipAllowed = await consumeWidgetRateLimit(
-      hashSessionIpRateLimitKey(getClientIp(request)),
-      WIDGET_RATE_LIMITS.session.windowSeconds,
-      WIDGET_RATE_LIMITS.session.limit,
+    const allowed = await consumeWidgetRateLimit(
+      hashIdentifyRateLimitKey(sessionToken),
+      WIDGET_RATE_LIMITS.identify.windowSeconds,
+      WIDGET_RATE_LIMITS.identify.limit,
     );
 
-    if (!ipAllowed) {
+    if (!allowed) {
       return widgetJsonError(
         "RATE_LIMITED",
         "Too many requests",
@@ -90,55 +99,67 @@ export async function POST(request: Request) {
       );
     }
 
-    const resumeToken = getBearerToken(request);
-    if (resumeToken) {
-      const sessionAllowed = await consumeWidgetRateLimit(
-        hashSessionRateLimitKey(resumeToken),
-        WIDGET_RATE_LIMITS.session.windowSeconds,
-        WIDGET_RATE_LIMITS.session.limit,
-      );
-      if (!sessionAllowed) {
+    let name: string | null | undefined;
+    let email: string | null | undefined;
+    let phone: string | null | undefined;
+    let phoneE164: string | null | undefined;
+    let attributes:
+      Record<string, string | number | boolean | null> | undefined;
+
+    try {
+      if (parsed.data.name !== undefined) {
+        name = normalizeVisitorName(parsed.data.name);
+      }
+      if (parsed.data.email !== undefined) {
+        email = normalizeVisitorEmail(parsed.data.email);
+      }
+      if (parsed.data.phone !== undefined) {
+        const normalizedPhone = normalizeVisitorPhone(parsed.data.phone);
+        phone = normalizedPhone.display;
+        phoneE164 = normalizedPhone.normalized;
+      }
+      if (parsed.data.attributes !== undefined) {
+        attributes = normalizeVisitorAttributes(parsed.data.attributes);
+      }
+    } catch (error) {
+      if (error instanceof VisitorIdentityError) {
         return widgetJsonError(
-          "RATE_LIMITED",
-          "Too many requests",
-          429,
+          "VALIDATION_ERROR",
+          GENERIC_VALIDATION_MESSAGE,
+          400,
           requestId,
           corsHeaders(corsOrigin),
         );
       }
+      throw error;
     }
 
-    const pageContext = buildPageContext({
-      url: parsed.data.pageUrl,
-      title: parsed.data.pageTitle,
-      referrer: parsed.data.referrer,
-      landingUrl: parsed.data.pageUrl,
-    });
-    const ua = parseUserAgent(request.headers.get("user-agent"));
+    if (
+      name === undefined &&
+      email === undefined &&
+      phone === undefined &&
+      attributes === undefined
+    ) {
+      return widgetJsonError(
+        "VALIDATION_ERROR",
+        GENERIC_VALIDATION_MESSAGE,
+        400,
+        requestId,
+        corsHeaders(corsOrigin),
+      );
+    }
 
-    const session = await createOrResumeVisitorSession({
+    const result = await identifyVisitor({
       workspaceId: embedContext.workspaceId,
-      sessionToken: resumeToken,
-      locale: parsed.data.locale,
-      pageUrl: pageContext.url,
-      referrer: pageContext.referrer,
-      visitorPublicId: parsed.data.visitorPublicId,
-      pageTitle: pageContext.title,
-      timezone: parsed.data.timezone,
-      language: parsed.data.language,
-      browserFamily: ua.browserFamily,
-      browserVersion: ua.browserVersion,
-      osFamily: ua.osFamily,
-      deviceType: ua.deviceType,
-      landingUrl: pageContext.landingUrl,
-      utmSource: pageContext.utmSource,
-      utmMedium: pageContext.utmMedium,
-      utmCampaign: pageContext.utmCampaign,
-      utmContent: pageContext.utmContent,
-      utmTerm: pageContext.utmTerm,
+      sessionToken,
+      name,
+      email,
+      phone,
+      phoneE164,
+      attributes,
     });
 
-    return widgetJsonSuccess(widgetSessionDataSchema, session, requestId, {
+    return widgetJsonSuccess(visitorIdentifyDataSchema, result, requestId, {
       headers: Object.fromEntries(corsHeaders(corsOrigin).entries()),
     });
   } catch (error) {
@@ -147,6 +168,18 @@ export async function POST(request: Request) {
         "SESSION_EXPIRED",
         GENERIC_SESSION_MESSAGE,
         401,
+        requestId,
+      );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message.includes("Email already belongs to another visitor")
+    ) {
+      return widgetJsonError(
+        "VALIDATION_ERROR",
+        GENERIC_VALIDATION_MESSAGE,
+        400,
         requestId,
       );
     }

@@ -1,18 +1,19 @@
 import {
-  buildPageContext,
-  parseUserAgent,
-  widgetSessionDataSchema,
-  widgetSessionRequestSchema,
+  parseUtmFromUrl,
+  sanitizePageTitle,
+  sanitizePageUrl,
+  sanitizeReferrer,
+  visitorPageViewDataSchema,
+  visitorPageViewRequestSchema,
 } from "@site-chat/shared";
 
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
+import { getRequestOrigin } from "@/lib/widget/origin";
 import {
-  hashSessionIpRateLimitKey,
-  hashSessionRateLimitKey,
+  hashPageViewRateLimitKey,
   WIDGET_RATE_LIMITS,
 } from "@/lib/widget/rate-limit";
-import { getClientIp, getRequestOrigin } from "@/lib/widget/origin";
 import {
   GENERIC_FORBIDDEN_MESSAGE,
   GENERIC_INTERNAL_MESSAGE,
@@ -23,10 +24,7 @@ import {
   widgetJsonSuccess,
   widgetOptionsResponse,
 } from "@/lib/widget/responses";
-import {
-  consumeWidgetRateLimit,
-  createOrResumeVisitorSession,
-} from "@/lib/widget/service";
+import { consumeWidgetRateLimit, recordPageView } from "@/lib/widget/service";
 
 function requireJsonContentType(request: Request): boolean {
   const contentType = request.headers.get("content-type") ?? "";
@@ -47,13 +45,23 @@ export async function POST(request: Request) {
     }
 
     const json = (await request.json()) as unknown;
-    const parsed = widgetSessionRequestSchema.safeParse(json);
+    const parsed = visitorPageViewRequestSchema.safeParse(json);
 
     if (!parsed.success) {
       return widgetJsonError(
         "VALIDATION_ERROR",
         GENERIC_VALIDATION_MESSAGE,
         400,
+        requestId,
+      );
+    }
+
+    const sessionToken = getBearerToken(request);
+    if (!sessionToken) {
+      return widgetJsonError(
+        "SESSION_EXPIRED",
+        GENERIC_SESSION_MESSAGE,
+        401,
         requestId,
       );
     }
@@ -74,13 +82,13 @@ export async function POST(request: Request) {
       return options;
     }
 
-    const ipAllowed = await consumeWidgetRateLimit(
-      hashSessionIpRateLimitKey(getClientIp(request)),
-      WIDGET_RATE_LIMITS.session.windowSeconds,
-      WIDGET_RATE_LIMITS.session.limit,
+    const allowed = await consumeWidgetRateLimit(
+      hashPageViewRateLimitKey(sessionToken),
+      WIDGET_RATE_LIMITS.pageView.windowSeconds,
+      WIDGET_RATE_LIMITS.pageView.limit,
     );
 
-    if (!ipAllowed) {
+    if (!allowed) {
       return widgetJsonError(
         "RATE_LIMITED",
         "Too many requests",
@@ -90,55 +98,41 @@ export async function POST(request: Request) {
       );
     }
 
-    const resumeToken = getBearerToken(request);
-    if (resumeToken) {
-      const sessionAllowed = await consumeWidgetRateLimit(
-        hashSessionRateLimitKey(resumeToken),
-        WIDGET_RATE_LIMITS.session.windowSeconds,
-        WIDGET_RATE_LIMITS.session.limit,
+    const url = sanitizePageUrl(parsed.data.url);
+    if (!url) {
+      return widgetJsonError(
+        "VALIDATION_ERROR",
+        GENERIC_VALIDATION_MESSAGE,
+        400,
+        requestId,
+        corsHeaders(corsOrigin),
       );
-      if (!sessionAllowed) {
-        return widgetJsonError(
-          "RATE_LIMITED",
-          "Too many requests",
-          429,
-          requestId,
-          corsHeaders(corsOrigin),
-        );
-      }
     }
 
-    const pageContext = buildPageContext({
-      url: parsed.data.pageUrl,
-      title: parsed.data.pageTitle,
-      referrer: parsed.data.referrer,
-      landingUrl: parsed.data.pageUrl,
-    });
-    const ua = parseUserAgent(request.headers.get("user-agent"));
+    const title =
+      parsed.data.title !== undefined
+        ? sanitizePageTitle(parsed.data.title)
+        : null;
+    const referrer =
+      parsed.data.referrer !== undefined
+        ? sanitizeReferrer(parsed.data.referrer)
+        : null;
+    const utm = parseUtmFromUrl(url);
 
-    const session = await createOrResumeVisitorSession({
+    const result = await recordPageView({
       workspaceId: embedContext.workspaceId,
-      sessionToken: resumeToken,
-      locale: parsed.data.locale,
-      pageUrl: pageContext.url,
-      referrer: pageContext.referrer,
-      visitorPublicId: parsed.data.visitorPublicId,
-      pageTitle: pageContext.title,
-      timezone: parsed.data.timezone,
-      language: parsed.data.language,
-      browserFamily: ua.browserFamily,
-      browserVersion: ua.browserVersion,
-      osFamily: ua.osFamily,
-      deviceType: ua.deviceType,
-      landingUrl: pageContext.landingUrl,
-      utmSource: pageContext.utmSource,
-      utmMedium: pageContext.utmMedium,
-      utmCampaign: pageContext.utmCampaign,
-      utmContent: pageContext.utmContent,
-      utmTerm: pageContext.utmTerm,
+      sessionToken,
+      url,
+      title,
+      referrer,
+      utmSource: utm.utmSource,
+      utmMedium: utm.utmMedium,
+      utmCampaign: utm.utmCampaign,
+      utmContent: utm.utmContent,
+      utmTerm: utm.utmTerm,
     });
 
-    return widgetJsonSuccess(widgetSessionDataSchema, session, requestId, {
+    return widgetJsonSuccess(visitorPageViewDataSchema, result, requestId, {
       headers: Object.fromEntries(corsHeaders(corsOrigin).entries()),
     });
   } catch (error) {
