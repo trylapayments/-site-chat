@@ -1,8 +1,8 @@
 # Site Chat — Security Model
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Foundation  
-**Last updated:** 2026-07-30
+**Last updated:** 2026-08-10
 
 ---
 
@@ -32,6 +32,10 @@ Site Chat handles business communications between companies and their website vi
 | DDoS on widget API | Medium | Rate limiting, Vercel edge protection |
 | Insider threat (platform operator) | Medium | Separate admin tooling, audit logs, minimal service-role usage |
 | Data exfiltration via export | Medium | Role-gated exports, audit logging |
+| Visitor identity enumeration | Medium | Opaque `vis_` public ids; workspace-scoped uniqueness; RLS |
+| XSS via page title/URL in inbox | Medium | Treat as untrusted text; encode on render; length bounds |
+| Attribute key pollution | Medium | Reserved keys rejected; primitive-only JSONB; count/length caps |
+| Cross-tenant identify / page-view | Critical | Session token + workspace binding; service-role RPCs after origin checks |
 
 ---
 
@@ -182,6 +186,20 @@ Client publish remains authorized at topic + extension granularity on the epheme
 | Service role query without workspace filter | Code review + lint rule; integration tests verify isolation |
 
 Integration tests include explicit cross-tenant access attempts that must fail.
+
+### 4.5 Visitor Identity Threat Notes
+
+| Threat | Mitigation |
+|--------|------------|
+| Enumerating `public_id` values | 128-bit random hex after `vis_`; not sequential; no list API for anon |
+| Host page sets another workspace’s visitor | Embed key resolves workspace server-side; identify cannot pass `workspace_id` / `visitor_id` |
+| XSS via `current_title` / URL in sidebar | Sanitize/bound on write; React text encoding on read; no HTML from page titles |
+| Prototype pollution via attributes | Reject `__proto__` / `constructor` / `prototype` and reserved identity keys |
+| Cross-tenant contact SELECT | RLS `workspace_is_accessible`; pgTAP negative tests |
+| Viewer elevates to edit PII | `update_visitor_profile` requires messaging role (`owner`/`admin`/`agent`) |
+| Widget RPC abuse from browser JWT | `widget_identify_visitor` / `widget_record_page_view` / session create: **service_role only** |
+
+See [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md) and [PRIVACY.md](./PRIVACY.md).
 
 ---
 
@@ -382,8 +400,9 @@ Site Chat processes personal data on behalf of workspace customers (data process
 
 | Data | Subject | Retention |
 |------|---------|-----------|
-| Visitor email/name | Website visitor | Workspace-configurable (default 12 months) |
-| Visitor IP address | Website visitor | 90 days clear text, then hashed |
+| Visitor email/name/phone | Website visitor | Workspace-configurable (default 12 months); see DATA-RETENTION |
+| Visitor page views / session context | Website visitor | Bounded; configurable retention (future purge job) |
+| Visitor IP address | — | **Not stored** on visitor sessions by default |
 | Agent email | Workspace member | Duration of membership + 30 days |
 | Message content | Visitor and agent | Workspace-configurable (default 12 months) |
 

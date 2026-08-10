@@ -137,15 +137,18 @@ The MVP is complete when:
 **Deliverables:**
 - [ ] Canned responses CRUD and autocomplete in composer
 - [ ] Variable substitution in canned responses
-- [ ] Contact creation (manual + auto on visitor identification)
+- [x] Contact / visitor identity foundation (opaque `public_id`, auto-create on session, widget identify, operator profile update)
+- [x] Visitor context (session device/UTM fields, `visitor_page_views`, page-view API + 30s dedupe)
 - [ ] Contact list page with linked conversations
-- [ ] Visitor identification flow in widget (name/email prompt)
+- [ ] Visitor identification UX polish in widget (name/email prompt UI)
 - [x] File attachment upload (widget + dashboard)
 - [x] Attachment display (inline images, download links)
 - [ ] Storage quota enforcement
 - [ ] Notification center (in-app, unread count)
 - [ ] Email notifications via Resend (configurable per agent)
 - [ ] Notification preferences UI
+
+**Notes:** This phase’s identity + context foundation (docs + schema/RPCs) delivers durable visitor contacts, host `SiteChat.identify`, page-view trail, and privacy defaults (no raw IP / no fingerprinting). Remaining work: contacts list UI, widget prompt UX, and retention purge jobs (`docs/DATA-RETENTION.md`).
 
 **Exit criteria:** Agent uses canned response with visitor name variable; visitor uploads image visible in dashboard; contact created automatically when visitor provides email; agent receives email notification for new conversation.
 
@@ -241,7 +244,7 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 | Slack notifications | Agent workflow fit | Slack app, OAuth |
 | AI suggested replies | Agent efficiency | **Foundation shipped** — see `docs/AI-ARCHITECTURE.md`; expand models/settings UX |
 | Chatbot / auto-responder | After-hours coverage | AI foundation, conversation routing, visitor-safe prompts |
-| Custom attributes on contacts | Customer segmentation | Schema extension |
+| Custom attributes on contacts | Host identify attributes shipped (JSONB bounds); admin UI / CRM fields still later | Schema + identify RPCs exist; admin UI pending |
 | SLA tracking and alerts | Enterprise support teams | Timer system, reporting |
 | Advanced analytics dashboard | Business insights | Data warehouse or aggregation |
 | SAML/OIDC SSO | Enterprise security requirement | Supabase Auth enterprise |
