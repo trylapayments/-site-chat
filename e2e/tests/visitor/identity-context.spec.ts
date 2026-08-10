@@ -22,6 +22,29 @@ async function prepareOperatorInbox(page: Page) {
   await waitForOperatorInboxRealtimeReady(page);
 }
 
+/** Continuity/visitor ids are stored in the embed iframe origin (not the host page). */
+async function readIframeVisitorIdentity(page: Page) {
+  const frame = page.frame({ url: /\/widget\/embed/ });
+  if (!frame) {
+    throw new Error("widget embed frame not found");
+  }
+  return frame.evaluate(() => {
+    let publicId: string | null = null;
+    let continuityToken: string | null = null;
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith("sitechat:visitor:")) {
+        publicId = localStorage.getItem(key);
+      }
+      if (key.startsWith("sitechat:continuity:")) {
+        continuityToken = localStorage.getItem(key);
+      }
+    }
+    return { publicId, continuityToken };
+  });
+}
+
 test.describe("visitor identity + context", () => {
   test("anonymous visitor creates session and operator sees visitor profile", async ({
     browser,
@@ -40,12 +63,15 @@ test.describe("visitor identity + context", () => {
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
 
-    await expect(operator.getByRole("heading", { name: "Visitor" })).toBeVisible();
-    await expect(operator.getByText(/vis_[a-f0-9]{32}/)).toBeVisible({
+    const sidebar = operator.locator("aside");
+    await expect(sidebar.getByRole("heading", { name: "Visitor", exact: true })).toBeVisible();
+    await expect(sidebar.getByText(/vis_[a-f0-9]{32}/)).toBeVisible({
       timeout: 30_000,
     });
-    await expect(operator.getByRole("heading", { name: "Current context" })).toBeVisible();
-    await expect(operator.getByRole("heading", { name: "Activity" })).toBeVisible();
+    await expect(
+      sidebar.getByRole("heading", { name: "Current context", exact: true }),
+    ).toBeVisible();
+    await expect(sidebar.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
 
     await visitorContext.close();
     await operatorContext.close();
@@ -95,10 +121,10 @@ test.describe("visitor identity + context", () => {
     const identify = await identifyResponse;
     expect(identify.status()).toBe(200);
 
-    await expect(operator.getByDisplayValue("Jane Doe")).toBeVisible({
+    await expect(operator.getByLabel("Name")).toHaveValue("Jane Doe", {
       timeout: 30_000,
     });
-    await expect(operator.getByDisplayValue(email)).toBeVisible({
+    await expect(operator.getByLabel("Email")).toHaveValue(email, {
       timeout: 30_000,
     });
 
@@ -181,7 +207,9 @@ test.describe("visitor identity + context", () => {
 
     await pageViewResponse;
 
-    await expect(operator.getByText(/\/pricing\?utm_source=e2e/)).toBeVisible({
+    const sidebar = operator.locator("aside");
+    // Current context URL + recent page-view history can both contain the path.
+    await expect(sidebar.getByText(/\/pricing\?utm_source=e2e/).first()).toBeVisible({
       timeout: 30_000,
     });
     await expect(operator.getByText("access_token=secret")).toHaveCount(0);
@@ -196,21 +224,7 @@ test.describe("visitor identity + context", () => {
     await openWidget(visitor);
     await sendWidgetMessage(visitor, `visitor-reload-${Date.now()}`);
 
-    const stored = await visitor.evaluate(() => {
-      let publicId: string | null = null;
-      let continuityToken: string | null = null;
-      for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i);
-        if (!key) continue;
-        if (key.startsWith("sitechat:visitor:")) {
-          publicId = localStorage.getItem(key);
-        }
-        if (key.startsWith("sitechat:continuity:")) {
-          continuityToken = localStorage.getItem(key);
-        }
-      }
-      return { publicId, continuityToken };
-    });
+    const stored = await readIframeVisitorIdentity(visitor);
     expect(stored.publicId).toMatch(/^vis_[a-f0-9]{32}$/);
     expect(stored.continuityToken).toMatch(/^[A-Za-z0-9_-]{20,128}$/);
 
@@ -222,22 +236,12 @@ test.describe("visitor identity + context", () => {
     await expect(frame.getByRole("button", { name: "Open chat" })).toBeVisible({
       timeout: 60_000,
     });
-
-    const storedAfter = await visitor.evaluate(() => {
-      let publicId: string | null = null;
-      let continuityToken: string | null = null;
-      for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i);
-        if (!key) continue;
-        if (key.startsWith("sitechat:visitor:")) {
-          publicId = localStorage.getItem(key);
-        }
-        if (key.startsWith("sitechat:continuity:")) {
-          continuityToken = localStorage.getItem(key);
-        }
-      }
-      return { publicId, continuityToken };
+    await frame.getByRole("button", { name: "Open chat" }).click();
+    await expect(frame.getByTestId("widget-realtime-ready")).toBeVisible({
+      timeout: 60_000,
     });
+
+    const storedAfter = await readIframeVisitorIdentity(visitor);
     expect(storedAfter.publicId).toBe(stored.publicId);
     expect(storedAfter.continuityToken).toBe(stored.continuityToken);
 
@@ -280,10 +284,10 @@ test.describe("visitor identity + context", () => {
     await prepareOperatorInbox(operator);
     await openOperatorConversation(operator, victimMarker);
     await waitForOperatorThreadRealtimeReady(operator);
-    await expect(operator.getByDisplayValue("Victim User")).toBeVisible({
+    await expect(operator.getByLabel("Name")).toHaveValue("Victim User", {
       timeout: 30_000,
     });
-    await expect(operator.getByDisplayValue(victimEmail)).toBeVisible();
+    await expect(operator.getByLabel("Email")).toHaveValue(victimEmail);
 
     await openWidget(attacker);
     await sendWidgetMessage(attacker, attackerMarker);
@@ -310,11 +314,11 @@ test.describe("visitor identity + context", () => {
     expect(identify.status()).not.toBe(200);
 
     await openOperatorConversation(operator, victimMarker);
-    await expect(operator.getByDisplayValue("Victim User")).toBeVisible({
+    await expect(operator.getByLabel("Name")).toHaveValue("Victim User", {
       timeout: 30_000,
     });
-    await expect(operator.getByDisplayValue(victimEmail)).toBeVisible();
-    await expect(operator.getByDisplayValue("Attacker")).toHaveCount(0);
+    await expect(operator.getByLabel("Email")).toHaveValue(victimEmail);
+    await expect(operator.getByLabel("Name")).not.toHaveValue("Attacker");
 
     await victimContext.close();
     await attackerContext.close();
@@ -349,7 +353,7 @@ test.describe("visitor identity + context", () => {
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
 
-    await expect(operator.getByDisplayValue('<img src=x onerror="window.__xss=1">')).toBeVisible({
+    await expect(operator.getByLabel("Name")).toHaveValue('<img src=x onerror="window.__xss=1">', {
       timeout: 30_000,
     });
 
@@ -364,16 +368,28 @@ test.describe("visitor identity + context", () => {
     await operatorContext.close();
   });
 
-  test("foreign workspace viewer cannot open seeded conversation route", async ({ browser }) => {
-    // Viewer is in acme-support; this asserts role gating for profile edits.
-    const operator = await browser.newPage();
-    await loginAs(operator, VIEWER_EMAIL);
-    await operator.goto(`${APP_URL}/app/acme-support/inbox`);
-    await waitForOperatorInboxRealtimeReady(operator);
-    await openOperatorConversation(operator, "Can you help with pricing?");
-    await expect(operator.getByRole("heading", { name: "Visitor" })).toBeVisible();
-    await expect(operator.getByRole("button", { name: "Save visitor" })).toHaveCount(0);
-    await operator.close();
+  test("viewer cannot edit visitor profile", async ({ browser }) => {
+    const visitorContext = await browser.newContext();
+    const viewerContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    const viewer = await viewerContext.newPage();
+
+    // Do not rely on a seeded preview other suites may mutate.
+    const marker = `viewer-gate-${Date.now()}`;
+    await openWidget(visitor);
+    await sendWidgetMessage(visitor, marker);
+
+    await loginAs(viewer, VIEWER_EMAIL);
+    await viewer.goto(`${APP_URL}/app/acme-support/inbox`);
+    await waitForOperatorInboxRealtimeReady(viewer);
+    await openOperatorConversation(viewer, marker);
+    await expect(
+      viewer.locator("aside").getByRole("heading", { name: "Visitor", exact: true }),
+    ).toBeVisible();
+    await expect(viewer.getByRole("button", { name: "Save visitor" })).toHaveCount(0);
+
+    await visitorContext.close();
+    await viewerContext.close();
   });
 
   test("messaging, receipts path, and suggested reply surface still work", async ({ browser }) => {
