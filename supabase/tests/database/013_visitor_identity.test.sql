@@ -1401,6 +1401,72 @@ SELECT is(
 
 SELECT tests.clear_auth();
 
+-- ---------------------------------------------------------------------------
+-- First visitor send copies session.contact_id onto the conversation
+-- ---------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_workspace uuid := tests.fixture('workspace_a')::uuid;
+  v_session_result jsonb;
+  v_session_token text;
+  v_session_id uuid;
+  v_session_contact uuid;
+  v_conversation_contact uuid;
+  v_public_id text;
+BEGIN
+  v_session_result := public.widget_create_or_resume_visitor_session(
+    v_workspace, NULL, 'en', NULL, NULL
+  );
+  v_session_token := v_session_result ->> 'session_token';
+
+  SELECT id, contact_id
+  INTO v_session_id, v_session_contact
+  FROM public.visitor_sessions
+  WHERE session_token_hash = app_private.hash_visitor_session_token(v_session_token);
+
+  PERFORM public.widget_send_visitor_message(
+    v_workspace,
+    v_session_token,
+    'link-contact-on-send',
+    gen_random_uuid(),
+    'https://example.com/send-link',
+    NULL
+  );
+
+  SELECT contact_id
+  INTO v_conversation_contact
+  FROM public.conversations
+  WHERE visitor_session_id = v_session_id
+    AND status IN ('open', 'pending')
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  SELECT public_id INTO v_public_id FROM public.contacts WHERE id = v_conversation_contact;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    (
+      'send_links_contact',
+      (v_conversation_contact IS NOT NULL AND v_conversation_contact = v_session_contact)::text
+    ),
+    (
+      'send_conversation_public_id',
+      COALESCE(v_public_id, '')
+    );
+END;
+$$;
+
+SELECT is(
+  tests.fixture('send_links_contact'),
+  'true',
+  'widget_send_visitor_message copies session.contact_id onto the conversation'
+);
+
+SELECT ok(
+  tests.fixture('send_conversation_public_id') ~ '^vis_[a-f0-9]{32}$',
+  'conversation linked contact exposes durable vis_ public_id for operator detail'
+);
+
 SELECT * FROM finish();
 
 ROLLBACK;
