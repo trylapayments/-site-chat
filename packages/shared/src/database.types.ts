@@ -265,6 +265,7 @@ export type Database = {
       }
       contacts: {
         Row: {
+          continuity_token_hash: string | null
           created_at: string
           custom_attributes_json: Json
           email: string | null
@@ -273,10 +274,14 @@ export type Database = {
           last_seen_at: string
           name: string | null
           phone: string | null
+          phone_e164: string | null
+          public_id: string
           updated_at: string
+          visit_count: number
           workspace_id: string
         }
         Insert: {
+          continuity_token_hash?: string | null
           created_at?: string
           custom_attributes_json?: Json
           email?: string | null
@@ -285,10 +290,14 @@ export type Database = {
           last_seen_at?: string
           name?: string | null
           phone?: string | null
+          phone_e164?: string | null
+          public_id?: string
           updated_at?: string
+          visit_count?: number
           workspace_id: string
         }
         Update: {
+          continuity_token_hash?: string | null
           created_at?: string
           custom_attributes_json?: Json
           email?: string | null
@@ -297,7 +306,10 @@ export type Database = {
           last_seen_at?: string
           name?: string | null
           phone?: string | null
+          phone_e164?: string | null
+          public_id?: string
           updated_at?: string
+          visit_count?: number
           workspace_id?: string
         }
         Relationships: [
@@ -734,44 +746,168 @@ export type Database = {
           },
         ]
       }
-      visitor_sessions: {
+      visitor_page_views: {
         Row: {
           contact_id: string | null
           created_at: string
-          current_url: string | null
-          expires_at: string
           id: string
-          initial_url: string | null
-          locale: string
           referrer: string | null
-          session_token_hash: string
-          updated_at: string
+          tab_id: string | null
+          title: string | null
+          url: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          visitor_session_id: string
           workspace_id: string
         }
         Insert: {
           contact_id?: string | null
           created_at?: string
-          current_url?: string | null
-          expires_at: string
           id?: string
-          initial_url?: string | null
-          locale?: string
           referrer?: string | null
-          session_token_hash: string
-          updated_at?: string
+          tab_id?: string | null
+          title?: string | null
+          url: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_session_id: string
           workspace_id: string
         }
         Update: {
           contact_id?: string | null
           created_at?: string
+          id?: string
+          referrer?: string | null
+          tab_id?: string | null
+          title?: string | null
+          url?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_session_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_visitor_page_views_contact_workspace"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_visitor_page_views_session_workspace"
+            columns: ["visitor_session_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sessions"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "visitor_page_views_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visitor_sessions: {
+        Row: {
+          active_tab_id: string | null
+          active_tab_seen_at: string | null
+          browser_family: string | null
+          browser_version: string | null
+          contact_id: string | null
+          country_code: string | null
+          created_at: string
+          current_title: string | null
+          current_url: string | null
+          device_type: Database["public"]["Enums"]["app_device_type"] | null
+          expires_at: string
+          id: string
+          initial_url: string | null
+          landing_url: string | null
+          language: string | null
+          last_seen_at: string
+          locale: string
+          os_family: string | null
+          referrer: string | null
+          session_token_hash: string
+          timezone: string | null
+          updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          workspace_id: string
+        }
+        Insert: {
+          active_tab_id?: string | null
+          active_tab_seen_at?: string | null
+          browser_family?: string | null
+          browser_version?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          current_title?: string | null
           current_url?: string | null
+          device_type?: Database["public"]["Enums"]["app_device_type"] | null
+          expires_at: string
+          id?: string
+          initial_url?: string | null
+          landing_url?: string | null
+          language?: string | null
+          last_seen_at?: string
+          locale?: string
+          os_family?: string | null
+          referrer?: string | null
+          session_token_hash: string
+          timezone?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          workspace_id: string
+        }
+        Update: {
+          active_tab_id?: string | null
+          active_tab_seen_at?: string | null
+          browser_family?: string | null
+          browser_version?: string | null
+          contact_id?: string | null
+          country_code?: string | null
+          created_at?: string
+          current_title?: string | null
+          current_url?: string | null
+          device_type?: Database["public"]["Enums"]["app_device_type"] | null
           expires_at?: string
           id?: string
           initial_url?: string | null
+          landing_url?: string | null
+          language?: string | null
+          last_seen_at?: string
           locale?: string
+          os_family?: string | null
           referrer?: string | null
           session_token_hash?: string
+          timezone?: string | null
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -1272,6 +1408,7 @@ export type Database = {
         | "expired"
       app_channel_type: "widget"
       app_conversation_status: "open" | "pending" | "resolved" | "closed"
+      app_device_type: "desktop" | "mobile" | "tablet" | "bot" | "unknown"
       app_member_role: "owner" | "admin" | "agent" | "viewer"
       app_member_status: "active" | "deactivated"
       app_message_delivery_status: "sent" | "delivered" | "failed"
@@ -1425,6 +1562,7 @@ export const Constants = {
       ],
       app_channel_type: ["widget"],
       app_conversation_status: ["open", "pending", "resolved", "closed"],
+      app_device_type: ["desktop", "mobile", "tablet", "bot", "unknown"],
       app_member_role: ["owner", "admin", "agent", "viewer"],
       app_member_status: ["active", "deactivated"],
       app_message_delivery_status: ["sent", "delivered", "failed"],
