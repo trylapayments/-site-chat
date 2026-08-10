@@ -11,7 +11,8 @@
     "i18n:check": "node scripts/i18n-check.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:committed": "node scripts/build-committed.mjs"
   },
   "dependencies": {
     "@site-chat/shared": "workspace:*",
