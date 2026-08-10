@@ -8,12 +8,10 @@ function fakeSupabase(rpcResult: {
   data?: unknown;
   error?: { message: string } | null;
 }): { supabase: AppSupabaseClient; rpc: ReturnType<typeof vi.fn> } {
-  const rpc = vi
-    .fn()
-    .mockResolvedValue({
-      data: rpcResult.data,
-      error: rpcResult.error ?? null,
-    });
+  const rpc = vi.fn().mockResolvedValue({
+    data: rpcResult.data,
+    error: rpcResult.error ?? null,
+  });
   return { supabase: { rpc } as unknown as AppSupabaseClient, rpc };
 }
 
