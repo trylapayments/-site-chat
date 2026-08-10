@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(10);
+SELECT plan(11);
 
 SELECT has_table('public', 'ai_usage_events', 'ai_usage_events exists');
 SELECT has_table('public', 'ai_rate_limit_buckets', 'ai_rate_limit_buckets exists');
@@ -47,6 +47,11 @@ SELECT is(
 SELECT ok(
   NOT has_table_privilege('authenticated', 'public.ai_rate_limit_buckets', 'INSERT'),
   'authenticated cannot insert into ai_rate_limit_buckets'
+);
+
+SELECT ok(
+  has_table_privilege('service_role', 'public.workspaces', 'UPDATE'),
+  'service_role can update workspaces for server-side AI config'
 );
 
 SELECT * FROM finish();

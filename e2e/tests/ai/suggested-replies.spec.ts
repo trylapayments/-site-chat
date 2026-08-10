@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
 
 import {
@@ -22,37 +23,23 @@ async function setWorkspaceAiEnabled(enabled: boolean) {
     throw new Error("Missing Supabase env for AI E2E helper");
   }
 
-  // Match CI widget bootstrap auth: newer Supabase `sb_secret_*` service keys
-  // must not send Authorization Bearer (apikey header alone is correct).
-  const headers: Record<string, string> = {
-    apikey: serviceKey,
-    "Content-Type": "application/json",
-    Prefer: "return=representation",
-  };
-  if (!serviceKey.startsWith("sb_secret_")) {
-    headers.Authorization = `Bearer ${serviceKey}`;
-  }
+  const supabase = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
-  const listResponse = await fetch(
-    `${url}/rest/v1/workspaces?slug=eq.${WORKSPACE_SLUG}&select=id,settings_json`,
-    { headers },
-  );
-  if (!listResponse.ok) {
-    throw new Error(`Failed to load workspace: HTTP ${String(listResponse.status)}`);
-  }
+  const { data: workspace, error: workspaceError } = await supabase
+    .from("workspaces")
+    .select("id, settings_json")
+    .eq("slug", WORKSPACE_SLUG)
+    .single();
 
-  const rows = (await listResponse.json()) as Array<{
-    id: string;
-    settings_json: Record<string, unknown> | null;
-  }>;
-  const workspace = rows[0];
-  if (!workspace) {
-    throw new Error("Workspace not found");
+  if (workspaceError || !workspace) {
+    throw workspaceError ?? new Error("Workspace not found");
   }
 
   const settings =
     workspace.settings_json && typeof workspace.settings_json === "object"
-      ? workspace.settings_json
+      ? (workspace.settings_json as Record<string, unknown>)
       : {};
 
   const nextSettings = {
@@ -70,16 +57,13 @@ async function setWorkspaceAiEnabled(enabled: boolean) {
     },
   };
 
-  const updateResponse = await fetch(`${url}/rest/v1/workspaces?id=eq.${workspace.id}`, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify({ settings_json: nextSettings }),
-  });
+  const { error } = await supabase
+    .from("workspaces")
+    .update({ settings_json: nextSettings })
+    .eq("id", workspace.id);
 
-  if (!updateResponse.ok) {
-    throw new Error(
-      `Failed to update workspace AI settings: HTTP ${String(updateResponse.status)}`,
-    );
+  if (error) {
+    throw error;
   }
 }
 

@@ -16,6 +16,9 @@ importers:
       "@site-chat/prettier-config":
         specifier: workspace:*
         version: link:tooling/prettier-config
+      "@supabase/supabase-js":
+        specifier: ^2.49.1
+        version: 2.111.0
       eslint:
         specifier: ^9.22.0
         version: 9.39.5(jiti@2.7.0)

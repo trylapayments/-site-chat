@@ -143,6 +143,9 @@ REVOKE ALL ON FUNCTION public.ai_consume_rate_limit(text, integer, integer) FROM
 REVOKE ALL ON FUNCTION public.ai_consume_rate_limit(text, integer, integer) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.ai_consume_rate_limit(text, integer, integer) TO service_role;
 
+-- Server-side AI config reads/updates (service role only; never exposed to anon).
+GRANT SELECT, UPDATE ON TABLE public.workspaces TO service_role;
+
 -- ---------------------------------------------------------------------------
 -- Helpers: extract AI config from settings_json (never includes secrets)
 -- ---------------------------------------------------------------------------
