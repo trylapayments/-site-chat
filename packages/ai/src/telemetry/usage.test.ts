@@ -35,5 +35,9 @@ describe("AI usage telemetry", () => {
       status: "timeout",
       errorCode: "AI_TIMEOUT",
     });
+    expect(statusFromError(new AIError("AI_CANCELLED", "bye"))).toEqual({
+      status: "cancelled",
+      errorCode: "AI_CANCELLED",
+    });
   });
 });

@@ -30,6 +30,14 @@ export const serverEnvSchema = z.object({
   // AI providers (server-only; never expose to the browser)
   OPENAI_API_KEY: z.string().min(1).optional(),
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
+  /**
+   * Explicitly allow MockProvider in production (e.g. staging demos).
+   * Defaults off; NODE_ENV=test always allows mock.
+   */
+  AI_ALLOW_MOCK_PROVIDER: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
 });
 
 /**

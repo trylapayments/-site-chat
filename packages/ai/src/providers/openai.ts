@@ -13,7 +13,7 @@ import type {
   TokenUsage,
 } from "../types/provider";
 import { collectStream } from "../streaming/collect";
-import { combineAbortSignals, throwIfAborted } from "./timeout";
+import { abortErrorForSignal, combineAbortSignals, throwIfAborted } from "./timeout";
 
 export type OpenAIProviderOptions = {
   apiKey: string;
@@ -109,6 +109,10 @@ async function readErrorSafe(response: Response): Promise<void> {
   }
 }
 
+function mapAbortError(signal: AbortSignal | undefined, error: unknown): AIError {
+  return abortErrorForSignal(signal, error);
+}
+
 export class OpenAIProvider implements AIProvider {
   readonly id = "openai" as const;
   readonly metadata;
@@ -188,54 +192,64 @@ export class OpenAIProvider implements AIProvider {
       let finishReason: GenerateResult["finishReason"] = "unknown";
       let responseModel = model;
 
-      for (;;) {
-        throwIfAborted(signal);
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
+      try {
+        for (;;) {
+          throwIfAborted(signal);
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith("data:")) {
+              continue;
+            }
+
+            const payload = line.slice(5).trim();
+            if (!payload) {
+              continue;
+            }
+            if (payload === "[DONE]") {
+              continue;
+            }
+
+            let parsed: OpenAIChatChunk;
+            try {
+              parsed = JSON.parse(payload) as OpenAIChatChunk;
+            } catch {
+              throw new AIError("AI_INVALID_RESPONSE", "Provider returned malformed stream data.");
+            }
+
+            if (parsed.model) {
+              responseModel = parsed.model;
+            }
+            if (parsed.usage) {
+              usage = mapUsage(parsed.usage);
+            }
+
+            const choice = parsed.choices?.[0];
+            const delta = choice?.delta?.content;
+            if (typeof delta === "string" && delta.length > 0) {
+              assembled += delta;
+              yield { type: "delta", text: delta };
+            }
+            if (choice?.finish_reason) {
+              finishReason = mapFinishReason(choice.finish_reason);
+            }
+          }
         }
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line.startsWith("data:")) {
-            continue;
-          }
-
-          const payload = line.slice(5).trim();
-          if (!payload) {
-            continue;
-          }
-          if (payload === "[DONE]") {
-            continue;
-          }
-
-          let parsed: OpenAIChatChunk;
-          try {
-            parsed = JSON.parse(payload) as OpenAIChatChunk;
-          } catch {
-            throw new AIError("AI_INVALID_RESPONSE", "Provider returned malformed stream data.");
-          }
-
-          if (parsed.model) {
-            responseModel = parsed.model;
-          }
-          if (parsed.usage) {
-            usage = mapUsage(parsed.usage);
-          }
-
-          const choice = parsed.choices?.[0];
-          const delta = choice?.delta?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            assembled += delta;
-            yield { type: "delta", text: delta };
-          }
-          if (choice?.finish_reason) {
-            finishReason = mapFinishReason(choice.finish_reason);
-          }
+      } finally {
+        // Cancel the upstream reader when the consumer stops early or aborts,
+        // so the transport can stop pulling tokens where the provider allows it.
+        try {
+          await reader.cancel();
+        } catch {
+          // ignore cancel races
         }
       }
 
@@ -259,10 +273,7 @@ export class OpenAIProvider implements AIProvider {
         error instanceof Error &&
         (error.name === "AbortError" || error.message.includes("aborted"))
       ) {
-        throw new AIError("AI_TIMEOUT", "AI request timed out.", {
-          retryable: true,
-          cause: error,
-        });
+        throw mapAbortError(signal, error);
       }
       throw new AIError("AI_PROVIDER_ERROR", "Provider request failed.", {
         cause: error,
@@ -272,76 +283,123 @@ export class OpenAIProvider implements AIProvider {
     }
   }
 
-  async embeddings(request: EmbeddingsRequest): Promise<EmbeddingsResult> {
+  async embeddings(
+    request: EmbeddingsRequest,
+    options?: GenerateOptions,
+  ): Promise<EmbeddingsResult> {
     const model = request.model ?? "text-embedding-3-small";
-    const response = await this.fetchImpl(`${this.baseUrl}/embeddings`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        input: request.input,
-      }),
-    });
+    const timeoutMs = options?.timeoutMs ?? this.defaultTimeoutMs;
+    const { signal, cleanup } = combineAbortSignals(options?.signal, timeoutMs);
 
-    if (!response.ok) {
-      await readErrorSafe(response);
-      throw mapProviderHttpError(response.status);
+    try {
+      throwIfAborted(signal);
+      const response = await this.fetchImpl(`${this.baseUrl}/embeddings`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          input: request.input,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        await readErrorSafe(response);
+        throw mapProviderHttpError(response.status);
+      }
+
+      const json = (await response.json()) as {
+        data?: Array<{ embedding?: number[] }>;
+        usage?: OpenAIChatCompletion["usage"];
+        model?: string;
+      };
+
+      const vectors =
+        json.data
+          ?.map((item) => item.embedding)
+          .filter((item): item is number[] => Array.isArray(item)) ?? [];
+
+      if (vectors.length === 0) {
+        throw new AIError("AI_INVALID_RESPONSE", "Provider returned no embeddings.");
+      }
+
+      return {
+        model: json.model ?? model,
+        vectors,
+        usage: mapUsage(json.usage),
+      };
+    } catch (error) {
+      if (error instanceof AIError) {
+        throw error;
+      }
+      if (
+        error instanceof Error &&
+        (error.name === "AbortError" || error.message.includes("aborted"))
+      ) {
+        throw mapAbortError(signal, error);
+      }
+      throw new AIError("AI_PROVIDER_ERROR", "Provider request failed.", {
+        cause: error,
+      });
+    } finally {
+      cleanup();
     }
-
-    const json = (await response.json()) as {
-      data?: Array<{ embedding?: number[] }>;
-      usage?: OpenAIChatCompletion["usage"];
-      model?: string;
-    };
-
-    const vectors =
-      json.data
-        ?.map((item) => item.embedding)
-        .filter((item): item is number[] => Array.isArray(item)) ?? [];
-
-    if (vectors.length === 0) {
-      throw new AIError("AI_INVALID_RESPONSE", "Provider returned no embeddings.");
-    }
-
-    return {
-      model: json.model ?? model,
-      vectors,
-      usage: mapUsage(json.usage),
-    };
   }
 
-  async moderate(request: ModerateRequest): Promise<ModerateResult> {
-    const response = await this.fetchImpl(`${this.baseUrl}/moderations`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        input: request.input,
-      }),
-    });
+  async moderate(request: ModerateRequest, options?: GenerateOptions): Promise<ModerateResult> {
+    const timeoutMs = options?.timeoutMs ?? this.defaultTimeoutMs;
+    const { signal, cleanup } = combineAbortSignals(options?.signal, timeoutMs);
 
-    if (!response.ok) {
-      await readErrorSafe(response);
-      throw mapProviderHttpError(response.status);
+    try {
+      throwIfAborted(signal);
+      const response = await this.fetchImpl(`${this.baseUrl}/moderations`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: request.input,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        await readErrorSafe(response);
+        throw mapProviderHttpError(response.status);
+      }
+
+      const json = (await response.json()) as {
+        results?: Array<{
+          flagged?: boolean;
+          categories?: Record<string, boolean>;
+        }>;
+      };
+
+      const result = json.results?.[0];
+      return {
+        flagged: result?.flagged === true,
+        categories: result?.categories ?? {},
+      };
+    } catch (error) {
+      if (error instanceof AIError) {
+        throw error;
+      }
+      if (
+        error instanceof Error &&
+        (error.name === "AbortError" || error.message.includes("aborted"))
+      ) {
+        throw mapAbortError(signal, error);
+      }
+      throw new AIError("AI_PROVIDER_ERROR", "Provider request failed.", {
+        cause: error,
+      });
+    } finally {
+      cleanup();
     }
-
-    const json = (await response.json()) as {
-      results?: Array<{
-        flagged?: boolean;
-        categories?: Record<string, boolean>;
-      }>;
-    };
-
-    const result = json.results?.[0];
-    return {
-      flagged: result?.flagged === true,
-      categories: result?.categories ?? {},
-    };
   }
 
   /** Non-streaming helper used by tests for response mapping. */
@@ -351,6 +409,7 @@ export class OpenAIProvider implements AIProvider {
     const { signal, cleanup } = combineAbortSignals(options?.signal, timeoutMs);
 
     try {
+      throwIfAborted(signal);
       const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
@@ -384,6 +443,19 @@ export class OpenAIProvider implements AIProvider {
         usage: mapUsage(json.usage),
         finishReason: mapFinishReason(json.choices?.[0]?.finish_reason),
       };
+    } catch (error) {
+      if (error instanceof AIError) {
+        throw error;
+      }
+      if (
+        error instanceof Error &&
+        (error.name === "AbortError" || error.message.includes("aborted"))
+      ) {
+        throw mapAbortError(signal, error);
+      }
+      throw new AIError("AI_PROVIDER_ERROR", "Provider request failed.", {
+        cause: error,
+      });
     } finally {
       cleanup();
     }

@@ -4,6 +4,7 @@ export const AI_ERROR_CODES = [
   "AI_RATE_LIMITED",
   "AI_PROVIDER_ERROR",
   "AI_TIMEOUT",
+  "AI_CANCELLED",
   "AI_INVALID_RESPONSE",
   "AI_UNAVAILABLE",
 ] as const;
@@ -35,6 +36,8 @@ function defaultStatusForCode(code: AIErrorCode): number {
       return 403;
     case "AI_RATE_LIMITED":
       return 429;
+    case "AI_CANCELLED":
+      return 499;
     case "AI_TIMEOUT":
       return 504;
     case "AI_INVALID_RESPONSE":
@@ -58,6 +61,10 @@ function defaultRetryableForCode(code: AIErrorCode): boolean {
 
 export function isAIError(error: unknown): error is AIError {
   return error instanceof AIError;
+}
+
+export function isAICancellation(error: unknown): boolean {
+  return isAIError(error) && error.code === "AI_CANCELLED";
 }
 
 export function toPublicAIError(error: unknown): {
@@ -93,6 +100,8 @@ export function publicMessageForCode(code: AIErrorCode): string {
       return "Too many AI requests. Please try again shortly.";
     case "AI_TIMEOUT":
       return "The AI provider timed out. Please try again.";
+    case "AI_CANCELLED":
+      return "The AI request was cancelled.";
     case "AI_INVALID_RESPONSE":
       return "The AI provider returned an invalid response.";
     case "AI_PROVIDER_ERROR":

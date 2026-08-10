@@ -11,6 +11,30 @@ function toError(reason: unknown): Error {
   return new Error("AI request failed.");
 }
 
+function errorFromAbortReason(reason: unknown): AIError {
+  if (reason instanceof AIError) {
+    return reason;
+  }
+
+  // Caller/client AbortSignal (or unknown abort) is cancellation, not timeout.
+  return new AIError("AI_CANCELLED", "AI request was cancelled.", {
+    status: 499,
+    retryable: false,
+    cause: reason,
+  });
+}
+
+/**
+ * Map a transport AbortError to AI_TIMEOUT only when the combined signal was
+ * aborted with an AI_TIMEOUT reason. Caller aborts map to AI_CANCELLED.
+ */
+export function abortErrorForSignal(signal: AbortSignal | undefined, cause?: unknown): AIError {
+  if (signal?.aborted) {
+    return errorFromAbortReason(asUnknownReason(signal.reason));
+  }
+  return errorFromAbortReason(cause);
+}
+
 export function combineAbortSignals(
   signal: AbortSignal | undefined,
   timeoutMs: number | undefined,
@@ -62,15 +86,7 @@ export function throwIfAborted(signal: AbortSignal | undefined): void {
     return;
   }
 
-  const reason = asUnknownReason(signal.reason);
-  if (reason instanceof AIError) {
-    throw reason;
-  }
-
-  throw new AIError("AI_TIMEOUT", "AI request was cancelled or timed out.", {
-    retryable: true,
-    cause: reason,
-  });
+  throw errorFromAbortReason(asUnknownReason(signal.reason));
 }
 
 export async function withTimeout<T>(
@@ -88,17 +104,7 @@ export async function withTimeout<T>(
 
     return await new Promise<T>((resolve, reject) => {
       const onAbort = () => {
-        const reason = asUnknownReason(signal.reason);
-        if (reason instanceof AIError) {
-          reject(reason);
-          return;
-        }
-        reject(
-          new AIError("AI_TIMEOUT", "AI request was cancelled or timed out.", {
-            retryable: true,
-            cause: reason,
-          }),
-        );
+        reject(errorFromAbortReason(asUnknownReason(signal.reason)));
       };
 
       if (signal.aborted) {

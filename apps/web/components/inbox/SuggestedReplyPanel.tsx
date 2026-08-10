@@ -7,6 +7,12 @@ import {
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { readSuggestedReplySse } from "@/lib/ai/parse-suggested-reply-sse";
+import { shouldInvalidateSuggestionForVisitorMessage } from "@/lib/ai/stale-suggestion";
+import {
+  createSuggestionRequestGuard,
+  type SuggestionRequestGuard,
+} from "@/lib/ai/suggestion-request-guard";
 
 type SuggestionState =
   | { status: "idle" }
@@ -16,105 +22,69 @@ type SuggestionState =
 
 type ConfirmMode = null | "replace-or-append";
 
-async function readSuggestedReplyStream(
-  response: Response,
-  onDelta: (text: string) => void,
-): Promise<{ suggestion: string } | { error: string }> {
-  if (!response.body) {
-    return { error: "AI is temporarily unavailable." };
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let assembled = "";
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() ?? "";
-
-    for (const part of parts) {
-      const line = part
-        .split("\n")
-        .map((entry) => entry.trim())
-        .find((entry) => entry.startsWith("data:"));
-      if (!line) continue;
-
-      let payload: unknown;
-      try {
-        payload = JSON.parse(line.slice(5).trim()) as unknown;
-      } catch {
-        return { error: "The AI provider returned an invalid response." };
-      }
-
-      if (
-        typeof payload === "object" &&
-        payload !== null &&
-        "type" in payload
-      ) {
-        const event = payload as {
-          type: string;
-          text?: string;
-          suggestion?: string;
-          message?: string;
-        };
-
-        if (event.type === "delta" && typeof event.text === "string") {
-          assembled += event.text;
-          onDelta(assembled);
-        } else if (
-          event.type === "done" &&
-          typeof event.suggestion === "string"
-        ) {
-          return { suggestion: event.suggestion };
-        } else if (event.type === "error") {
-          return {
-            error: event.message ?? "AI is temporarily unavailable.",
-          };
-        }
-      }
-    }
-  }
-
-  if (assembled.trim()) {
-    return { suggestion: assembled.trim() };
-  }
-
-  return { error: "AI is temporarily unavailable." };
-}
-
 export function SuggestedReplyPanel({
   workspaceId,
   conversationId,
   composerText,
   onInsertIntoComposer,
   enabled,
+  latestVisitorMessageId = null,
 }: {
   workspaceId: string;
   conversationId: string;
   composerText: string;
   onInsertIntoComposer: (text: string) => void;
   enabled: boolean;
+  /** When a new visitor message arrives, invalidate any displayed suggestion. */
+  latestVisitorMessageId?: string | null;
 }) {
   const labelId = useId();
   const [state, setState] = useState<SuggestionState>({ status: "idle" });
   const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const guardRef = useRef<SuggestionRequestGuard | null>(null);
+  const visitorContextRef = useRef<string | null>(latestVisitorMessageId);
+  const latestVisitorMessageIdRef = useRef(latestVisitorMessageId);
+  latestVisitorMessageIdRef.current = latestVisitorMessageId;
+
+  if (!guardRef.current) {
+    guardRef.current = createSuggestionRequestGuard();
+  }
 
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    guardRef.current?.resetConversation(conversationId);
+    visitorContextRef.current = latestVisitorMessageIdRef.current;
     setState({ status: "idle" });
     setConfirmMode(null);
   }, [conversationId]);
 
   useEffect(() => {
+    // Invalidate a displayed/generating suggestion when a newer visitor message arrives.
+    const previous = visitorContextRef.current;
+    if (
+      !shouldInvalidateSuggestionForVisitorMessage(
+        previous,
+        latestVisitorMessageId,
+      )
+    ) {
+      visitorContextRef.current = latestVisitorMessageId;
+      return;
+    }
+
+    visitorContextRef.current = latestVisitorMessageId;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    guardRef.current?.invalidate();
+    setConfirmMode(null);
+    setState({ status: "idle" });
+  }, [latestVisitorMessageId]);
+
+  useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      guardRef.current?.invalidate();
     };
   }, []);
 
@@ -123,11 +93,24 @@ export function SuggestedReplyPanel({
   }
 
   async function requestSuggestion(regenerate: boolean) {
+    const guard = guardRef.current;
+    if (!guard) {
+      return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const token = guard.begin(conversationId);
     setConfirmMode(null);
     setState({ status: "generating", draft: "" });
+
+    const applyIfCurrent = (next: SuggestionState) => {
+      if (!guard.isCurrent(token)) {
+        return;
+      }
+      setState(next);
+    };
 
     try {
       const response = await fetch("/api/v1/inbox/ai/suggested-replies", {
@@ -139,12 +122,14 @@ export function SuggestedReplyPanel({
         body: JSON.stringify({
           workspaceId,
           conversationId,
-          regenerateNonce: regenerate
-            ? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-            : undefined,
+          regenerate: regenerate || undefined,
         }),
         signal: controller.signal,
       });
+
+      if (!guard.isCurrent(token)) {
+        return;
+      }
 
       if (
         !response.ok &&
@@ -159,29 +144,53 @@ export function SuggestedReplyPanel({
         } catch {
           // ignore
         }
-        setState({ status: "error", message, draft: "" });
+        applyIfCurrent({ status: "error", message, draft: "" });
         return;
       }
 
-      const result = await readSuggestedReplyStream(response, (draft) => {
-        setState({ status: "generating", draft: sanitizePlainText(draft) });
+      const result = await readSuggestedReplySse(response, {
+        signal: controller.signal,
+        isCurrent: () => guard.isCurrent(token),
+        onDelta: (draft) => {
+          applyIfCurrent({
+            status: "generating",
+            draft: sanitizePlainText(draft),
+          });
+        },
       });
 
-      if ("error" in result) {
-        setState({ status: "error", message: result.error, draft: "" });
+      if (!guard.isCurrent(token)) {
         return;
       }
 
-      setState({
+      if (result.kind === "cancelled") {
+        // Only the current request may clear generating state on cancel.
+        applyIfCurrent({ status: "idle" });
+        return;
+      }
+
+      if (result.kind === "error") {
+        applyIfCurrent({
+          status: "error",
+          message: result.message,
+          draft: "",
+        });
+        return;
+      }
+
+      applyIfCurrent({
         status: "generated",
         draft: sanitizePlainText(result.suggestion),
       });
     } catch (error) {
-      if (controller.signal.aborted) {
-        setState({ status: "idle" });
+      if (!guard.isCurrent(token)) {
         return;
       }
-      setState({
+      if (controller.signal.aborted) {
+        applyIfCurrent({ status: "idle" });
+        return;
+      }
+      applyIfCurrent({
         status: "error",
         message:
           error instanceof Error
@@ -196,7 +205,7 @@ export function SuggestedReplyPanel({
     }
   }
 
-  function applyAccept(mode: "insert" | "replace" | "append") {
+  function applyAccept(mode: "replace" | "append" | "insert") {
     if (state.status !== "generated" && state.status !== "generating") {
       return;
     }
@@ -220,7 +229,15 @@ export function SuggestedReplyPanel({
   }
 
   function handleAccept() {
-    applyAccept(composerText.trim() ? "insert" : "insert");
+    applyAccept("insert");
+  }
+
+  function handleDismiss() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    guardRef.current?.invalidate();
+    setConfirmMode(null);
+    setState({ status: "idle" });
   }
 
   const draft =
@@ -361,7 +378,6 @@ export function SuggestedReplyPanel({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={busy}
                 aria-label="Regenerate suggested reply"
                 data-testid="suggested-reply-regenerate"
                 onClick={() => {
@@ -374,14 +390,9 @@ export function SuggestedReplyPanel({
                 type="button"
                 size="sm"
                 variant="ghost"
-                disabled={busy}
                 aria-label="Dismiss suggested reply"
                 data-testid="suggested-reply-dismiss"
-                onClick={() => {
-                  abortRef.current?.abort();
-                  setConfirmMode(null);
-                  setState({ status: "idle" });
-                }}
+                onClick={handleDismiss}
               >
                 Dismiss
               </Button>

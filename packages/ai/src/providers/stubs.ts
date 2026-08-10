@@ -38,11 +38,11 @@ abstract class UnimplementedProvider implements AIProvider {
     };
   }
 
-  embeddings(_request: EmbeddingsRequest): Promise<EmbeddingsResult> {
+  embeddings(_request: EmbeddingsRequest, _options?: GenerateOptions): Promise<EmbeddingsResult> {
     return Promise.reject(this.unavailable());
   }
 
-  moderate(_request: ModerateRequest): Promise<ModerateResult> {
+  moderate(_request: ModerateRequest, _options?: GenerateOptions): Promise<ModerateResult> {
     return Promise.reject(this.unavailable());
   }
 

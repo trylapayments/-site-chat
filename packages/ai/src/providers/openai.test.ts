@@ -134,6 +134,76 @@ describe("OpenAIProvider", () => {
     ).rejects.toMatchObject({ code: "AI_TIMEOUT" });
   });
 
+  it("maps caller AbortSignal to AI_CANCELLED, not AI_TIMEOUT", async () => {
+    const fetchImpl: typeof fetch = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    );
+
+    const provider = new OpenAIProvider({
+      apiKey: "test-key",
+      fetchImpl,
+      defaultTimeoutMs: 30_000,
+    });
+    const controller = new AbortController();
+    const pending = provider.generate(
+      { messages: [{ role: "user", content: "Hi" }] },
+      { signal: controller.signal },
+    );
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: "AI_CANCELLED" });
+  });
+
+  it("cancels the stream reader on early consumer termination", async () => {
+    let cancelCalls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              choices: [{ delta: { content: "Hello" } }],
+            })}\n\n`,
+          ),
+        );
+      },
+      cancel() {
+        cancelCalls += 1;
+      },
+    });
+
+    const fetchImpl: typeof fetch = vi.fn(() =>
+      Promise.resolve(
+        new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      ),
+    );
+
+    const provider = new OpenAIProvider({
+      apiKey: "test-key",
+      fetchImpl,
+    });
+
+    const iterator = provider
+      .stream({
+        messages: [{ role: "user", content: "Hi" }],
+      })
+      [Symbol.asyncIterator]();
+
+    const first = await iterator.next();
+    expect(first.value).toMatchObject({ type: "delta", text: "Hello" });
+    await iterator.return?.();
+
+    expect(cancelCalls).toBeGreaterThanOrEqual(1);
+  });
+
   it("handles null usage safely", async () => {
     const fetchImpl: typeof fetch = vi.fn(() =>
       Promise.resolve(

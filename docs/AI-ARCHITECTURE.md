@@ -58,6 +58,8 @@ Implemented:
 - `OpenAIProvider` — real OpenAI Chat Completions streaming
 - `MockProvider` — deterministic local/CI provider (no paid APIs)
 
+`MockProvider` is blocked when `NODE_ENV=production` unless `AI_ALLOW_MOCK_PROVIDER=true` (or `allowMockProvider` is passed explicitly). All provider methods accept `AbortSignal` / timeout options.
+
 Stubs only (fail with `AI_UNAVAILABLE` / `AI_NOT_CONFIGURED`):
 
 - Anthropic, Gemini, Ollama
@@ -108,17 +110,31 @@ Operator UI
   → POST /api/v1/inbox/ai/suggested-replies  (SSE)
     → auth + workspace membership + send_messages capability
     → load workspace AI config (fail closed)
-    → rate limit (workspace + member HMAC bucket)
+    → rate limit (one combined HMAC bucket keyed by workspaceId + memberId)
     → load conversation/messages via existing RLS RPCs
-    → build context + prompt
-    → provider.stream()
+    → build structured JSON context + prompt (no client nonce in prompt text)
+    → provider.stream() with AbortSignal + timeout distinction
     → sanitize text
-    → record ai_usage_events
-    → SSE delta/done/error events
+    → record ai_usage_events (service_role only)
+    → SSE delta/done/cancelled/error events
   → Accept inserts into composer only (never auto-send)
 ```
 
-Cancellation uses the request `AbortSignal`. Timeouts use `AI_REQUEST_TIMEOUT_MS` (default 30s).
+### Rate limiting
+
+Suggested Replies uses **one combined fixed-window bucket** per operator:
+
+- Key material: `workspaceId:memberId` (HMAC’d; raw ids are not stored)
+- Window / limit: 60s / 20 requests (`AI_RATE_LIMITS.suggestedReplies`)
+- Consumed via `public.ai_consume_rate_limit` (service_role only)
+
+There are not separate workspace-only and member-only buckets in this release.
+
+### Cancellation vs timeout
+
+- Caller/client `AbortSignal` → `AI_CANCELLED` (telemetry status `cancelled`; SSE `cancelled`)
+- Provider/request timeout (`AI_REQUEST_TIMEOUT_MS`, default 30s) → `AI_TIMEOUT`
+- These are never conflated
 
 ---
 
@@ -127,6 +143,8 @@ Cancellation uses the request `AbortSignal`. Timeouts use `AI_REQUEST_TIMEOUT_MS
 Table `ai_usage_events` records:
 
 `workspace_id`, `member_id`, `feature`, `provider`, `model`, token counts (nullable), `latency_ms`, `status`, `error_code`, `created_at`.
+
+`member_id` is constrained by a composite FK `(member_id, workspace_id)` so usage cannot be attributed across tenants. RLS: **service_role only** until an owner/admin analytics UI exists.
 
 It does **not** store prompts, completions, or conversation content. Estimated cost is intentionally omitted from core logic to avoid fragile hardcoded pricing.
 

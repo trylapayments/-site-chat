@@ -19,11 +19,37 @@ export type CreateProviderOptions = {
    * When false (default for runtime), selecting them throws AI_NOT_CONFIGURED.
    */
   allowUnimplementedStubs?: boolean;
+  /**
+   * Explicitly allow MockProvider. Required in production unless NODE_ENV=test
+   * or AI_ALLOW_MOCK_PROVIDER=true.
+   */
+  allowMockProvider?: boolean;
 };
+
+function isMockProviderAllowed(explicitAllow: boolean | undefined): boolean {
+  if (explicitAllow === true) {
+    return true;
+  }
+  if (process.env.AI_ALLOW_MOCK_PROVIDER === "true") {
+    return true;
+  }
+  // Vitest / automated tests may select mock without production risk.
+  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
+    return true;
+  }
+  return process.env.NODE_ENV !== "production";
+}
 
 export function createAIProvider(options: CreateProviderOptions): AIProvider {
   switch (options.provider) {
     case "mock":
+      if (!isMockProviderAllowed(options.allowMockProvider)) {
+        throw new AIError(
+          "AI_NOT_CONFIGURED",
+          "Mock AI provider is not allowed in this environment.",
+          { status: 403, retryable: false },
+        );
+      }
       return new MockProvider({
         ...options.mock,
         model: options.model ?? options.mock?.model,

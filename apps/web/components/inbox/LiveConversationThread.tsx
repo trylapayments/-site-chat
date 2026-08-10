@@ -487,6 +487,14 @@ function LiveReplyComposer({
   }
 
   const suggestedRepliesEnabled = aiSuggestedRepliesEnabled;
+  let latestVisitorMessageId: string | null = null;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message && message.senderType === "visitor" && !message.isOptimistic) {
+      latestVisitorMessageId = message.id;
+      break;
+    }
+  }
 
   return (
     <form
@@ -756,6 +764,7 @@ function LiveReplyComposer({
         conversationId={conversationId}
         composerText={body}
         enabled={suggestedRepliesEnabled}
+        latestVisitorMessageId={latestVisitorMessageId}
         onInsertIntoComposer={(text) => {
           setBody(text);
           onComposerChange(text);

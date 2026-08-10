@@ -1,8 +1,13 @@
-import { toPublicAIError } from "@site-chat/ai";
+import { isAICancellation, toPublicAIError } from "@site-chat/ai";
 import { suggestedReplyRequestSchema } from "@site-chat/shared";
 import { NextResponse } from "next/server";
 
-import { aiJsonError, encodeSseEvent } from "@/lib/ai/responses";
+import {
+  aiJsonError,
+  encodeSseEvent,
+  readBoundedJsonBody,
+  requireJsonContentType,
+} from "@/lib/ai/responses";
 import { streamSuggestedReply } from "@/lib/ai/suggested-replies";
 import { requireUser } from "@/lib/auth/session";
 import {
@@ -16,6 +21,19 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    if (!requireJsonContentType(request)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "AI_INVALID_RESPONSE",
+            message: "Content-Type must be application/json.",
+            retryable: false,
+          },
+        },
+        { status: 415 },
+      );
+    }
+
     const supabase = await createClient();
     const { user } = await requireUser(supabase);
     if (!user) {
@@ -31,23 +49,21 @@ export async function POST(request: Request) {
       );
     }
 
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
+    const bodyResult = await readBoundedJsonBody(request);
+    if (!bodyResult.ok) {
       return NextResponse.json(
         {
           error: {
-            code: "AI_INVALID_RESPONSE",
-            message: "Invalid request body.",
+            code: bodyResult.code,
+            message: bodyResult.message,
             retryable: false,
           },
         },
-        { status: 400 },
+        { status: bodyResult.status },
       );
     }
 
-    const parsed = suggestedReplyRequestSchema.safeParse(body);
+    const parsed = suggestedReplyRequestSchema.safeParse(bodyResult.body);
     if (!parsed.success) {
       return NextResponse.json(
         {
@@ -121,9 +137,8 @@ export async function POST(request: Request) {
       workspaceId: workspace.workspace_id,
       workspaceName: workspace.name,
       memberId: memberRow.id,
-      operatorDisplayName: user.email ?? null,
       conversationId: parsed.data.conversationId,
-      regenerateNonce: parsed.data.regenerateNonce,
+      regenerate: parsed.data.regenerate === true,
     };
 
     const encoder = new TextEncoder();
@@ -138,6 +153,13 @@ export async function POST(request: Request) {
                 encoder.encode(
                   encodeSseEvent({ type: "delta", text: chunk.text }),
                 ),
+              );
+              continue;
+            }
+
+            if (chunk.type === "cancelled") {
+              controller.enqueue(
+                encoder.encode(encodeSseEvent({ type: "cancelled" })),
               );
               continue;
             }
@@ -159,16 +181,22 @@ export async function POST(request: Request) {
             );
           }
         } catch (error) {
-          const publicError = toPublicAIError(error);
-          controller.enqueue(
-            encoder.encode(
-              encodeSseEvent({
-                type: "error",
-                code: publicError.code,
-                message: publicError.message,
-              }),
-            ),
-          );
+          if (isAICancellation(error) || request.signal.aborted) {
+            controller.enqueue(
+              encoder.encode(encodeSseEvent({ type: "cancelled" })),
+            );
+          } else {
+            const publicError = toPublicAIError(error);
+            controller.enqueue(
+              encoder.encode(
+                encodeSseEvent({
+                  type: "error",
+                  code: publicError.code,
+                  message: publicError.message,
+                }),
+              ),
+            );
+          }
         } finally {
           controller.close();
         }

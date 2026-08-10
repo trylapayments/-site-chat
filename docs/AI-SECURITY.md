@@ -29,8 +29,12 @@ Out of scope (not implemented): visitor chatbot, tools/agents, RAG ingestion, au
 | Auto-send / unwanted actions | Accept inserts into composer only; send remains explicit operator action |
 | HTML/script execution | Plain-text sanitize; React text nodes; escape helper available |
 | Secret / prompt logging | Usage telemetry excludes prompt/body content; provider error bodies discarded |
-| Abuse / cost explosion | Per workspace+member rate limit via HMAC bucket keys |
+| Abuse / cost explosion | One combined HMAC rate-limit bucket per workspaceId+memberId (20/min) |
 | RLS weakening | No broad policy changes to messages/conversations; new tables deny client writes |
+| Privilege regression on SECURITY DEFINER | New `app_private` helpers explicitly revoke EXECUTE from PUBLIC/anon/authenticated |
+| AI telemetry exposure | `ai_usage_events` is service_role only (no authenticated SELECT) |
+| Prompt role spoofing | Conversation context sent as JSON; system instructions remain authoritative |
+| Client regenerate nonce injection | Client may send `regenerate: boolean` only; server generates opaque `regenerateSeed` |
 
 ---
 
@@ -69,9 +73,9 @@ Out of scope (not implemented): visitor chatbot, tools/agents, RAG ingestion, au
 
 Stable public codes:
 
-`AI_DISABLED`, `AI_NOT_CONFIGURED`, `AI_RATE_LIMITED`, `AI_PROVIDER_ERROR`, `AI_TIMEOUT`, `AI_INVALID_RESPONSE`, `AI_UNAVAILABLE`
+`AI_DISABLED`, `AI_NOT_CONFIGURED`, `AI_RATE_LIMITED`, `AI_PROVIDER_ERROR`, `AI_TIMEOUT`, `AI_CANCELLED`, `AI_INVALID_RESPONSE`, `AI_UNAVAILABLE`
 
-Clients receive sanitized messages only. Upstream provider payloads are not forwarded.
+Clients receive sanitized messages only. Upstream provider payloads are not forwarded. Caller cancellation returns a stable `cancelled` SSE event (not a timeout error).
 
 ---
 

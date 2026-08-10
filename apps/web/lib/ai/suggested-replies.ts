@@ -1,11 +1,14 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import {
   AIError,
   buildConversationContext,
   buildPrompt,
   buildUsageEvent,
   createAIProvider,
+  isAICancellation,
   sanitizePlainText,
   statusFromError,
   type AIProvider,
@@ -30,9 +33,12 @@ export type SuggestedReplyAuthContext = {
   workspaceId: string;
   workspaceName: string;
   memberId: string;
-  operatorDisplayName: string | null;
   conversationId: string;
-  regenerateNonce?: string;
+  /**
+   * When true, generate an opaque server-side regenerateSeed for provider entropy.
+   * Never interpolate client text into prompts.
+   */
+  regenerate?: boolean;
 };
 
 export type SuggestedReplyStreamEvent =
@@ -43,7 +49,8 @@ export type SuggestedReplyStreamEvent =
       model: string;
       provider: AIProviderId;
       usage: TokenUsage;
-    };
+    }
+  | { type: "cancelled" };
 
 async function consumeSuggestedReplyRateLimit(input: {
   workspaceId: string;
@@ -84,6 +91,7 @@ function createWorkspaceProvider(
     openai: {
       defaultTimeoutMs: env.AI_REQUEST_TIMEOUT_MS,
     },
+    allowMockProvider: env.AI_ALLOW_MOCK_PROVIDER,
   });
 }
 
@@ -133,6 +141,7 @@ async function loadAuthorizedContext(
     { limit: 50 },
   );
 
+  // Do not send operator email (or other PII identifiers) to providers.
   const context = buildConversationContext({
     workspace: {
       id: auth.workspaceId,
@@ -140,7 +149,7 @@ async function loadAuthorizedContext(
     },
     operator: {
       id: auth.memberId,
-      displayName: auth.operatorDisplayName,
+      displayName: null,
     },
     visitor: {
       displayName: conversation.contact?.name ?? null,
@@ -155,16 +164,11 @@ async function loadAuthorizedContext(
   });
 
   const prompt = buildPrompt("suggested_reply", context);
-  if (auth.regenerateNonce) {
-    const last = prompt.messages.at(-1);
-    if (last?.role === "user") {
-      last.content = `${last.content}\n\n[regenerate:${auth.regenerateNonce}]`;
-    }
-  }
+  const regenerateSeed = auth.regenerate ? randomUUID() : undefined;
 
   const provider = createWorkspaceProvider(config.provider, config.model);
 
-  return { provider, prompt, config };
+  return { provider, prompt, config, regenerateSeed };
 }
 
 async function persistUsage(event: AIUsageEventInsert): Promise<void> {
@@ -181,10 +185,8 @@ export async function generateSuggestedReply(
   let model: string | null = null;
 
   try {
-    const { provider, prompt, config } = await loadAuthorizedContext(
-      supabase,
-      auth,
-    );
+    const { provider, prompt, config, regenerateSeed } =
+      await loadAuthorizedContext(supabase, auth);
     providerId = provider.id;
     model = config.model ?? provider.metadata.model;
 
@@ -194,6 +196,7 @@ export async function generateSuggestedReply(
         model: config.model,
         temperature: prompt.temperature,
         maxOutputTokens: prompt.maxOutputTokens,
+        regenerateSeed,
       },
       {
         signal: options?.signal,
@@ -256,10 +259,8 @@ export async function* streamSuggestedReply(
   let completed = false;
 
   try {
-    const { provider, prompt, config } = await loadAuthorizedContext(
-      supabase,
-      auth,
-    );
+    const { provider, prompt, config, regenerateSeed } =
+      await loadAuthorizedContext(supabase, auth);
     providerId = provider.id;
     model = config.model ?? provider.metadata.model;
 
@@ -269,6 +270,7 @@ export async function* streamSuggestedReply(
         model: config.model,
         temperature: prompt.temperature,
         maxOutputTokens: prompt.maxOutputTokens,
+        regenerateSeed,
       },
       {
         signal: options?.signal,
@@ -334,6 +336,10 @@ export async function* streamSuggestedReply(
           errorCode: mapped.errorCode,
         }),
       );
+    }
+    if (isAICancellation(error)) {
+      yield { type: "cancelled" };
+      return;
     }
     throw error;
   }

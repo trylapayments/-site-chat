@@ -9,7 +9,7 @@
 CREATE TABLE public.ai_usage_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL REFERENCES public.workspaces (id) ON DELETE CASCADE,
-  member_id uuid REFERENCES public.workspace_members (id) ON DELETE SET NULL,
+  member_id uuid,
   feature text NOT NULL,
   provider text NOT NULL,
   model text,
@@ -33,7 +33,12 @@ CREATE TABLE public.ai_usage_events (
     (prompt_tokens IS NULL OR prompt_tokens >= 0)
     AND (completion_tokens IS NULL OR completion_tokens >= 0)
     AND (total_tokens IS NULL OR total_tokens >= 0)
-  )
+  ),
+  -- member_id must belong to the same workspace (prevents cross-tenant attribution).
+  CONSTRAINT fk_ai_usage_events_member_workspace
+    FOREIGN KEY (member_id, workspace_id)
+    REFERENCES public.workspace_members (id, workspace_id)
+    ON DELETE SET NULL
 );
 
 CREATE INDEX idx_ai_usage_events_workspace_created
@@ -47,24 +52,10 @@ COMMENT ON TABLE public.ai_usage_events IS
 
 ALTER TABLE public.ai_usage_events ENABLE ROW LEVEL SECURITY;
 
--- Members can read usage for workspaces they belong to (billing/analytics later).
-CREATE POLICY ai_usage_events_select_member
-  ON public.ai_usage_events
-  FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM public.workspace_members wm
-      WHERE wm.workspace_id = ai_usage_events.workspace_id
-        AND wm.user_id = (SELECT auth.uid())
-        AND wm.status = 'active'
-    )
-  );
-
--- No direct client inserts/updates/deletes. Service role inserts from API.
-REVOKE INSERT, UPDATE, DELETE ON public.ai_usage_events FROM authenticated, anon;
-GRANT SELECT ON public.ai_usage_events TO authenticated;
+-- Least privilege until an owner/admin analytics UI exists:
+-- no authenticated/anon policies; service_role inserts/reads only.
+REVOKE ALL ON public.ai_usage_events FROM PUBLIC;
+REVOKE ALL ON public.ai_usage_events FROM anon, authenticated;
 GRANT ALL ON public.ai_usage_events TO service_role;
 
 -- ---------------------------------------------------------------------------
@@ -139,6 +130,7 @@ BEGIN
 END;
 $$;
 
+-- Public wrapper: service_role only.
 REVOKE ALL ON FUNCTION public.ai_consume_rate_limit(text, integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.ai_consume_rate_limit(text, integer, integer) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.ai_consume_rate_limit(text, integer, integer) TO service_role;
@@ -182,3 +174,29 @@ BEGIN
   );
 END;
 $$;
+
+-- Repository-standard: authenticated has USAGE on app_private, so new functions
+-- must explicitly revoke default EXECUTE from PUBLIC/anon/authenticated.
+REVOKE EXECUTE ON FUNCTION app_private.ai_consume_rate_limit(text, integer, integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app_private.ai_consume_rate_limit(text, integer, integer) FROM anon;
+REVOKE EXECUTE ON FUNCTION app_private.ai_consume_rate_limit(text, integer, integer) FROM authenticated;
+
+REVOKE EXECUTE ON FUNCTION app_private.workspace_ai_config(jsonb) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app_private.workspace_ai_config(jsonb) FROM anon;
+REVOKE EXECUTE ON FUNCTION app_private.workspace_ai_config(jsonb) FROM authenticated;
+
+-- Belt-and-suspenders: re-assert schema-wide revoke for any other new app_private
+-- functions added in this migration path (matches attachments/read-receipts pattern).
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM anon;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM authenticated;
+
+-- Intended callers only: service_role may execute the new private helpers.
+GRANT EXECUTE ON FUNCTION app_private.ai_consume_rate_limit(text, integer, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION app_private.workspace_ai_config(jsonb) TO service_role;
+
+-- Re-grant intentional authenticated app_private helpers used by the product.
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_ids() TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_role(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.workspace_is_accessible(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.get_caller_member_id(uuid) TO authenticated;

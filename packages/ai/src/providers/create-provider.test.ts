@@ -1,11 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AI_PROVIDER_IDS } from "../types/provider";
 import { AIError } from "../types/errors";
 import { createAIProvider } from "./create-provider";
 import { MockProvider } from "./mock";
 import { OpenAIProvider } from "./openai";
 
 describe("createAIProvider", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("creates mock and openai providers from configuration", () => {
     expect(createAIProvider({ provider: "mock" })).toBeInstanceOf(MockProvider);
     expect(
@@ -14,6 +19,22 @@ describe("createAIProvider", () => {
         credentials: { openaiApiKey: "sk-test" },
       }),
     ).toBeInstanceOf(OpenAIProvider);
+  });
+
+  it("keeps provider ids aligned with the shared API contract set", () => {
+    expect([...AI_PROVIDER_IDS]).toEqual(["openai", "mock", "anthropic", "gemini", "ollama"]);
+  });
+
+  it("blocks MockProvider in production unless explicitly allowed", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AI_ALLOW_MOCK_PROVIDER", "false");
+    vi.stubEnv("VITEST", "");
+
+    expect(() => createAIProvider({ provider: "mock" })).toThrowError(/not allowed/i);
+
+    expect(createAIProvider({ provider: "mock", allowMockProvider: true })).toBeInstanceOf(
+      MockProvider,
+    );
   });
 
   it("fails closed when openai key is missing", () => {

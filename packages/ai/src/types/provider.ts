@@ -1,3 +1,7 @@
+/**
+ * Canonical provider ids. Keep identical to `@site-chat/shared` AI_PROVIDER_IDS
+ * (asserted in create-provider tests) — shared owns the API contract enum.
+ */
 export const AI_PROVIDER_IDS = ["openai", "mock", "anthropic", "gemini", "ollama"] as const;
 
 export type AIProviderId = (typeof AI_PROVIDER_IDS)[number];
@@ -33,6 +37,11 @@ export type GenerateRequest = {
    * Never includes prompt content.
    */
   requestId?: string;
+  /**
+   * Server-generated opaque regenerate entropy.
+   * Must never be interpolated into prompt messages.
+   */
+  regenerateSeed?: string;
 };
 
 export type GenerateOptions = {
@@ -83,6 +92,7 @@ export type ModerateResult = {
 /**
  * Provider contract. Streaming is first-class; generate() may be
  * implemented via stream aggregation when convenient.
+ * Cancellation/timeout options apply to every method.
  */
 export interface AIProvider {
   readonly id: AIProviderId;
@@ -92,7 +102,7 @@ export interface AIProvider {
 
   stream(request: GenerateRequest, options?: GenerateOptions): AsyncIterable<StreamChunk>;
 
-  embeddings(request: EmbeddingsRequest): Promise<EmbeddingsResult>;
+  embeddings(request: EmbeddingsRequest, options?: GenerateOptions): Promise<EmbeddingsResult>;
 
-  moderate(request: ModerateRequest): Promise<ModerateResult>;
+  moderate(request: ModerateRequest, options?: GenerateOptions): Promise<ModerateResult>;
 }

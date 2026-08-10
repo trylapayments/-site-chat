@@ -16,6 +16,8 @@ export function statusFromError(error: unknown): {
       return { status: "rate_limited", errorCode: error.code };
     case "AI_TIMEOUT":
       return { status: "timeout", errorCode: error.code };
+    case "AI_CANCELLED":
+      return { status: "cancelled", errorCode: error.code };
     default:
       return { status: "error", errorCode: error.code };
   }

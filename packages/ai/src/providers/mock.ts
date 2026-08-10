@@ -19,22 +19,28 @@ export type MockProviderOptions = {
   model?: string;
   /**
    * Fixed suggestion text. When omitted, a deterministic draft is derived
-   * from the last user/assistant turn so regenerate can change output when
-   * the conversation (or a regenerate nonce in messages) changes.
+   * from conversation JSON + optional regenerateSeed (never prompt-injected).
    */
   fixedText?: string;
   streamDelayMs?: number;
   failWith?: AIError;
 };
 
+function abortError(signal?: AbortSignal): AIError {
+  if (signal?.reason instanceof AIError) {
+    return signal.reason;
+  }
+  return new AIError("AI_CANCELLED", "AI request was cancelled.", {
+    status: 499,
+    retryable: false,
+    cause: signal?.reason,
+  });
+}
+
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(
-        signal.reason instanceof AIError
-          ? signal.reason
-          : new AIError("AI_TIMEOUT", "AI request was cancelled or timed out."),
-      );
+      reject(abortError(signal));
       return;
     }
 
@@ -45,23 +51,38 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
     const onAbort = () => {
       clearTimeout(timer);
-      reject(
-        signal?.reason instanceof AIError
-          ? signal.reason
-          : new AIError("AI_TIMEOUT", "AI request was cancelled or timed out."),
-      );
+      reject(abortError(signal));
     };
 
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
+function extractVisitorSnippet(userContent: string): string {
+  try {
+    const parsed = JSON.parse(userContent) as {
+      messages?: Array<{ senderType?: string; body?: string }>;
+    };
+    const visitorBodies =
+      parsed.messages
+        ?.filter((message) => message.senderType === "visitor")
+        .map((message) => message.body ?? "")
+        .filter((body) => body.length > 0) ?? [];
+    return visitorBodies.at(-1) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 function deriveSuggestion(request: GenerateRequest): string {
   const lastContent =
     [...request.messages].reverse().find((message) => message.role === "user")?.content ?? "";
-  const visitorLines = lastContent.split("\n").filter((line) => line.startsWith("Visitor: "));
-  const lastVisitor = visitorLines.at(-1)?.replace(/^Visitor:\s*/, "") ?? "";
-  const seed = createHash("sha256").update(lastContent).digest("hex").slice(0, 8);
+  const lastVisitor = extractVisitorSnippet(lastContent);
+  const seed = createHash("sha256")
+    .update(lastContent)
+    .update(request.regenerateSeed ?? "")
+    .digest("hex")
+    .slice(0, 8);
 
   if (lastVisitor) {
     return `Thanks for reaching out — I can help with that. Regarding “${lastVisitor.slice(0, 120)}”, could you share a bit more detail so I can assist accurately? (ref ${seed})`;
@@ -139,7 +160,8 @@ export class MockProvider implements AIProvider {
     };
   }
 
-  embeddings(request: EmbeddingsRequest): Promise<EmbeddingsResult> {
+  embeddings(request: EmbeddingsRequest, options?: GenerateOptions): Promise<EmbeddingsResult> {
+    throwIfAborted(options?.signal);
     const inputs = Array.isArray(request.input) ? request.input : [request.input];
     return Promise.resolve({
       model: request.model ?? "mock-embeddings",
@@ -155,7 +177,8 @@ export class MockProvider implements AIProvider {
     });
   }
 
-  moderate(request: ModerateRequest): Promise<ModerateResult> {
+  moderate(request: ModerateRequest, options?: GenerateOptions): Promise<ModerateResult> {
+    throwIfAborted(options?.signal);
     const flagged = /ignore previous instructions/i.test(request.input);
     return Promise.resolve({
       flagged,
