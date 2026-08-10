@@ -3,19 +3,24 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-import { subscribeOperatorConversation } from "@/lib/realtime/operator-subscriptions";
+import { subscribeOperatorVisitorContext } from "@/lib/realtime/operator-subscriptions";
 
 /**
  * Refreshes the conversation sidebar when visitor identity/context changes.
- * Identify and page-view RPCs touch conversation.updated_at, so a conversation
- * UPDATE subscription is sufficient.
+ *
+ * Page views no longer bump `conversations.updated_at` (write-amplification
+ * fix), so this subscribes directly to `visitor_sessions` (current URL,
+ * device, tab) and `contacts` (identify) UPDATEs by id instead of piggy-
+ * backing on the conversation/message channel used by the live thread.
  */
 export function VisitorSidebarLiveRefresh({
   workspaceId,
-  conversationId,
+  visitorSessionId,
+  contactId,
 }: {
   workspaceId: string;
-  conversationId: string;
+  visitorSessionId: string;
+  contactId?: string | null;
 }) {
   const router = useRouter();
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -31,14 +36,18 @@ export function VisitorSidebarLiveRefresh({
       }, 250);
     };
 
-    const unsubscribe = subscribeOperatorConversation({
+    const unsubscribe = subscribeOperatorVisitorContext({
       workspaceId,
-      conversationId,
-      onMessageInsert: () => {
-        // Messages are handled by the live thread; ignore here.
-      },
-      onConversationChange: () => {
+      visitorSessionId,
+      contactId,
+      onChange: () => {
         scheduleRefresh();
+      },
+      onConnectionChange: (status) => {
+        // Catch up on any context changes missed while disconnected.
+        if (status === "connected") {
+          scheduleRefresh();
+        }
       },
     });
 
@@ -49,7 +58,7 @@ export function VisitorSidebarLiveRefresh({
         refreshTimerRef.current = null;
       }
     };
-  }, [workspaceId, conversationId, router]);
+  }, [workspaceId, visitorSessionId, contactId, router]);
 
   return null;
 }

@@ -10,7 +10,10 @@ import {
 
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
-import { getRequestOrigin } from "@/lib/widget/origin";
+import {
+  getRequestOrigin,
+  requestOriginMatchesEmbed,
+} from "@/lib/widget/origin";
 import {
   hashIdentifyRateLimitKey,
   WIDGET_RATE_LIMITS,
@@ -81,6 +84,15 @@ export async function POST(request: Request) {
     const options = widgetOptionsResponse(request, corsOrigin);
     if (options) {
       return options;
+    }
+
+    if (!requestOriginMatchesEmbed(request, embedContext.parentOrigin)) {
+      return widgetJsonError(
+        "FORBIDDEN",
+        GENERIC_FORBIDDEN_MESSAGE,
+        403,
+        requestId,
+      );
     }
 
     const allowed = await consumeWidgetRateLimit(

@@ -12,6 +12,7 @@ export default defineConfig({
       "app/api/v1/widget/realtime-token/**/*.test.ts",
       "app/api/v1/widget/identify/**/*.test.ts",
       "app/api/v1/widget/page-view/**/*.test.ts",
+      "app/api/v1/widget/session/**/*.test.ts",
       "app/api/v1/inbox/ai/suggested-replies/**/*.test.ts",
     ],
     setupFiles: ["./vitest.setup.ts"],

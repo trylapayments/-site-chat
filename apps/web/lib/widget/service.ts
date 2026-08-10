@@ -86,6 +86,7 @@ function mapSessionFromRpc(data: Json): unknown {
     hasConversation: Boolean(record.has_conversation),
     conversationStatus: record.conversation_status ?? null,
     visitorPublicId: record.visitor_public_id ?? null,
+    continuityToken: record.continuity_token ?? null,
   };
 }
 
@@ -234,7 +235,8 @@ export async function createOrResumeVisitorSession(input: {
   locale?: string;
   pageUrl?: string | null;
   referrer?: string | null;
-  visitorPublicId?: string | null;
+  /** Opaque cross-session continuity token (never a public/display id). */
+  continuityToken?: string | null;
   pageTitle?: string | null;
   timezone?: string | null;
   language?: string | null;
@@ -258,7 +260,7 @@ export async function createOrResumeVisitorSession(input: {
       p_locale: input.locale ?? "en",
       p_page_url: input.pageUrl ?? undefined,
       p_referrer: input.referrer ?? undefined,
-      p_visitor_public_id: input.visitorPublicId ?? undefined,
+      p_continuity_token: input.continuityToken ?? undefined,
       p_page_title: input.pageTitle ?? undefined,
       p_timezone: input.timezone ?? undefined,
       p_language: input.language ?? undefined,
@@ -320,6 +322,8 @@ export async function recordPageView(input: {
   utmCampaign?: string | null;
   utmContent?: string | null;
   utmTerm?: string | null;
+  /** Optional client tab identifier; distinguishes concurrent tabs in one session. */
+  tabId?: string | null;
 }): Promise<VisitorPageViewData> {
   const supabase = createServiceClient();
   const { data, error } = await supabase.rpc("widget_record_page_view", {
@@ -333,6 +337,7 @@ export async function recordPageView(input: {
     p_utm_campaign: input.utmCampaign ?? undefined,
     p_utm_content: input.utmContent ?? undefined,
     p_utm_term: input.utmTerm ?? undefined,
+    p_tab_id: input.tabId ?? undefined,
   });
 
   if (error) {

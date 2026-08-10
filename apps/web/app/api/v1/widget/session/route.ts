@@ -12,7 +12,11 @@ import {
   hashSessionRateLimitKey,
   WIDGET_RATE_LIMITS,
 } from "@/lib/widget/rate-limit";
-import { getClientIp, getRequestOrigin } from "@/lib/widget/origin";
+import {
+  getClientIp,
+  getRequestOrigin,
+  requestOriginMatchesEmbed,
+} from "@/lib/widget/origin";
 import {
   GENERIC_FORBIDDEN_MESSAGE,
   GENERIC_INTERNAL_MESSAGE,
@@ -74,6 +78,15 @@ export async function POST(request: Request) {
       return options;
     }
 
+    if (!requestOriginMatchesEmbed(request, embedContext.parentOrigin)) {
+      return widgetJsonError(
+        "FORBIDDEN",
+        GENERIC_FORBIDDEN_MESSAGE,
+        403,
+        requestId,
+      );
+    }
+
     const ipAllowed = await consumeWidgetRateLimit(
       hashSessionIpRateLimitKey(getClientIp(request)),
       WIDGET_RATE_LIMITS.session.windowSeconds,
@@ -122,7 +135,7 @@ export async function POST(request: Request) {
       locale: parsed.data.locale,
       pageUrl: pageContext.url,
       referrer: pageContext.referrer,
-      visitorPublicId: parsed.data.visitorPublicId,
+      continuityToken: parsed.data.continuityToken,
       pageTitle: pageContext.title,
       timezone: parsed.data.timezone,
       language: parsed.data.language,

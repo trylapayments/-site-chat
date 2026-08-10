@@ -104,7 +104,8 @@ export function ConversationSidebar({
     <aside className="space-y-6 rounded-lg border p-4">
       <VisitorSidebarLiveRefresh
         workspaceId={workspaceId}
-        conversationId={conversationId}
+        visitorSessionId={conversation.visitor_session_id}
+        contactId={conversation.contact?.id ?? null}
       />
 
       <section className="space-y-3">

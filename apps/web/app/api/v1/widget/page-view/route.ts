@@ -9,7 +9,10 @@ import {
 
 import { corsOriginFromEmbed, verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
-import { getRequestOrigin } from "@/lib/widget/origin";
+import {
+  getRequestOrigin,
+  requestOriginMatchesEmbed,
+} from "@/lib/widget/origin";
 import {
   hashPageViewRateLimitKey,
   WIDGET_RATE_LIMITS,
@@ -82,6 +85,15 @@ export async function POST(request: Request) {
       return options;
     }
 
+    if (!requestOriginMatchesEmbed(request, embedContext.parentOrigin)) {
+      return widgetJsonError(
+        "FORBIDDEN",
+        GENERIC_FORBIDDEN_MESSAGE,
+        403,
+        requestId,
+      );
+    }
+
     const allowed = await consumeWidgetRateLimit(
       hashPageViewRateLimitKey(sessionToken),
       WIDGET_RATE_LIMITS.pageView.windowSeconds,
@@ -130,6 +142,7 @@ export async function POST(request: Request) {
       utmCampaign: utm.utmCampaign,
       utmContent: utm.utmContent,
       utmTerm: utm.utmTerm,
+      tabId: parsed.data.tabId,
     });
 
     return widgetJsonSuccess(visitorPageViewDataSchema, result, requestId, {

@@ -102,4 +102,38 @@ describe("widget identify route", () => {
       }),
     );
   });
+
+  it("denies requests whose Origin does not match the embed's parentOrigin", async () => {
+    verifyEmbedContext.mockResolvedValue({
+      workspaceId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      parentOrigin: "https://customer.example.com",
+      widgetPublicKey: "wk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+
+    const request = new Request(
+      "http://localhost:3000/api/v1/widget/identify",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://evil.example.com",
+          Authorization: "Bearer session-token",
+        },
+        body: JSON.stringify({
+          embedToken: "embed-token",
+          name: "Ada Lovelace",
+        }),
+      },
+    );
+
+    const response = await POST(request);
+    const body = (await response.json()) as {
+      error: { code: string; message: string };
+    };
+
+    expect(response.status).toBe(403);
+    expect(body.error.code).toBe("FORBIDDEN");
+    expect(consumeWidgetRateLimit).not.toHaveBeenCalled();
+    expect(identifyVisitor).not.toHaveBeenCalled();
+  });
 });

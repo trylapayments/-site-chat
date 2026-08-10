@@ -57,6 +57,38 @@ export function getRequestOrigin(request: Request): string | null {
   }
 }
 
+/**
+ * Verify a browser-supplied Origin header against the embed token's bound
+ * `parentOrigin`. Widget requests are same-origin-embedded, so a browser that
+ * sends an `Origin` header MUST match the embed context — a mismatch means
+ * the embed token (issued for a different parent origin) is being replayed
+ * from elsewhere and must be denied.
+ *
+ * Requests with NO `Origin` header (non-browser/server-to-server clients,
+ * or browsers that omit it for same-origin navigations) are allowed through
+ * here — they still must carry a valid embed token + session, which are
+ * checked separately. This mirrors the stricter policy note in the task:
+ * "Origin present + mismatch -> deny; Origin absent -> allow" (defense in
+ * depth on top of, not instead of, embed-token verification).
+ */
+export function requestOriginMatchesEmbed(
+  request: Request,
+  parentOrigin: string,
+): boolean {
+  const origin = getRequestOrigin(request);
+  if (!origin) {
+    return true;
+  }
+
+  const normalizedOrigin = normalizeParentOrigin(origin);
+  const normalizedParent = normalizeParentOrigin(parentOrigin);
+  if (!normalizedOrigin || !normalizedParent) {
+    return false;
+  }
+
+  return normalizedOrigin === normalizedParent;
+}
+
 export function getClientIp(request: Request): string | null {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
