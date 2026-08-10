@@ -2,7 +2,18 @@ import { z } from "zod";
 
 import { WIDGET_LOCALE_CODES, type WidgetLocale } from "../i18n/widget-locales";
 import { normalizeStoredWidgetLocale } from "../i18n/resolve-widget-locale";
+import { CONTINUITY_TOKEN_PATTERN, VISITOR_PUBLIC_ID_PATTERN } from "../visitor/constants";
 import { messageAttachmentViewSchema } from "./attachments";
+
+/**
+ * Opaque continuity token (see `contacts.continuity_token_hash`). This is the
+ * ONLY client-supplied value that may bind a new session to an existing
+ * contact — `visitorPublicId` must never be accepted for binding since it is
+ * a display/correlation id, not an authorization secret.
+ */
+export const continuityTokenSchema = z
+  .string()
+  .regex(CONTINUITY_TOKEN_PATTERN, "Invalid continuity token");
 
 export const widgetLocaleSchema = z.enum(WIDGET_LOCALE_CODES);
 
@@ -71,12 +82,13 @@ export const widgetSessionRequestSchema = z
     pageUrl: z.string().url().optional().nullable(),
     pageTitle: z.string().max(500).optional().nullable(),
     referrer: z.string().max(2048).optional().nullable(),
-    /** Opaque visitor public id from prior sessions (localStorage). */
-    visitorPublicId: z
-      .string()
-      .regex(/^vis_[a-f0-9]{32}$/)
-      .optional()
-      .nullable(),
+    /**
+     * Opaque continuity token from a prior session (localStorage), used to
+     * resume the same contact across browsers/sessions. `visitorPublicId` is
+     * intentionally NOT accepted here — it is a display id, not an
+     * authorization secret, and must never be used to bind sessions.
+     */
+    continuityToken: continuityTokenSchema.optional().nullable(),
     timezone: z.string().max(64).optional().nullable(),
     language: z.string().max(35).optional().nullable(),
   })
@@ -93,12 +105,15 @@ export const widgetSessionDataSchema = z
     locale: widgetLocaleInputSchema,
     hasConversation: z.boolean(),
     conversationStatus: widgetConversationStatusSchema.nullable(),
-    /** Opaque public visitor id — safe for widget storage / host APIs. */
-    visitorPublicId: z
-      .string()
-      .regex(/^vis_[a-f0-9]{32}$/)
-      .nullable()
-      .optional(),
+    /** Opaque public visitor id — display/correlation only, never authorization. */
+    visitorPublicId: z.string().regex(VISITOR_PUBLIC_ID_PATTERN).nullable().optional(),
+    /**
+     * Plaintext continuity token — present ONLY the first time a token is
+     * minted for this contact. The client must persist it (e.g. localStorage)
+     * and send it back as `continuityToken` on future session requests. Never
+     * re-emitted once a token hash already exists for the contact.
+     */
+    continuityToken: continuityTokenSchema.nullable().optional(),
   })
   .strict();
 

@@ -220,7 +220,16 @@ export function normalizeVisitorAttributes(raw: unknown): Record<string, Primiti
   return result;
 }
 
-/** Shallow merge attributes; later values overwrite; null deletes a key. */
+/**
+ * Shallow merge for the visitor's custom attributes map; later values
+ * overwrite; null deletes a key.
+ *
+ * This is unrelated to contact identity resolution: it never merges or
+ * reassigns *contacts* by email, name, or phone. Widget identify patches only
+ * the current session's contact — see `app_private.widget_identify_visitor`
+ * in the database migrations, which explicitly does not look up/merge by
+ * email.
+ */
 export function mergeVisitorAttributes(
   existing: Record<string, PrimitiveAttributeValue>,
   patch: Record<string, PrimitiveAttributeValue>,

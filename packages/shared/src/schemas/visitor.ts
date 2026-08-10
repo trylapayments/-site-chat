@@ -6,6 +6,7 @@ import {
   VISITOR_PUBLIC_ID_PATTERN,
   VISITOR_RECENT_PAGE_VIEWS_LIMIT,
   VISITOR_REFERRER_MAX_LENGTH,
+  VISITOR_TAB_ID_MAX_LENGTH,
   VISITOR_TIMEZONE_MAX_LENGTH,
   VISITOR_TITLE_MAX_LENGTH,
   VISITOR_URL_MAX_LENGTH,
@@ -142,6 +143,8 @@ export const visitorPageViewRequestSchema = z
     referrer: z.union([z.string().max(VISITOR_REFERRER_MAX_LENGTH), z.null()]).optional(),
     timezone: optionalTimezone,
     language: optionalLanguage,
+    /** Optional client tab identifier; distinguishes concurrent tabs in one session. */
+    tabId: z.union([z.string().min(1).max(VISITOR_TAB_ID_MAX_LENGTH), z.null()]).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

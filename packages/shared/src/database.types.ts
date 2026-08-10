@@ -1151,6 +1151,7 @@ export type Database = {
         Args: {
           p_browser_family?: string
           p_browser_version?: string
+          p_continuity_token?: string
           p_device_type?: string
           p_landing_url?: string
           p_language?: string
@@ -1166,7 +1167,6 @@ export type Database = {
           p_utm_medium?: string
           p_utm_source?: string
           p_utm_term?: string
-          p_visitor_public_id?: string
           p_workspace_id: string
         }
         Returns: Json
@@ -1215,6 +1215,7 @@ export type Database = {
         Args: {
           p_referrer?: string
           p_session_token: string
+          p_tab_id?: string
           p_title?: string
           p_url: string
           p_utm_campaign?: string

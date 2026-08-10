@@ -1,4 +1,5 @@
 import {
+  ALLOWED_UTM_PARAMS,
   VISITOR_REFERRER_MAX_LENGTH,
   VISITOR_TITLE_MAX_LENGTH,
   VISITOR_URL_MAX_LENGTH,
@@ -21,13 +22,33 @@ export type PageContext = {
   landingUrl: string | null;
 } & UtmParams;
 
+const SCRIPT_SCHEME_PATTERN = /^(javascript|data|vbscript):/i;
+
 function clampText(value: string, max: number): string {
   return value.length <= max ? value : value.slice(0, max);
 }
 
+function cleanUtmValue(raw: string): string | null {
+  const cleaned = stripControlChars(raw).trim();
+  if (cleaned.length === 0) {
+    return null;
+  }
+  return clampText(cleaned, VISITOR_UTM_MAX_LENGTH);
+}
+
 /**
- * Sanitize an untrusted URL from the host page.
- * Rejects javascript:/data:/vbscript: and non-http(s) schemes.
+ * Sanitize an untrusted URL from the host page for privacy-safe storage.
+ *
+ * Policy (must match SQL `app_private.sanitize_page_url`):
+ * - Accept only http/https; reject javascript:/data:/vbscript: and any other scheme.
+ * - Strip credentials (userinfo).
+ * - Strip the fragment/hash entirely.
+ * - Keep ONLY allowlisted UTM query params (utm_source, utm_medium, utm_campaign,
+ *   utm_content, utm_term). Every other query param is dropped — this is an
+ *   allowlist, not a blacklist, so OAuth `code`/`state`, password-reset/magic-link
+ *   tokens, and any other secret-bearing query params never persist.
+ * - Return origin + pathname + optional allowlisted query only.
+ * - Bound length to VISITOR_URL_MAX_LENGTH.
  */
 export function sanitizePageUrl(raw: unknown): string | null {
   if (raw === null || raw === undefined) {
@@ -42,6 +63,10 @@ export function sanitizePageUrl(raw: unknown): string | null {
     return null;
   }
 
+  if (SCRIPT_SCHEME_PATTERN.test(cleaned)) {
+    return null;
+  }
+
   let parsed: URL;
   try {
     parsed = new URL(cleaned);
@@ -53,11 +78,28 @@ export function sanitizePageUrl(raw: unknown): string | null {
     return null;
   }
 
-  // Drop credentials if present.
-  parsed.username = "";
-  parsed.password = "";
+  if (!parsed.host) {
+    return null;
+  }
 
-  return clampText(parsed.toString(), VISITOR_URL_MAX_LENGTH);
+  const utmParts: string[] = [];
+  for (const key of ALLOWED_UTM_PARAMS) {
+    const rawValue = parsed.searchParams.get(key);
+    if (rawValue === null) {
+      continue;
+    }
+    const value = cleanUtmValue(rawValue);
+    if (value === null) {
+      continue;
+    }
+    utmParts.push(`${key}=${encodeURIComponent(value)}`);
+  }
+
+  const path = parsed.pathname.length > 0 ? parsed.pathname : "/";
+  const query = utmParts.length > 0 ? `?${utmParts.join("&")}` : "";
+  const result = `${parsed.origin}${path}${query}`;
+
+  return clampText(result, VISITOR_URL_MAX_LENGTH);
 }
 
 export function sanitizePageTitle(raw: unknown): string | null {
@@ -74,6 +116,14 @@ export function sanitizePageTitle(raw: unknown): string | null {
   return clampText(cleaned, VISITOR_TITLE_MAX_LENGTH);
 }
 
+/**
+ * Sanitize a referrer value. Absolute http(s) referrers go through the same
+ * privacy policy as `sanitizePageUrl` (secrets stripped, UTM allowlist only).
+ * Referrers may also be opaque/non-URL strings on some browsers (e.g. the
+ * empty string, or a privacy-trimmed origin-only value) — those are kept as
+ * bounded text after rejecting script schemes, since they are not parseable
+ * URLs to redact.
+ */
 export function sanitizeReferrer(raw: unknown): string | null {
   if (raw === null || raw === undefined) {
     return null;
@@ -85,58 +135,49 @@ export function sanitizeReferrer(raw: unknown): string | null {
   if (cleaned.length === 0) {
     return null;
   }
-  // Referrer may be opaque ("") or a relative string on some browsers;
-  // prefer absolute http(s) when parseable, otherwise store bounded text.
+
+  if (SCRIPT_SCHEME_PATTERN.test(cleaned)) {
+    return null;
+  }
+
   const asUrl = sanitizePageUrl(cleaned);
   if (asUrl) {
     return asUrl;
   }
-  if (/^(javascript|data|vbscript):/i.test(cleaned)) {
-    return null;
-  }
+
   return clampText(cleaned, VISITOR_REFERRER_MAX_LENGTH);
 }
 
-function readUtm(params: URLSearchParams, key: string): string | null {
-  const value = params.get(key);
-  if (!value) {
-    return null;
-  }
-  const cleaned = stripControlChars(value).trim();
-  if (cleaned.length === 0) {
-    return null;
-  }
-  return clampText(cleaned, VISITOR_UTM_MAX_LENGTH);
-}
-
+/**
+ * Extract UTM params from a URL. Intended to be called with an already
+ * `sanitizePageUrl`-sanitized URL, whose query string (if any) already
+ * contains only allowlisted UTM keys — but this also works standalone
+ * against an arbitrary URL string.
+ */
 export function parseUtmFromUrl(url: string | null): UtmParams {
+  const empty: UtmParams = {
+    utmSource: null,
+    utmMedium: null,
+    utmCampaign: null,
+    utmContent: null,
+    utmTerm: null,
+  };
+
   if (!url) {
-    return {
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      utmTerm: null,
-    };
+    return empty;
   }
 
   try {
     const parsed = new URL(url);
     return {
-      utmSource: readUtm(parsed.searchParams, "utm_source"),
-      utmMedium: readUtm(parsed.searchParams, "utm_medium"),
-      utmCampaign: readUtm(parsed.searchParams, "utm_campaign"),
-      utmContent: readUtm(parsed.searchParams, "utm_content"),
-      utmTerm: readUtm(parsed.searchParams, "utm_term"),
+      utmSource: cleanUtmValue(parsed.searchParams.get("utm_source") ?? ""),
+      utmMedium: cleanUtmValue(parsed.searchParams.get("utm_medium") ?? ""),
+      utmCampaign: cleanUtmValue(parsed.searchParams.get("utm_campaign") ?? ""),
+      utmContent: cleanUtmValue(parsed.searchParams.get("utm_content") ?? ""),
+      utmTerm: cleanUtmValue(parsed.searchParams.get("utm_term") ?? ""),
     };
   } catch {
-    return {
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      utmContent: null,
-      utmTerm: null,
-    };
+    return empty;
   }
 }
 
@@ -174,7 +215,8 @@ export function pageViewDedupeKey(sessionId: string, url: string): string {
 
 /**
  * Decide whether a SPA navigation should emit a new page view.
- * Same URL (ignoring hash-only changes when hashIsNavigation=false) is skipped.
+ * Sanitized URLs never carry a fragment, so hash-only navigation naturally
+ * dedupes even when `hashIsNavigation` is left at its default.
  */
 export function shouldRecordPageView(input: {
   previousUrl: string | null;
