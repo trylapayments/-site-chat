@@ -1,10 +1,9 @@
 /**
- * Canonical provider ids. Keep identical to `@site-chat/shared` AI_PROVIDER_IDS
- * (asserted in create-provider tests) — shared owns the API contract enum.
+ * Canonical provider ids — single source of truth in `@site-chat/shared`.
  */
-export const AI_PROVIDER_IDS = ["openai", "mock", "anthropic", "gemini", "ollama"] as const;
+import { AI_PROVIDER_IDS, type AIProviderId } from "@site-chat/shared";
 
-export type AIProviderId = (typeof AI_PROVIDER_IDS)[number];
+export { AI_PROVIDER_IDS, type AIProviderId };
 
 export type AIRole = "system" | "user" | "assistant";
 

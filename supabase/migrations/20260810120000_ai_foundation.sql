@@ -35,10 +35,12 @@ CREATE TABLE public.ai_usage_events (
     AND (total_tokens IS NULL OR total_tokens >= 0)
   ),
   -- member_id must belong to the same workspace (prevents cross-tenant attribution).
+  -- Column-specific SET NULL (PG15+): only member_id is cleared on member delete;
+  -- workspace_id stays NOT NULL so historical usage remains workspace-scoped.
   CONSTRAINT fk_ai_usage_events_member_workspace
     FOREIGN KEY (member_id, workspace_id)
     REFERENCES public.workspace_members (id, workspace_id)
-    ON DELETE SET NULL
+    ON DELETE SET NULL (member_id)
 );
 
 CREATE INDEX idx_ai_usage_events_workspace_created

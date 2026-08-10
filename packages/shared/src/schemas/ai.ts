@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 /**
- * Canonical AI provider ids used by API contracts and workspace config.
- * Keep in sync with packages/ai AI_PROVIDER_IDS (tested).
+ * Canonical AI provider ids used by API contracts, workspace config, and
+ * `@site-chat/ai` provider implementations (single source of truth).
  */
 export const AI_PROVIDER_IDS = ["openai", "mock", "anthropic", "gemini", "ollama"] as const;
 
