@@ -14,8 +14,6 @@ import {
   waitForWidgetRealtimeReady,
 } from "../../helpers";
 
-const PREVIEW = `AI suggest ${Date.now()}`;
-
 async function setWorkspaceAiEnabled(enabled: boolean) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
