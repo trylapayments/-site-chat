@@ -106,13 +106,14 @@ test.describe("visitor identity + context", () => {
     await operatorContext.close();
   });
 
-  test("operator can edit visitor name", async ({ browser }) => {
+  test("operator can edit visitor name/email/phone and reload preserves", async ({ browser }) => {
     const visitorContext = await browser.newContext();
     const operatorContext = await browser.newContext();
     const visitor = await visitorContext.newPage();
     const operator = await operatorContext.newPage();
 
     const marker = `visitor-edit-${Date.now()}`;
+    const editedEmail = `edited.${Date.now()}@example.com`;
     await openWidget(visitor);
     await sendWidgetMessage(visitor, marker);
 
@@ -121,12 +122,26 @@ test.describe("visitor identity + context", () => {
     await waitForOperatorThreadRealtimeReady(operator);
 
     const nameInput = operator.getByLabel("Name");
+    const emailInput = operator.getByLabel("Email");
+    const phoneInput = operator.getByLabel("Phone");
     await expect(nameInput).toBeVisible({ timeout: 30_000 });
     await nameInput.fill("Operator Edited");
+    await emailInput.fill(editedEmail);
+    await phoneInput.fill("+1 555 0100");
     await operator.getByRole("button", { name: "Save visitor" }).click();
 
     await expect(nameInput).toHaveValue("Operator Edited", { timeout: 30_000 });
+    await expect(emailInput).toHaveValue(editedEmail);
+    await expect(phoneInput).toHaveValue("+1 555 0100");
     await expect(operator.getByText("Operator Edited").first()).toBeVisible();
+
+    await operator.reload();
+    await waitForOperatorThreadRealtimeReady(operator);
+    await expect(operator.getByLabel("Name")).toHaveValue("Operator Edited", {
+      timeout: 30_000,
+    });
+    await expect(operator.getByLabel("Email")).toHaveValue(editedEmail);
+    await expect(operator.getByLabel("Phone")).toHaveValue("+1 555 0100");
 
     await visitorContext.close();
     await operatorContext.close();
@@ -155,7 +170,11 @@ test.describe("visitor identity + context", () => {
     );
 
     await visitor.evaluate(() => {
-      window.history.pushState({}, "", "/pricing?utm_source=e2e&utm_medium=test");
+      window.history.pushState(
+        {},
+        "",
+        "/pricing?utm_source=e2e&utm_medium=test&access_token=secret#frag",
+      );
       document.title = "Pricing page";
       window.dispatchEvent(new Event("sitechat:locationchange"));
     });
@@ -165,26 +184,35 @@ test.describe("visitor identity + context", () => {
     await expect(operator.getByText(/\/pricing\?utm_source=e2e/)).toBeVisible({
       timeout: 30_000,
     });
+    await expect(operator.getByText("access_token=secret")).toHaveCount(0);
+    await expect(operator.getByText("#frag")).toHaveCount(0);
 
     await visitorContext.close();
     await operatorContext.close();
   });
 
-  test("reload preserves visitor public id", async ({ browser }) => {
+  test("reload preserves continuity token and visitor public id", async ({ browser }) => {
     const visitor = await browser.newPage();
     await openWidget(visitor);
     await sendWidgetMessage(visitor, `visitor-reload-${Date.now()}`);
 
-    const publicId = await visitor.evaluate(() => {
+    const stored = await visitor.evaluate(() => {
+      let publicId: string | null = null;
+      let continuityToken: string | null = null;
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
-        if (key?.startsWith("sitechat:visitor:")) {
-          return localStorage.getItem(key);
+        if (!key) continue;
+        if (key.startsWith("sitechat:visitor:")) {
+          publicId = localStorage.getItem(key);
+        }
+        if (key.startsWith("sitechat:continuity:")) {
+          continuityToken = localStorage.getItem(key);
         }
       }
-      return null;
+      return { publicId, continuityToken };
     });
-    expect(publicId).toMatch(/^vis_[a-f0-9]{32}$/);
+    expect(stored.publicId).toMatch(/^vis_[a-f0-9]{32}$/);
+    expect(stored.continuityToken).toMatch(/^[A-Za-z0-9_-]{20,128}$/);
 
     await visitor.reload();
     await expect(visitor.locator('iframe[title="Site Chat"]')).toBeAttached({
@@ -195,18 +223,102 @@ test.describe("visitor identity + context", () => {
       timeout: 60_000,
     });
 
-    const publicIdAfter = await visitor.evaluate(() => {
+    const storedAfter = await visitor.evaluate(() => {
+      let publicId: string | null = null;
+      let continuityToken: string | null = null;
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
-        if (key?.startsWith("sitechat:visitor:")) {
-          return localStorage.getItem(key);
+        if (!key) continue;
+        if (key.startsWith("sitechat:visitor:")) {
+          publicId = localStorage.getItem(key);
+        }
+        if (key.startsWith("sitechat:continuity:")) {
+          continuityToken = localStorage.getItem(key);
         }
       }
-      return null;
+      return { publicId, continuityToken };
     });
-    expect(publicIdAfter).toBe(publicId);
+    expect(storedAfter.publicId).toBe(stored.publicId);
+    expect(storedAfter.continuityToken).toBe(stored.continuityToken);
 
     await visitor.close();
+  });
+
+  test("unsigned identify with existing email does not takeover victim", async ({ browser }) => {
+    const victimContext = await browser.newContext();
+    const attackerContext = await browser.newContext();
+    const operatorContext = await browser.newContext();
+    const victim = await victimContext.newPage();
+    const attacker = await attackerContext.newPage();
+    const operator = await operatorContext.newPage();
+
+    const victimEmail = `victim.${Date.now()}@example.com`;
+    const victimMarker = `victim-msg-${Date.now()}`;
+    const attackerMarker = `attacker-msg-${Date.now()}`;
+
+    await openWidget(victim);
+    await sendWidgetMessage(victim, victimMarker);
+    await waitForWidgetRealtimeReady(victim);
+    const victimIdentify = victim.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/widget/identify") &&
+        response.request().method() === "POST",
+      { timeout: 30_000 },
+    );
+    await victim.evaluate(
+      ({ email }) => {
+        (
+          window as unknown as {
+            SiteChat?: { identify: (payload: { name: string; email: string }) => void };
+          }
+        ).SiteChat?.identify({ name: "Victim User", email });
+      },
+      { email: victimEmail },
+    );
+    expect((await victimIdentify).status()).toBe(200);
+
+    await prepareOperatorInbox(operator);
+    await openOperatorConversation(operator, victimMarker);
+    await waitForOperatorThreadRealtimeReady(operator);
+    await expect(operator.getByDisplayValue("Victim User")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(operator.getByDisplayValue(victimEmail)).toBeVisible();
+
+    await openWidget(attacker);
+    await sendWidgetMessage(attacker, attackerMarker);
+    await waitForWidgetRealtimeReady(attacker);
+
+    const identifyResponse = attacker.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/widget/identify") &&
+        response.request().method() === "POST",
+      { timeout: 30_000 },
+    );
+    await attacker.evaluate(
+      ({ email }) => {
+        (
+          window as unknown as {
+            SiteChat?: { identify: (payload: { name: string; email: string }) => void };
+          }
+        ).SiteChat?.identify({ name: "Attacker", email });
+      },
+      { email: victimEmail },
+    );
+    const identify = await identifyResponse;
+    // Conflict or soft-fail: must not succeed as a merge/takeover.
+    expect(identify.status()).not.toBe(200);
+
+    await openOperatorConversation(operator, victimMarker);
+    await expect(operator.getByDisplayValue("Victim User")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(operator.getByDisplayValue(victimEmail)).toBeVisible();
+    await expect(operator.getByDisplayValue("Attacker")).toHaveCount(0);
+
+    await victimContext.close();
+    await attackerContext.close();
+    await operatorContext.close();
   });
 
   test("malicious name and page title render as text", async ({ browser }) => {
