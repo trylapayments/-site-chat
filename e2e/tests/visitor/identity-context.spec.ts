@@ -63,9 +63,10 @@ test.describe("visitor identity + context", () => {
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
 
-    const sidebar = operator.locator("aside");
+    const sidebar = operator.locator("main aside");
     await expect(sidebar.getByRole("heading", { name: "Visitor", exact: true })).toBeVisible();
-    await expect(sidebar.getByText(/vis_[a-f0-9]{32}/)).toBeVisible({
+    await expect(sidebar.getByText("Public ID")).toBeVisible({ timeout: 30_000 });
+    await expect(sidebar.getByText(/^vis_[a-f0-9]{32}$/)).toBeVisible({
       timeout: 30_000,
     });
     await expect(
@@ -313,7 +314,12 @@ test.describe("visitor identity + context", () => {
     // Conflict or soft-fail: must not succeed as a merge/takeover.
     expect(identify.status()).not.toBe(200);
 
+    // Stay on (or return to) the victim thread — do not require an inbox row
+    // lookup while already on a conversation detail URL.
+    await operator.goto(`${APP_URL}/app/acme-support/inbox`);
+    await waitForOperatorInboxRealtimeReady(operator);
     await openOperatorConversation(operator, victimMarker);
+    await waitForOperatorThreadRealtimeReady(operator);
     await expect(operator.getByLabel("Name")).toHaveValue("Victim User", {
       timeout: 30_000,
     });

@@ -13,8 +13,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 -- + sanitize_page_url redaction(3)
 -- + operator: viewer deny(1) + foreign workspace deny(1) + agent allow(1)
 --   + profile shape(2) + no last_seen bump(1)
--- = 97
-SELECT plan(97);
+-- + send links conversation.contact_id from session(2)
+-- = 99
+SELECT plan(99);
 
 TRUNCATE tests.fixtures;
 
