@@ -22,12 +22,16 @@ async function setWorkspaceAiEnabled(enabled: boolean) {
     throw new Error("Missing Supabase env for AI E2E helper");
   }
 
-  const headers = {
+  // Match CI widget bootstrap auth: newer Supabase `sb_secret_*` service keys
+  // must not send Authorization Bearer (apikey header alone is correct).
+  const headers: Record<string, string> = {
     apikey: serviceKey,
-    Authorization: `Bearer ${serviceKey}`,
     "Content-Type": "application/json",
     Prefer: "return=representation",
   };
+  if (!serviceKey.startsWith("sb_secret_")) {
+    headers.Authorization = `Bearer ${serviceKey}`;
+  }
 
   const listResponse = await fetch(
     `${url}/rest/v1/workspaces?slug=eq.${WORKSPACE_SLUG}&select=id,settings_json`,
