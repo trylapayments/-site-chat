@@ -1112,6 +1112,14 @@ export type Database = {
         }
         Returns: Json
       }
+      update_visitor_profile: {
+        Args: {
+          p_conversation_id: string
+          p_patch?: Json
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       update_workspace_member_role: {
         Args: {
           p_member_id: string
@@ -1141,10 +1149,24 @@ export type Database = {
       }
       widget_create_or_resume_visitor_session: {
         Args: {
+          p_browser_family?: string
+          p_browser_version?: string
+          p_device_type?: string
+          p_landing_url?: string
+          p_language?: string
           p_locale?: string
+          p_os_family?: string
+          p_page_title?: string
           p_page_url?: string
           p_referrer?: string
           p_session_token?: string
+          p_timezone?: string
+          p_utm_campaign?: string
+          p_utm_content?: string
+          p_utm_medium?: string
+          p_utm_source?: string
+          p_utm_term?: string
+          p_visitor_public_id?: string
           p_workspace_id: string
         }
         Returns: Json
@@ -1153,6 +1175,18 @@ export type Database = {
         Args: {
           p_page_url?: string
           p_referrer?: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_identify_visitor: {
+        Args: {
+          p_attributes?: Json
+          p_email?: string
+          p_name?: string
+          p_phone?: string
+          p_phone_e164?: string
           p_session_token: string
           p_workspace_id: string
         }
@@ -1173,6 +1207,21 @@ export type Database = {
           p_kind: string
           p_session_token: string
           p_through_sequence: number
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_record_page_view: {
+        Args: {
+          p_referrer?: string
+          p_session_token: string
+          p_title?: string
+          p_url: string
+          p_utm_campaign?: string
+          p_utm_content?: string
+          p_utm_medium?: string
+          p_utm_source?: string
+          p_utm_term?: string
           p_workspace_id: string
         }
         Returns: Json

@@ -69,7 +69,16 @@ export const widgetSessionRequestSchema = z
     embedToken: z.string().min(1),
     locale: optionalWidgetLocaleInputSchema,
     pageUrl: z.string().url().optional().nullable(),
-    referrer: z.string().optional().nullable(),
+    pageTitle: z.string().max(500).optional().nullable(),
+    referrer: z.string().max(2048).optional().nullable(),
+    /** Opaque visitor public id from prior sessions (localStorage). */
+    visitorPublicId: z
+      .string()
+      .regex(/^vis_[a-f0-9]{32}$/)
+      .optional()
+      .nullable(),
+    timezone: z.string().max(64).optional().nullable(),
+    language: z.string().max(35).optional().nullable(),
   })
   .strict();
 
@@ -84,6 +93,12 @@ export const widgetSessionDataSchema = z
     locale: widgetLocaleInputSchema,
     hasConversation: z.boolean(),
     conversationStatus: widgetConversationStatusSchema.nullable(),
+    /** Opaque public visitor id — safe for widget storage / host APIs. */
+    visitorPublicId: z
+      .string()
+      .regex(/^vis_[a-f0-9]{32}$/)
+      .nullable()
+      .optional(),
   })
   .strict();
 
