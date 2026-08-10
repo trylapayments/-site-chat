@@ -26,6 +26,10 @@ export const serverEnvSchema = z.object({
 
   // Supabase JWT signing secret for scoped widget Realtime tokens
   SUPABASE_JWT_SECRET: z.string().min(32),
+
+  // AI providers (server-only; never expose to the browser)
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
 });
 
 /**

@@ -7,6 +7,7 @@ import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPage
 import { ConversationSidebar } from "@/components/inbox/ConversationSidebar";
 import { LiveConversationThread } from "@/components/inbox/LiveConversationThread";
 import { MarkConversationRead } from "@/components/inbox/ConversationThread";
+import { loadWorkspaceAIConfig } from "@/lib/ai/config";
 import { requireUser } from "@/lib/auth/session";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { workspaceNavPath } from "@/lib/dashboard/routes";
@@ -60,6 +61,13 @@ export default async function ConversationDetailPage({
     ? await fetchAssignableMembers(supabase, workspace.workspace_id)
     : [];
 
+  const { flags: aiFlags } = await loadWorkspaceAIConfig(
+    supabase,
+    workspace.workspace_id,
+  );
+  const aiSuggestedRepliesEnabled =
+    can(workspace.role, "send_messages") && aiFlags.suggestedReplies;
+
   const maxSequence = messages.items.reduce(
     (max, message) => Math.max(max, message.sequence_number),
     0,
@@ -102,6 +110,7 @@ export default async function ConversationDetailPage({
               lastReadSequence: conversation.visitor_last_read_sequence,
             }}
             canSend={can(workspace.role, "send_messages")}
+            aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
           />
         </section>
 

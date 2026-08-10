@@ -32,13 +32,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Local development refresh
 
-After pulling changes, run `pnpm local:refresh` when local runtime errors look misleading or when shared package output may be stale. It is **required after pulling changes that affect `packages/shared`** (schemas, types, validators, or constants). Without a refresh, the widget bundle and Next.js app can keep using stale compiled output from `packages/shared/dist`, which leads to confusing validation or type mismatches at runtime.
+After pulling changes, run `pnpm local:refresh` when local runtime errors look misleading or when shared/AI package output may be stale. It is **required after pulling changes that affect `packages/shared` or `packages/ai`**. Without a refresh, the widget bundle and Next.js app can keep using stale compiled output, which leads to confusing validation or type mismatches at runtime.
 
 The refresh script:
 
 1. rebuilds `@site-chat/shared`
-2. rebuilds `@site-chat/widget` (so committed/public widget bundles pick up updated schemas/types)
-3. removes `apps/web/.next` (clears cached Next.js build output)
+2. rebuilds `@site-chat/ai`
+3. rebuilds `@site-chat/widget` (so committed/public widget bundles pick up updated schemas/types)
+4. removes `apps/web/.next` (clears cached Next.js build output)
 
 Normal local startup sequence:
 
@@ -64,6 +65,7 @@ site-chat/
 │   └── web/              # Next.js application (App Router)
 ├── packages/
 │   ├── shared/           # Shared types, constants, validators
+│   ├── ai/               # AI provider abstraction + Suggested Replies foundation
 │   └── widget/           # Widget bundle (Phase 1+)
 ├── supabase/             # Supabase local config
 ├── tooling/              # Shared ESLint, Prettier, TSConfig

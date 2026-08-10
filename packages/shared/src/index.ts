@@ -7,6 +7,7 @@ export * from "./schemas/conversation";
 export * from "./schemas/widget";
 export * from "./schemas/workspace";
 export * from "./schemas/realtime";
+export * from "./schemas/ai";
 export * from "./realtime/merge-messages";
 export * from "./realtime/merge-conversations";
 export * from "./realtime/connection-state";
