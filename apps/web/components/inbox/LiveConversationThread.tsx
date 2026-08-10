@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
 import { OperatorMessageAttachments } from "@/components/inbox/MessageAttachments";
 import { MessageReceiptIndicator } from "@/components/inbox/MessageReceiptIndicator";
+import { SuggestedReplyPanel } from "@/components/inbox/SuggestedReplyPanel";
 import {
   fetchVisitorReceiptCursorsAction,
   markConversationDeliveredAction,
@@ -62,6 +63,7 @@ export function LiveConversationThread({
   initialMessages,
   initialVisitorReceipts,
   canSend,
+  aiSuggestedRepliesEnabled = false,
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -72,6 +74,7 @@ export function LiveConversationThread({
   initialMessages: MessageItem[];
   initialVisitorReceipts: ReceiptCursors;
   canSend: boolean;
+  aiSuggestedRepliesEnabled?: boolean;
 }) {
   // Stabilize mapped props so useLiveConversationThread's effect does not see a
   // fresh array reference on every parent re-render.
@@ -324,9 +327,11 @@ export function LiveConversationThread({
         {visitorTyping ? "Visitor is typing…" : null}
       </div>
       <LiveReplyComposer
+        workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         conversationId={conversationId}
         canSend={canSend}
+        aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
         messages={messages}
         setMessages={setMessages}
         onComposerChange={(text) => {
@@ -417,18 +422,22 @@ function MessageList({
 }
 
 function LiveReplyComposer({
+  workspaceId,
   workspaceSlug,
   conversationId,
   canSend,
+  aiSuggestedRepliesEnabled,
   messages,
   setMessages,
   onComposerChange,
   onClearTyping,
   onVisitorMessageDisplayed,
 }: {
+  workspaceId: string;
   workspaceSlug: string;
   conversationId: string;
   canSend: boolean;
+  aiSuggestedRepliesEnabled: boolean;
   messages: MessageView[];
   setMessages: (updater: (current: MessageView[]) => MessageView[]) => void;
   onComposerChange: (text: string) => void;
@@ -475,6 +484,16 @@ function LiveReplyComposer({
         You have read-only access to this conversation.
       </p>
     );
+  }
+
+  const suggestedRepliesEnabled = aiSuggestedRepliesEnabled;
+  let latestVisitorMessageId: string | null = null;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message && message.senderType === "visitor" && !message.isOptimistic) {
+      latestVisitorMessageId = message.id;
+      break;
+    }
   }
 
   return (
@@ -740,6 +759,17 @@ function LiveReplyComposer({
         });
       }}
     >
+      <SuggestedReplyPanel
+        workspaceId={workspaceId}
+        conversationId={conversationId}
+        composerText={body}
+        enabled={suggestedRepliesEnabled}
+        latestVisitorMessageId={latestVisitorMessageId}
+        onInsertIntoComposer={(text) => {
+          setBody(text);
+          onComposerChange(text);
+        }}
+      />
       <label className="sr-only" htmlFor="reply-body">
         Reply
       </label>

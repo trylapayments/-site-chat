@@ -21,6 +21,7 @@ function runPnpm(args) {
 
 export function refreshLocalBuildArtifacts() {
   runPnpm(["--filter", "@site-chat/shared", "build"]);
+  runPnpm(["--filter", "@site-chat/ai", "build"]);
   runPnpm(["--filter", "@site-chat/widget", "build"]);
 
   if (existsSync(nextDir)) {

@@ -42,7 +42,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build shared packages
-        run: pnpm --filter @site-chat/shared build
+        run: pnpm --filter @site-chat/shared build && pnpm --filter @site-chat/ai build
 
       - name: Lint
         run: pnpm lint
@@ -52,6 +52,9 @@ jobs:
 
       - name: Test shared package
         run: pnpm --filter @site-chat/shared test
+
+      - name: Test AI package
+        run: pnpm --filter @site-chat/ai test
 
       - name: Test web auth utilities
         run: pnpm --filter @site-chat/web test
@@ -86,7 +89,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build shared packages
-        run: pnpm --filter @site-chat/shared build
+        run: pnpm --filter @site-chat/shared build && pnpm --filter @site-chat/ai build
 
       - name: Build widget bundle
         run: pnpm --filter @site-chat/widget build

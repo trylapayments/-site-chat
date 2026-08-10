@@ -4,19 +4,26 @@ export const HOST_URL = "http://localhost:3001";
 export const APP_URL = "http://localhost:3000";
 export const WORKSPACE_SLUG = "acme-support";
 export const OPERATOR_EMAIL = "owner@local.test";
+export const ADMIN_EMAIL = "admin@local.test";
+export const VIEWER_EMAIL = "viewer@local.test";
 export const OPERATOR_PASSWORD = "local-dev-password";
+export const SEEDED_OPEN_CONVERSATION_PREVIEW = "Can you help with pricing?";
 
-export async function loginOperator(page: Page) {
+export async function loginAs(page: Page, email: string, password = OPERATOR_PASSWORD) {
   await page.goto(`${APP_URL}/login`);
   await expect(page.getByLabel("Email")).toBeVisible({ timeout: 60_000 });
-  await page.getByLabel("Email").fill(OPERATOR_EMAIL);
-  await page.getByLabel("Password").fill(OPERATOR_PASSWORD);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
   await Promise.all([
     page.waitForURL(/\/app\//, { timeout: 60_000 }),
     page.getByRole("button", { name: "Sign in" }).click(),
   ]);
   // Ensure the post-auth redirect landed in the app shell before callers navigate.
   await expect(page).toHaveURL(/\/app\//);
+}
+
+export async function loginOperator(page: Page) {
+  await loginAs(page, OPERATOR_EMAIL);
 }
 
 function widgetFrame(page: Page): FrameLocator {

@@ -1,8 +1,8 @@
 # Site Chat — System Architecture
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Foundation  
-**Last updated:** 2026-07-30
+**Last updated:** 2026-08-10
 
 ---
 
@@ -74,6 +74,9 @@ Site Chat is a multi-tenant SaaS platform composed of four primary runtime surfa
 | Payments | Stripe | Industry standard; Checkout + Customer Portal + webhooks |
 | Email | Resend | Transactional email with good deliverability and developer experience |
 | Error tracking | Sentry | Client and server exception capture with release tracking |
+| AI foundation | `@site-chat/ai` + provider abstraction | Suggested Replies first; OpenAI/Mock implemented; workspace-scoped, fail-closed |
+
+AI subsystem details: `docs/AI-ARCHITECTURE.md`, `docs/AI-SECURITY.md`, `docs/AI-ROADMAP.md`, `docs/adr/ADR-002-ai-provider-foundation.md`.
 
 ---
 

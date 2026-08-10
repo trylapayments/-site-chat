@@ -1,8 +1,8 @@
 # Site Chat — Product Roadmap
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Foundation  
-**Last updated:** 2026-07-30
+**Last updated:** 2026-08-10
 
 ---
 
@@ -40,7 +40,7 @@ The Minimum Viable Product is the smallest feature set that a paying customer ca
 
 | Feature | Rationale |
 |---------|-----------|
-| AI/auto-replies | Complexity; not required for core value |
+| Visitor-facing AI chatbot / auto-replies | Higher safety scope; operator Suggested Replies ships first on the AI foundation |
 | Mobile apps | Web dashboard is responsive; native apps are expensive |
 | CRM integrations | Manual workflow sufficient for early customers |
 | Custom SSO | Enterprise feature; email auth covers SMB/mid-market |
@@ -239,8 +239,8 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 | Webhooks (outbound) | Customer automation | Event system, retry logic |
 | CRM integrations (HubSpot, Salesforce) | Workflow embedding | Public API, OAuth |
 | Slack notifications | Agent workflow fit | Slack app, OAuth |
-| AI suggested replies | Agent efficiency | LLM integration, prompt engineering |
-| Chatbot / auto-responder | After-hours coverage | AI, conversation routing |
+| AI suggested replies | Agent efficiency | **Foundation shipped** — see `docs/AI-ARCHITECTURE.md`; expand models/settings UX |
+| Chatbot / auto-responder | After-hours coverage | AI foundation, conversation routing, visitor-safe prompts |
 | Custom attributes on contacts | Customer segmentation | Schema extension |
 | SLA tracking and alerts | Enterprise support teams | Timer system, reporting |
 | Advanced analytics dashboard | Business insights | Data warehouse or aggregation |

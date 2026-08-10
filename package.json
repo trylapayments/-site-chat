@@ -4,7 +4,7 @@
   "packageManager": "pnpm@10.33.3",
   "scripts": {
     "dev": "pnpm --filter @site-chat/web dev",
-    "build": "pnpm --filter @site-chat/shared build && pnpm --filter @site-chat/widget build && pnpm --filter @site-chat/web build",
+    "build": "pnpm --filter @site-chat/shared build && pnpm --filter @site-chat/ai build && pnpm --filter @site-chat/widget build && pnpm --filter @site-chat/web build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
@@ -22,6 +22,7 @@
     "@playwright/test": "^1.51.0",
     "@site-chat/eslint-config": "workspace:*",
     "@site-chat/prettier-config": "workspace:*",
+    "@supabase/supabase-js": "^2.49.1",
     "eslint": "^9.22.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",

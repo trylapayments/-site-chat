@@ -163,6 +163,17 @@ BEGIN
             'primaryColor', '#0066FF',
             'showPoweredBy', true
           )
+        ),
+        'ai', jsonb_build_object(
+          'enabled', true,
+          'provider', 'mock',
+          'model', 'mock-suggested-reply',
+          'features', jsonb_build_object(
+            'suggestedReplies', true,
+            'summary', false,
+            'rag', false,
+            'agent', false
+          )
         )
       )
     );
@@ -183,6 +194,17 @@ BEGIN
         'displayName', 'Acme Support',
         'primaryColor', '#0066FF',
         'showPoweredBy', true
+      )
+    ),
+    'ai', jsonb_build_object(
+      'enabled', true,
+      'provider', 'mock',
+      'model', 'mock-suggested-reply',
+      'features', jsonb_build_object(
+        'suggestedReplies', true,
+        'summary', false,
+        'rag', false,
+        'agent', false
       )
     )
   )

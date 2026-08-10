@@ -34,6 +34,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_rate_limit_buckets: {
+        Row: {
+          bucket_key: string
+          created_at: string
+          request_count: number
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          bucket_key: string
+          created_at?: string
+          request_count?: number
+          updated_at?: string
+          window_start: string
+        }
+        Update: {
+          bucket_key?: string
+          created_at?: string
+          request_count?: number
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      ai_usage_events: {
+        Row: {
+          completion_tokens: number | null
+          created_at: string
+          error_code: string | null
+          feature: string
+          id: string
+          latency_ms: number
+          member_id: string | null
+          model: string | null
+          prompt_tokens: number | null
+          provider: string
+          status: string
+          total_tokens: number | null
+          workspace_id: string
+        }
+        Insert: {
+          completion_tokens?: number | null
+          created_at?: string
+          error_code?: string | null
+          feature: string
+          id?: string
+          latency_ms: number
+          member_id?: string | null
+          model?: string | null
+          prompt_tokens?: number | null
+          provider: string
+          status: string
+          total_tokens?: number | null
+          workspace_id: string
+        }
+        Update: {
+          completion_tokens?: number | null
+          created_at?: string
+          error_code?: string | null
+          feature?: string
+          id?: string
+          latency_ms?: number
+          member_id?: string | null
+          model?: string | null
+          prompt_tokens?: number | null
+          provider?: string
+          status?: string
+          total_tokens?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_ai_usage_events_member_workspace"
+            columns: ["member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
       allowed_domains: {
         Row: {
           created_at: string
@@ -864,6 +951,14 @@ export type Database = {
     }
     Functions: {
       accept_workspace_invitation: { Args: { p_token: string }; Returns: Json }
+      ai_consume_rate_limit: {
+        Args: {
+          p_bucket_key: string
+          p_limit: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
       assign_conversation: {
         Args: {
           p_assignee_member_id: string
