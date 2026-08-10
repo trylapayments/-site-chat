@@ -3,8 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __resetMemoryStoreForTests,
   clearSessionToken,
+  clearVisitorPublicId,
   readSessionToken,
+  readVisitorPublicId,
   writeSessionToken,
+  writeVisitorPublicId,
 } from "./storage";
 
 describe("session storage", () => {
@@ -23,6 +26,21 @@ describe("session storage", () => {
     expect(readSessionToken(key)).toBe("token-value");
     clearSessionToken(key);
     expect(readSessionToken(key)).toBeNull();
+  });
+
+  it("reads and writes visitor public ids", () => {
+    const key = "wk_dddddddddddddddddddddddddddddddd";
+    const visitorId = "vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    expect(writeVisitorPublicId(key, visitorId)).toBe(true);
+    expect(readVisitorPublicId(key)).toBe(visitorId);
+    clearVisitorPublicId(key);
+    expect(readVisitorPublicId(key)).toBeNull();
+  });
+
+  it("rejects invalid visitor public ids", () => {
+    const key = "wk_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    expect(writeVisitorPublicId(key, "not-a-visitor-id")).toBe(false);
+    expect(readVisitorPublicId(key)).toBeNull();
   });
 
   it("falls back to in-memory storage when localStorage throws", () => {
@@ -45,5 +63,11 @@ describe("session storage", () => {
     expect(readSessionToken(key)).toBe("memory-token");
     clearSessionToken(key);
     expect(readSessionToken(key)).toBeNull();
+
+    const visitorId = "vis_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    expect(writeVisitorPublicId(key, visitorId)).toBe(true);
+    expect(readVisitorPublicId(key)).toBe(visitorId);
+    clearVisitorPublicId(key);
+    expect(readVisitorPublicId(key)).toBeNull();
   });
 });

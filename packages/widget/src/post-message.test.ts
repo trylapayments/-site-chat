@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isMessageFromIframe, isMessageFromParent } from "./post-message";
+import {
+  isEmbedMessageType,
+  isLoaderMessageType,
+  isMessageFromIframe,
+  isMessageFromParent,
+} from "./post-message";
 
 describe("postMessage validation", () => {
   it("accepts iframe messages only from the widget host origin and iframe window", () => {
@@ -71,5 +76,14 @@ describe("postMessage validation", () => {
     expect(isMessageFromParent(initFromParent, "https://evil.example.com")).toBe(false);
 
     iframe.remove();
+  });
+
+  it("recognizes loader and embed message types", () => {
+    expect(isLoaderMessageType("sitechat:init")).toBe(true);
+    expect(isLoaderMessageType("sitechat:page")).toBe(true);
+    expect(isLoaderMessageType("sitechat:identify")).toBe(true);
+    expect(isLoaderMessageType("sitechat:ready")).toBe(false);
+    expect(isEmbedMessageType("sitechat:ready")).toBe(true);
+    expect(isEmbedMessageType("sitechat:page")).toBe(false);
   });
 });
