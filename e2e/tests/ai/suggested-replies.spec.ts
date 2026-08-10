@@ -1,9 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
 
 import {
+  ADMIN_EMAIL,
   APP_URL,
   OPERATOR_PASSWORD,
+  SEEDED_OPEN_CONVERSATION_PREVIEW,
   VIEWER_EMAIL,
   WORKSPACE_SLUG,
   loginAs,
@@ -16,16 +18,98 @@ import {
   waitForWidgetRealtimeReady,
 } from "../../helpers";
 
-async function setWorkspaceAiEnabled(enabled: boolean) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    throw new Error("Missing Supabase env for AI E2E helper");
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing ${name} for AI E2E helper`);
+  }
+  return value;
+}
+
+function serviceRoleClient(): SupabaseClient {
+  return createClient(
+    requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    },
+  );
+}
+
+function anonClient(): SupabaseClient {
+  return createClient(
+    requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    },
+  );
+}
+
+async function getAcmeWorkspaceId(): Promise<string> {
+  const supabase = serviceRoleClient();
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("id")
+    .eq("slug", WORKSPACE_SLUG)
+    .single();
+  if (error || !data) {
+    throw error ?? new Error("Acme workspace not found");
+  }
+  return data.id;
+}
+
+/**
+ * Create a real workspace owned by admin@local.test (not owner@local.test).
+ * Uses the authenticated create_workspace RPC — service_role cannot INSERT workspaces.
+ */
+async function createForeignWorkspaceOwnedByAdmin(): Promise<string> {
+  const supabase = anonClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: ADMIN_EMAIL,
+    password: OPERATOR_PASSWORD,
+  });
+  if (signInError) {
+    throw signInError;
   }
 
-  const supabase = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+  const slug = `other-ai-${Date.now()}`;
+  const { data, error } = await supabase.rpc("create_workspace", {
+    p_name: "Other AI Workspace",
+    p_slug: slug,
   });
+  await supabase.auth.signOut();
+
+  if (error) {
+    throw error;
+  }
+
+  const workspaceId =
+    data && typeof data === "object" && "workspace_id" in data
+      ? String((data as { workspace_id: string }).workspace_id)
+      : null;
+  if (!workspaceId) {
+    throw new Error("create_workspace did not return workspace_id");
+  }
+  return workspaceId;
+}
+
+/** Resolve a seeded conversation id from the inbox UI (no conversations table grant for service_role). */
+async function resolveSeededConversationId(
+  page: Page,
+): Promise<{ workspaceId: string; conversationId: string }> {
+  const workspaceId = await getAcmeWorkspaceId();
+  await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
+  await openOperatorConversation(page, SEEDED_OPEN_CONVERSATION_PREVIEW);
+  const match = page.url().match(/\/inbox\/([0-9a-f-]{36})/i);
+  if (!match?.[1]) {
+    throw new Error(`Could not parse conversation id from URL: ${page.url()}`);
+  }
+  return { workspaceId, conversationId: match[1] };
+}
+
+async function setWorkspaceAiEnabled(enabled: boolean) {
+  const supabase = serviceRoleClient();
 
   const { data: workspace, error: workspaceError } = await supabase
     .from("workspaces")
@@ -198,149 +282,58 @@ test.describe("AI suggested replies", () => {
   });
 
   test("authenticated member of another workspace is denied", async ({ browser }) => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
-      throw new Error("Missing Supabase env for AI E2E helper");
-    }
-
-    const supabase = createClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const { data: acme, error: acmeError } = await supabase
-      .from("workspaces")
-      .select("id")
-      .eq("slug", WORKSPACE_SLUG)
-      .single();
-    if (acmeError || !acme) {
-      throw acmeError ?? new Error("Acme workspace not found");
-    }
-
-    const otherSlug = `other-ai-${Date.now()}`;
-    const otherPublicKey = `wk_${crypto.randomUUID().replaceAll("-", "")}`;
-    const { data: otherWorkspace, error: otherError } = await supabase
-      .from("workspaces")
-      .insert({
-        name: "Other AI Workspace",
-        slug: otherSlug,
-        widget_public_key: otherPublicKey,
-      })
-      .select("id")
-      .single();
-    if (otherError || !otherWorkspace) {
-      throw otherError ?? new Error("Failed to create other workspace");
-    }
-
-    // Ensure acme exists (operator is a member there, not of otherWorkspace).
-    expect(acme.id).not.toEqual(otherWorkspace.id);
+    const foreignWorkspaceId = await createForeignWorkspaceOwnedByAdmin();
+    const acmeWorkspaceId = await getAcmeWorkspaceId();
+    expect(foreignWorkspaceId).not.toEqual(acmeWorkspaceId);
 
     const context = await browser.newContext();
     const page = await context.newPage();
-    // Authenticated owner of acme-support must not access a foreign workspace.
+    // Authenticated owner of acme-support must not access admin's foreign workspace.
     await loginOperator(page);
 
     const response = await page.request.post(`${APP_URL}/api/v1/inbox/ai/suggested-replies`, {
       data: {
-        workspaceId: otherWorkspace.id,
+        workspaceId: foreignWorkspaceId,
         conversationId: "22222222-2222-4222-8222-222222222222",
       },
     });
 
     expect(response.status()).toBe(403);
     await context.close();
-
-    await supabase.from("workspaces").delete().eq("id", otherWorkspace.id);
   });
 
   test("authenticated viewer without send_messages is denied", async ({ browser }) => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
-      throw new Error("Missing Supabase env for AI E2E helper");
-    }
+    const setupContext = await browser.newContext();
+    const setupPage = await setupContext.newPage();
+    await loginAs(setupPage, VIEWER_EMAIL, OPERATOR_PASSWORD);
+    const { workspaceId, conversationId } = await resolveSeededConversationId(setupPage);
 
-    const supabase = createClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const { data: acme, error: acmeError } = await supabase
-      .from("workspaces")
-      .select("id")
-      .eq("slug", WORKSPACE_SLUG)
-      .single();
-    if (acmeError || !acme) {
-      throw acmeError ?? new Error("Acme workspace not found");
-    }
-
-    const { data: conversation, error: conversationError } = await supabase
-      .from("conversations")
-      .select("id")
-      .eq("workspace_id", acme.id)
-      .limit(1)
-      .maybeSingle();
-    if (conversationError || !conversation) {
-      throw conversationError ?? new Error("No conversation available for viewer AI denial test");
-    }
-
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await loginAs(page, VIEWER_EMAIL, OPERATOR_PASSWORD);
-
-    const response = await page.request.post(`${APP_URL}/api/v1/inbox/ai/suggested-replies`, {
+    const response = await setupPage.request.post(`${APP_URL}/api/v1/inbox/ai/suggested-replies`, {
       data: {
-        workspaceId: acme.id,
-        conversationId: conversation.id,
+        workspaceId,
+        conversationId,
       },
     });
 
     expect(response.status()).toBe(403);
-    await context.close();
+    await setupContext.close();
   });
 
   test("valid authenticated operator with permission can stream suggested replies", async ({
     browser,
   }) => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
-      throw new Error("Missing Supabase env for AI E2E helper");
-    }
-
-    const supabase = createClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const { data: acme, error: acmeError } = await supabase
-      .from("workspaces")
-      .select("id")
-      .eq("slug", WORKSPACE_SLUG)
-      .single();
-    if (acmeError || !acme) {
-      throw acmeError ?? new Error("Acme workspace not found");
-    }
-
-    const { data: conversation, error: conversationError } = await supabase
-      .from("conversations")
-      .select("id")
-      .eq("workspace_id", acme.id)
-      .limit(1)
-      .maybeSingle();
-    if (conversationError || !conversation) {
-      throw conversationError ?? new Error("No conversation available for operator AI allow test");
-    }
-
     const context = await browser.newContext();
     const page = await context.newPage();
     await loginOperator(page);
+    const { workspaceId, conversationId } = await resolveSeededConversationId(page);
 
     const response = await page.request.post(`${APP_URL}/api/v1/inbox/ai/suggested-replies`, {
       headers: {
         Accept: "text/event-stream",
       },
       data: {
-        workspaceId: acme.id,
-        conversationId: conversation.id,
+        workspaceId,
+        conversationId,
       },
     });
 
