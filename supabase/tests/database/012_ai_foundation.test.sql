@@ -204,10 +204,15 @@ BEGIN
   WHERE wm.workspace_id = v_workspace
     AND wm.user_id = v_owner;
 
+  -- Direct member/usage inserts require postgres/service_role privileges
+  -- (same fixture pattern as 001_workspace_foundation / 003_inbox_foundation).
+  PERFORM tests.clear_auth();
+
   INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
   VALUES (v_workspace, v_agent, 'agent', 'active')
   RETURNING id INTO v_agent_member;
 
+  SET LOCAL ROLE service_role;
   INSERT INTO public.ai_usage_events (
     workspace_id,
     member_id,
@@ -227,6 +232,7 @@ BEGIN
     'success'
   )
   RETURNING id INTO v_usage_id;
+  RESET ROLE;
 
   INSERT INTO tests.fixtures (key, value) VALUES
     ('owner_id', v_owner::text),
@@ -235,8 +241,6 @@ BEGIN
     ('owner_member_id', v_owner_member::text),
     ('agent_member_id', v_agent_member::text),
     ('usage_event_id', v_usage_id::text);
-
-  PERFORM tests.clear_auth();
 END;
 $$;
 
