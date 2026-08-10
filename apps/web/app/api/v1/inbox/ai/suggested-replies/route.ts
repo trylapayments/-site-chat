@@ -34,21 +34,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createClient();
-    const { user } = await requireUser(supabase);
-    if (!user) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "AI_UNAVAILABLE",
-            message: "Authentication required.",
-            retryable: false,
-          },
-        },
-        { status: 401 },
-      );
-    }
-
+    // Bound and parse before auth/rate-limit work so oversized payloads cannot
+    // force unbounded buffering on the hot path.
     const bodyResult = await readBoundedJsonBody(request);
     if (!bodyResult.ok) {
       return NextResponse.json(
@@ -74,6 +61,21 @@ export async function POST(request: Request) {
           },
         },
         { status: 400 },
+      );
+    }
+
+    const supabase = await createClient();
+    const { user } = await requireUser(supabase);
+    if (!user) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "AI_UNAVAILABLE",
+            message: "Authentication required.",
+            retryable: false,
+          },
+        },
+        { status: 401 },
       );
     }
 

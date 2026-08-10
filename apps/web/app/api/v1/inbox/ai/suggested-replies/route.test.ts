@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { CapabilityError } from "@/lib/permissions/require-capability";
-
-const requireUser = vi.fn();
-const getWorkspaceContext = vi.fn();
-const createClient = vi.fn();
-const streamSuggestedReply = vi.fn();
-const requireCapability = vi.fn();
+const {
+  requireUser,
+  getWorkspaceContext,
+  createClient,
+  streamSuggestedReply,
+  requireCapability,
+} = vi.hoisted(() => ({
+  requireUser: vi.fn(),
+  getWorkspaceContext: vi.fn(),
+  createClient: vi.fn(),
+  streamSuggestedReply: vi.fn(),
+  requireCapability: vi.fn(),
+}));
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser,
@@ -33,6 +39,8 @@ vi.mock("@/lib/permissions/require-capability", async () => {
 });
 
 const { POST } = await import("./route");
+const { CapabilityError } =
+  await import("@/lib/permissions/require-capability");
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const otherWorkspaceId = "22222222-2222-4222-8222-222222222222";

@@ -106,18 +106,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ai_usage_events_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_members"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "ai_usage_events_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_ai_usage_events_member_workspace"
+            columns: ["member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
           },
         ]
       }

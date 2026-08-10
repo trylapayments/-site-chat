@@ -10,6 +10,7 @@ export default defineConfig({
       "app/widget/embed/**/*.test.ts",
       "app/widget/embed/**/*.test.tsx",
       "app/api/v1/widget/realtime-token/**/*.test.ts",
+      "app/api/v1/inbox/ai/suggested-replies/**/*.test.ts",
     ],
     setupFiles: ["./vitest.setup.ts"],
   },
