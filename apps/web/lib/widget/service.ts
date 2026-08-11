@@ -1,9 +1,16 @@
 import {
+  visitorIdentifyDataSchema,
+  visitorPageViewDataSchema,
   widgetListMessagesDataSchema,
   widgetMarkReceiptDataSchema,
   widgetPublicConfigSchema,
   widgetSendMessageDataSchema,
   widgetSessionDataSchema,
+  sanitizePageUrl,
+  sanitizeReferrer,
+  type DeviceType,
+  type VisitorIdentifyData,
+  type VisitorPageViewData,
   type WidgetListMessagesData,
   type WidgetMarkReceiptData,
   type WidgetPublicConfig,
@@ -28,11 +35,15 @@ function parseRpcResult<T>(
       ? mapPublicConfigFromRpc(data)
       : label === "widget session"
         ? mapSessionFromRpc(data)
-        : label === "widget send message"
-          ? mapSendMessageFromRpc(data)
-          : label === "widget list messages"
-            ? mapListMessagesFromRpc(data)
-            : data;
+        : label === "widget identify"
+          ? mapIdentifyFromRpc(data)
+          : label === "widget page view"
+            ? mapPageViewFromRpc(data)
+            : label === "widget send message"
+              ? mapSendMessageFromRpc(data)
+              : label === "widget list messages"
+                ? mapListMessagesFromRpc(data)
+                : data;
 
   return schema.parse(mapped);
 }
@@ -76,6 +87,36 @@ function mapSessionFromRpc(data: Json): unknown {
     locale: record.locale,
     hasConversation: Boolean(record.has_conversation),
     conversationStatus: record.conversation_status ?? null,
+    visitorPublicId: record.visitor_public_id ?? null,
+    continuityToken: record.continuity_token ?? null,
+  };
+}
+
+function mapIdentifyFromRpc(data: Json): unknown {
+  const record = asRecord(data);
+
+  return {
+    visitorPublicId: record.public_id,
+    name: record.name ?? null,
+    email: record.email ?? null,
+    phone: record.phone ?? null,
+    attributes:
+      typeof record.attributes === "object" &&
+      record.attributes !== null &&
+      !Array.isArray(record.attributes)
+        ? record.attributes
+        : {},
+  };
+}
+
+function mapPageViewFromRpc(data: Json): unknown {
+  const record = asRecord(data);
+
+  return {
+    recorded: Boolean(record.recorded),
+    deduped: Boolean(record.deduped),
+    currentUrl: record.current_url ?? null,
+    currentTitle: record.current_title ?? null,
   };
 }
 
@@ -196,6 +237,21 @@ export async function createOrResumeVisitorSession(input: {
   locale?: string;
   pageUrl?: string | null;
   referrer?: string | null;
+  /** Opaque cross-session continuity token (never a public/display id). */
+  continuityToken?: string | null;
+  pageTitle?: string | null;
+  timezone?: string | null;
+  language?: string | null;
+  browserFamily?: string | null;
+  browserVersion?: string | null;
+  osFamily?: string | null;
+  deviceType?: DeviceType | null;
+  landingUrl?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
 }): Promise<WidgetSessionData> {
   const supabase = createServiceClient();
   const { data, error } = await supabase.rpc(
@@ -206,6 +262,20 @@ export async function createOrResumeVisitorSession(input: {
       p_locale: input.locale ?? "en",
       p_page_url: input.pageUrl ?? undefined,
       p_referrer: input.referrer ?? undefined,
+      p_continuity_token: input.continuityToken ?? undefined,
+      p_page_title: input.pageTitle ?? undefined,
+      p_timezone: input.timezone ?? undefined,
+      p_language: input.language ?? undefined,
+      p_browser_family: input.browserFamily ?? undefined,
+      p_browser_version: input.browserVersion ?? undefined,
+      p_os_family: input.osFamily ?? undefined,
+      p_device_type: input.deviceType ?? undefined,
+      p_landing_url: input.landingUrl ?? undefined,
+      p_utm_source: input.utmSource ?? undefined,
+      p_utm_medium: input.utmMedium ?? undefined,
+      p_utm_campaign: input.utmCampaign ?? undefined,
+      p_utm_content: input.utmContent ?? undefined,
+      p_utm_term: input.utmTerm ?? undefined,
     },
   );
 
@@ -214,6 +284,69 @@ export async function createOrResumeVisitorSession(input: {
   }
 
   return parseRpcResult("widget session", data, widgetSessionDataSchema);
+}
+
+export async function identifyVisitor(input: {
+  workspaceId: string;
+  sessionToken: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  phoneE164?: string | null;
+  attributes?: Record<string, string | number | boolean | null>;
+}): Promise<VisitorIdentifyData> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("widget_identify_visitor", {
+    p_workspace_id: input.workspaceId,
+    p_session_token: input.sessionToken,
+    p_name: input.name ?? undefined,
+    p_email: input.email ?? undefined,
+    p_phone: input.phone ?? undefined,
+    p_phone_e164: input.phoneE164 ?? undefined,
+    p_attributes: input.attributes ?? undefined,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return parseRpcResult("widget identify", data, visitorIdentifyDataSchema);
+}
+
+export async function recordPageView(input: {
+  workspaceId: string;
+  sessionToken: string;
+  url: string;
+  title?: string | null;
+  referrer?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
+  /** Optional client tab identifier; distinguishes concurrent tabs in one session. */
+  tabId?: string | null;
+}): Promise<VisitorPageViewData> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("widget_record_page_view", {
+    p_workspace_id: input.workspaceId,
+    p_session_token: input.sessionToken,
+    p_url: input.url,
+    p_title: input.title ?? undefined,
+    p_referrer: input.referrer ?? undefined,
+    p_utm_source: input.utmSource ?? undefined,
+    p_utm_medium: input.utmMedium ?? undefined,
+    p_utm_campaign: input.utmCampaign ?? undefined,
+    p_utm_content: input.utmContent ?? undefined,
+    p_utm_term: input.utmTerm ?? undefined,
+    p_tab_id: input.tabId ?? undefined,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return parseRpcResult("widget page view", data, visitorPageViewDataSchema);
 }
 
 export async function sendVisitorMessage(input: {
@@ -225,13 +358,16 @@ export async function sendVisitorMessage(input: {
   referrer?: string | null;
 }): Promise<WidgetSendMessageData> {
   const supabase = createServiceClient();
+  // Defense in depth: sanitize before RPC; DB sanitize_page_url is the final boundary.
+  const pageUrl = sanitizePageUrl(input.pageUrl) ?? undefined;
+  const referrer = sanitizeReferrer(input.referrer) ?? undefined;
   const { data, error } = await supabase.rpc("widget_send_visitor_message", {
     p_workspace_id: input.workspaceId,
     p_session_token: input.sessionToken,
     p_body: input.body,
     p_client_message_id: input.clientMessageId,
-    p_page_url: input.pageUrl ?? undefined,
-    p_referrer: input.referrer ?? undefined,
+    p_page_url: pageUrl,
+    p_referrer: referrer,
   });
 
   if (error) {

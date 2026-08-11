@@ -1,8 +1,8 @@
 # Site Chat — Database Design
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Foundation  
-**Last updated:** 2026-07-30
+**Last updated:** 2026-08-10
 
 ---
 
@@ -59,15 +59,15 @@ Site Chat uses PostgreSQL 15+ hosted on Supabase. The database is the single sou
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │ visitor_     │────▶│ contacts     │◀────│ conversations│
 │ sessions     │     └──────────────┘     └──────┬───────┘
-└──────────────┘                                 │
-                                                 ▼
-                                          ┌──────────────┐
-                                          │ messages     │
-                                          └──────┬───────┘
-                                                 │
-                                                 ▼
-                                          ┌──────────────┐
-                                          │ message_     │
+└──────┬───────┘                                 │
+       │                                         ▼
+       │                                  ┌──────────────┐
+       │                                  │ messages     │
+       ▼                                  └──────┬───────┘
+┌──────────────┐                                 │
+│ visitor_     │                                 ▼
+│ page_views   │                          ┌──────────────┐
+└──────────────┘                          │ message_     │
                                           │ attachments  │
                                           └──────────────┘
 
@@ -109,6 +109,7 @@ CREATE TYPE app_audit_action AS ENUM (
   'auth.login_new_device'
 );
 CREATE TYPE app_agent_presence AS ENUM ('online', 'away', 'offline');
+CREATE TYPE app_device_type AS ENUM ('desktop', 'mobile', 'tablet', 'bot', 'unknown');
 ```
 
 ---
@@ -239,54 +240,104 @@ Domain allowlist for widget embedding.
 
 ## 6. Visitor and Contact Tables
 
+Visitor identity semantics: [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md). Privacy: [PRIVACY.md](./PRIVACY.md). Retention: [DATA-RETENTION.md](./DATA-RETENTION.md).
+
+**Doc/code gap closed:** Session metadata columns documented below match the schema (locale, URLs, UTM, parsed device fields, timezone, language, `last_seen_at`). **Raw IP is intentionally omitted** — there is no `ip_address` / `ip_address_hash` column on `visitor_sessions`. Raw User-Agent is also not stored; only parsed `browser_*` / `os_family` / `device_type`.
+
+**URL storage policy:** `current_url`, `initial_url`, `landing_url`, `referrer` (here), `url` / `referrer` on `visitor_page_views`, and widget-sourced `conversations.source_url` / `conversations.referrer` are all written through the same allowlist sanitizer (`app_private.sanitize_page_url`, mirrored in `packages/shared/src/visitor/page-context.ts`): keep `scheme://host[:port]` + `pathname` + only `utm_source` / `utm_medium` / `utm_campaign` / `utm_content` / `utm_term`; the URL fragment and every other query parameter are stripped before the row is written. See [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md) §5.
+
 ### 6.1 visitor_sessions
 
-Browser-scoped visitor identity.
+Browser-scoped visitor session (auth token + page/device context).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | Session identifier |
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
-| contact_id | UUID | NULL, FK → contacts | Linked after identification |
+| contact_id | UUID | NULL, FK → contacts | Linked visitor identity |
 | session_token_hash | TEXT | NOT NULL | SHA-256 hash of current token |
-| user_agent | TEXT | NULL | |
-| ip_address | INET | NULL | Stored in clear for 90 days; then nulled |
-| ip_address_hash | TEXT | NULL | SHA-256 hash retained after IP nulled |
-| initial_url | TEXT | NULL | First page URL |
-| current_url | TEXT | NULL | Most recent page URL |
-| referrer | TEXT | NULL | |
-| timezone | TEXT | NULL | IANA timezone |
-| language | TEXT | NULL | BCP 47 language tag |
-| metadata_json | JSONB | NOT NULL DEFAULT '{}' | Extensible visitor metadata |
+| locale | TEXT | NOT NULL DEFAULT `'en'` | Widget UI locale |
+| initial_url | TEXT | NULL | First page URL (≤ 2048) |
+| current_url | TEXT | NULL | Most recent page URL (≤ 2048) |
+| current_title | TEXT | NULL | Most recent page title (≤ 500) |
+| landing_url | TEXT | NULL | Landing URL for the session (≤ 2048) |
+| referrer | TEXT | NULL | Referrer (≤ 2048) |
+| utm_source / utm_medium / utm_campaign / utm_content / utm_term | TEXT | NULL | UTM params (≤ 200 each) |
+| browser_family | TEXT | NULL | Parsed browser family (≤ 64); not raw UA |
+| browser_version | TEXT | NULL | Parsed browser version (≤ 64) |
+| os_family | TEXT | NULL | Parsed OS family (≤ 64) |
+| device_type | app_device_type | NULL | `desktop` / `mobile` / `tablet` / `bot` / `unknown` |
+| timezone | TEXT | NULL | IANA timezone (≤ 64) |
+| language | TEXT | NULL | BCP 47 language tag (≤ 35) |
+| country_code | CHAR(2) | NULL | Reserved for future trusted platform headers; never from IP geo |
+| active_tab_id | TEXT | NULL | Most recently reported `tab_id` from a page-view POST (≤ 64); `current_url`/`current_title` reflect this tab, not a locked "primary" tab |
+| active_tab_seen_at | TIMESTAMPTZ | NULL | Timestamp `active_tab_id` was last reported |
+| last_seen_at | TIMESTAMPTZ | NOT NULL | Last **visitor** activity (session create/resume, identify, page view) — never bumped by operator edits |
 | expires_at | TIMESTAMPTZ | NOT NULL | Session expiration |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 **Indexes:**
-- `idx_visitor_sessions_workspace` ON `(workspace_id, created_at DESC)`
-- `idx_visitor_sessions_token_hash` ON `(session_token_hash)`
-- `idx_visitor_sessions_contact` ON `(contact_id)` WHERE `contact_id IS NOT NULL`
+- `idx_visitor_sessions_workspace_id` ON `(workspace_id)`
+- `idx_visitor_sessions_token_hash` ON `(session_token_hash)` (widget foundation)
+- `idx_visitor_sessions_contact_id` ON `(contact_id)` WHERE `contact_id IS NOT NULL`
+
+**Auth token:** `session_token_hash` is a SHA-256 hash of an opaque, randomly generated Bearer token — **not** a JWT; the visitor DB role never receives identity as JWT claims. See [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md) §10.
+
+**Intentionally absent:** `ip_address`, `ip_address_hash`, raw `user_agent`.
 
 ### 6.2 contacts
 
-Persistent visitor records with identifying information.
+Persistent visitor identity records (anonymous or identified). Table name remains `contacts` (ADR-003).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
-| email | TEXT | NULL | |
+| public_id | TEXT | NOT NULL, `DEFAULT 'vis_' \|\| encode(gen_random_bytes(16), 'hex')` | Opaque `vis_` + 32 hex; UNIQUE per workspace. **Display/correlation id only — never authorization.** No RPC resolves or binds a session by this value. |
+| continuity_token_hash | TEXT | NULL, `CHECK` matches `^[a-f0-9]{64}$` | SHA-256 hex of the opaque continuity credential (`^[a-f0-9]{64}$`). **This — not `public_id` — is the cross-session binder.** Plaintext is returned to the client once (on mint) and never stored server-side. |
+| email | TEXT | NULL | Unique per workspace when present (`lower(email)`); unsigned identify enforces this as a write-time conflict, never a merge |
 | name | TEXT | NULL | |
-| phone | TEXT | NULL | |
-| custom_attributes_json | JSONB | NOT NULL DEFAULT '{}' | |
+| phone | TEXT | NULL | Display phone |
+| phone_e164 | TEXT | NULL | Normalized `+digits` (≤ 20) |
+| custom_attributes_json | JSONB | NOT NULL DEFAULT `'{}'` | Host attributes (bounded primitives) |
+| visit_count | INTEGER | NOT NULL DEFAULT 1 | Increments only when a **new** session links to this contact via a valid `continuity_token` (≥ 1) |
 | first_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | Visitor activity only — `update_visitor_profile` (operator edit) does **not** bump this |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 **Indexes:**
+- `uq_contacts_workspace_public_id` UNIQUE ON `(workspace_id, public_id)`
+- `uq_contacts_workspace_continuity_token_hash` UNIQUE ON `(workspace_id, continuity_token_hash)` WHERE `continuity_token_hash IS NOT NULL`
 - `idx_contacts_workspace_email` UNIQUE ON `(workspace_id, lower(email))` WHERE `email IS NOT NULL`
 - `idx_contacts_workspace_name` ON `(workspace_id, name)`
+
+### 6.3 visitor_page_views
+
+Bounded page-view trail for operator context.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| workspace_id | UUID | NOT NULL, FK → workspaces | |
+| visitor_session_id | UUID | NOT NULL | Composite FK → visitor_sessions `(id, workspace_id)` **ON DELETE CASCADE** |
+| contact_id | UUID | NULL | Composite FK → contacts; **ON DELETE SET NULL** |
+| url | TEXT | NOT NULL | Page URL (1–2048), sanitized to origin + path + allowlisted UTM (see URL storage policy above) |
+| title | TEXT | NULL | ≤ 500 |
+| referrer | TEXT | NULL | ≤ 2048, sanitized the same way as `url` |
+| utm_* | TEXT | NULL | ≤ 200 each |
+| tab_id | TEXT | NULL | ≤ 64; client-generated tab activity id (`sessionStorage`); distinguishes concurrent tabs in one session |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+
+**Indexes:**
+- `idx_visitor_page_views_contact_created` ON `(workspace_id, contact_id, created_at DESC)`
+- `idx_visitor_page_views_session_created` ON `(visitor_session_id, created_at DESC)`
+- `idx_visitor_page_views_session_url_created` ON `(visitor_session_id, url, created_at DESC)` (dedupe lookup)
+
+**RLS:** Authenticated SELECT when `workspace_is_accessible`; no INSERT/UPDATE/DELETE for `authenticated` (writes via service-role RPCs).
+
+**Dedupe:** `widget_record_page_view` skips insert when the same session+URL was recorded within 30 seconds.
 
 ---
 
@@ -305,8 +356,8 @@ Message threads between visitors and agents.
 | assigned_to | UUID | NULL, FK → workspace_members | Current assignee |
 | status | app_conversation_status | NOT NULL DEFAULT 'open' | |
 | subject | TEXT | NULL | Optional subject line |
-| source_url | TEXT | NULL | URL where conversation started |
-| referrer | TEXT | NULL | |
+| source_url | TEXT | NULL | URL where conversation started (sanitized; origin + path + allowlisted UTM only) |
+| referrer | TEXT | NULL | Sanitized the same way as `source_url` |
 | message_count | INTEGER | NOT NULL DEFAULT 0 | Denormalized counter |
 | last_message_at | TIMESTAMPTZ | NULL | For inbox sorting |
 | last_message_preview | TEXT | NULL | First 200 chars of last message |
@@ -698,14 +749,16 @@ Example: `20260730120000_create_workspaces_and_members.sql`
 | Data | Retention | Purge mechanism |
 |------|-----------|-----------------|
 | Messages | Workspace-configurable (default 12 months) | Scheduled job |
+| Visitor page views | Bounded trail; configurable via `settings_json.privacy.visitorDataRetentionDays` (future) | Scheduled job (future); session delete cascades |
 | Visitor sessions | 30 days after expiration | Scheduled job |
-| IP addresses (clear text) | 90 days | Scheduled job nulls column |
+| Contacts (visitor identity) | Workspace-configurable (same privacy setting, future) | Scheduled job / owner delete |
+| IP addresses (clear text) | **Not stored** on visitor sessions (intentional) | — |
 | Audit logs | Plan-dependent (90 days – 2 years) | Scheduled job |
 | Notifications | 90 days | Scheduled job |
 | Soft-deleted workspaces | 30 days | Hard delete job |
 | Stripe webhook events | 1 year | Scheduled job |
 
-Purge jobs run as Supabase Edge Functions or Vercel Cron invoking service-role endpoints. Each job is idempotent and logs rows affected.
+Purge jobs run as Supabase Edge Functions or Vercel Cron invoking service-role endpoints. Each job is idempotent and logs rows affected. Visitor identity retention architecture: [DATA-RETENTION.md](./DATA-RETENTION.md).
 
 ---
 

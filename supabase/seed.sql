@@ -322,16 +322,31 @@ BEGIN
     RETURN;
   END IF;
 
-  INSERT INTO public.contacts (workspace_id, email, name)
-  VALUES (v_workspace_id, 'jane@example.com', 'Jane Cooper')
+  INSERT INTO public.contacts (workspace_id, public_id, email, name)
+  VALUES (
+    v_workspace_id,
+    'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
+    'jane@example.com',
+    'Jane Cooper'
+  )
   RETURNING id INTO v_contact_open;
 
-  INSERT INTO public.contacts (workspace_id, email, name)
-  VALUES (v_workspace_id, 'marcus@example.com', 'Marcus Lee')
+  INSERT INTO public.contacts (workspace_id, public_id, email, name)
+  VALUES (
+    v_workspace_id,
+    'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
+    'marcus@example.com',
+    'Marcus Lee'
+  )
   RETURNING id INTO v_contact_pending;
 
-  INSERT INTO public.contacts (workspace_id, email, name)
-  VALUES (v_workspace_id, 'sara@example.com', 'Sara Nguyen')
+  INSERT INTO public.contacts (workspace_id, public_id, email, name)
+  VALUES (
+    v_workspace_id,
+    'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
+    'sara@example.com',
+    'Sara Nguyen'
+  )
   RETURNING id INTO v_contact_resolved;
 
   INSERT INTO public.visitor_sessions (workspace_id, contact_id, session_token_hash, expires_at)

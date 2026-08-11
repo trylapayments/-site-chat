@@ -57,6 +57,48 @@ export function getRequestOrigin(request: Request): string | null {
   }
 }
 
+/**
+ * Verify a browser-supplied Origin header against allowed embed origins.
+ *
+ * Allowed when Origin is present:
+ * 1. `parentOrigin` from the embed token (host page / CORS callers)
+ * 2. The Site Chat widget API origin (`request.url`) — the embed iframe is
+ *    hosted on the app origin and issues same-origin fetches from there.
+ *    Comparing only to parentOrigin incorrectly blocks all iframe API calls.
+ *
+ * Denied when Origin is present and matches neither (token replay from an
+ * unrelated site).
+ *
+ * Requests with NO `Origin` header (non-browser / some same-site cases) are
+ * allowed here; they still require a valid embed token + session.
+ */
+export function requestOriginMatchesEmbed(
+  request: Request,
+  parentOrigin: string,
+): boolean {
+  const origin = getRequestOrigin(request);
+  if (!origin) {
+    return true;
+  }
+
+  const normalizedOrigin = normalizeParentOrigin(origin);
+  const normalizedParent = normalizeParentOrigin(parentOrigin);
+  if (!normalizedOrigin || !normalizedParent) {
+    return false;
+  }
+
+  if (normalizedOrigin === normalizedParent) {
+    return true;
+  }
+
+  try {
+    const apiOrigin = normalizeParentOrigin(new URL(request.url).origin);
+    return apiOrigin !== null && normalizedOrigin === apiOrigin;
+  } catch {
+    return false;
+  }
+}
+
 export function getClientIp(request: Request): string | null {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {

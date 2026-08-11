@@ -2,11 +2,17 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
+/**
+ * Default `vite build` entry used by package scripts.
+ * Prefer the dual-pass scripts (loader IIFE then app ESM) via package.json `build`.
+ * This file remains for Vitest / tooling that expects vite.config.ts.
+ *
+ * IMPORTANT: Do not use a multi-entry ESM build for loader+app together — shared
+ * chunks emit `import` into loader.js, which breaks classic <script> embeds.
+ */
 export default defineConfig({
   plugins: [
     react({
-      // CI sets NODE_ENV=test globally; force production JSX so bundles never
-      // embed machine-specific jsxDEV fileName metadata.
       jsxRuntime: "automatic",
     }),
   ],
@@ -21,34 +27,16 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, "../../apps/web/public/widget"),
     emptyOutDir: true,
+    lib: {
+      entry: resolve(__dirname, "src/loader/index.ts"),
+      name: "SiteChatLoader",
+      formats: ["iife"],
+      fileName: () => "loader.js",
+    },
     rollupOptions: {
-      maxParallelFileOps: 1,
-      input: {
-        loader: resolve(__dirname, "src/loader/index.ts"),
-        app: resolve(__dirname, "src/app/main.tsx"),
-      },
       output: {
-        entryFileNames: (chunk) => {
-          if (chunk.name === "loader") {
-            return "loader.js";
-          }
-          if (chunk.name === "app") {
-            return "app.js";
-          }
-          return "assets/[name]-[hash].js";
-        },
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash][extname]",
-        // Keep locale dictionaries as separate hashed chunks for lazy load + CSP.
-        manualChunks(id) {
-          if (id.includes("/i18n/locales/")) {
-            const match = id.match(/locales\/([^/]+)\.ts$/);
-            if (match?.[1] && match[1] !== "en") {
-              return `locale-${match[1]}`;
-            }
-          }
-          return undefined;
-        },
+        inlineDynamicImports: true,
+        entryFileNames: "loader.js",
       },
     },
   },

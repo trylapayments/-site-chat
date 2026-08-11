@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ATTACHMENT_LIMITS } from "../attachments/limits.js";
+import { sanitizePageUrl, sanitizeReferrer } from "../visitor/page-context";
 
 export const attachmentKindSchema = z.enum(["image", "document"]);
 
@@ -71,8 +72,26 @@ export const widgetInitiateUploadsRequestSchema = z
     files: z.array(attachmentUploadFileSchema).min(1).max(ATTACHMENT_LIMITS.maxFilesPerMessage),
     body: z.string().max(4000).optional().default(""),
     clientMessageId: z.string().uuid().optional(),
-    pageUrl: z.string().url().optional().nullable(),
-    referrer: z.string().optional().nullable(),
+    pageUrl: z
+      .string()
+      .max(2048)
+      .optional()
+      .nullable()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (value === null) return null;
+        return sanitizePageUrl(value);
+      }),
+    referrer: z
+      .string()
+      .max(2048)
+      .optional()
+      .nullable()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (value === null) return null;
+        return sanitizeReferrer(value);
+      }),
   })
   .strict();
 
@@ -123,8 +142,26 @@ export const completeUploadsRequestSchema = z
     uploadIds: z.array(z.string().uuid()).min(1).max(ATTACHMENT_LIMITS.maxFilesPerMessage),
     body: z.string().max(4000).optional().default(""),
     clientMessageId: z.string().uuid().optional(),
-    pageUrl: z.string().url().optional().nullable(),
-    referrer: z.string().optional().nullable(),
+    pageUrl: z
+      .string()
+      .max(2048)
+      .optional()
+      .nullable()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (value === null) return null;
+        return sanitizePageUrl(value);
+      }),
+    referrer: z
+      .string()
+      .max(2048)
+      .optional()
+      .nullable()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (value === null) return null;
+        return sanitizeReferrer(value);
+      }),
   })
   .strict();
 

@@ -115,12 +115,14 @@ export default async function ConversationDetailPage({
         </section>
 
         <ConversationSidebar
+          workspaceId={workspace.workspace_id}
           workspaceSlug={workspaceSlug}
           conversationId={conversationId}
           conversation={conversation}
           members={members}
           canAssign={can(workspace.role, "assign_conversations")}
           canUpdateStatus={can(workspace.role, "update_conversation_status")}
+          canUpdateVisitor={can(workspace.role, "update_visitor_profile")}
         />
       </div>
     </DashboardPage>

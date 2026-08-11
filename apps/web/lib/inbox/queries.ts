@@ -8,6 +8,7 @@ import {
   markConversationDeliveredResultSchema,
   markConversationReadResultSchema,
   sendOperatorMessageResultSchema,
+  visitorProfileSchema,
   workspaceMemberOptionSchema,
   type ConversationDetail,
   type InboxUnreadTotalResult,
@@ -18,6 +19,7 @@ import {
   type MarkConversationDeliveredResult,
   type MarkConversationReadResult,
   type SendOperatorMessageResult,
+  type VisitorProfile,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
 import { z } from "zod";
@@ -271,4 +273,32 @@ export async function fetchAssignableMembers(
     data,
     "list_assignable_members",
   );
+}
+
+export async function updateVisitorProfile(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  conversationId: string,
+  patch: {
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    phone_e164?: string | null;
+  },
+): Promise<VisitorProfile> {
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "update_visitor_profile",
+    {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+      p_patch: patch,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return parseRpcResult(visitorProfileSchema, data, "update_visitor_profile");
 }

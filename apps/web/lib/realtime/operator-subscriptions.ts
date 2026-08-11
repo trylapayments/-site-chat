@@ -323,6 +323,49 @@ export function subscribeOperatorConversation(input: {
   });
 }
 
+export function subscribeOperatorVisitorContext(input: {
+  workspaceId: string;
+  visitorSessionId: string;
+  contactId?: string | null;
+  onChange: (payload: Record<string, unknown>) => void;
+  onConnectionChange?: RealtimeConnectionListener;
+}): () => void {
+  const supabase = createClient();
+
+  const bindings: Array<{
+    event: "INSERT" | "UPDATE";
+    schema: string;
+    table: string;
+    filter: string;
+    handler: (payload: Record<string, unknown>) => void;
+  }> = [
+    {
+      event: "UPDATE",
+      schema: "public",
+      table: "visitor_sessions",
+      filter: `id=eq.${input.visitorSessionId}`,
+      handler: input.onChange,
+    },
+  ];
+
+  if (input.contactId) {
+    bindings.push({
+      event: "UPDATE",
+      schema: "public",
+      table: "contacts",
+      filter: `id=eq.${input.contactId}`,
+      handler: input.onChange,
+    });
+  }
+
+  return subscribeWithOperatorAuth({
+    supabase,
+    channelName: `visitor-context:${input.visitorSessionId}`,
+    onConnectionChange: input.onConnectionChange,
+    bindings,
+  });
+}
+
 function mapChannelStatus(
   status: REALTIME_SUBSCRIBE_STATES,
   previous:

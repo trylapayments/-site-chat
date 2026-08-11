@@ -6,7 +6,12 @@ import {
   reduceUploadBatch,
   uploadBatchAriaStatus,
   createEmptyUploadBatch,
+  hostIdentifyPayloadSchema,
+  sanitizePageUrl,
+  sanitizeReferrer,
+  shouldRecordPageView,
   type ConnectionState,
+  type HostIdentifyPayload,
   type MessageReceiptStatus,
   type MessageView,
   type ReceiptCursors,
@@ -42,7 +47,7 @@ import {
   resolveWidgetLocale,
   type WidgetMessages,
 } from "../i18n";
-import { isMessageFromParent } from "../post-message";
+import { isLoaderMessageType, isMessageFromParent } from "../post-message";
 import { readParentOriginFromLocation } from "../parent-origin";
 import { maxAgentMessageSequence, shouldMarkMessagesRead } from "../realtime/receipt-visibility";
 import {
@@ -53,8 +58,12 @@ import {
 import {
   clearSessionToken,
   generateClientMessageId,
+  getOrCreateTabId,
+  readContinuityToken,
   readSessionToken,
+  writeContinuityToken,
   writeSessionToken,
+  writeVisitorPublicId,
 } from "../session/storage";
 import { isNearBottom, scrollContainerToBottom, shouldAutoScroll } from "./scroll";
 
@@ -65,8 +74,17 @@ const EMPTY_RECEIPTS: ReceiptCursors = {
 
 const MESSAGE_SOURCE = "sitechat-embed";
 
+type PageContextState = {
+  url: string | null;
+  title: string | null;
+  referrer: string | null;
+};
+
 type InitPayload = BootstrapPayload & {
   parentOrigin: string;
+  pageUrl?: string;
+  pageTitle?: string;
+  referrer?: string;
 };
 
 type WidgetState =
@@ -141,6 +159,14 @@ function WidgetApp() {
   const sessionLocaleRef = useRef<WidgetLocale>("en");
   const visitorReceiptsRef = useRef<ReceiptCursors>(EMPTY_RECEIPTS);
   const agentReceiptsRef = useRef<ReceiptCursors>(EMPTY_RECEIPTS);
+  const pageContextRef = useRef<PageContextState>({
+    url: null,
+    title: null,
+    referrer: null,
+  });
+  const lastRecordedPageUrlRef = useRef<string | null>(null);
+  const identifyInFlightRef = useRef(false);
+  const pendingIdentifyRef = useRef<HostIdentifyPayload | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -193,11 +219,24 @@ function WidgetApp() {
 
   const readySessionToken = state.status === "ready" ? state.sessionToken : null;
   const readyEmbedToken = state.status === "ready" ? state.init.embedToken : null;
+  const sessionTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    sessionTokenRef.current = readySessionToken;
+  }, [readySessionToken]);
 
   const initialize = useCallback(
     async (init: InitPayload) => {
       initRef.current = init;
       parentOriginRef.current = init.parentOrigin;
+
+      if (init.pageUrl) {
+        pageContextRef.current = {
+          url: sanitizePageUrl(init.pageUrl) ?? init.pageUrl,
+          title: init.pageTitle ?? null,
+          referrer: sanitizeReferrer(init.referrer) ?? null,
+        };
+      }
 
       const resolvedLocale = resolveWidgetLocale({
         configLocale: init.config.locale,
@@ -212,16 +251,42 @@ function WidgetApp() {
 
       try {
         const existingToken = readSessionToken(init.widgetPublicKey);
+        const continuityToken = readContinuityToken(init.widgetPublicKey);
+        const pageUrl = sanitizePageUrl(pageContextRef.current.url ?? init.pageUrl ?? null) ?? null;
+        const pageTitle = pageContextRef.current.title ?? init.pageTitle ?? null;
+        const referrer =
+          sanitizeReferrer(pageContextRef.current.referrer ?? init.referrer ?? null) ?? null;
+        let timezone: string | null = null;
+        try {
+          timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+        } catch {
+          timezone = null;
+        }
+        const language =
+          typeof navigator !== "undefined" && navigator.language ? navigator.language : null;
 
         const session = await api.createSession({
           embedToken: init.embedToken,
           sessionToken: existingToken,
           locale: resolvedLocale,
-          pageUrl: init.parentOrigin,
-          referrer: document.referrer || undefined,
+          pageUrl,
+          pageTitle,
+          referrer,
+          continuityToken,
+          timezone,
+          language,
         });
 
         writeSessionToken(init.widgetPublicKey, session.sessionToken);
+        if (session.continuityToken) {
+          writeContinuityToken(init.widgetPublicKey, session.continuityToken);
+        }
+        if (session.visitorPublicId) {
+          writeVisitorPublicId(init.widgetPublicKey, session.visitorPublicId);
+        }
+        if (pageUrl) {
+          lastRecordedPageUrlRef.current = pageUrl;
+        }
 
         // Prefer session-returned locale when supported; keep session-stable otherwise.
         const sessionLocale = resolveWidgetLocale({ configLocale: session.locale });
@@ -276,29 +341,163 @@ function WidgetApp() {
     parentOriginRef.current = parentOrigin;
     postToParent(parentOrigin, "sitechat:ready");
 
+    async function flushIdentify() {
+      const payload = pendingIdentifyRef.current;
+      const init = initRef.current;
+      const sessionToken = sessionTokenRef.current;
+      if (!payload || !init || !sessionToken || identifyInFlightRef.current) {
+        return;
+      }
+
+      identifyInFlightRef.current = true;
+      pendingIdentifyRef.current = null;
+      try {
+        const result = await api.identify({
+          embedToken: init.embedToken,
+          sessionToken,
+          name: payload.name,
+          email: payload.email,
+          phone: payload.phone,
+          attributes: payload.attributes,
+        });
+        if (result.visitorPublicId) {
+          writeVisitorPublicId(init.widgetPublicKey, result.visitorPublicId);
+        }
+      } catch {
+        // Identify is best-effort from the host page.
+      } finally {
+        identifyInFlightRef.current = false;
+        // Another host identify may have queued while this call was in flight.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- ref mutated concurrently
+        if (pendingIdentifyRef.current) {
+          void flushIdentify();
+        }
+      }
+    }
+
     function onMessage(event: MessageEvent) {
       const data = event.data as {
         source?: string;
         type?: string;
-        payload?: InitPayload;
+        payload?: unknown;
       };
 
-      if (data.source !== "sitechat-loader" || data.type !== "sitechat:init" || !data.payload) {
+      if (data.source !== "sitechat-loader" || !isLoaderMessageType(data.type)) {
         return;
       }
 
-      if (!isMessageFromParent(event, data.payload.parentOrigin)) {
+      if (data.type === "sitechat:init") {
+        const payload = data.payload as InitPayload | undefined;
+        if (!payload?.parentOrigin) {
+          return;
+        }
+        if (!isMessageFromParent(event, payload.parentOrigin)) {
+          return;
+        }
+        void initialize(payload);
         return;
       }
 
-      void initialize(data.payload);
+      const expectedOrigin = parentOriginRef.current;
+      if (!expectedOrigin || !isMessageFromParent(event, expectedOrigin)) {
+        return;
+      }
+
+      if (data.type === "sitechat:page") {
+        const page = data.payload as
+          { url?: unknown; title?: unknown; referrer?: unknown } | undefined;
+        if (!page || typeof page.url !== "string" || page.url.length === 0) {
+          return;
+        }
+
+        const nextUrl = sanitizePageUrl(page.url) ?? page.url;
+        const nextTitle = typeof page.title === "string" ? page.title : null;
+        const nextReferrer =
+          typeof page.referrer === "string" ? (sanitizeReferrer(page.referrer) ?? null) : null;
+
+        pageContextRef.current = {
+          url: nextUrl,
+          title: nextTitle,
+          referrer: nextReferrer,
+        };
+
+        const init = initRef.current;
+        const sessionToken = sessionTokenRef.current;
+        if (!init || !sessionToken) {
+          return;
+        }
+
+        if (
+          !shouldRecordPageView({
+            previousUrl: lastRecordedPageUrlRef.current,
+            nextUrl,
+          })
+        ) {
+          return;
+        }
+
+        lastRecordedPageUrlRef.current = nextUrl;
+        void api
+          .recordPageView({
+            embedToken: init.embedToken,
+            sessionToken,
+            url: nextUrl,
+            title: nextTitle,
+            referrer: nextReferrer,
+            tabId: getOrCreateTabId(),
+          })
+          .catch(() => {
+            // Page views are best-effort; keep messaging healthy on failure.
+          });
+        return;
+      }
+
+      // Remaining loader→embed type after init/page: identify
+      const parsed = hostIdentifyPayloadSchema.safeParse(data.payload);
+      if (!parsed.success) {
+        return;
+      }
+      pendingIdentifyRef.current = parsed.data;
+      void flushIdentify();
     }
 
     window.addEventListener("message", onMessage);
     return () => {
       window.removeEventListener("message", onMessage);
     };
-  }, [initialize]);
+  }, [api, initialize]);
+
+  // Flush identify queued before the session became ready.
+  useEffect(() => {
+    const payload = pendingIdentifyRef.current;
+    const init = initRef.current;
+    if (!readySessionToken || !payload || !init || identifyInFlightRef.current) {
+      return;
+    }
+
+    identifyInFlightRef.current = true;
+    pendingIdentifyRef.current = null;
+    void api
+      .identify({
+        embedToken: init.embedToken,
+        sessionToken: readySessionToken,
+        name: payload.name,
+        email: payload.email,
+        phone: payload.phone,
+        attributes: payload.attributes,
+      })
+      .then((result) => {
+        if (result.visitorPublicId) {
+          writeVisitorPublicId(init.widgetPublicKey, result.visitorPublicId);
+        }
+      })
+      .catch(() => {
+        // Identify is best-effort from the host page.
+      })
+      .finally(() => {
+        identifyInFlightRef.current = false;
+      });
+  }, [api, readySessionToken]);
 
   useEffect(() => {
     const parentOrigin = resolveParentOrigin(
@@ -588,8 +787,8 @@ function WidgetApp() {
           })),
           body,
           clientMessageId,
-          pageUrl: state.init.parentOrigin,
-          referrer: document.referrer || undefined,
+          pageUrl: pageContextRef.current.url ?? undefined,
+          referrer: pageContextRef.current.referrer ?? undefined,
         });
         activeBatchId = initiated.batchId;
 
@@ -645,8 +844,8 @@ function WidgetApp() {
           uploadIds: initiated.uploads.map((upload) => upload.uploadId),
           body,
           clientMessageId,
-          pageUrl: state.init.parentOrigin,
-          referrer: document.referrer || undefined,
+          pageUrl: pageContextRef.current.url ?? undefined,
+          referrer: pageContextRef.current.referrer ?? undefined,
         });
         resultMessage = completed.message;
         setUploadBatch(reduceUploadBatch(batch, { type: "CONFIRM_SUCCESS" }));
@@ -657,8 +856,8 @@ function WidgetApp() {
           sessionToken: state.sessionToken,
           body,
           clientMessageId,
-          pageUrl: state.init.parentOrigin,
-          referrer: document.referrer || undefined,
+          pageUrl: pageContextRef.current.url ?? undefined,
+          referrer: pageContextRef.current.referrer ?? undefined,
         });
         resultMessage = result.message;
       }

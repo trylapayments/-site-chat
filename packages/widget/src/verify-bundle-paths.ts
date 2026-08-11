@@ -24,14 +24,28 @@ export function scanBundlePaths(baseDir = BUNDLE_DIR): string[] {
     }
   }
 
+  const loaderContents = readFileSync(resolve(baseDir, "loader.js"), "utf8");
+  if (
+    /^\s*import\b/m.test(loaderContents) ||
+    /\bexport\b/.test(loaderContents) ||
+    /\bfrom\s*["']\.\//.test(loaderContents)
+  ) {
+    violations.push(
+      "loader.js: must be classic-script compatible (no ESM import/export). Build loader as IIFE.",
+    );
+  }
+  if (loaderContents.length > 40_000) {
+    violations.push(
+      `loader.js: raw size ${String(loaderContents.length)} bytes exceeds 40KB — likely pulled @site-chat/shared/Zod into the IIFE.`,
+    );
+  }
+
   return violations;
 }
 
 export function assertBundlePathsClean(baseDir = BUNDLE_DIR): void {
   const violations = scanBundlePaths(baseDir);
   if (violations.length > 0) {
-    throw new Error(
-      `Widget bundles must not embed machine-specific absolute paths:\n${violations.join("\n")}`,
-    );
+    throw new Error(`Widget bundle verification failed:\n${violations.join("\n")}`);
   }
 }

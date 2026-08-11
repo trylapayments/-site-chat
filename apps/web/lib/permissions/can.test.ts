@@ -30,4 +30,11 @@ describe("can", () => {
     expect(can("agent", "update_conversation_status")).toBe(true);
     expect(can("viewer", "update_conversation_status")).toBe(false);
   });
+
+  it("restricts update_visitor_profile to owner, admin, and agent", () => {
+    expect(can("owner", "update_visitor_profile")).toBe(true);
+    expect(can("admin", "update_visitor_profile")).toBe(true);
+    expect(can("agent", "update_visitor_profile")).toBe(true);
+    expect(can("viewer", "update_visitor_profile")).toBe(false);
+  });
 });

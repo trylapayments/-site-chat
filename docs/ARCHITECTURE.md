@@ -1,6 +1,6 @@
 # Site Chat — System Architecture
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Status:** Foundation  
 **Last updated:** 2026-08-10
 
@@ -77,6 +77,8 @@ Site Chat is a multi-tenant SaaS platform composed of four primary runtime surfa
 | AI foundation | `@site-chat/ai` + provider abstraction | Suggested Replies first; OpenAI/Mock implemented; workspace-scoped, fail-closed |
 
 AI subsystem details: `docs/AI-ARCHITECTURE.md`, `docs/AI-SECURITY.md`, `docs/AI-ROADMAP.md`, `docs/adr/ADR-002-ai-provider-foundation.md`.
+
+Visitor identity + context: `docs/VISITOR-IDENTITY.md`, `docs/PRIVACY.md`, `docs/DATA-RETENTION.md`, `docs/adr/ADR-003-visitor-identity-model.md`.
 
 ---
 
@@ -214,16 +216,29 @@ GraphQL and tRPC are explicitly not used in v1 to reduce long-term surface area.
 
 #### Widget API (Public, Session-Scoped)
 
-- Auth: Visitor session token issued on widget initialization, sent as `X-Session-Token` header.
+- Auth: Visitor session token issued on widget initialization/resume, sent as a standard `Authorization: Bearer <session_token>` header (opaque token, hashed at rest — not a JWT).
 - Rate limited per IP and per session (Vercel edge middleware + Upstash Redis or Supabase-based counter).
 - Endpoints:
-  - `POST /api/v1/widget/init` — Initialize session, return token and config
+  - `POST /api/v1/widget/session` — Create/resume session; return token, `visitor_public_id` (display only), and — the first time one is minted — a `continuity_token` the client must persist to resume the same contact later
   - `POST /api/v1/widget/messages` — Send visitor message
   - `GET /api/v1/widget/messages` — Fetch conversation history
   - `POST /api/v1/widget/attachments` — Upload file (returns signed upload URL)
-  - `POST /api/v1/widget/identify` — Link session to contact (email/name)
+  - `POST /api/v1/widget/identify` — **Unsigned** update of the current session's own contact (name/email/phone/attributes); never merges by email or reassigns to another contact
+  - `POST /api/v1/widget/page-view` — Record page view (URL redacted to origin + path + allowlisted UTM; 30s server dedupe; client throttle)
 
-Origin validation: every widget request includes the page origin; server validates against workspace domain allowlist.
+Origin validation: when the request carries a browser `Origin` header, it must match the `parentOrigin` bound to the embed token; a mismatch is rejected. Requests without an `Origin` header still require a valid embed token + session.
+
+Host page API (v1): `window.SiteChat.identify({ name, email, phone, attributes })` queues until the widget is ready (implemented — calls before init are buffered and flushed on ready), is scoped by the embed public key’s workspace, and cannot set `visitor_id` / `workspace_id`. See `docs/VISITOR-IDENTITY.md`.
+
+---
+
+### 5.2.1 Visitor Identity Architecture
+
+Visitors are modeled as durable **contacts**, separate from browser **sessions** and messaging **conversations**. Contacts carry two distinct client-facing values with opposite trust levels: `public_id` (`vis_` + 32 hex) is a **display/correlation id only** — never checked by any lookup or authorization path — while a separate opaque `continuity_token` (hashed as `continuity_token_hash`) is the actual credential a new session must present to bind to an existing contact. Page context lives on the session plus a `visitor_page_views` trail, with URLs redacted to origin + path + allowlisted UTM params before storage.
+
+Unsigned identify (current `SiteChat.identify`) patches only the calling session's own contact and never merges by email; a future **verified identify** (signed HMAC/JWT assertion) is designed but not implemented for durable cross-session merges. Identify touches this session's open/pending `conversations.updated_at` for inbox CDC; page-view does not — operators subscribe directly to `visitor_sessions`/`contacts` realtime for live page context instead.
+
+Privacy defaults: no raw IP storage, no fingerprinting, parsed device fields only, workspace-isolated PII. Full model: `docs/VISITOR-IDENTITY.md`.
 
 #### Webhook API
 
@@ -596,5 +611,6 @@ Detailed security controls are documented in [SECURITY.md](./SECURITY.md). Archi
 | 2026-07-30 | Supabase Realtime over custom WebSocket | Reduced infrastructure; Postgres CDC is source of truth | Socket.io, Ably |
 | 2026-07-30 | iframe widget over script-only | Stronger isolation from host site CSS/JS | Shadow DOM-only embed |
 | 2026-07-30 | Monorepo with separate widget package | Independent bundle size optimization | Single package |
+| 2026-08-10 | Contacts as visitor identity + opaque `public_id` | Durable identity without CRM rename/fingerprint | See ADR-003 |
 
 Decisions are append-only. Superseded decisions are marked but not deleted.

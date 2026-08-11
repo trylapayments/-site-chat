@@ -30,6 +30,29 @@ export type SessionPayload = {
   locale: WidgetLocale;
   hasConversation: boolean;
   conversationStatus: "open" | "pending" | "resolved" | "closed" | null;
+  /** Opaque public visitor id — display/correlation only, never authorization. */
+  visitorPublicId?: string | null;
+  /**
+   * Plaintext continuity token, present only the first time it is minted for
+   * this contact. Persist it and replay it as `continuityToken` on future
+   * `createSession` calls to resume the same contact.
+   */
+  continuityToken?: string | null;
+};
+
+export type IdentifyPayload = {
+  visitorPublicId: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  attributes: Record<string, string | number | boolean | null>;
+};
+
+export type PageViewPayload = {
+  recorded: boolean;
+  deduped: boolean;
+  currentUrl: string | null;
+  currentTitle: string | null;
 };
 
 export type AttachmentPayload = {
@@ -133,8 +156,17 @@ export class WidgetApiClient {
     embedToken: string;
     sessionToken?: string | null;
     locale?: WidgetLocale;
-    pageUrl?: string;
-    referrer?: string;
+    pageUrl?: string | null;
+    pageTitle?: string | null;
+    referrer?: string | null;
+    /**
+     * Opaque continuity token from a prior session, used to resume the same
+     * contact across browsers/sessions. `visitorPublicId` must never be sent
+     * here — it is a display id, not an authorization secret.
+     */
+    continuityToken?: string | null;
+    timezone?: string | null;
+    language?: string | null;
   }): Promise<SessionPayload> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -152,11 +184,74 @@ export class WidgetApiClient {
         embedToken: input.embedToken,
         locale: input.locale,
         pageUrl: input.pageUrl ?? null,
+        pageTitle: input.pageTitle ?? null,
         referrer: input.referrer ?? null,
+        continuityToken: input.continuityToken ?? null,
+        timezone: input.timezone ?? null,
+        language: input.language ?? null,
       }),
     });
 
     return this.parseResponse<SessionPayload>(response);
+  }
+
+  async identify(input: {
+    embedToken: string;
+    sessionToken: string;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    attributes?: Record<string, string | number | boolean | null>;
+  }): Promise<IdentifyPayload> {
+    const response = await fetch(new URL("/api/v1/widget/identify", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify({
+        embedToken: input.embedToken,
+        name: input.name,
+        email: input.email,
+        phone: input.phone,
+        attributes: input.attributes,
+      }),
+    });
+
+    return this.parseResponse(response);
+  }
+
+  async recordPageView(input: {
+    embedToken: string;
+    sessionToken: string;
+    url: string;
+    title?: string | null;
+    referrer?: string | null;
+    timezone?: string | null;
+    language?: string | null;
+    /** Distinguishes concurrent tabs within one session; not sent when omitted. */
+    tabId?: string | null;
+  }): Promise<PageViewPayload> {
+    const response = await fetch(new URL("/api/v1/widget/page-view", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify({
+        embedToken: input.embedToken,
+        url: input.url,
+        title: input.title ?? null,
+        referrer: input.referrer ?? null,
+        timezone: input.timezone ?? null,
+        language: input.language ?? null,
+        tabId: input.tabId ?? null,
+      }),
+    });
+
+    return this.parseResponse(response);
   }
 
   async listMessages(input: {

@@ -5,12 +5,17 @@ import {
   cancelUploadsRequestSchema,
   completeUploadsRequestSchema,
   initiateUploadsDataSchema,
+  normalizeVisitorEmail,
+  normalizeVisitorName,
+  normalizeVisitorPhone,
   operatorInitiateUploadsRequestSchema,
+  operatorUpdateVisitorSchema,
   sendOperatorMessageResultSchema,
   markConversationDeliveredSchema,
   markConversationReadSchema,
   sendMessageSchema,
   updateConversationStatusSchema,
+  VisitorIdentityError,
   type InitiateUploadsData,
   type MarkConversationDeliveredResult,
   type MarkConversationReadResult,
@@ -35,6 +40,7 @@ import {
   markConversationRead,
   sendOperatorMessage,
   updateConversationStatus,
+  updateVisitorProfile,
 } from "@/lib/inbox/queries";
 import {
   CapabilityError,
@@ -164,6 +170,68 @@ export async function updateConversationStatusAction(
       workspace.workspace_id,
       parsed.data.conversationId,
       parsed.data.status,
+    );
+
+    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
+    revalidatePath(
+      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
+    );
+    return { success: true };
+  } catch (error) {
+    return mapActionError(error);
+  }
+}
+
+export async function updateVisitorProfileAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = operatorUpdateVisitorSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid visitor profile." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "update_visitor_profile");
+
+    const patch: {
+      name?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      phone_e164?: string | null;
+    } = {};
+
+    try {
+      if (parsed.data.name !== undefined) {
+        patch.name = normalizeVisitorName(parsed.data.name);
+      }
+      if (parsed.data.email !== undefined) {
+        patch.email = normalizeVisitorEmail(parsed.data.email);
+      }
+      if (parsed.data.phone !== undefined) {
+        const phone = normalizeVisitorPhone(parsed.data.phone);
+        patch.phone = phone.display;
+        patch.phone_e164 = phone.normalized;
+      }
+    } catch (error) {
+      if (error instanceof VisitorIdentityError) {
+        return { success: false, message: error.message };
+      }
+      throw error;
+    }
+
+    await updateVisitorProfile(
+      supabase,
+      workspace.workspace_id,
+      parsed.data.conversationId,
+      patch,
     );
 
     revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));

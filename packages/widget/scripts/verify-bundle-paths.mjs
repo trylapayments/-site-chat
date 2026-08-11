@@ -23,10 +23,28 @@ for (const fileName of bundleFiles) {
   }
 }
 
-if (violations.length > 0) {
-  console.error(
-    "Widget bundles must not embed machine-specific absolute paths:\n" + violations.join("\n"),
+// Host pages load loader.js as a classic <script> (no type="module").
+// ESM import/export in loader.js silently fails and the widget never bootstraps.
+const loaderContents = readFileSync(resolve(bundleDir, "loader.js"), "utf8");
+if (
+  /^\s*import\b/m.test(loaderContents) ||
+  /\bexport\b/.test(loaderContents) ||
+  /\bfrom\s*["']\.\//.test(loaderContents)
+) {
+  violations.push(
+    "loader.js: must be classic-script compatible (no ESM import/export). Build loader as IIFE.",
   );
+}
+// Gzipped loader budget (docs/ROADMAP.md Phase 5 target: 30 KB). Soft-fail early if
+// shared barrel accidentally lands in the IIFE again (~90 KB raw / ~23 KB gz).
+if (loaderContents.length > 40_000) {
+  violations.push(
+    `loader.js: raw size ${String(loaderContents.length)} bytes exceeds 40KB — likely pulled @site-chat/shared/Zod into the IIFE.`,
+  );
+}
+
+if (violations.length > 0) {
+  console.error("Widget bundle verification failed:\n" + violations.join("\n"));
   process.exit(1);
 }
 

@@ -39,4 +39,14 @@ export const WIDGET_RATE_LIMITS = {
   realtimeToken: { windowSeconds: 60, limit: 30 },
   receipts: { windowSeconds: 60, limit: 120 },
   attachments: { windowSeconds: 60, limit: 10 },
+  identify: { windowSeconds: 60, limit: 20 },
+  pageView: { windowSeconds: 60, limit: 60 },
 } as const;
+
+export function hashIdentifyRateLimitKey(sessionToken: string): string {
+  return hashRateLimitKey("identify", sessionToken);
+}
+
+export function hashPageViewRateLimitKey(sessionToken: string): string {
+  return hashRateLimitKey("page-view", sessionToken);
+}

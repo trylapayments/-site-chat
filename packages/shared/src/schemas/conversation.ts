@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { messageAttachmentViewSchema } from "./attachments";
 import { listQuerySchema } from "./list-query";
+import { visitorActivitySchema, visitorContextSchema, visitorProfileSchema } from "./visitor";
 
 export const conversationStatusSchema = z.enum(["open", "pending", "resolved", "closed"]);
 
@@ -29,6 +30,12 @@ export const contactSummarySchema = z
 export const contactDetailSchema = z
   .object({
     id: z.string().uuid(),
+    /** Opaque public visitor id (`vis_…`). Safe to show in operator UI. */
+    public_id: z
+      .string()
+      .regex(/^vis_[a-f0-9]{32}$/)
+      .nullable()
+      .optional(),
     name: z.string().nullable(),
     email: z.string().nullable(),
     phone: z.string().nullable(),
@@ -97,6 +104,13 @@ export const conversationDetailSchema = z
      */
     visitor_ephemeral_topic: z.string().regex(/^widget-ephemeral:[a-f0-9]{64}$/),
     source_url: z.string().nullable(),
+    referrer: z.string().nullable().optional(),
+    /** Durable visitor profile (contacts row). Null only for legacy unlinked rows. */
+    visitor: visitorProfileSchema.nullable().optional(),
+    /** Current session page/device context. */
+    visitor_context: visitorContextSchema.nullable().optional(),
+    /** First/last seen, visit count, recent page views (bounded). */
+    visitor_activity: visitorActivitySchema.nullable().optional(),
 
     message_count: z.number().int(),
     last_message_at: z.string().nullable(),

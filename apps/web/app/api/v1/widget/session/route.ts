@@ -1,4 +1,6 @@
 import {
+  buildPageContext,
+  parseUserAgent,
   widgetSessionDataSchema,
   widgetSessionRequestSchema,
 } from "@site-chat/shared";
@@ -10,7 +12,11 @@ import {
   hashSessionRateLimitKey,
   WIDGET_RATE_LIMITS,
 } from "@/lib/widget/rate-limit";
-import { getClientIp, getRequestOrigin } from "@/lib/widget/origin";
+import {
+  getClientIp,
+  getRequestOrigin,
+  requestOriginMatchesEmbed,
+} from "@/lib/widget/origin";
 import {
   GENERIC_FORBIDDEN_MESSAGE,
   GENERIC_INTERNAL_MESSAGE,
@@ -26,10 +32,24 @@ import {
   createOrResumeVisitorSession,
 } from "@/lib/widget/service";
 
+function requireJsonContentType(request: Request): boolean {
+  const contentType = request.headers.get("content-type") ?? "";
+  return contentType.toLowerCase().includes("application/json");
+}
+
 export async function POST(request: Request) {
   const requestId = createRequestId();
 
   try {
+    if (!requireJsonContentType(request)) {
+      return widgetJsonError(
+        "VALIDATION_ERROR",
+        GENERIC_VALIDATION_MESSAGE,
+        400,
+        requestId,
+      );
+    }
+
     const json = (await request.json()) as unknown;
     const parsed = widgetSessionRequestSchema.safeParse(json);
 
@@ -56,6 +76,15 @@ export async function POST(request: Request) {
     const options = widgetOptionsResponse(request, corsOrigin);
     if (options) {
       return options;
+    }
+
+    if (!requestOriginMatchesEmbed(request, embedContext.parentOrigin)) {
+      return widgetJsonError(
+        "FORBIDDEN",
+        GENERIC_FORBIDDEN_MESSAGE,
+        403,
+        requestId,
+      );
     }
 
     const ipAllowed = await consumeWidgetRateLimit(
@@ -92,12 +121,34 @@ export async function POST(request: Request) {
       }
     }
 
+    const pageContext = buildPageContext({
+      url: parsed.data.pageUrl,
+      title: parsed.data.pageTitle,
+      referrer: parsed.data.referrer,
+      landingUrl: parsed.data.pageUrl,
+    });
+    const ua = parseUserAgent(request.headers.get("user-agent"));
+
     const session = await createOrResumeVisitorSession({
       workspaceId: embedContext.workspaceId,
       sessionToken: resumeToken,
       locale: parsed.data.locale,
-      pageUrl: parsed.data.pageUrl,
-      referrer: parsed.data.referrer,
+      pageUrl: pageContext.url,
+      referrer: pageContext.referrer,
+      continuityToken: parsed.data.continuityToken,
+      pageTitle: pageContext.title,
+      timezone: parsed.data.timezone,
+      language: parsed.data.language,
+      browserFamily: ua.browserFamily,
+      browserVersion: ua.browserVersion,
+      osFamily: ua.osFamily,
+      deviceType: ua.deviceType,
+      landingUrl: pageContext.landingUrl,
+      utmSource: pageContext.utmSource,
+      utmMedium: pageContext.utmMedium,
+      utmCampaign: pageContext.utmCampaign,
+      utmContent: pageContext.utmContent,
+      utmTerm: pageContext.utmTerm,
     });
 
     return widgetJsonSuccess(widgetSessionDataSchema, session, requestId, {
