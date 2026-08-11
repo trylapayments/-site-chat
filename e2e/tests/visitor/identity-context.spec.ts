@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import path from "node:path";
 
 import {
   APP_URL,
@@ -13,8 +14,12 @@ import {
   waitForOperatorInboxRealtimeReady,
   waitForOperatorThreadRealtimeReady,
   waitForWidgetRealtimeReady,
+  widgetComposer,
   widgetFrameLocator,
 } from "../../helpers";
+
+// Playwright loads specs as CommonJS in this repo — avoid import.meta.
+const fixturesDir = path.join(process.cwd(), "e2e/fixtures");
 
 async function prepareOperatorInbox(page: Page) {
   await loginOperator(page);
@@ -455,7 +460,7 @@ test.describe("visitor identity + context", () => {
     await visitor.close();
   });
 
-  test("message send does not persist sensitive query/hash secrets in operator sidebar", async ({
+  test("send and attachment complete cannot reintroduce URL secrets after page-view", async ({
     browser,
   }) => {
     const visitorContext = await browser.newContext();
@@ -464,61 +469,99 @@ test.describe("visitor identity + context", () => {
     const operator = await operatorContext.newPage();
 
     const secret = `SECRET_SEND_${Date.now()}`;
-    const marker = `url-privacy-send-${Date.now()}`;
+    const sendMarker = `url-privacy-send-${Date.now()}`;
+    const attachMarker = `url-privacy-attach-${Date.now()}`;
 
-    // Cover the send overwrite path: host URL carries access_token + hash token.
-    // Session create already sanitizes; send previously could re-write raw client
-    // pageUrl into visitor_sessions.current_url / conversations.source_url.
-    const dirtyUrl =
-      `${HOST_URL}/reset-password?access_token=${secret}&utm_source=e2e` + `#token=${secret}`;
+    // 1–2. Load on a normal page and establish visitor session.
+    await openWidget(visitor);
+    await waitForWidgetRealtimeReady(visitor);
+    const frame = widgetFrameLocator(visitor);
 
-    const loaderLoaded = visitor.waitForResponse(
+    // 3. SPA navigate to a secret-bearing URL so page-view sanitizer runs first.
+    const pageViewResponse = visitor.waitForResponse(
       (response) =>
-        response.url().includes("/widget/loader.js") &&
-        response.request().method() === "GET" &&
+        response.url().includes("/api/v1/widget/page-view") &&
+        response.request().method() === "POST" &&
         response.status() === 200,
-      { timeout: 60_000 },
+      { timeout: 30_000 },
     );
-    const bootstrapResponse = visitor.waitForResponse(
-      (response) =>
-        response.url().includes("/api/v1/widget/bootstrap") &&
-        response.request().method() === "GET",
-      { timeout: 60_000 },
-    );
+
+    await visitor.evaluate((secretValue) => {
+      window.history.pushState(
+        {},
+        "",
+        `/checkout?access_token=${secretValue}&code=${secretValue}&token=${secretValue}&utm_source=e2e#token=${secretValue}`,
+      );
+      document.title = "Checkout";
+      window.dispatchEvent(new Event("sitechat:locationchange"));
+    }, secret);
+
+    const pageView = await pageViewResponse;
+    const pageViewBody = pageView.request().postDataJSON() as {
+      url?: string | null;
+    };
+    expect(pageViewBody.url ?? "").toContain("/checkout");
+    expect(pageViewBody.url ?? "").toContain("utm_source=e2e");
+    expect(pageViewBody.url ?? "").not.toContain(secret);
+    expect(pageViewBody.url ?? "").not.toContain("access_token");
+    expect(pageViewBody.url ?? "").not.toContain("code=");
+    expect(pageViewBody.url ?? "").not.toMatch(/[#?]token=/i);
+
+    // 4. Send a message — previously could overwrite sanitized current_url with raw pageUrl.
     const sendResponsePromise = visitor.waitForResponse(
       (response) =>
         response.url().includes("/api/v1/widget/messages") &&
         response.request().method() === "POST",
       { timeout: 60_000 },
     );
-
-    await visitor.goto(dirtyUrl);
-    await loaderLoaded;
-    const bootstrap = await bootstrapResponse;
-    expect(bootstrap.status()).toBe(200);
-
-    const frame = widgetFrameLocator(visitor);
-    await expect(frame.getByRole("button", { name: "Open chat" })).toBeVisible({
-      timeout: 60_000,
-    });
-    await frame.getByRole("button", { name: "Open chat" }).click();
-    await expect(frame.getByTestId("widget-realtime-ready")).toBeVisible({
-      timeout: 60_000,
-    });
-
-    await sendWidgetMessage(visitor, marker);
+    await sendWidgetMessage(visitor, sendMarker);
     const sendResponse = await sendResponsePromise;
     expect(sendResponse.status()).toBe(200);
     const sendBody = sendResponse.request().postDataJSON() as {
       pageUrl?: string | null;
     };
-    // Client/API boundary must already strip the secret before persistence.
     expect(sendBody.pageUrl ?? "").not.toContain(secret);
     expect(sendBody.pageUrl ?? "").not.toContain("access_token");
-    expect(sendBody.pageUrl ?? "").toContain("utm_source=e2e");
+    expect(sendBody.pageUrl ?? "").not.toContain("code=");
+    expect(sendBody.pageUrl ?? "").not.toMatch(/[#?]token=/i);
 
+    // 5. Upload + complete an attachment after SPA navigation (same dirty page context).
+    const completeResponsePromise = visitor.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/widget/attachments/uploads/complete") &&
+        response.request().method() === "POST",
+      { timeout: 60_000 },
+    );
+
+    await frame
+      .getByTestId("widget-file-input")
+      .setInputFiles(path.join(fixturesDir, "sample.pdf"));
+    await expect(frame.getByTestId("pending-attachments")).toBeVisible({
+      timeout: 15_000,
+    });
+    await widgetComposer(visitor).fill(attachMarker);
+    await frame.getByRole("button", { name: "Send" }).click();
+
+    await expect(
+      frame.getByTestId("visitor-message").filter({ hasText: attachMarker }),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(frame.getByTestId("attachment-document")).toBeVisible({
+      timeout: 60_000,
+    });
+
+    const completeResponse = await completeResponsePromise;
+    expect(completeResponse.status()).toBe(200);
+    const completeBody = completeResponse.request().postDataJSON() as {
+      pageUrl?: string | null;
+    };
+    expect(completeBody.pageUrl ?? "").not.toContain(secret);
+    expect(completeBody.pageUrl ?? "").not.toContain("access_token");
+    expect(completeBody.pageUrl ?? "").not.toContain("code=");
+    expect(completeBody.pageUrl ?? "").not.toMatch(/[#?]token=/i);
+
+    // 6–7. Operator sidebar must show sanitized path/UTM and never the secret.
     await prepareOperatorInbox(operator);
-    await openOperatorConversation(operator, marker);
+    await openOperatorConversation(operator, attachMarker);
     await waitForOperatorThreadRealtimeReady(operator);
 
     const sidebar = operator.locator("main aside");
@@ -529,9 +572,9 @@ test.describe("visitor identity + context", () => {
     const sidebarText = await sidebar.innerText();
     expect(sidebarText).not.toContain(secret);
     expect(sidebarText).not.toContain("access_token");
+    expect(sidebarText).not.toContain("code=");
     expect(sidebarText).not.toMatch(/[#?]token=/i);
-    // Sanitized origin/path (+ allowlisted UTM) should still be visible.
-    expect(sidebarText).toMatch(/localhost:3001\/reset-password/);
+    expect(sidebarText).toMatch(/\/checkout/);
     expect(sidebarText).toContain("utm_source=e2e");
 
     await visitorContext.close();
