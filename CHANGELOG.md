@@ -6,6 +6,10 @@ All notable changes to Site Chat are documented in this file.
 
 ### Added
 
+- Customer Timeline foundation: durable `customer_timeline_events` with DB-side emission, canonical taxonomy, keyset pagination (`list_customer_timeline`), operator sidebar Timeline panel, and realtime INSERT subscriptions.
+- Timeline events for page views, conversation start/status/assignment, concise message milestones, attachments, and identity changes (no-op patches emit nothing).
+- Docs: `docs/CUSTOMER-TIMELINE.md`, `docs/adr/ADR-004-customer-timeline-events.md`; updates to Architecture, Database, Security, Privacy, Data Retention, Roadmap.
+- pgTAP: `supabase/tests/database/014_customer_timeline.test.sql`; shared Vitest timeline suite; Playwright customer timeline E2E.
 - Visitor identity + context foundation: durable `contacts.public_id` (`vis_` + 32 hex), session device/UTM fields, `visitor_page_views` with 30s server dedupe, widget identify/page-view RPCs, and operator `update_visitor_profile`.
 - Host identify API contract (v1): `window.SiteChat.identify({ name, email, phone, attributes })` — queue until ready, workspace-scoped by embed key, cannot set `visitor_id` / `workspace_id`.
 - Privacy defaults documented: no raw IP, no fingerprinting, workspace-isolated PII; retention architecture for future purge via `settings_json.privacy.visitorDataRetentionDays`.

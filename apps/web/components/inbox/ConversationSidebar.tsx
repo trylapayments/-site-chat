@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { VisitorSidebarLiveRefresh } from "@/components/inbox/VisitorSidebarLiveRefresh";
+import { CustomerTimeline } from "@/components/inbox/CustomerTimeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -287,6 +288,15 @@ export function ConversationSidebar({
           <p className="text-muted-foreground text-sm">No recent page views.</p>
         )}
       </section>
+
+      {conversation.contact?.id ? (
+        <CustomerTimeline
+          workspaceId={workspaceId}
+          workspaceSlug={workspaceSlug}
+          contactId={conversation.contact.id}
+          conversationId={conversationId}
+        />
+      ) : null}
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">Assignment</h2>

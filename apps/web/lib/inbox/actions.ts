@@ -5,6 +5,7 @@ import {
   cancelUploadsRequestSchema,
   completeUploadsRequestSchema,
   initiateUploadsDataSchema,
+  listCustomerTimelineQuerySchema,
   normalizeVisitorEmail,
   normalizeVisitorName,
   normalizeVisitorPhone,
@@ -17,6 +18,7 @@ import {
   updateConversationStatusSchema,
   VisitorIdentityError,
   type InitiateUploadsData,
+  type ListCustomerTimelineResult,
   type MarkConversationDeliveredResult,
   type MarkConversationReadResult,
   type ReceiptCursors,
@@ -36,6 +38,7 @@ import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   assignConversation,
   fetchConversation,
+  fetchCustomerTimeline,
   markConversationDelivered,
   markConversationRead,
   sendOperatorMessage,
@@ -499,6 +502,40 @@ export async function cancelOperatorUploadsAction(
     return { success: true, data: { cancelled } };
   } catch (error) {
     return attachmentActionError(error);
+  }
+}
+
+/**
+ * Keyset-paginated customer timeline for the operator sidebar.
+ * Viewers may read; mutations are not performed here.
+ */
+export async function listCustomerTimelineAction(
+  workspaceSlug: string,
+  input: unknown,
+): Promise<
+  | { success: true; data: ListCustomerTimelineResult }
+  | { success: false; message: string }
+> {
+  try {
+    const parsed = listCustomerTimelineQuerySchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid timeline query." };
+    }
+
+    const { workspace } = await requireInboxWorkspace(workspaceSlug);
+    requireCapability(workspace.role, "view_conversations");
+    const supabase = await createClient();
+    const data = await fetchCustomerTimeline(
+      supabase,
+      workspace.workspace_id,
+      parsed.data,
+    );
+    return { success: true, data };
+  } catch (error) {
+    if (error instanceof CapabilityError) {
+      return { success: false, message: error.message };
+    }
+    return { success: false, message: "Unable to load timeline." };
   }
 }
 
