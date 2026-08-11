@@ -6,6 +6,8 @@ import {
   widgetPublicConfigSchema,
   widgetSendMessageDataSchema,
   widgetSessionDataSchema,
+  sanitizePageUrl,
+  sanitizeReferrer,
   type DeviceType,
   type VisitorIdentifyData,
   type VisitorPageViewData,
@@ -356,13 +358,16 @@ export async function sendVisitorMessage(input: {
   referrer?: string | null;
 }): Promise<WidgetSendMessageData> {
   const supabase = createServiceClient();
+  // Defense in depth: sanitize before RPC; DB sanitize_page_url is the final boundary.
+  const pageUrl = sanitizePageUrl(input.pageUrl) ?? undefined;
+  const referrer = sanitizeReferrer(input.referrer) ?? undefined;
   const { data, error } = await supabase.rpc("widget_send_visitor_message", {
     p_workspace_id: input.workspaceId,
     p_session_token: input.sessionToken,
     p_body: input.body,
     p_client_message_id: input.clientMessageId,
-    p_page_url: input.pageUrl ?? undefined,
-    p_referrer: input.referrer ?? undefined,
+    p_page_url: pageUrl,
+    p_referrer: referrer,
   });
 
   if (error) {

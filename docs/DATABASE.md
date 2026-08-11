@@ -244,7 +244,7 @@ Visitor identity semantics: [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md). Privac
 
 **Doc/code gap closed:** Session metadata columns documented below match the schema (locale, URLs, UTM, parsed device fields, timezone, language, `last_seen_at`). **Raw IP is intentionally omitted** — there is no `ip_address` / `ip_address_hash` column on `visitor_sessions`. Raw User-Agent is also not stored; only parsed `browser_*` / `os_family` / `device_type`.
 
-**URL storage policy:** `current_url`, `initial_url`, `landing_url`, `referrer` (here) and `url` / `referrer` on `visitor_page_views` are all written through the same allowlist sanitizer (`app_private.sanitize_page_url`, mirrored in `packages/shared/src/visitor/page-context.ts`): keep `scheme://host[:port]` + `pathname` + only `utm_source` / `utm_medium` / `utm_campaign` / `utm_content` / `utm_term`; the URL fragment and every other query parameter are stripped before the row is written. See [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md) §5.
+**URL storage policy:** `current_url`, `initial_url`, `landing_url`, `referrer` (here), `url` / `referrer` on `visitor_page_views`, and widget-sourced `conversations.source_url` / `conversations.referrer` are all written through the same allowlist sanitizer (`app_private.sanitize_page_url`, mirrored in `packages/shared/src/visitor/page-context.ts`): keep `scheme://host[:port]` + `pathname` + only `utm_source` / `utm_medium` / `utm_campaign` / `utm_content` / `utm_term`; the URL fragment and every other query parameter are stripped before the row is written. See [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md) §5.
 
 ### 6.1 visitor_sessions
 
@@ -356,8 +356,8 @@ Message threads between visitors and agents.
 | assigned_to | UUID | NULL, FK → workspace_members | Current assignee |
 | status | app_conversation_status | NOT NULL DEFAULT 'open' | |
 | subject | TEXT | NULL | Optional subject line |
-| source_url | TEXT | NULL | URL where conversation started |
-| referrer | TEXT | NULL | |
+| source_url | TEXT | NULL | URL where conversation started (sanitized; origin + path + allowlisted UTM only) |
+| referrer | TEXT | NULL | Sanitized the same way as `source_url` |
 | message_count | INTEGER | NOT NULL DEFAULT 0 | Denormalized counter |
 | last_message_at | TIMESTAMPTZ | NULL | For inbox sorting |
 | last_message_preview | TEXT | NULL | First 200 chars of last message |

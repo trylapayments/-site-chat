@@ -454,4 +454,87 @@ test.describe("visitor identity + context", () => {
 
     await visitor.close();
   });
+
+  test("message send does not persist sensitive query/hash secrets in operator sidebar", async ({
+    browser,
+  }) => {
+    const visitorContext = await browser.newContext();
+    const operatorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    const operator = await operatorContext.newPage();
+
+    const secret = `SECRET_SEND_${Date.now()}`;
+    const marker = `url-privacy-send-${Date.now()}`;
+
+    // Cover the send overwrite path: host URL carries access_token + hash token.
+    // Session create already sanitizes; send previously could re-write raw client
+    // pageUrl into visitor_sessions.current_url / conversations.source_url.
+    const dirtyUrl =
+      `${HOST_URL}/reset-password?access_token=${secret}&utm_source=e2e` + `#token=${secret}`;
+
+    const loaderLoaded = visitor.waitForResponse(
+      (response) =>
+        response.url().includes("/widget/loader.js") &&
+        response.request().method() === "GET" &&
+        response.status() === 200,
+      { timeout: 60_000 },
+    );
+    const bootstrapResponse = visitor.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/widget/bootstrap") &&
+        response.request().method() === "GET",
+      { timeout: 60_000 },
+    );
+    const sendResponsePromise = visitor.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/widget/messages") &&
+        response.request().method() === "POST",
+      { timeout: 60_000 },
+    );
+
+    await visitor.goto(dirtyUrl);
+    await loaderLoaded;
+    const bootstrap = await bootstrapResponse;
+    expect(bootstrap.status()).toBe(200);
+
+    const frame = widgetFrameLocator(visitor);
+    await expect(frame.getByRole("button", { name: "Open chat" })).toBeVisible({
+      timeout: 60_000,
+    });
+    await frame.getByRole("button", { name: "Open chat" }).click();
+    await expect(frame.getByTestId("widget-realtime-ready")).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await sendWidgetMessage(visitor, marker);
+    const sendResponse = await sendResponsePromise;
+    expect(sendResponse.status()).toBe(200);
+    const sendBody = sendResponse.request().postDataJSON() as {
+      pageUrl?: string | null;
+    };
+    // Client/API boundary must already strip the secret before persistence.
+    expect(sendBody.pageUrl ?? "").not.toContain(secret);
+    expect(sendBody.pageUrl ?? "").not.toContain("access_token");
+    expect(sendBody.pageUrl ?? "").toContain("utm_source=e2e");
+
+    await prepareOperatorInbox(operator);
+    await openOperatorConversation(operator, marker);
+    await waitForOperatorThreadRealtimeReady(operator);
+
+    const sidebar = operator.locator("main aside");
+    await expect(
+      sidebar.getByRole("heading", { name: "Current context", exact: true }),
+    ).toBeVisible();
+
+    const sidebarText = await sidebar.innerText();
+    expect(sidebarText).not.toContain(secret);
+    expect(sidebarText).not.toContain("access_token");
+    expect(sidebarText).not.toMatch(/[#?]token=/i);
+    // Sanitized origin/path (+ allowlisted UTM) should still be visible.
+    expect(sidebarText).toMatch(/localhost:3001\/reset-password/);
+    expect(sidebarText).toContain("utm_source=e2e");
+
+    await visitorContext.close();
+    await operatorContext.close();
+  });
 });

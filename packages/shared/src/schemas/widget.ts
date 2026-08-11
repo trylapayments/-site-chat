@@ -3,6 +3,7 @@ import { z } from "zod";
 import { WIDGET_LOCALE_CODES, type WidgetLocale } from "../i18n/widget-locales";
 import { normalizeStoredWidgetLocale } from "../i18n/resolve-widget-locale";
 import { CONTINUITY_TOKEN_PATTERN, VISITOR_PUBLIC_ID_PATTERN } from "../visitor/constants";
+import { sanitizePageUrl, sanitizeReferrer } from "../visitor/page-context";
 import { messageAttachmentViewSchema } from "./attachments";
 
 /**
@@ -139,8 +140,26 @@ export const widgetSendMessageRequestSchema = z
     embedToken: z.string().min(1),
     body: z.string().trim().min(1).max(4000),
     clientMessageId: z.string().uuid().optional(),
-    pageUrl: z.string().url().optional().nullable(),
-    referrer: z.string().optional().nullable(),
+    pageUrl: z
+      .string()
+      .max(2048)
+      .optional()
+      .nullable()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (value === null) return null;
+        return sanitizePageUrl(value);
+      }),
+    referrer: z
+      .string()
+      .max(2048)
+      .optional()
+      .nullable()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (value === null) return null;
+        return sanitizeReferrer(value);
+      }),
   })
   .strict();
 

@@ -14,8 +14,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 -- + operator: viewer deny(1) + foreign workspace deny(1) + agent allow(1)
 --   + profile shape(2) + no last_seen bump(1)
 -- + send links conversation.contact_id from session(2)
--- = 99
-SELECT plan(99);
+-- + send/attachment URL privacy regression(16)
+-- = 115
+SELECT plan(115);
 
 TRUNCATE tests.fixtures;
 
@@ -1465,6 +1466,363 @@ SELECT is(
 SELECT ok(
   tests.fixture('send_conversation_public_id') ~ '^vis_[a-f0-9]{32}$',
   'conversation linked contact exposes durable vis_ public_id for operator detail'
+);
+
+-- ---------------------------------------------------------------------------
+-- URL privacy: message send + attachment initiate/complete must not persist
+-- raw client pageUrl/referrer secrets (access_token, code, hash tokens).
+-- ---------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  v_workspace uuid := tests.fixture('workspace_a')::uuid;
+  v_session_result jsonb;
+  v_session_token text;
+  v_session_id uuid;
+  v_current_url text;
+  v_referrer text;
+  v_source_url text;
+  v_conv_referrer text;
+  v_page_view_url text;
+  v_ensure jsonb;
+  v_conversation_id uuid;
+  v_batch_id uuid := gen_random_uuid();
+  v_upload_id uuid := gen_random_uuid();
+  v_attachment_id uuid := gen_random_uuid();
+  v_finalize jsonb;
+BEGIN
+  -- Fresh session with no prior page context, then send with dirty URLs.
+  v_session_result := public.widget_create_or_resume_visitor_session(
+    v_workspace, NULL, 'en', NULL, NULL
+  );
+  v_session_token := v_session_result ->> 'session_token';
+
+  PERFORM public.widget_send_visitor_message(
+    v_workspace,
+    v_session_token,
+    'url-privacy-send-reset',
+    gen_random_uuid(),
+    'https://example.com/reset-password?access_token=SECRET&utm_source=test',
+    'https://evil.example/login?token=SECRET&utm_medium=email#token=SECRET'
+  );
+
+  SELECT id, current_url, referrer
+  INTO v_session_id, v_current_url, v_referrer
+  FROM public.visitor_sessions
+  WHERE session_token_hash = app_private.hash_visitor_session_token(v_session_token);
+
+  SELECT source_url, referrer
+  INTO v_source_url, v_conv_referrer
+  FROM public.conversations
+  WHERE visitor_session_id = v_session_id
+    AND status IN ('open', 'pending')
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('send_reset_current_url', COALESCE(v_current_url, '')),
+    ('send_reset_source_url', COALESCE(v_source_url, '')),
+    ('send_reset_session_referrer', COALESCE(v_referrer, '')),
+    ('send_reset_conv_referrer', COALESCE(v_conv_referrer, ''));
+
+  -- OAuth callback + hash fragment on a second fresh send conversation.
+  v_session_result := public.widget_create_or_resume_visitor_session(
+    v_workspace, NULL, 'en', NULL, NULL
+  );
+  v_session_token := v_session_result ->> 'session_token';
+
+  PERFORM public.widget_send_visitor_message(
+    v_workspace,
+    v_session_token,
+    'url-privacy-send-oauth',
+    gen_random_uuid(),
+    'https://example.com/oauth/callback?code=SECRET',
+    NULL
+  );
+
+  SELECT id, current_url
+  INTO v_session_id, v_current_url
+  FROM public.visitor_sessions
+  WHERE session_token_hash = app_private.hash_visitor_session_token(v_session_token);
+
+  SELECT source_url
+  INTO v_source_url
+  FROM public.conversations
+  WHERE visitor_session_id = v_session_id
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('send_oauth_current_url', COALESCE(v_current_url, '')),
+    ('send_oauth_source_url', COALESCE(v_source_url, ''));
+
+  PERFORM public.widget_send_visitor_message(
+    v_workspace,
+    v_session_token,
+    'url-privacy-send-hash',
+    gen_random_uuid(),
+    'https://example.com/path#token=SECRET',
+    NULL
+  );
+
+  SELECT current_url INTO v_current_url
+  FROM public.visitor_sessions
+  WHERE id = v_session_id;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('send_hash_current_url', COALESCE(v_current_url, ''));
+
+  -- Prefer page-view context: establish clean current_url, then send dirty.
+  v_session_result := public.widget_create_or_resume_visitor_session(
+    v_workspace, NULL, 'en',
+    'https://example.com/pricing?utm_source=ads',
+    NULL
+  );
+  v_session_token := v_session_result ->> 'session_token';
+
+  PERFORM public.widget_record_page_view(
+    v_workspace,
+    v_session_token,
+    'https://example.com/docs/guide',
+    'Guide',
+    NULL,
+    NULL, NULL, NULL, NULL, NULL,
+    'tab-url-privacy'
+  );
+
+  SELECT current_url INTO v_page_view_url
+  FROM public.visitor_sessions
+  WHERE session_token_hash = app_private.hash_visitor_session_token(v_session_token);
+
+  PERFORM public.widget_send_visitor_message(
+    v_workspace,
+    v_session_token,
+    'url-privacy-no-stale-overwrite',
+    gen_random_uuid(),
+    'https://example.com/reset-password?access_token=SECRET&utm_source=stale',
+    'https://evil.example/?session=SECRET'
+  );
+
+  SELECT current_url, referrer
+  INTO v_current_url, v_referrer
+  FROM public.visitor_sessions
+  WHERE session_token_hash = app_private.hash_visitor_session_token(v_session_token);
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('send_preserve_page_view_url', COALESCE(v_page_view_url, '')),
+    ('send_after_stale_current_url', COALESCE(v_current_url, '')),
+    ('send_after_stale_referrer', COALESCE(v_referrer, ''));
+
+  -- Attachment initiate: ensure conversation with dirty URLs.
+  v_session_result := public.widget_create_or_resume_visitor_session(
+    v_workspace, NULL, 'en', NULL, NULL
+  );
+  v_session_token := v_session_result ->> 'session_token';
+
+  v_ensure := public.widget_ensure_conversation_for_attachments(
+    v_workspace,
+    v_session_token,
+    'https://example.com/reset-password?access_token=SECRET&utm_source=upload',
+    'https://referrer.example/path?code=SECRET&utm_campaign=spring'
+  );
+  v_conversation_id := (v_ensure ->> 'conversation_id')::uuid;
+  v_session_id := (v_ensure ->> 'visitor_session_id')::uuid;
+
+  SELECT current_url, referrer
+  INTO v_current_url, v_referrer
+  FROM public.visitor_sessions
+  WHERE id = v_session_id;
+
+  SELECT source_url, referrer
+  INTO v_source_url, v_conv_referrer
+  FROM public.conversations
+  WHERE id = v_conversation_id;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('attach_ensure_current_url', COALESCE(v_current_url, '')),
+    ('attach_ensure_source_url', COALESCE(v_source_url, '')),
+    ('attach_ensure_session_referrer', COALESCE(v_referrer, '')),
+    ('attach_ensure_conv_referrer', COALESCE(v_conv_referrer, ''));
+
+  -- Attachment complete: finalize with dirty URLs must remain sanitized.
+  INSERT INTO public.attachment_uploads (
+    id,
+    workspace_id,
+    conversation_id,
+    batch_id,
+    attachment_id,
+    storage_key,
+    filename,
+    mime_type,
+    size_bytes,
+    kind,
+    status,
+    actor_role,
+    visitor_session_id,
+    expires_at
+  ) VALUES (
+    v_upload_id,
+    v_workspace,
+    v_conversation_id,
+    v_batch_id,
+    v_attachment_id,
+    'workspaces/' || v_workspace::text || '/attachments/' || v_attachment_id::text || '/doc.pdf',
+    'doc.pdf',
+    'application/pdf',
+    1024,
+    'document',
+    'uploaded',
+    'visitor',
+    v_session_id,
+    now() + interval '30 minutes'
+  );
+
+  v_finalize := public.finalize_visitor_attachment_message(
+    v_workspace,
+    v_session_token,
+    v_batch_id,
+    ARRAY[v_upload_id],
+    'url-privacy-attach-complete',
+    gen_random_uuid(),
+    'https://example.com/oauth/callback?code=SECRET&utm_source=complete',
+    'https://evil.example/#token=SECRET',
+    jsonb_build_array(
+      jsonb_build_object(
+        'id', v_attachment_id,
+        'storage_key', 'workspaces/' || v_workspace::text || '/attachments/' || v_attachment_id::text || '/doc.pdf',
+        'thumbnail_storage_key', NULL,
+        'mime_type', 'application/pdf',
+        'filename', 'doc.pdf',
+        'size_bytes', 1024,
+        'kind', 'document',
+        'width', NULL,
+        'height', NULL,
+        'duration_ms', NULL,
+        'scan_status', 'skipped',
+        'sort_order', 0,
+        'metadata_json', '{}'::jsonb
+      )
+    )
+  );
+
+  SELECT current_url, referrer
+  INTO v_current_url, v_referrer
+  FROM public.visitor_sessions
+  WHERE id = v_session_id;
+
+  SELECT source_url
+  INTO v_source_url
+  FROM public.conversations
+  WHERE id = v_conversation_id;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('attach_complete_current_url', COALESCE(v_current_url, '')),
+    ('attach_complete_source_url', COALESCE(v_source_url, '')),
+    ('attach_complete_message_id', COALESCE(v_finalize -> 'message' ->> 'id', ''));
+END;
+$$;
+
+SELECT is(
+  tests.fixture('send_reset_current_url'),
+  'https://example.com/reset-password?utm_source=test',
+  'send sanitizes reset-password current_url (keeps UTM, drops access_token)'
+);
+
+SELECT is(
+  tests.fixture('send_reset_source_url'),
+  'https://example.com/reset-password?utm_source=test',
+  'send sanitizes conversation source_url from dirty pageUrl'
+);
+
+SELECT is(
+  tests.fixture('send_reset_session_referrer'),
+  'https://evil.example/login?utm_medium=email',
+  'send sanitizes session referrer (drops token + hash)'
+);
+
+SELECT is(
+  tests.fixture('send_reset_conv_referrer'),
+  'https://evil.example/login?utm_medium=email',
+  'send sanitizes conversation referrer'
+);
+
+SELECT ok(
+  position('SECRET' in tests.fixture('send_reset_current_url')
+    || tests.fixture('send_reset_source_url')
+    || tests.fixture('send_reset_session_referrer')
+    || tests.fixture('send_reset_conv_referrer')) = 0
+  AND position('access_token' in tests.fixture('send_reset_current_url')
+    || tests.fixture('send_reset_source_url')) = 0,
+  'send persisted URLs never contain SECRET or access_token'
+);
+
+SELECT is(
+  tests.fixture('send_oauth_current_url'),
+  'https://example.com/oauth/callback',
+  'send sanitizes oauth callback current_url (drops code)'
+);
+
+SELECT is(
+  tests.fixture('send_oauth_source_url'),
+  'https://example.com/oauth/callback',
+  'send sanitizes oauth callback source_url'
+);
+
+SELECT is(
+  tests.fixture('send_hash_current_url'),
+  'https://example.com/oauth/callback',
+  'send with hash-only dirty URL does not overwrite existing sanitized current_url'
+);
+
+SELECT is(
+  tests.fixture('send_after_stale_current_url'),
+  tests.fixture('send_preserve_page_view_url'),
+  'send does not overwrite newer page-view current_url with stale client pageUrl'
+);
+
+SELECT ok(
+  position('SECRET' in tests.fixture('send_after_stale_current_url')
+    || COALESCE(tests.fixture('send_after_stale_referrer'), '')) = 0,
+  'stale send path leaves no SECRET in session URL fields'
+);
+
+SELECT is(
+  tests.fixture('attach_ensure_current_url'),
+  'https://example.com/reset-password?utm_source=upload',
+  'attachment initiate sanitizes session current_url'
+);
+
+SELECT is(
+  tests.fixture('attach_ensure_source_url'),
+  'https://example.com/reset-password?utm_source=upload',
+  'attachment initiate sanitizes conversation source_url'
+);
+
+SELECT is(
+  tests.fixture('attach_ensure_session_referrer'),
+  'https://referrer.example/path?utm_campaign=spring',
+  'attachment initiate sanitizes session referrer'
+);
+
+SELECT is(
+  tests.fixture('attach_ensure_conv_referrer'),
+  'https://referrer.example/path?utm_campaign=spring',
+  'attachment initiate sanitizes conversation referrer'
+);
+
+SELECT is(
+  tests.fixture('attach_complete_current_url'),
+  'https://example.com/reset-password?utm_source=upload',
+  'attachment complete does not overwrite existing sanitized current_url with dirty complete pageUrl'
+);
+
+SELECT ok(
+  position('SECRET' in tests.fixture('attach_complete_current_url')
+    || tests.fixture('attach_complete_source_url')) = 0
+  AND position('code=' in tests.fixture('attach_complete_current_url')
+    || tests.fixture('attach_complete_source_url')) = 0
+  AND tests.fixture('attach_complete_message_id') ~ '^[0-9a-f-]{36}$',
+  'attachment complete persists no SECRET/code and creates a message'
 );
 
 SELECT * FROM finish();

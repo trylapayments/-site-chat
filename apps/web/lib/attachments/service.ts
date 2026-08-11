@@ -7,6 +7,8 @@ import {
   contentDispositionAttachment,
   createUploadBroadcastPayload,
   isAntivirusAllowlisted,
+  sanitizePageUrl,
+  sanitizeReferrer,
   type AntivirusScanner,
   type InitiateUploadsData,
   type MessageAttachmentView,
@@ -14,6 +16,7 @@ import {
   type ValidatedAttachmentFile,
   validateAttachmentBatch,
   validateMagicBytesAgainstDeclared,
+  type Json,
 } from "@site-chat/shared";
 import { randomUUID } from "node:crypto";
 
@@ -24,7 +27,6 @@ import {
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { callPublicRpc } from "@/lib/workspace/rpc";
-import type { Json } from "@site-chat/shared";
 
 export type InitiateUploadFileInput = {
   localId: string;
@@ -55,13 +57,16 @@ async function resolveVisitorConversationContext(input: {
   referrer?: string | null;
 }): Promise<{ conversationId: string; visitorSessionId: string }> {
   const supabase = createServiceClient();
+  // Defense in depth: sanitize before RPC; DB sanitize_page_url is the final boundary.
+  const pageUrl = sanitizePageUrl(input.pageUrl) ?? undefined;
+  const referrer = sanitizeReferrer(input.referrer) ?? undefined;
   const { data, error } = await supabase.rpc(
     "widget_ensure_conversation_for_attachments",
     {
       p_workspace_id: input.workspaceId,
       p_session_token: input.sessionToken,
-      p_page_url: input.pageUrl ?? undefined,
-      p_referrer: input.referrer ?? undefined,
+      p_page_url: pageUrl,
+      p_referrer: referrer,
     },
   );
 
@@ -323,6 +328,9 @@ export async function completeVisitorUploads(
   deps?: AttachmentServiceDeps,
 ) {
   const supabase = createServiceClient();
+  // Defense in depth: sanitize before RPC; DB sanitize_page_url is the final boundary.
+  const pageUrl = sanitizePageUrl(input.pageUrl) ?? undefined;
+  const referrer = sanitizeReferrer(input.referrer) ?? undefined;
 
   // Idempotent retry: if uploads are already confirmed, finalize returns the
   // existing message via client_message_id without re-validating storage.
@@ -343,8 +351,8 @@ export async function completeVisitorUploads(
         p_upload_ids: input.uploadIds,
         p_body: input.body ?? "",
         p_client_message_id: input.clientMessageId,
-        p_page_url: input.pageUrl ?? undefined,
-        p_referrer: input.referrer ?? undefined,
+        p_page_url: pageUrl,
+        p_referrer: referrer,
         p_attachments: [],
       },
     );
@@ -372,8 +380,8 @@ export async function completeVisitorUploads(
       p_upload_ids: input.uploadIds,
       p_body: input.body ?? "",
       p_client_message_id: input.clientMessageId,
-      p_page_url: input.pageUrl ?? undefined,
-      p_referrer: input.referrer ?? undefined,
+      p_page_url: pageUrl,
+      p_referrer: referrer,
       p_attachments: prepared.attachmentRows,
     },
   );

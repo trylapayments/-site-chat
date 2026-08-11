@@ -7,6 +7,8 @@ import {
   uploadBatchAriaStatus,
   createEmptyUploadBatch,
   hostIdentifyPayloadSchema,
+  sanitizePageUrl,
+  sanitizeReferrer,
   shouldRecordPageView,
   type ConnectionState,
   type HostIdentifyPayload,
@@ -230,9 +232,9 @@ function WidgetApp() {
 
       if (init.pageUrl) {
         pageContextRef.current = {
-          url: init.pageUrl,
+          url: sanitizePageUrl(init.pageUrl) ?? init.pageUrl,
           title: init.pageTitle ?? null,
-          referrer: init.referrer ?? null,
+          referrer: sanitizeReferrer(init.referrer) ?? null,
         };
       }
 
@@ -250,9 +252,10 @@ function WidgetApp() {
       try {
         const existingToken = readSessionToken(init.widgetPublicKey);
         const continuityToken = readContinuityToken(init.widgetPublicKey);
-        const pageUrl = pageContextRef.current.url ?? init.pageUrl ?? null;
+        const pageUrl = sanitizePageUrl(pageContextRef.current.url ?? init.pageUrl ?? null) ?? null;
         const pageTitle = pageContextRef.current.title ?? init.pageTitle ?? null;
-        const referrer = pageContextRef.current.referrer ?? init.referrer ?? null;
+        const referrer =
+          sanitizeReferrer(pageContextRef.current.referrer ?? init.referrer ?? null) ?? null;
         let timezone: string | null = null;
         try {
           timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
@@ -407,9 +410,10 @@ function WidgetApp() {
           return;
         }
 
-        const nextUrl = page.url;
+        const nextUrl = sanitizePageUrl(page.url) ?? page.url;
         const nextTitle = typeof page.title === "string" ? page.title : null;
-        const nextReferrer = typeof page.referrer === "string" ? page.referrer : null;
+        const nextReferrer =
+          typeof page.referrer === "string" ? (sanitizeReferrer(page.referrer) ?? null) : null;
 
         pageContextRef.current = {
           url: nextUrl,

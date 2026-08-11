@@ -99,7 +99,7 @@ Full page URLs, landing URLs, and referrers frequently carry query-string secret
 
 - **Kept:** origin (`scheme://host[:port]`) + `pathname`, plus only these five query params if present: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`.
 - **Stripped:** the URL fragment (`#...`) is discarded entirely before any parsing. Every other query parameter is dropped — this is an **allowlist**, not a blacklist of "known-bad" params.
-- Applies uniformly to `visitor_sessions.current_url` / `initial_url` / `landing_url` / `referrer` and every `visitor_page_views.url` / `referrer` row.
+- Applies uniformly to `visitor_sessions.current_url` / `initial_url` / `landing_url` / `referrer`, every `visitor_page_views.url` / `referrer` row, and widget-sourced `conversations.source_url` / `conversations.referrer` (session create, page-view, message send, attachment initiate/complete).
 
 Because the redaction happens before storage, **the operator dashboard can never display a stripped secret** — there is nothing to accidentally render, export, or leak later. This removes an entire class of "we stored it but forgot to redact it on the way out" bugs.
 
@@ -159,5 +159,6 @@ Page titles and URLs are attacker-controlled on compromised or malicious host pa
 
 | Date | Change |
 |------|--------|
+| 2026-08-11 | Clarified URL privacy also covers conversation `source_url`/`referrer` and send/attachment write paths |
 | 2026-08-10 | Security hardening: distinguished `public_id` (non-secret, display-only) from `continuity_token`/`continuity_token_hash` (secret, the real continuity mechanism, hashed at rest); documented that unsigned identify never merges by email; added the URL privacy policy (allowlist sanitizer) section; split retention into implemented cascades vs. future purge jobs |
 | 2026-08-10 | Initial visitor privacy doc |
