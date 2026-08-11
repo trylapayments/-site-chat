@@ -474,7 +474,6 @@ test.describe("visitor identity + context", () => {
 
     // 1–2. Load on a normal page and establish visitor session.
     await openWidget(visitor);
-    await waitForWidgetRealtimeReady(visitor);
     const frame = widgetFrameLocator(visitor);
 
     // 3. SPA navigate to a secret-bearing URL so page-view sanitizer runs first.
@@ -515,6 +514,7 @@ test.describe("visitor identity + context", () => {
       { timeout: 60_000 },
     );
     await sendWidgetMessage(visitor, sendMarker);
+    await waitForWidgetRealtimeReady(visitor);
     const sendResponse = await sendResponsePromise;
     expect(sendResponse.status()).toBe(200);
     const sendBody = sendResponse.request().postDataJSON() as {
