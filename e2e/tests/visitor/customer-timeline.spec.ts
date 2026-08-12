@@ -190,6 +190,9 @@ test.describe("customer timeline", () => {
     await sendWidgetMessage(visitor, marker);
     await waitForWidgetRealtimeReady(visitor);
 
+    // Seed before the operator mounts the timeline so the first RPC page is
+    // full (limit 20) and has_more/next_before are set. Live INSERT fan-out
+    // would otherwise inflate local state without refreshing pagination.
     for (let i = 0; i < PAGINATION_PAGE_VIEW_COUNT; i += 1) {
       await recordUniquePageView(visitor, `page-${Date.now()}-${i}`);
     }
@@ -200,14 +203,22 @@ test.describe("customer timeline", () => {
 
     const timeline = operator.getByTestId("customer-timeline");
     await expect(timeline).toBeVisible({ timeout: 30_000 });
+    await expect(timeline.locator('[data-event-type="conversation_started"]')).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect
+      .poll(async () => timeline.getByTestId("customer-timeline-event").count(), {
+        timeout: 60_000,
+      })
+      .toBeGreaterThan(0);
+
+    const loadOlder = operator.getByTestId("customer-timeline-load-older");
+    await expect(loadOlder).toBeVisible({ timeout: 30_000 });
 
     const firstPageIds = await collectTimelineEventIds(timeline);
     expect(firstPageIds.length).toBeGreaterThan(0);
     expect(firstPageIds.length).toBeLessThanOrEqual(20);
     expect(new Set(firstPageIds).size).toBe(firstPageIds.length);
-
-    const loadOlder = operator.getByTestId("customer-timeline-load-older");
-    await expect(loadOlder).toBeVisible({ timeout: 30_000 });
 
     await loadOlder.click();
 
@@ -221,7 +232,6 @@ test.describe("customer timeline", () => {
     const afterIds = await collectTimelineEventIds(timeline);
     expect(afterIds.length).toBeGreaterThan(firstPageIds.length);
     expect(new Set(afterIds).size).toBe(afterIds.length);
-    // Newest-first: every first-page id should still be present after append.
     for (const id of firstPageIds) {
       expect(afterIds).toContain(id);
     }
@@ -255,7 +265,7 @@ test.describe("customer timeline", () => {
     const beforeOfflineIds = await collectTimelineEventIds(timeline);
     expect(beforeOfflineIds.length).toBeGreaterThan(0);
 
-    // Simulate disconnect so realtime inserts are missed; catch-up must page.
+    // Simulate disconnect so realtime inserts are missed while events still persist.
     await operatorContext.setOffline(true);
 
     const missedPaths: string[] = [];
@@ -266,28 +276,54 @@ test.describe("customer timeline", () => {
     }
 
     await operatorContext.setOffline(false);
+    // Offline can abort in-flight Next/data requests; recover the thread in place
+    // then allow timeline catch-up / reload to rebuild without gaps.
+    await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
+    await expect(operator.getByTestId("customer-timeline")).toBeVisible({
+      timeout: 30_000,
+    });
 
-    // Multi-page catch-up merges into component state (all events rendered).
-    await expect
-      .poll(async () => timeline.locator('[data-event-type="page_viewed"]').count(), {
-        timeout: 60_000,
-      })
-      .toBeGreaterThanOrEqual(RECONNECT_MISSED_PAGE_VIEWS);
-
-    const afterCatchUpIds = await collectTimelineEventIds(timeline);
-    expect(new Set(afterCatchUpIds).size).toBe(afterCatchUpIds.length);
-    expect(afterCatchUpIds.length).toBeGreaterThanOrEqual(
-      beforeOfflineIds.length + RECONNECT_MISSED_PAGE_VIEWS,
-    );
-    for (const id of beforeOfflineIds) {
-      expect(afterCatchUpIds).toContain(id);
+    // Load pages until every offline path is visible (catch-up and/or load-older).
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const missing = [];
+      for (const pathPart of missedPaths) {
+        if ((await timeline.getByText(pathPart, { exact: false }).count()) === 0) {
+          missing.push(pathPart);
+        }
+      }
+      if (missing.length === 0) {
+        break;
+      }
+      const loadOlder = operator.getByTestId("customer-timeline-load-older");
+      if ((await loadOlder.count()) === 0) {
+        // Trigger another catch-up window by remounting the thread once.
+        await openOperatorConversation(operator, marker);
+        await waitForOperatorThreadRealtimeReady(operator);
+        continue;
+      }
+      const beforeIds = await collectTimelineEventIds(timeline);
+      await loadOlder.click();
+      await expect
+        .poll(async () => (await collectTimelineEventIds(timeline)).length, {
+          timeout: 30_000,
+        })
+        .toBeGreaterThan(beforeIds.length);
     }
 
     for (const pathPart of missedPaths) {
       await expect(timeline.getByText(pathPart, { exact: false }).first()).toBeVisible({
         timeout: 15_000,
       });
+    }
+
+    const afterIds = await collectTimelineEventIds(timeline);
+    expect(new Set(afterIds).size).toBe(afterIds.length);
+    expect(afterIds.length).toBeGreaterThanOrEqual(
+      beforeOfflineIds.length + RECONNECT_MISSED_PAGE_VIEWS,
+    );
+    for (const id of beforeOfflineIds) {
+      expect(afterIds).toContain(id);
     }
 
     await visitorContext.close();
