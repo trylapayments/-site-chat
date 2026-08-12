@@ -49,11 +49,10 @@ BEGIN
     (v_workspace_a, v_viewer_a, 'viewer', 'active'),
     (v_workspace_a, v_agent_a, 'agent', 'active');
 
-  INSERT INTO public.contacts (workspace_id, public_id, name)
+  INSERT INTO public.contacts (workspace_id, public_id)
   VALUES (
     v_workspace_a,
-    'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
-    'Timeline Visitor A'
+    'vis_' || encode(extensions.gen_random_bytes(16), 'hex')
   )
   RETURNING id INTO v_contact_a;
 
@@ -364,7 +363,7 @@ SELECT is(
 );
 
 -- ---------------------------------------------------------------------------
--- Identity no-op vs change
+-- Identity: anonymous → identified, then no-op on identical values
 -- ---------------------------------------------------------------------------
 
 SELECT lives_ok(
@@ -372,25 +371,26 @@ SELECT lives_ok(
     SELECT public.widget_identify_visitor(
       tests.fixture('workspace_a')::uuid,
       tests.fixture('session_token'),
-      'Timeline Visitor A',
-      NULL,
+      'Jane Timeline',
+      'jane.timeline@example.com',
       NULL,
       NULL,
       NULL
     );
   $$,
-  'identify with unchanged name (no-op)'
+  'identify anonymous visitor with name/email'
 );
 
-SELECT is(
-  (
-    SELECT count(*)::integer
+SELECT ok(
+  EXISTS (
+    SELECT 1
     FROM public.customer_timeline_events
     WHERE workspace_id = tests.fixture('workspace_a')::uuid
-      AND event_type IN ('visitor_identified', 'visitor_profile_updated')
+      AND event_type = 'visitor_identified'
+      AND metadata_json ->> 'email' = 'jane.timeline@example.com'
+      AND NOT (metadata_json ? 'continuity_token')
   ),
-  0,
-  'no-op identify creates no identity timeline event'
+  'visitor_identified emitted with safe metadata'
 );
 
 SELECT lives_ok(
@@ -405,19 +405,18 @@ SELECT lives_ok(
       NULL
     );
   $$,
-  'identify with new email/name'
+  'identify with unchanged values (no-op)'
 );
 
-SELECT ok(
-  EXISTS (
-    SELECT 1
+SELECT is(
+  (
+    SELECT count(*)::integer
     FROM public.customer_timeline_events
     WHERE workspace_id = tests.fixture('workspace_a')::uuid
-      AND event_type = 'visitor_identified'
-      AND metadata_json ->> 'email' = 'jane.timeline@example.com'
-      AND NOT (metadata_json ? 'continuity_token')
+      AND event_type IN ('visitor_identified', 'visitor_profile_updated')
   ),
-  'visitor_identified emitted with safe metadata'
+  1,
+  'no-op identify creates no additional identity timeline event'
 );
 
 -- ---------------------------------------------------------------------------
