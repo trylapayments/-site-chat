@@ -399,9 +399,16 @@ SELECT is(
 -- last_message_at must not bump on assignment
 -- ---------------------------------------------------------------------------
 
+SELECT tests.clear_auth();
+
 UPDATE public.conversations
 SET last_message_at = '2026-01-01T00:00:00Z'
 WHERE id = tests.fixture('conversation_b')::uuid;
+
+SELECT tests.authenticate_as(
+  tests.fixture('agent_a')::uuid,
+  'assign-agent-a@test.local'
+);
 
 SELECT is(
   (
