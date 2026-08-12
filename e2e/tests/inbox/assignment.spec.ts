@@ -49,8 +49,8 @@ async function startVisitorConversation(
   const context = await browser.newContext();
   const page = await context.newPage();
   await openWidget(page);
-  await waitForWidgetRealtimeReady(page);
   await sendWidgetMessage(page, marker);
+  await waitForWidgetRealtimeReady(page);
   return { context, page };
 }
 
