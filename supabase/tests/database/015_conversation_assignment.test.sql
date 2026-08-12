@@ -29,6 +29,7 @@ DECLARE
   v_foreign_agent_member uuid;
   v_contact_a uuid;
   v_session_a uuid;
+  v_session_b uuid;
   v_conversation_a uuid;
   v_conversation_b uuid;
 BEGIN
