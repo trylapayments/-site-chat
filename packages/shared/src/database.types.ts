@@ -532,15 +532,15 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_conversations_assigned_to_workspace"
-            columns: ["assigned_to", "workspace_id"]
+            foreignKeyName: "fk_conversations_assigned_by_workspace"
+            columns: ["assigned_by_member_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "workspace_members"
             referencedColumns: ["id", "workspace_id"]
           },
           {
-            foreignKeyName: "fk_conversations_assigned_by_workspace"
-            columns: ["assigned_by_member_id", "workspace_id"]
+            foreignKeyName: "fk_conversations_assigned_to_workspace"
+            columns: ["assigned_to", "workspace_id"]
             isOneToOne: false
             referencedRelation: "workspace_members"
             referencedColumns: ["id", "workspace_id"]
@@ -1194,24 +1194,8 @@ export type Database = {
       }
       assign_conversation: {
         Args: {
-          p_assignee_member_id: string | null
+          p_assignee_member_id: string
           p_conversation_id: string
-          p_workspace_id: string
-        }
-        Returns: Json
-      }
-      take_conversation: {
-        Args: {
-          p_conversation_id: string
-          p_expected_version?: number | null
-          p_workspace_id: string
-        }
-        Returns: Json
-      }
-      unassign_conversation: {
-        Args: {
-          p_conversation_id: string
-          p_expected_version?: number | null
           p_workspace_id: string
         }
         Returns: Json
@@ -1356,6 +1340,22 @@ export type Database = {
       soft_delete_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
+      }
+      take_conversation: {
+        Args: {
+          p_conversation_id: string
+          p_expected_version?: number
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      unassign_conversation: {
+        Args: {
+          p_conversation_id: string
+          p_expected_version?: number
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       update_conversation_status: {
         Args: {
