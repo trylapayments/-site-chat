@@ -196,7 +196,9 @@ test.describe("conversation assignment & queues", () => {
       await route.continue();
     });
 
-    await openAssignmentConversation(operatorA, marker);
+    // Operator A is already on the taken conversation — do not re-open via the
+    // Unassigned inbox list (the row leaves that filter after Take).
+    await expect(operatorA.getByTestId("assignment-panel")).toBeVisible();
     await operatorA.getByTestId("assignment-open-picker").click();
     await expect(operatorA.getByTestId("assignment-picker")).toBeVisible();
     const adminOption = operatorA
