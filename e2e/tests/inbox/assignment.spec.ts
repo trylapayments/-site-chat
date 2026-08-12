@@ -213,6 +213,8 @@ test.describe("conversation assignment & queues", () => {
 
     // Multi-tab sync for same operator
     const operatorATab2 = await operatorAContext.newPage();
+    await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
+    await waitForOperatorInboxRealtimeReady(operatorA);
     await operatorATab2.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorATab2);
 
