@@ -602,155 +602,6 @@ DECLARE
   v_limit integer;
   v_before_occurred timestamptz;
   v_before_id uuid;
-  v_events jsonb;
-  v_has_more boolean := false;
-  v_next jsonb := NULL;
-  v_last jsonb;
-BEGIN
-  IF NOT app_private.workspace_is_accessible(p_workspace_id) THEN
-    RAISE EXCEPTION 'Workspace not accessible';
-  END IF;
-
-  IF p_query IS NULL OR jsonb_typeof(p_query) <> 'object' THEN
-    RAISE EXCEPTION 'query must be an object';
-  END IF;
-
-  v_contact_id := NULLIF(p_query ->> 'contact_id', '')::uuid;
-  IF v_contact_id IS NULL THEN
-    RAISE EXCEPTION 'contact_id is required';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.contacts c
-    WHERE c.id = v_contact_id
-      AND c.workspace_id = p_workspace_id
-  ) THEN
-    RAISE EXCEPTION 'Contact not found';
-  END IF;
-
-  v_conversation_id := NULLIF(p_query ->> 'conversation_id', '')::uuid;
-
-  v_limit := COALESCE((p_query ->> 'limit')::integer, 20);
-  IF v_limit < 1 THEN
-    v_limit := 1;
-  ELSIF v_limit > 50 THEN
-    v_limit := 50;
-  END IF;
-
-  IF p_query ? 'before' AND p_query -> 'before' IS NOT NULL AND p_query -> 'before' <> 'null'::jsonb THEN
-    v_before_occurred := (p_query -> 'before' ->> 'occurred_at')::timestamptz;
-    v_before_id := (p_query -> 'before' ->> 'id')::uuid;
-    IF v_before_occurred IS NULL OR v_before_id IS NULL THEN
-      RAISE EXCEPTION 'Invalid before cursor';
-    END IF;
-  END IF;
-
-  SELECT COALESCE(jsonb_agg(row_to_event ORDER BY ordinality), '[]'::jsonb)
-  INTO v_events
-  FROM (
-    SELECT
-      jsonb_build_object(
-        'id', e.id,
-        'workspace_id', e.workspace_id,
-        'contact_id', e.contact_id,
-        'visitor_session_id', e.visitor_session_id,
-        'conversation_id', e.conversation_id,
-        'event_type', e.event_type,
-        'actor_type', e.actor_type,
-        'actor_member_id', e.actor_member_id,
-        'metadata_json', e.metadata_json,
-        'occurred_at', e.occurred_at,
-        'created_at', e.created_at,
-        'dedupe_key', e.dedupe_key
-      ) AS row_to_event,
-      ordinality
-    FROM (
-      SELECT e.*
-      FROM public.customer_timeline_events e
-      WHERE e.workspace_id = p_workspace_id
-        AND e.contact_id = v_contact_id
-        AND (v_conversation_id IS NULL OR e.conversation_id = v_conversation_id)
-        AND (
-          v_before_occurred IS NULL
-          OR (e.occurred_at, e.id) < (v_before_occurred, v_before_id)
-        )
-      ORDER BY e.occurred_at DESC, e.id DESC
-      LIMIT v_limit + 1
-    ) e
-    WITH ORDINALITY AS t(e, ordinality)
-  ) ranked
-  WHERE ordinality <= v_limit;
-
-  IF (
-    SELECT count(*)
-    FROM public.customer_timeline_events e
-    WHERE e.workspace_id = p_workspace_id
-      AND e.contact_id = v_contact_id
-      AND (v_conversation_id IS NULL OR e.conversation_id = v_conversation_id)
-      AND (
-        v_before_occurred IS NULL
-        OR (e.occurred_at, e.id) < (v_before_occurred, v_before_id)
-      )
-  ) > v_limit THEN
-    v_has_more := true;
-  END IF;
-
-  -- Cheaper has_more: based on fetched page size
-  IF jsonb_array_length(v_events) = v_limit THEN
-    -- Confirm there is at least one older row beyond the page.
-    v_last := v_events -> (jsonb_array_length(v_events) - 1);
-    IF v_last IS NOT NULL THEN
-      SELECT EXISTS (
-        SELECT 1
-        FROM public.customer_timeline_events e
-        WHERE e.workspace_id = p_workspace_id
-          AND e.contact_id = v_contact_id
-          AND (v_conversation_id IS NULL OR e.conversation_id = v_conversation_id)
-          AND (e.occurred_at, e.id) < (
-            (v_last ->> 'occurred_at')::timestamptz,
-            (v_last ->> 'id')::uuid
-          )
-      ) INTO v_has_more;
-    END IF;
-  ELSE
-    v_has_more := false;
-  END IF;
-
-  IF v_has_more AND jsonb_array_length(v_events) > 0 THEN
-    v_last := v_events -> (jsonb_array_length(v_events) - 1);
-    v_next := jsonb_build_object(
-      'occurred_at', v_last ->> 'occurred_at',
-      'id', v_last ->> 'id'
-    );
-  END IF;
-
-  RETURN jsonb_build_object(
-    'events', v_events,
-    'next_before', v_next,
-    'has_more', v_has_more
-  );
-END;
-$$;
-
--- Fix list query: the WITH ORDINALITY subquery above is overly complex / possibly wrong.
--- Replace with a clearer implementation.
-CREATE OR REPLACE FUNCTION app_private.list_customer_timeline(
-  p_workspace_id uuid,
-  p_query jsonb DEFAULT '{}'::jsonb
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_contact_id uuid;
-  v_conversation_id uuid;
-  v_limit integer;
-  v_before_occurred timestamptz;
-  v_before_id uuid;
   v_rows jsonb := '[]'::jsonb;
   v_has_more boolean := false;
   v_next jsonb := NULL;
@@ -835,13 +686,12 @@ BEGIN
 
   IF jsonb_array_length(v_rows) > v_limit THEN
     v_has_more := true;
-    SELECT jsonb_agg(value)
+    SELECT jsonb_agg(value ORDER BY ord)
     INTO v_rows
     FROM (
-      SELECT value
+      SELECT value, ord
       FROM jsonb_array_elements(v_rows) WITH ORDINALITY AS t(value, ord)
       WHERE ord <= v_limit
-      ORDER BY ord
     ) trimmed;
   END IF;
 
@@ -1066,7 +916,7 @@ BEGIN
         NULL,
         NULL,
         now(),
-        'contact:' || v_contact.id::text || ':identified:' || md5(v_changes::text)
+        'contact:' || v_contact.id::text || ':identified:' || md5(v_changes::text) || ':' || floor(extract(epoch FROM now()) * 1000)::text
       );
     ELSE
       PERFORM app_private.emit_customer_timeline_event(

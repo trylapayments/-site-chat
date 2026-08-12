@@ -98,20 +98,71 @@ export function CustomerTimeline({
   const [isPending, startTransition] = useTransition();
   const [loadingOlder, setLoadingOlder] = useState(false);
   const catchUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Bumped on contact change so stale RPC responses are ignored. */
+  const contactGenerationRef = useRef(0);
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const catchUpAbortRef = useRef<AbortController | null>(null);
+  const contactIdRef = useRef(contactId);
+  contactIdRef.current = contactId;
+
+  const invalidateInFlight = () => {
+    contactGenerationRef.current += 1;
+    loadAbortRef.current?.abort();
+    loadAbortRef.current = null;
+    catchUpAbortRef.current?.abort();
+    catchUpAbortRef.current = null;
+    if (catchUpTimerRef.current) {
+      clearTimeout(catchUpTimerRef.current);
+      catchUpTimerRef.current = null;
+    }
+  };
+
+  const beginLoadRequest = () => {
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    const generation = contactGenerationRef.current;
+    const requestedContactId = contactIdRef.current;
+    return {
+      isCurrent: () =>
+        !controller.signal.aborted &&
+        contactGenerationRef.current === generation &&
+        contactIdRef.current === requestedContactId,
+    };
+  };
+
+  const beginCatchUpRequest = () => {
+    catchUpAbortRef.current?.abort();
+    const controller = new AbortController();
+    catchUpAbortRef.current = controller;
+    const generation = contactGenerationRef.current;
+    const requestedContactId = contactIdRef.current;
+    return {
+      isCurrent: () =>
+        !controller.signal.aborted &&
+        contactGenerationRef.current === generation &&
+        contactIdRef.current === requestedContactId,
+    };
+  };
 
   const loadInitial = () => {
+    const { isCurrent } = beginLoadRequest();
     startTransition(async () => {
       setError(null);
       const result = await listCustomerTimelineAction(workspaceSlug, {
         contact_id: contactId,
         limit: 20,
       });
+      if (!isCurrent()) {
+        return;
+      }
       if (!result.success) {
         setError(result.message);
         setLoaded(true);
         return;
       }
-      setEvents(result.data.events);
+      // Merge by id so realtime inserts that arrived during the RPC are kept.
+      setEvents((prev) => mergeTimelineEvents(prev, result.data.events));
       setNextBefore(result.data.next_before);
       setHasMore(result.data.has_more);
       setLoaded(true);
@@ -119,12 +170,17 @@ export function CustomerTimeline({
   };
 
   useEffect(() => {
+    invalidateInFlight();
     setLoaded(false);
     setEvents([]);
     setNextBefore(null);
     setHasMore(false);
     setError(null);
+    setLoadingOlder(false);
     loadInitial();
+    return () => {
+      invalidateInFlight();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when contact changes
   }, [workspaceSlug, contactId]);
 
@@ -135,19 +191,18 @@ export function CustomerTimeline({
       }
       catchUpTimerRef.current = setTimeout(() => {
         catchUpTimerRef.current = null;
+        const { isCurrent } = beginCatchUpRequest();
         void (async () => {
           const result = await listCustomerTimelineAction(workspaceSlug, {
             contact_id: contactId,
             limit: 20,
           });
-          if (!result.success) {
+          if (!isCurrent() || !result.success) {
             return;
           }
+          // Merge newest page only — do not touch hasMore/nextBefore so an
+          // exhausted "load older" cursor is never revived after reconnect.
           setEvents((prev) => mergeTimelineEvents(prev, result.data.events));
-          // Keep existing pagination cursor if we already loaded older pages;
-          // only refresh has_more/next when still on the first page window.
-          setHasMore((prevHasMore) => prevHasMore || result.data.has_more);
-          setNextBefore((prev) => prev ?? result.data.next_before);
         })();
       }, 250);
     };
@@ -177,6 +232,8 @@ export function CustomerTimeline({
         clearTimeout(catchUpTimerRef.current);
         catchUpTimerRef.current = null;
       }
+      catchUpAbortRef.current?.abort();
+      catchUpAbortRef.current = null;
     };
   }, [workspaceId, workspaceSlug, contactId]);
 
@@ -184,14 +241,19 @@ export function CustomerTimeline({
     if (!nextBefore || loadingOlder) {
       return;
     }
+    const cursor = nextBefore;
+    const { isCurrent } = beginLoadRequest();
     setLoadingOlder(true);
     setError(null);
     void (async () => {
       const result = await listCustomerTimelineAction(workspaceSlug, {
         contact_id: contactId,
         limit: 20,
-        before: nextBefore,
+        before: cursor,
       });
+      if (!isCurrent()) {
+        return;
+      }
       setLoadingOlder(false);
       if (!result.success) {
         setError(result.message);
