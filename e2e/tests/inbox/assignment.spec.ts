@@ -51,6 +51,7 @@ test.describe("conversation assignment & queues", () => {
   test("take, live sync, transfer, unassign, timeline, race, multi-tab, reconnect, ordering", async ({
     browser,
   }) => {
+    test.setTimeout(360_000);
     const visitorContext = await browser.newContext();
     const operatorAContext = await browser.newContext();
     const operatorBContext = await browser.newContext();

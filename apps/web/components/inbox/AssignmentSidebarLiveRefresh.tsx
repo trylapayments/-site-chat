@@ -20,11 +20,14 @@ export function AssignmentSidebarLiveRefresh({
 }) {
   const router = useRouter();
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasConnectedRef = useRef(false);
   const [realtimeState, setRealtimeState] = useState<
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed"
   >("connecting");
 
   useEffect(() => {
+    hasConnectedRef.current = false;
+
     const scheduleRefresh = () => {
       if (refreshTimerRef.current) {
         return;
@@ -46,8 +49,13 @@ export function AssignmentSidebarLiveRefresh({
       },
       onConnectionChange: (status) => {
         setRealtimeState(status);
+        // Refresh on reconnect only — initial connect must not race visitor
+        // identify / form hydration (VisitorSidebarLiveRefresh owns that path).
         if (status === "connected") {
-          scheduleRefresh();
+          if (hasConnectedRef.current) {
+            scheduleRefresh();
+          }
+          hasConnectedRef.current = true;
         }
       },
     });
