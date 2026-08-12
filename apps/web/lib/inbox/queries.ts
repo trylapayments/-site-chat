@@ -162,7 +162,9 @@ export async function takeConversation(
   const { data, error } = await callPublicRpc(supabase, "take_conversation", {
     p_workspace_id: workspaceId,
     p_conversation_id: conversationId,
-    p_expected_version: expectedVersion ?? null,
+    ...(expectedVersion !== undefined
+      ? { p_expected_version: expectedVersion }
+      : {}),
   });
 
   if (error) {
@@ -180,12 +182,12 @@ export async function assignConversation(
   supabase: AppSupabaseClient,
   workspaceId: string,
   conversationId: string,
-  assigneeMemberId: string | null,
+  assigneeMemberId: string,
 ): Promise<AssignmentMutationResult> {
   const { data, error } = await callPublicRpc(supabase, "assign_conversation", {
     p_workspace_id: workspaceId,
     p_conversation_id: conversationId,
-    p_assignee_member_id: assigneeMemberId as unknown as string,
+    p_assignee_member_id: assigneeMemberId,
   });
 
   if (error) {
@@ -211,7 +213,9 @@ export async function unassignConversation(
     {
       p_workspace_id: workspaceId,
       p_conversation_id: conversationId,
-      p_expected_version: expectedVersion ?? null,
+      ...(expectedVersion !== undefined
+        ? { p_expected_version: expectedVersion }
+        : {}),
     },
   );
 
