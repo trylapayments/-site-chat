@@ -83,7 +83,10 @@ export function patchConversationListItem(
             // UUID is unchanged, otherwise clear label until list refresh.
             item.assigned_to?.member_id === change.assigned_to
             ? item.assigned_to
-            : { member_id: change.assigned_to, display_label: item.assigned_to?.display_label ?? "…" }
+            : {
+                member_id: change.assigned_to,
+                display_label: item.assigned_to?.display_label ?? "…",
+              }
         : item.assigned_to,
   };
 }
@@ -91,7 +94,7 @@ export function patchConversationListItem(
 /** True when CDC assignee UUID differs from the enriched list-row assignee. */
 export function assignmentNeedsEnrichmentRefresh(
   item: ConversationListItem | undefined,
-  change: Pick<OperatorConversationChange, "assigned_to">,
+  change: { assigned_to?: string | null },
 ): boolean {
   if (change.assigned_to === undefined) {
     return false;
@@ -158,11 +161,7 @@ export function conversationMatchesFilters(
     filters.assignment === "unassigned" ||
     filters.assignment === "assigned_to_me"
   ) {
-    return conversationMatchesAssignmentFilter(
-      item,
-      filters.assignment,
-      filters.memberId,
-    );
+    return conversationMatchesAssignmentFilter(item, filters.assignment, filters.memberId);
   }
 
   return true;

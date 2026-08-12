@@ -30,9 +30,7 @@ import { subscribeOperatorConversation } from "@/lib/realtime/operator-subscript
 
 const messages = assignmentMessagesEn;
 
-function isAssignmentResult(
-  data: unknown,
-): data is AssignmentMutationResult {
+function isAssignmentResult(data: unknown): data is AssignmentMutationResult {
   return (
     typeof data === "object" &&
     data !== null &&
@@ -91,9 +89,6 @@ export function AssignmentPanel({
         // Assignment panel only cares about conversation row updates.
       },
       onConversationChange: (raw) => {
-        if (!raw || typeof raw !== "object") {
-          return;
-        }
         const assignedTo = Reflect.get(raw, "assigned_to");
         const currentId = assignee?.member_id ?? null;
         const nextId =
@@ -125,12 +120,17 @@ export function AssignmentPanel({
     [assignee?.member_id, members, search],
   );
 
-  const takeDecision = evaluateTakeDecision(assignee?.member_id ?? null, memberId);
-  const isAssignedToMe = assignee?.member_id === memberId;
+  const takeDecision = evaluateTakeDecision(
+    assignee?.member_id ?? null,
+    memberId,
+  );
   const hasAssignee = assignee != null;
   const assignLabel = hasAssignee ? messages.transfer : messages.assign;
 
-  function applyResult(result: AssignmentMutationResult, successMessage: string) {
+  function applyResult(
+    result: AssignmentMutationResult,
+    successMessage: string,
+  ) {
     setAssignee(result.conversation.assigned_to);
     setAssignmentVersion(result.conversation.assignment_version ?? 0);
     if (result.changed) {
@@ -161,9 +161,13 @@ export function AssignmentPanel({
       }
       // Conflict / failure: revert to authoritative server state via refresh.
       setAssignee(previous);
-      setError(result.message ?? messages.conflict);
-      if (result.code === "ASSIGNMENT_CONFLICT") {
-        setStatusMessage(messages.conflictRefresh);
+      if (!result.success) {
+        setError(result.message);
+        if (result.code === "ASSIGNMENT_CONFLICT") {
+          setStatusMessage(messages.conflictRefresh);
+        }
+      } else {
+        setError(messages.conflict);
       }
       router.refresh();
     });
@@ -186,7 +190,7 @@ export function AssignmentPanel({
         );
         return;
       }
-      setError(result.message ?? messages.genericError);
+      setError(!result.success ? result.message : messages.genericError);
       router.refresh();
     });
   }
@@ -202,7 +206,7 @@ export function AssignmentPanel({
         applyResult(result.data, messages.unassignSuccess);
         return;
       }
-      setError(result.message ?? messages.genericError);
+      setError(!result.success ? result.message : messages.genericError);
       router.refresh();
     });
   }
@@ -329,7 +333,9 @@ export function AssignmentPanel({
                         runAssign(member.member_id);
                       }}
                     >
-                      <span className="font-medium">{member.display_label}</span>
+                      <span className="font-medium">
+                        {member.display_label}
+                      </span>
                       {isCurrent ? (
                         <span className="text-muted-foreground ml-2 text-xs">
                           ({messages.currentAssignee})
@@ -351,13 +357,13 @@ export function AssignmentPanel({
       ) : null}
 
       {error ? (
-        <p className="text-destructive text-xs" role="alert" data-testid="assignment-error">
+        <p
+          className="text-destructive text-xs"
+          role="alert"
+          data-testid="assignment-error"
+        >
           {error}
         </p>
-      ) : null}
-
-      {isAssignedToMe ? (
-        <p className="text-muted-foreground text-xs">{messages.takeSuccess}</p>
       ) : null}
     </section>
   );

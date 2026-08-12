@@ -168,15 +168,18 @@ test.describe("conversation assignment & queues", () => {
       timeout: 30_000,
     });
     await expect
-      .poll(async () => {
-        const aId =
-          (await operatorA.getByTestId("assignment-current").getAttribute("data-assignee-id")) ??
-          "";
-        const bId =
-          (await operatorB.getByTestId("assignment-current").getAttribute("data-assignee-id")) ??
-          "";
-        return aId.length > 0 && aId === bId;
-      }, { timeout: 30_000 })
+      .poll(
+        async () => {
+          const aId =
+            (await operatorA.getByTestId("assignment-current").getAttribute("data-assignee-id")) ??
+            "";
+          const bId =
+            (await operatorB.getByTestId("assignment-current").getAttribute("data-assignee-id")) ??
+            "";
+          return aId.length > 0 && aId === bId;
+        },
+        { timeout: 30_000 },
+      )
       .toBe(true);
 
     // Multi-tab sync for same operator

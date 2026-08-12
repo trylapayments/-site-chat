@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  AssignmentError,
-  parseAssignmentErrorMessage,
-} from "./errors.js";
+import { AssignmentError, parseAssignmentErrorMessage } from "./errors.js";
 import {
   classifyAssignmentMutation,
   conversationMatchesAssignmentFilter,

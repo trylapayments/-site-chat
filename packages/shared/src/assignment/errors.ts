@@ -18,13 +18,16 @@ export class AssignmentError extends Error {
   }
 }
 
-const CODE_PREFIX = /^(ASSIGNMENT_CONFLICT|MEMBER_NOT_FOUND|MEMBER_NOT_ASSIGNABLE|FORBIDDEN|CONVERSATION_NOT_FOUND):\s*(.*)$/;
+const CODE_PREFIX =
+  /^(ASSIGNMENT_CONFLICT|MEMBER_NOT_FOUND|MEMBER_NOT_ASSIGNABLE|FORBIDDEN|CONVERSATION_NOT_FOUND):\s*(.*)$/;
 
 /**
  * Map PostgREST / Postgres exception messages to typed assignment errors.
  * Never expose raw SQL internals to clients.
  */
-export function parseAssignmentErrorMessage(raw: string | null | undefined): AssignmentError | null {
+export function parseAssignmentErrorMessage(
+  raw: string | null | undefined,
+): AssignmentError | null {
   if (!raw) {
     return null;
   }

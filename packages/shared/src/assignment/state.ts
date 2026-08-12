@@ -20,20 +20,15 @@ export function conversationMatchesAssignmentFilter(
     return item.assigned_to === null;
   }
 
-  if (filter === "assigned_to_me") {
-    if (!memberId) {
-      return false;
-    }
-    return item.assigned_to?.member_id === memberId;
+  // assigned_to_me
+  if (!memberId) {
+    return false;
   }
-
-  return true;
+  return item.assigned_to?.member_id === memberId;
 }
 
 export type TakeDecision =
-  | { action: "take" }
-  | { action: "noop" }
-  | { action: "conflict"; assigneeMemberId: string };
+  { action: "take" } | { action: "noop" } | { action: "conflict"; assigneeMemberId: string };
 
 /**
  * Client-side preview of Take semantics (server remains authoritative).
@@ -84,8 +79,8 @@ export function filterAssignableMembers(
   } = {},
 ): WorkspaceMemberOption[] {
   const search = options.search?.trim().toLowerCase() ?? "";
-  let list = members.filter((member) =>
-    member.role === "owner" || member.role === "admin" || member.role === "agent",
+  let list = members.filter(
+    (member) => member.role === "owner" || member.role === "admin" || member.role === "agent",
   );
 
   if (search) {

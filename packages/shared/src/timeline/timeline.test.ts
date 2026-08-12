@@ -52,6 +52,8 @@ describe("timeline event taxonomy", () => {
       "visitor_profile_updated",
       "conversation_status_changed",
       "conversation_assigned",
+      "conversation_transferred",
+      "conversation_unassigned",
     ]);
     expect(isCustomerTimelineEventType("typing_started")).toBe(false);
     expect(isCustomerTimelineEventType("page_viewed")).toBe(true);

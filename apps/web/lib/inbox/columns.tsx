@@ -91,7 +91,8 @@ export function createInboxColumns(
           data-testid="inbox-row-assignee"
           data-assignee-id={row.original.assigned_to?.member_id ?? ""}
         >
-          {row.original.assigned_to?.display_label ?? assignmentMessages.unassigned}
+          {row.original.assigned_to?.display_label ??
+            assignmentMessages.unassigned}
         </span>
       ),
     },

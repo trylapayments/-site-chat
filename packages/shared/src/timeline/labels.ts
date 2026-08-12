@@ -172,10 +172,7 @@ export function formatTimelineEventDescription(
         (typeof meta.to_member_label === "string" ? meta.to_member_label : null) ??
         (typeof meta.assignee_label === "string" ? meta.assignee_label : null) ??
         "assignee";
-      if (from && to && messages.event.conversation_transferred) {
-        return interpolate(messages.event.conversation_transferred, { from, to });
-      }
-      return interpolate(messages.event.conversation_transferred_to, { name: to });
+      return interpolate(messages.event.conversation_transferred, { from, to });
     }
     case "conversation_unassigned":
       return messages.event.conversation_unassigned;
