@@ -37,7 +37,9 @@ async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
   await expect(page.getByTestId("assignment-live")).toHaveText(successPattern, {
     timeout: 30_000,
   });
-  await expect(page.getByTestId("assignment-panel")).toHaveAttribute("data-pending", "false");
+  await expect(page.getByTestId("assignment-panel")).toHaveAttribute("data-pending", "false", {
+    timeout: 30_000,
+  });
 }
 
 test.describe("conversation assignment & queues", () => {
@@ -106,7 +108,7 @@ test.describe("conversation assignment & queues", () => {
     await adminOption.click();
     await waitForAssignmentMutation(operatorA, /transferred/i);
 
-    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
+    await expect(operatorB.getByTestId("assignment-current")).toContainText(ADMIN_EMAIL, {
       timeout: 30_000,
     });
 

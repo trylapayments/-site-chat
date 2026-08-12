@@ -9,14 +9,7 @@ import {
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
 import { useRouter } from "next/navigation";
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +50,10 @@ export function AssignmentPanel({
   canAssign: boolean;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  // Explicit busy flag — do not use useTransition here. router.refresh() inside
+  // a transition keeps isPending true until RSC refetch completes, which can
+  // strand the panel disabled after a successful mutation.
+  const [busy, setBusy] = useState(false);
   const [assignee, setAssignee] = useState(conversation.assigned_to);
   const [assignmentVersion, setAssignmentVersion] = useState(
     conversation.assignment_version ?? 0,
@@ -139,9 +135,13 @@ export function AssignmentPanel({
     router.refresh();
   }
 
-  function runTake() {
+  async function runTake() {
+    if (busy) {
+      return;
+    }
     setError(null);
     const previous = assignee;
+    const versionAtClick = assignmentVersion;
     // Optimistic: show self as assignee while request is in flight.
     if (takeDecision.action === "take" && memberId) {
       setAssignee({
@@ -150,10 +150,11 @@ export function AssignmentPanel({
       });
     }
 
-    startTransition(async () => {
+    setBusy(true);
+    try {
       const result = await takeConversationAction(workspaceSlug, {
         conversationId,
-        expectedVersion: assignmentVersion,
+        expectedVersion: versionAtClick,
       });
       if (result.success && isAssignmentResult(result.data)) {
         applyResult(result.data, messages.takeSuccess);
@@ -170,37 +171,52 @@ export function AssignmentPanel({
         setError(messages.conflict);
       }
       router.refresh();
-    });
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function runAssign(targetMemberId: string) {
+  async function runAssign(targetMemberId: string) {
+    if (busy) {
+      return;
+    }
     setError(null);
     setPickerOpen(false);
     setSearch("");
-    startTransition(async () => {
+    const transferring = hasAssignee;
+    const versionAtClick = assignmentVersion;
+    setBusy(true);
+    try {
       const result = await assignConversationAction(workspaceSlug, {
         conversationId,
         assigneeMemberId: targetMemberId,
-        expectedVersion: assignmentVersion,
+        expectedVersion: versionAtClick,
       });
       if (result.success && isAssignmentResult(result.data)) {
         applyResult(
           result.data,
-          hasAssignee ? messages.transferSuccess : messages.takeSuccess,
+          transferring ? messages.transferSuccess : messages.takeSuccess,
         );
         return;
       }
       setError(!result.success ? result.message : messages.genericError);
       router.refresh();
-    });
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function runUnassign() {
+  async function runUnassign() {
+    if (busy) {
+      return;
+    }
     setError(null);
-    startTransition(async () => {
+    const versionAtClick = assignmentVersion;
+    setBusy(true);
+    try {
       const result = await unassignConversationAction(workspaceSlug, {
         conversationId,
-        expectedVersion: assignmentVersion,
+        expectedVersion: versionAtClick,
       });
       if (result.success && isAssignmentResult(result.data)) {
         applyResult(result.data, messages.unassignSuccess);
@@ -208,7 +224,9 @@ export function AssignmentPanel({
       }
       setError(!result.success ? result.message : messages.genericError);
       router.refresh();
-    });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -216,7 +234,7 @@ export function AssignmentPanel({
       className="space-y-3"
       aria-labelledby="assignment-heading"
       data-testid="assignment-panel"
-      data-pending={isPending ? "true" : "false"}
+      data-pending={busy ? "true" : "false"}
       data-assignee-id={assignee?.member_id ?? ""}
     >
       <h2 id="assignment-heading" className="text-sm font-semibold">
@@ -251,11 +269,13 @@ export function AssignmentPanel({
               ref={takeButtonRef}
               type="button"
               size="sm"
-              disabled={isPending || !memberId}
+              disabled={busy || !memberId}
               data-testid="assignment-take"
-              onClick={runTake}
+              onClick={() => {
+                void runTake();
+              }}
             >
-              {isPending ? messages.taking : messages.take}
+              {busy ? messages.taking : messages.take}
             </Button>
           ) : null}
 
@@ -263,7 +283,7 @@ export function AssignmentPanel({
             type="button"
             size="sm"
             variant="outline"
-            disabled={isPending}
+            disabled={busy}
             data-testid="assignment-open-picker"
             aria-expanded={pickerOpen}
             aria-haspopup="listbox"
@@ -279,11 +299,13 @@ export function AssignmentPanel({
               type="button"
               size="sm"
               variant="outline"
-              disabled={isPending}
+              disabled={busy}
               data-testid="assignment-unassign"
-              onClick={runUnassign}
+              onClick={() => {
+                void runUnassign();
+              }}
             >
-              {isPending ? messages.unassigning : messages.unassign}
+              {busy ? messages.unassigning : messages.unassign}
             </Button>
           ) : null}
         </div>
@@ -333,11 +355,11 @@ export function AssignmentPanel({
                       type="button"
                       role="option"
                       aria-selected={isCurrent}
-                      disabled={isPending || isCurrent}
+                      disabled={busy || isCurrent}
                       data-testid={`assignment-member-${member.member_id}`}
                       className="hover:bg-muted w-full rounded-md px-2 py-1.5 text-left text-sm disabled:opacity-60"
                       onClick={() => {
-                        runAssign(member.member_id);
+                        void runAssign(member.member_id);
                       }}
                     >
                       <span className="font-medium">
