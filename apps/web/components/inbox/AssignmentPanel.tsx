@@ -161,14 +161,18 @@ export function AssignmentPanel({
         applyResult(result.data, messages.takeSuccess);
         return;
       }
-      // Conflict / failure: revert to authoritative server state via refresh.
-      setAssignee(previous);
+      // Conflict / failure: refresh to authoritative server state.
+      // On ASSIGNMENT_CONFLICT do not flash Unassigned — keep optimistic
+      // assignee until router.refresh() replaces it with the winner.
       if (!result.success) {
         setError(result.message);
         if (result.code === "ASSIGNMENT_CONFLICT") {
           setStatusMessage(messages.conflictRefresh);
+        } else {
+          setAssignee(previous);
         }
       } else {
+        setAssignee(previous);
         setError(messages.conflict);
       }
       router.refresh();

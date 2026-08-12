@@ -167,7 +167,6 @@ test.describe("conversation assignment & queues", () => {
       operatorB.getByTestId("assignment-take").click(),
     ]);
 
-    // Both UIs converge on the single winner (not Unassigned); conflict path refreshes.
     await expect(operatorA.getByTestId("assignment-panel")).toHaveAttribute(
       "data-pending",
       "false",
@@ -178,6 +177,19 @@ test.describe("conversation assignment & queues", () => {
       "false",
       { timeout: 30_000 },
     );
+
+    // Authoritative convergence after concurrent Take (avoid stale RSC cache).
+    await operatorA.reload();
+    await operatorB.reload();
+    await waitForOperatorThreadRealtimeReady(operatorA);
+    await waitForOperatorThreadRealtimeReady(operatorB);
+    await expect(operatorA.getByTestId("assignment-panel")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(operatorB.getByTestId("assignment-panel")).toBeVisible({
+      timeout: 30_000,
+    });
+
     await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
       timeout: 30_000,
     });
