@@ -14,6 +14,7 @@ import {
   isCustomerTimelineEventType,
 } from "./labels.js";
 import { mergeTimelineEvents, reconcileTimelineRealtimeInsert } from "./merge.js";
+import { decideTimelineCatchUpPage, TIMELINE_CATCH_UP_MAX_PAGES } from "./catch-up.js";
 import {
   clampTimelinePageSize,
   compareTimelineOrder,
@@ -246,5 +247,155 @@ describe("timeline merge / realtime reconciliation", () => {
       }),
     );
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe("timeline reconnect catch-up", () => {
+  function pageEvent(index: number, occurredAt: string): CustomerTimelineEvent {
+    const id = `${index.toString(16).padStart(8, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`;
+    return event({
+      id,
+      event_type: "page_viewed",
+      occurred_at: occurredAt,
+      metadata_json: { v: 1, url: `https://example.com/p/${String(index)}` },
+    });
+  }
+
+  function lastOf(events: CustomerTimelineEvent[]): CustomerTimelineEvent {
+    const last = events.at(-1);
+    if (!last) {
+      throw new Error("expected non-empty event page");
+    }
+    return last;
+  }
+
+  function firstOf(events: CustomerTimelineEvent[]): CustomerTimelineEvent {
+    const first = events[0];
+    if (!first) {
+      throw new Error("expected non-empty event list");
+    }
+    return first;
+  }
+
+  it("continues paging when the newest page has no overlap", () => {
+    const existing = [
+      pageEvent(0, "2026-08-11T10:00:00.000Z"),
+      pageEvent(1, "2026-08-11T09:00:00.000Z"),
+    ];
+    const existingIds = new Set(existing.map((e) => e.id));
+    const newestPage = Array.from({ length: 20 }, (_, i) =>
+      pageEvent(100 + i, `2026-08-11T12:${String(59 - i).padStart(2, "0")}:00.000Z`),
+    );
+    const cursor = {
+      occurred_at: lastOf(newestPage).occurred_at,
+      id: lastOf(newestPage).id,
+    };
+
+    const decision = decideTimelineCatchUpPage({
+      existingIds,
+      pageEvents: newestPage,
+      hasMore: true,
+      nextBefore: cursor,
+    });
+    expect(decision).toEqual({
+      kind: "continue",
+      nextBefore: cursor,
+    });
+  });
+
+  it("completes when a later page overlaps already-loaded events", () => {
+    const existing = [
+      pageEvent(0, "2026-08-11T10:00:00.000Z"),
+      pageEvent(1, "2026-08-11T09:00:00.000Z"),
+    ];
+    const existingIds = new Set(existing.map((e) => e.id));
+    const newestExisting = firstOf(existing);
+    const gapPage = [
+      ...Array.from({ length: 5 }, (_, i) =>
+        pageEvent(50 + i, `2026-08-11T11:${String(10 - i).padStart(2, "0")}:00.000Z`),
+      ),
+      newestExisting,
+    ];
+
+    expect(
+      decideTimelineCatchUpPage({
+        existingIds,
+        pageEvents: gapPage,
+        hasMore: true,
+        nextBefore: {
+          occurred_at: newestExisting.occurred_at,
+          id: newestExisting.id,
+        },
+      }),
+    ).toEqual({ kind: "complete", reason: "overlap" });
+  });
+
+  it("merges multi-page catch-up without gaps or duplicates", () => {
+    const existing = [
+      pageEvent(0, "2026-08-11T10:00:00.000Z"),
+      pageEvent(1, "2026-08-11T09:00:00.000Z"),
+    ];
+    const existingIds = new Set(existing.map((e) => e.id));
+
+    // 25 events arrived while disconnected (newer than existing[0]).
+    const missed = Array.from({ length: 25 }, (_, i) =>
+      pageEvent(200 + i, `2026-08-11T15:${String(59 - i).padStart(2, "0")}:00.000Z`),
+    );
+
+    const page1 = missed.slice(0, 20);
+    const page2 = [...missed.slice(20), ...existing];
+    const page1Cursor = {
+      occurred_at: lastOf(page1).occurred_at,
+      id: lastOf(page1).id,
+    };
+
+    expect(
+      decideTimelineCatchUpPage({
+        existingIds,
+        pageEvents: page1,
+        hasMore: true,
+        nextBefore: page1Cursor,
+      }).kind,
+    ).toBe("continue");
+
+    expect(
+      decideTimelineCatchUpPage({
+        existingIds,
+        pageEvents: page2,
+        hasMore: false,
+        nextBefore: null,
+      }),
+    ).toEqual({ kind: "complete", reason: "overlap" });
+
+    const merged = mergeTimelineEvents(existing, [...page1, ...page2]);
+    expect(merged).toHaveLength(27);
+    expect(new Set(merged.map((e) => e.id)).size).toBe(27);
+    for (let i = 1; i < merged.length; i += 1) {
+      const newer = merged[i - 1];
+      const older = merged[i];
+      if (!newer || !older) {
+        throw new Error("expected adjacent merged events");
+      }
+      expect(compareTimelineOrder(newer, older)).toBeLessThanOrEqual(0);
+    }
+    for (const missedEvent of missed) {
+      expect(merged.some((e) => e.id === missedEvent.id)).toBe(true);
+    }
+  });
+
+  it("requests a full reload when history is exhausted without overlap", () => {
+    const existingIds = new Set(["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]);
+    expect(
+      decideTimelineCatchUpPage({
+        existingIds,
+        pageEvents: [pageEvent(9, "2026-08-11T12:00:00.000Z")],
+        hasMore: false,
+        nextBefore: null,
+      }),
+    ).toEqual({ kind: "reload", reason: "exhausted-without-overlap" });
+  });
+
+  it("exposes a finite catch-up page cap", () => {
+    expect(TIMELINE_CATCH_UP_MAX_PAGES).toBeGreaterThanOrEqual(2);
   });
 });

@@ -3,9 +3,11 @@
 import {
   customerTimelineEventSchema,
   customerTimelineMessagesEn,
+  decideTimelineCatchUpPage,
   formatTimelineEventDescription,
   mergeTimelineEvents,
   reconcileTimelineRealtimeInsert,
+  TIMELINE_CATCH_UP_MAX_PAGES,
   type CustomerTimelineEvent,
   type CustomerTimelineCursor,
 } from "@site-chat/shared";
@@ -104,6 +106,8 @@ export function CustomerTimeline({
   const catchUpAbortRef = useRef<AbortController | null>(null);
   const contactIdRef = useRef(contactId);
   contactIdRef.current = contactId;
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
 
   const invalidateInFlight = () => {
     contactGenerationRef.current += 1;
@@ -145,7 +149,8 @@ export function CustomerTimeline({
     };
   };
 
-  const loadInitial = () => {
+  const loadInitial = (options?: { replace?: boolean }) => {
+    const replace = options?.replace === true;
     const { isCurrent } = beginLoadRequest();
     setLoadingOlder(false);
     startTransition(async () => {
@@ -162,8 +167,12 @@ export function CustomerTimeline({
         setLoaded(true);
         return;
       }
-      // Merge by id so realtime inserts that arrived during the RPC are kept.
-      setEvents((prev) => mergeTimelineEvents(prev, result.data.events));
+      if (replace) {
+        setEvents(result.data.events);
+      } else {
+        // Merge by id so realtime inserts that arrived during the RPC are kept.
+        setEvents((prev) => mergeTimelineEvents(prev, result.data.events));
+      }
       setNextBefore(result.data.next_before);
       setHasMore(result.data.has_more);
       setLoaded(true);
@@ -194,16 +203,58 @@ export function CustomerTimeline({
         catchUpTimerRef.current = null;
         const { isCurrent } = beginCatchUpRequest();
         void (async () => {
-          const result = await listCustomerTimelineAction(workspaceSlug, {
-            contact_id: contactId,
-            limit: 20,
-          });
-          if (!isCurrent() || !result.success) {
+          const existingIds = new Set(
+            eventsRef.current.map((event) => event.id),
+          );
+          let before: CustomerTimelineCursor | undefined;
+          let collected: CustomerTimelineEvent[] = [];
+
+          for (let page = 0; page < TIMELINE_CATCH_UP_MAX_PAGES; page += 1) {
+            const result = await listCustomerTimelineAction(workspaceSlug, {
+              contact_id: contactId,
+              limit: 20,
+              before,
+            });
+            if (!isCurrent() || !result.success) {
+              return;
+            }
+
+            collected = mergeTimelineEvents(collected, result.data.events);
+            const decision = decideTimelineCatchUpPage({
+              existingIds,
+              pageEvents: result.data.events,
+              hasMore: result.data.has_more,
+              nextBefore: result.data.next_before,
+            });
+
+            if (decision.kind === "continue") {
+              before = decision.nextBefore;
+              continue;
+            }
+
+            if (decision.kind === "reload") {
+              // Gap cannot be closed safely — rebuild from the newest page.
+              setEvents([]);
+              setNextBefore(null);
+              setHasMore(false);
+              loadInitial({ replace: true });
+              return;
+            }
+
+            // Overlap / empty: merge catch-up pages only. Do not touch
+            // hasMore/nextBefore so exhausted "load older" is never revived.
+            setEvents((prev) => mergeTimelineEvents(prev, collected));
             return;
           }
-          // Merge newest page only — do not touch hasMore/nextBefore so an
-          // exhausted "load older" cursor is never revived after reconnect.
-          setEvents((prev) => mergeTimelineEvents(prev, result.data.events));
+
+          // Safety: too many pages without overlap — rebuild.
+          if (!isCurrent()) {
+            return;
+          }
+          setEvents([]);
+          setNextBefore(null);
+          setHasMore(false);
+          loadInitial({ replace: true });
         })();
       }, 250);
     };
@@ -236,6 +287,7 @@ export function CustomerTimeline({
       catchUpAbortRef.current?.abort();
       catchUpAbortRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- contact-scoped subscription
   }, [workspaceId, workspaceSlug, contactId]);
 
   const loadOlder = () => {
@@ -289,7 +341,9 @@ export function CustomerTimeline({
             type="button"
             size="sm"
             variant="outline"
-            onClick={loadInitial}
+            onClick={() => {
+              loadInitial();
+            }}
           >
             {messages.retry}
           </Button>
