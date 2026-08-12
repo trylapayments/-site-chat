@@ -366,6 +366,34 @@ export function subscribeOperatorVisitorContext(input: {
   });
 }
 
+/**
+ * Live customer timeline inserts for a contact (operator sidebar).
+ * Durable DB rows remain source of truth; reconnect should re-fetch via RPC.
+ */
+export function subscribeOperatorCustomerTimeline(input: {
+  workspaceId: string;
+  contactId: string;
+  onInsert: (payload: Record<string, unknown>) => void;
+  onConnectionChange?: RealtimeConnectionListener;
+}): () => void {
+  const supabase = createClient();
+
+  return subscribeWithOperatorAuth({
+    supabase,
+    channelName: `customer-timeline:${input.contactId}`,
+    onConnectionChange: input.onConnectionChange,
+    bindings: [
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "customer_timeline_events",
+        filter: `contact_id=eq.${input.contactId}`,
+        handler: input.onInsert,
+      },
+    ],
+  });
+}
+
 function mapChannelStatus(
   status: REALTIME_SUBSCRIBE_STATES,
   previous:

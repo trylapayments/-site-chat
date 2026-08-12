@@ -552,6 +552,87 @@ export type Database = {
           },
         ]
       }
+      customer_timeline_events: {
+        Row: {
+          actor_member_id: string | null
+          actor_type: string
+          contact_id: string
+          conversation_id: string | null
+          created_at: string
+          dedupe_key: string | null
+          event_type: string
+          id: string
+          metadata_json: Json
+          occurred_at: string
+          visitor_session_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          actor_member_id?: string | null
+          actor_type: string
+          contact_id: string
+          conversation_id?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          event_type: string
+          id?: string
+          metadata_json?: Json
+          occurred_at?: string
+          visitor_session_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          actor_member_id?: string | null
+          actor_type?: string
+          contact_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          event_type?: string
+          id?: string
+          metadata_json?: Json
+          occurred_at?: string
+          visitor_session_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_timeline_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_timeline_events_actor_member_workspace"
+            columns: ["actor_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_customer_timeline_events_contact_workspace"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_customer_timeline_events_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_customer_timeline_events_session_workspace"
+            columns: ["visitor_session_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "visitor_sessions"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           conversation_id: string
@@ -1176,6 +1257,10 @@ export type Database = {
         Returns: Json
       }
       list_conversations: {
+        Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      list_customer_timeline: {
         Args: { p_query?: Json; p_workspace_id: string }
         Returns: Json
       }

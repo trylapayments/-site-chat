@@ -41,6 +41,8 @@ Site Chat handles business communications between companies and their website vi
 | XSS via page title/URL in inbox | Medium | Treat as untrusted text; encode on render; length bounds |
 | Attribute key pollution | Medium | Reserved keys rejected; primitive-only JSONB; count/length caps |
 | Cross-tenant identify / page-view | Critical | Session token + workspace binding; service-role RPCs after origin checks |
+| Cross-tenant customer timeline read | Critical | `list_customer_timeline` requires `workspace_is_accessible`; RLS on `customer_timeline_events`; contact must belong to workspace |
+| Timeline metadata secret leakage | High | Emit helper strips forbidden keys; page URLs sanitized; no signed URLs/bodies/tokens persisted |
 
 ---
 

@@ -21,6 +21,7 @@ This document describes the **architecture**. Automated purge jobs and settings 
 | Data | Default intent | Notes |
 |------|----------------|-------|
 | `visitor_page_views` | Short–medium trail | High volume; primary candidate for aggressive purge |
+| `customer_timeline_events` | Align with contact/message retention | Contact delete cascades; conversation delete nulls `conversation_id`; purge-by-`occurred_at` is a future job hook |
 | `visitor_sessions` | ~30 days after expiry / inactivity | Token hash + device/page context; hard delete |
 | `contacts` | Workspace-configurable (default aligned with message retention, e.g. 12 months) | Keep while conversations may still be needed |
 | Conversation messages | Workspace-configurable | Separate from page-view trail; see DATABASE §15 |
@@ -76,8 +77,9 @@ Documented so purge and manual deletes stay predictable:
 
 | Parent delete | Child effect |
 |---------------|--------------|
-| `visitor_sessions` row deleted | `visitor_page_views` for that session **CASCADE** delete |
-| `contacts` row deleted | `visitor_page_views.contact_id` **SET NULL**; sessions/conversations FKs follow their own `ON DELETE` rules |
+| `visitor_sessions` row deleted | `visitor_page_views` for that session **CASCADE** delete; `customer_timeline_events.visitor_session_id` **SET NULL** |
+| `contacts` row deleted | `visitor_page_views.contact_id` **SET NULL**; `customer_timeline_events` for that contact **CASCADE** delete; sessions/conversations FKs follow their own `ON DELETE` rules |
+| `conversations` row deleted | `customer_timeline_events.conversation_id` **SET NULL** (contact history retained) |
 | `workspaces` restricted | Tenant tables use `ON DELETE RESTRICT` on workspace; workspace soft-delete + hard purge is a separate lifecycle |
 
 Application contact delete (when implemented) must respect conversation history product rules and audit logging.

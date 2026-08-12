@@ -240,6 +240,10 @@ Unsigned identify (current `SiteChat.identify`) patches only the calling session
 
 Privacy defaults: no raw IP storage, no fingerprinting, parsed device fields only, workspace-isolated PII. Full model: `docs/VISITOR-IDENTITY.md`.
 
+### 5.2.2 Customer Timeline Architecture
+
+Meaningful visitor/customer activity is recorded in a durable `customer_timeline_events` table (not assembled by merging product tables on each render). Events are emitted inside the database from durable actions (page views, conversation lifecycle, messages/attachments, identity patches) with `dedupe_key` idempotency. Operators read via keyset-paginated `list_customer_timeline` and subscribe to realtime INSERTs by `contact_id`. Compact versioned metadata never stores tokens, signed URLs, or message bodies. Full model: `docs/CUSTOMER-TIMELINE.md`, ADR-004.
+
 #### Webhook API
 
 - Stripe webhooks verified via `stripe-signature` header.

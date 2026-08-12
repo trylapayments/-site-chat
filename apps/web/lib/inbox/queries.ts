@@ -3,6 +3,8 @@ import {
   inboxUnreadTotalResultSchema,
   listConversationsQuerySchema,
   listConversationsResultSchema,
+  listCustomerTimelineQuerySchema,
+  listCustomerTimelineResultSchema,
   listMessagesQuerySchema,
   listMessagesResultSchema,
   markConversationDeliveredResultSchema,
@@ -14,6 +16,8 @@ import {
   type InboxUnreadTotalResult,
   type ListConversationsQuery,
   type ListConversationsResult,
+  type ListCustomerTimelineQuery,
+  type ListCustomerTimelineResult,
   type ListMessagesQuery,
   type ListMessagesResult,
   type MarkConversationDeliveredResult,
@@ -301,4 +305,30 @@ export async function updateVisitorProfile(
   }
 
   return parseRpcResult(visitorProfileSchema, data, "update_visitor_profile");
+}
+
+export async function fetchCustomerTimeline(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  query: ListCustomerTimelineQuery,
+): Promise<ListCustomerTimelineResult> {
+  const validated = listCustomerTimelineQuerySchema.parse(query);
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "list_customer_timeline",
+    {
+      p_workspace_id: workspaceId,
+      p_query: validated,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return parseRpcResult(
+    listCustomerTimelineResultSchema,
+    data,
+    "list_customer_timeline",
+  );
 }

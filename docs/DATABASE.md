@@ -339,6 +339,36 @@ Bounded page-view trail for operator context.
 
 **Dedupe:** `widget_record_page_view` skips insert when the same session+URL was recorded within 30 seconds.
 
+### 6.4 customer_timeline_events
+
+Durable customer/product history for operator Timeline and future CRM/AI/analytics. See [CUSTOMER-TIMELINE.md](./CUSTOMER-TIMELINE.md) and [ADR-004](./adr/ADR-004-customer-timeline-events.md).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| workspace_id | UUID | NOT NULL, FK → workspaces RESTRICT | Tenant scope |
+| contact_id | UUID | NOT NULL | Composite FK → contacts **ON DELETE CASCADE** |
+| visitor_session_id | UUID | NULL | Composite FK → sessions **ON DELETE SET NULL** |
+| conversation_id | UUID | NULL | Composite FK → conversations **ON DELETE SET NULL** |
+| event_type | TEXT | NOT NULL, CHECK taxonomy | Canonical event name |
+| actor_type | TEXT | NOT NULL, CHECK | `visitor` \| `operator` \| `system` \| `host` |
+| actor_member_id | UUID | NULL | Operator member when applicable |
+| metadata_json | JSONB | NOT NULL DEFAULT `{"v":1}` | Compact versioned payload; no secrets |
+| occurred_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | Event time (keyset order) |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| dedupe_key | TEXT | NULL, ≤ 256 | Idempotency key |
+
+**Indexes:**
+- `idx_customer_timeline_events_contact_occurred` ON `(workspace_id, contact_id, occurred_at DESC, id DESC)`
+- `idx_customer_timeline_events_conversation_occurred` (partial) ON `(workspace_id, conversation_id, occurred_at DESC, id DESC)`
+- `uq_customer_timeline_events_dedupe` UNIQUE (partial) ON `(workspace_id, dedupe_key)` WHERE `dedupe_key IS NOT NULL`
+
+**RLS:** Authenticated SELECT when `workspace_is_accessible`; no direct writes for `authenticated`/`anon`. Writes via `app_private.emit_customer_timeline_event` from triggers/RPCs.
+
+**Query plan rationale:** Contact timeline lookups use the composite `(workspace_id, contact_id, occurred_at DESC, id DESC)` index for keyset pagination (`WHERE … AND (occurred_at, id) < (cursor)`). Bounded `LIMIT` (≤ 50) keeps result size fixed. Conversation-scoped filters use the partial conversation index. Avoid OFFSET.
+
+**RPC:** `list_customer_timeline(p_workspace_id, p_query jsonb)` — membership via `workspace_is_accessible`; visitors/anon cannot execute.
+
 ---
 
 ## 7. Conversation Tables

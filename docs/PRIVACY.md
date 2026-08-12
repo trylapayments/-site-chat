@@ -41,10 +41,11 @@ This is an engineering architecture note, not legal advice. Customer-facing term
 
 ## 3. Isolation
 
-- Every contact, session, page view, and conversation row carries `workspace_id`.
-- RLS on `contacts`, `visitor_sessions`, and `visitor_page_views` restricts authenticated SELECT to members of that workspace.
+- Every contact, session, page view, conversation, and **customer timeline** row carries `workspace_id`.
+- RLS on `contacts`, `visitor_sessions`, `visitor_page_views`, and `customer_timeline_events` restricts authenticated SELECT to members of that workspace.
 - Widget mutations run through service-role RPCs after origin + session validation; clients cannot set `workspace_id` or invent another tenant’s `visitor_id`.
 - Email uniqueness is **workspace-local**; unsigned identify enforces it as a write-time conflict only (no cross-contact merge — see §4b).
+- Timeline APIs are operator-only (`list_customer_timeline`); visitors/anon cannot execute them. Timeline metadata must not store continuity tokens, auth secrets, signed URLs, or message bodies.
 
 Cross-tenant access attempts must fail in automated RLS tests.
 
