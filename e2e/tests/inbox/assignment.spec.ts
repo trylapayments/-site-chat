@@ -211,7 +211,13 @@ test.describe("conversation assignment & queues", () => {
       )
       .toBe(true);
 
-    // Multi-tab sync for same operator
+    // Multi-tab sync for same operator — need a fresh unassigned conversation
+    // (continuing the existing widget would append to the race-assigned thread).
+    const visitorMultiContext = await browser.newContext();
+    const visitorMulti = await visitorMultiContext.newPage();
+    await openWidget(visitorMulti);
+    await waitForWidgetRealtimeReady(visitorMulti);
+
     const operatorATab2 = await operatorAContext.newPage();
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
@@ -219,7 +225,7 @@ test.describe("conversation assignment & queues", () => {
     await waitForOperatorInboxRealtimeReady(operatorATab2);
 
     const multiMarker = `assign-multitab-${Date.now()}`;
-    await sendWidgetMessage(visitor, multiMarker);
+    await sendWidgetMessage(visitorMulti, multiMarker);
 
     await expect(operatorA.getByRole("row").filter({ hasText: multiMarker })).toBeVisible({
       timeout: 60_000,
@@ -236,8 +242,12 @@ test.describe("conversation assignment & queues", () => {
     });
 
     // Reconnect catch-up: go offline, peer assigns, reconnect sees update
+    const visitorReconnectContext = await browser.newContext();
+    const visitorReconnect = await visitorReconnectContext.newPage();
+    await openWidget(visitorReconnect);
+    await waitForWidgetRealtimeReady(visitorReconnect);
     const reconnectMarker = `assign-reconnect-${Date.now()}`;
-    await sendWidgetMessage(visitor, reconnectMarker);
+    await sendWidgetMessage(visitorReconnect, reconnectMarker);
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
     await openAssignmentConversation(operatorA, reconnectMarker);
@@ -261,16 +271,24 @@ test.describe("conversation assignment & queues", () => {
 
     // Assignment does not reorder by assignment time — last_message_at ordering retained.
     // Verify Mine list still sorts by activity: newer message appears above older.
+    const visitorOrderOldContext = await browser.newContext();
+    const visitorOrderOld = await visitorOrderOldContext.newPage();
+    await openWidget(visitorOrderOld);
+    await waitForWidgetRealtimeReady(visitorOrderOld);
     const orderMarkerOld = `assign-order-old-${Date.now()}`;
-    const orderMarkerNew = `assign-order-new-${Date.now()}`;
-    await sendWidgetMessage(visitor, orderMarkerOld);
+    await sendWidgetMessage(visitorOrderOld, orderMarkerOld);
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
     await openAssignmentConversation(operatorA, orderMarkerOld);
     await operatorA.getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operatorA, /assigned to you/i);
 
-    await sendWidgetMessage(visitor, orderMarkerNew);
+    const visitorOrderNewContext = await browser.newContext();
+    const visitorOrderNew = await visitorOrderNewContext.newPage();
+    await openWidget(visitorOrderNew);
+    await waitForWidgetRealtimeReady(visitorOrderNew);
+    const orderMarkerNew = `assign-order-new-${Date.now()}`;
+    await sendWidgetMessage(visitorOrderNew, orderMarkerNew);
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
     await openAssignmentConversation(operatorA, orderMarkerNew);
@@ -288,6 +306,10 @@ test.describe("conversation assignment & queues", () => {
     expect(idxNew).toBeLessThan(idxOld);
 
     await visitorContext.close();
+    await visitorMultiContext.close();
+    await visitorReconnectContext.close();
+    await visitorOrderOldContext.close();
+    await visitorOrderNewContext.close();
     await operatorAContext.close();
     await operatorBContext.close();
   });
