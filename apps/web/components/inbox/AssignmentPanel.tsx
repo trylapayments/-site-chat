@@ -19,6 +19,7 @@ import {
   takeConversationAction,
   unassignConversationAction,
 } from "@/lib/inbox/actions";
+import { subscribeOperatorConversation } from "@/lib/realtime/operator-subscriptions";
 
 const messages = assignmentMessagesEn;
 
@@ -32,7 +33,7 @@ function isAssignmentResult(data: unknown): data is AssignmentMutationResult {
 }
 
 export function AssignmentPanel({
-  workspaceId: _workspaceId,
+  workspaceId,
   workspaceSlug,
   conversationId,
   conversation,
@@ -74,6 +75,32 @@ export function AssignmentPanel({
     conversation.assigned_to,
     conversation.assignment_version,
   ]);
+
+  // Live assignee updates from CDC. Debounced refresh avoids stacking with
+  // visitor sidebar refreshes on the same page.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeOperatorConversation({
+      workspaceId,
+      conversationId,
+      onMessageInsert: () => {},
+      onConversationChange: () => {
+        if (timer) {
+          return;
+        }
+        timer = setTimeout(() => {
+          timer = null;
+          router.refresh();
+        }, 250);
+      },
+    });
+    return () => {
+      unsubscribe();
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [conversationId, router, workspaceId]);
 
   useEffect(() => {
     if (pickerOpen) {

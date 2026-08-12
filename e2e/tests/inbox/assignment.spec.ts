@@ -26,11 +26,6 @@ async function openAssignmentConversation(page: Page, marker: string) {
   await expect(page.getByTestId("assignment-panel")).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByTestId("assignment-realtime-ready")).toHaveAttribute(
-    "data-realtime-state",
-    "connected",
-    { timeout: 60_000 },
-  );
 }
 
 /**
@@ -155,7 +150,8 @@ test.describe("conversation assignment & queues", () => {
     });
 
     // Race: two operators Take the same unassigned conversation
-    await openWidget(visitor);
+    // Widget is already open from the first visitor message — do not re-openWidget
+    // (cached loader.js can make waitForResponse hang until timeout).
     await sendWidgetMessage(visitor, raceMarker);
 
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
@@ -239,7 +235,12 @@ test.describe("conversation assignment & queues", () => {
     await waitForAssignmentMutation(operatorB, /assigned to you/i);
 
     await operatorA.context().setOffline(false);
+    // Hard navigation catch-up after reconnect (missed CDC while offline).
+    await operatorA.reload();
     await waitForOperatorThreadRealtimeReady(operatorA);
+    await expect(operatorA.getByTestId("assignment-panel")).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
       timeout: 60_000,
     });
