@@ -86,6 +86,15 @@ BEGIN
   )
   RETURNING id INTO v_session_a;
 
+  INSERT INTO public.visitor_sessions (workspace_id, contact_id, session_token_hash, expires_at)
+  VALUES (
+    v_workspace_a,
+    v_contact_a,
+    encode(extensions.digest('assign-session-b', 'sha256'), 'hex'),
+    now() + interval '1 day'
+  )
+  RETURNING id INTO v_session_b;
+
   INSERT INTO public.conversations (
     workspace_id,
     visitor_session_id,
@@ -117,7 +126,7 @@ BEGIN
   )
   VALUES (
     v_workspace_a,
-    v_session_a,
+    v_session_b,
     v_contact_a,
     'open',
     now() - interval '2 hours',
