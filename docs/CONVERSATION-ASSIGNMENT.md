@@ -58,7 +58,7 @@ No-ops do **not** emit timeline events and do **not** increment `assignment_vers
 
 Exactly one concurrent Take wins. Loser receives a typed conflict; UI refreshes to the authoritative assignee.
 
-Optional `p_expected_version` enables client CAS for multi-tab / stale UI protection.
+Optional `p_expected_version` enables client CAS for multi-tab / stale UI protection on **Take, Assign/Transfer, and Unassign**.
 
 ---
 
@@ -76,7 +76,7 @@ Optional `p_expected_version` enables client CAS for multi-tab / stale UI protec
 
 RLS on `conversations` remains SELECT-only for members; mutations go through `SECURITY DEFINER` RPCs with `search_path = ''`.
 
-Deactivating a member clears their assignments back to the unassigned queue (PRD).
+Deactivating or removing a member clears their assignments back to the unassigned queue (PRD): assignee, `assigned_at`, and `assigned_by` are cleared, `assignment_version` is incremented, and exactly one `conversation_unassigned` timeline event is emitted per conversation. Removal does **not** rely on FK `ON DELETE SET NULL` alone.
 
 ---
 
@@ -102,7 +102,7 @@ Future departments / skills / routing rules should add **adjacent** tables (e.g.
 | RPC | Purpose |
 |-----|---------|
 | `take_conversation(workspace_id, conversation_id, expected_version?)` | Claim unassigned |
-| `assign_conversation(workspace_id, conversation_id, assignee_member_id)` | Assign / transfer (`NULL` → unassign for backward compat) |
+| `assign_conversation(workspace_id, conversation_id, assignee_member_id, expected_version?)` | Assign / transfer (`NULL` assignee → unassign for backward compat) |
 | `unassign_conversation(workspace_id, conversation_id, expected_version?)` | Clear assignee |
 | `list_assignable_members(workspace_id)` | Active messaging-role members |
 
@@ -155,8 +155,8 @@ Metadata includes safe display labels (`from_member_label` / `to_member_label`),
 
 ## 10. Optimistic UI
 
-- **Take:** may show optimistic self-assignee; conflict reverts via authoritative refresh.
-- **Assign / Unassign:** wait for server result to avoid flicker; failures refresh to server state.
+- **Take / Assign / Transfer:** may show optimistic assignee; conflict rolls back and refreshes to authoritative state.
+- **Unassign:** wait for server result to avoid flicker; failures refresh to server state.
 
 ---
 

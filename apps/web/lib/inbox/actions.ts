@@ -199,6 +199,7 @@ export async function assignConversationAction(
             workspace.workspace_id,
             parsed.data.conversationId,
             parsed.data.assigneeMemberId,
+            parsed.data.expectedVersion,
           );
 
     revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));

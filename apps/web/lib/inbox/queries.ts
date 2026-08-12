@@ -183,11 +183,15 @@ export async function assignConversation(
   workspaceId: string,
   conversationId: string,
   assigneeMemberId: string,
+  expectedVersion?: number,
 ): Promise<AssignmentMutationResult> {
   const { data, error } = await callPublicRpc(supabase, "assign_conversation", {
     p_workspace_id: workspaceId,
     p_conversation_id: conversationId,
     p_assignee_member_id: assigneeMemberId,
+    ...(expectedVersion !== undefined
+      ? { p_expected_version: expectedVersion }
+      : {}),
   });
 
   if (error) {

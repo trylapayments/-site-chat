@@ -144,7 +144,7 @@ See [PRD.md](./PRD.md) Section 3 for the user-facing permission matrix. Implemen
 | Manage billing | Check `role = 'owner'` in Server Action; Stripe Customer Portal session created server-side |
 | Invite member | Check `role IN ('owner', 'admin')`; verify seat limit against subscription |
 | Send message | Check active membership + `role IN ('owner', 'admin', 'agent')` |
-| Assign conversation | Capability `assign_conversations` (owner/admin/agent); RPC `require_messaging_role`; assignee must be active messaging-role member in same workspace; Take uses CAS (`ASSIGNMENT_CONFLICT` on race) |
+| Assign conversation | Capability `assign_conversations` (owner/admin/agent); RPC `require_messaging_role`; assignee must be active messaging-role member in same workspace; Take/Assign/Transfer/Unassign use CAS (`ASSIGNMENT_CONFLICT` on stale or raced version) |
 | View audit logs | Check `role IN ('owner', 'admin', 'viewer')` |
 | Export data | Check `role IN ('owner', 'admin')`; log audit event |
 

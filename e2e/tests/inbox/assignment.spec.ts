@@ -151,6 +151,102 @@ test.describe("conversation assignment & queues", () => {
     await operatorBContext.close();
   });
 
+  test("stale transfer conflicts and UI rolls back", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const marker = `assign-stale-transfer-${Date.now()}`;
+    const { context: visitorContext } = await startVisitorConversation(browser, marker);
+
+    const operatorAContext = await browser.newContext();
+    const operatorBContext = await browser.newContext();
+    const operatorA = await operatorAContext.newPage();
+    const operatorB = await operatorBContext.newPage();
+
+    await prepareInbox(operatorA, AGENT_EMAIL);
+    await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
+    await waitForOperatorInboxRealtimeReady(operatorA);
+    await openAssignmentConversation(operatorA, marker);
+    await operatorA.getByTestId("assignment-take").click();
+    await waitForAssignmentMutation(operatorA, /assigned to you/i);
+
+    await prepareInbox(operatorB, ADMIN_EMAIL);
+    await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=all`);
+    await waitForOperatorInboxRealtimeReady(operatorB);
+    await openAssignmentConversation(operatorB, marker);
+    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i);
+
+    const staleVersion = await operatorB
+      .getByTestId("assignment-panel")
+      .getAttribute("data-assignment-version");
+    expect(staleVersion).toBeTruthy();
+
+    // Keep operator B on a stale assignment_version by blocking RSC refreshes
+    // while still allowing server actions (POST + next-action).
+    await operatorB.route("**/app/**", async (route) => {
+      const request = route.request();
+      const headers = request.headers();
+      const isRscRefresh =
+        request.method() === "GET" &&
+        (headers["rsc"] === "1" ||
+          headers["next-router-state-tree"] !== undefined ||
+          request.url().includes("_rsc"));
+      if (isRscRefresh) {
+        await route.abort();
+        return;
+      }
+      await route.continue();
+    });
+
+    await openAssignmentConversation(operatorA, marker);
+    await operatorA.getByTestId("assignment-open-picker").click();
+    await expect(operatorA.getByTestId("assignment-picker")).toBeVisible();
+    const adminOption = operatorA
+      .locator('[data-testid^="assignment-member-"]')
+      .filter({ hasText: ADMIN_EMAIL });
+    await expect(adminOption).toBeVisible({ timeout: 15_000 });
+    await adminOption.click();
+    await waitForAssignmentMutation(operatorA, /transferred/i);
+
+    await expect(operatorB.getByTestId("assignment-panel")).toHaveAttribute(
+      "data-assignment-version",
+      staleVersion!,
+    );
+    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(ADMIN_EMAIL, {
+      timeout: 5_000,
+    });
+
+    await operatorB.getByTestId("assignment-open-picker").click();
+    await expect(operatorB.getByTestId("assignment-picker")).toBeVisible();
+    const staleAdminOption = operatorB
+      .locator('[data-testid^="assignment-member-"]')
+      .filter({ hasText: ADMIN_EMAIL });
+    await expect(staleAdminOption).toBeVisible({ timeout: 15_000 });
+    await staleAdminOption.click();
+
+    await expect(operatorB.getByTestId("assignment-panel")).toHaveAttribute(
+      "data-pending",
+      "false",
+      { timeout: 30_000 },
+    );
+    await expect(operatorB.getByTestId("assignment-live")).toHaveText(
+      /just assigned|current assignee|conflict|changed concurrently|version mismatch/i,
+      { timeout: 30_000 },
+    );
+
+    // Optimistic UI rolled back to the pre-click (stale) assignee label.
+    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(ADMIN_EMAIL);
+
+    await operatorB.unrouteAll();
+    await operatorB.reload();
+    await waitForOperatorThreadRealtimeReady(operatorB);
+    await expect(operatorB.getByTestId("assignment-current")).toContainText(ADMIN_EMAIL, {
+      timeout: 30_000,
+    });
+
+    await visitorContext.close();
+    await operatorAContext.close();
+    await operatorBContext.close();
+  });
+
   test("concurrent Take: exactly one winner", async ({ browser }) => {
     test.setTimeout(180_000);
     const marker = `assign-race-${Date.now()}`;

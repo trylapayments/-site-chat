@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(32);
+SELECT plan(44);
 
 CREATE TEMP TABLE assignment_fixtures (
   key text PRIMARY KEY,
@@ -288,6 +288,62 @@ SELECT is(
   'no timeline event on no-op assign'
 );
 
+-- ---------------------------------------------------------------------------
+-- Stale Assign / Transfer: expected_version CAS
+-- ---------------------------------------------------------------------------
+
+SELECT throws_like(
+  format(
+    $q$SELECT public.assign_conversation(%L::uuid, %L::uuid, %L::uuid, 1)$q$,
+    tests.fixture('workspace_a'),
+    tests.fixture('conversation_a'),
+    tests.fixture('agent_member_a')
+  ),
+  'ASSIGNMENT_CONFLICT%',
+  'stale assign using old version raises ASSIGNMENT_CONFLICT'
+);
+
+SELECT is(
+  (
+    SELECT assigned_to::text
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_a')::uuid
+  ),
+  tests.fixture('agent_member_b'),
+  'stale assign does not overwrite current assignee'
+);
+
+SELECT lives_ok(
+  format(
+    $q$SELECT public.assign_conversation(%L::uuid, %L::uuid, %L::uuid)$q$,
+    tests.fixture('workspace_a'),
+    tests.fixture('conversation_a'),
+    tests.fixture('agent_member_a')
+  ),
+  'fresh assign/transfer to agent_a succeeds'
+);
+
+SELECT throws_like(
+  format(
+    $q$SELECT public.assign_conversation(%L::uuid, %L::uuid, %L::uuid, 2)$q$,
+    tests.fixture('workspace_a'),
+    tests.fixture('conversation_a'),
+    tests.fixture('agent_member_b')
+  ),
+  'ASSIGNMENT_CONFLICT%',
+  'stale transfer using old version raises ASSIGNMENT_CONFLICT'
+);
+
+SELECT is(
+  (
+    SELECT assigned_to::text
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_a')::uuid
+  ),
+  tests.fixture('agent_member_a'),
+  'stale transfer does not overwrite current assignee'
+);
+
 SELECT throws_like(
   format(
     $q$SELECT public.assign_conversation(%L::uuid, %L::uuid, %L::uuid)$q$,
@@ -547,6 +603,129 @@ SELECT is(
 );
 
 -- ---------------------------------------------------------------------------
+-- Remove member clears assignments (equivalent durable state to deactivate)
+-- ---------------------------------------------------------------------------
+
+SELECT tests.clear_auth();
+
+DO $$
+DECLARE
+  v_agent_c uuid;
+  v_agent_member_c uuid;
+  v_version bigint;
+BEGIN
+  v_agent_c := tests.create_auth_user('assign-agent-c@test.local');
+
+  INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
+  VALUES (
+    tests.fixture('workspace_a')::uuid,
+    v_agent_c,
+    'agent',
+    'active'
+  )
+  RETURNING id INTO v_agent_member_c;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('agent_c', v_agent_c::text),
+    ('agent_member_c', v_agent_member_c::text);
+END;
+$$;
+
+SELECT tests.authenticate_as(
+  tests.fixture('agent_a')::uuid,
+  'assign-agent-a@test.local'
+);
+
+SELECT lives_ok(
+  format(
+    $q$SELECT public.assign_conversation(%L::uuid, %L::uuid, %L::uuid)$q$,
+    tests.fixture('workspace_a'),
+    tests.fixture('conversation_b'),
+    tests.fixture('agent_member_c')
+  ),
+  'assign conversation_b to agent_c before remove'
+);
+
+SELECT tests.clear_auth();
+
+DO $$
+DECLARE
+  v_version bigint;
+BEGIN
+  SELECT assignment_version INTO v_version
+  FROM public.conversations
+  WHERE id = tests.fixture('conversation_b')::uuid;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('conversation_b_version_before_remove', v_version::text);
+END;
+$$;
+
+SELECT tests.authenticate_as(
+  tests.fixture('owner_a')::uuid,
+  'assign-owner-a@test.local'
+);
+
+SELECT lives_ok(
+  format(
+    $q$SELECT public.remove_workspace_member(%L::uuid)$q$,
+    tests.fixture('agent_member_c')
+  ),
+  'owner removes agent_c'
+);
+
+SELECT is(
+  (
+    SELECT assigned_to
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_b')::uuid
+  ),
+  NULL,
+  'remove clears assignee'
+);
+
+SELECT is(
+  (
+    SELECT assigned_at
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_b')::uuid
+  ),
+  NULL,
+  'remove clears assigned_at'
+);
+
+SELECT is(
+  (
+    SELECT assigned_by_member_id
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_b')::uuid
+  ),
+  NULL,
+  'remove clears assigned_by'
+);
+
+SELECT is(
+  (
+    SELECT assignment_version
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_b')::uuid
+  ),
+  tests.fixture('conversation_b_version_before_remove')::bigint + 1,
+  'remove increments assignment_version'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM public.customer_timeline_events
+    WHERE conversation_id = tests.fixture('conversation_b')::uuid
+      AND event_type = 'conversation_unassigned'
+  ),
+  1,
+  'remove emits exactly one conversation_unassigned event'
+);
+
+-- ---------------------------------------------------------------------------
 -- Privileges: EXECUTE grants + app_private locked
 -- ---------------------------------------------------------------------------
 
@@ -561,7 +740,7 @@ SELECT ok(
 );
 
 SELECT ok(
-  has_function_privilege('authenticated', 'public.assign_conversation(uuid, uuid, uuid)', 'execute'),
+  has_function_privilege('authenticated', 'public.assign_conversation(uuid, uuid, uuid, bigint)', 'execute'),
   'authenticated can execute assign_conversation'
 );
 

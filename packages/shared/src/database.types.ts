@@ -1196,6 +1196,7 @@ export type Database = {
         Args: {
           p_assignee_member_id: string
           p_conversation_id: string
+          p_expected_version?: number
           p_workspace_id: string
         }
         Returns: Json

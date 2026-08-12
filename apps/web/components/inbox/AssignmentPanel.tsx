@@ -189,7 +189,19 @@ export function AssignmentPanel({
     setPickerOpen(false);
     setSearch("");
     const transferring = hasAssignee;
+    const previous = assignee;
+    const previousVersion = assignmentVersion;
     const versionAtClick = assignmentVersion;
+    const target = members.find(
+      (member) => member.member_id === targetMemberId,
+    );
+    // Optimistic: show target assignee while request is in flight.
+    if (target) {
+      setAssignee({
+        member_id: target.member_id,
+        display_label: target.display_label,
+      });
+    }
     setBusy(true);
     try {
       const result = await assignConversationAction(workspaceSlug, {
@@ -204,7 +216,17 @@ export function AssignmentPanel({
         );
         return;
       }
-      setError(!result.success ? result.message : messages.genericError);
+      // Conflict / failure: roll back optimistic assignee, then refresh.
+      setAssignee(previous);
+      setAssignmentVersion(previousVersion);
+      if (!result.success) {
+        setError(result.message);
+        if (result.code === "ASSIGNMENT_CONFLICT") {
+          setStatusMessage(messages.conflictRefresh);
+        }
+      } else {
+        setError(messages.genericError);
+      }
       router.refresh();
     } finally {
       setBusy(false);
@@ -241,6 +263,7 @@ export function AssignmentPanel({
       data-testid="assignment-panel"
       data-pending={busy ? "true" : "false"}
       data-assignee-id={assignee?.member_id ?? ""}
+      data-assignment-version={String(assignmentVersion)}
     >
       <h2 id="assignment-heading" className="text-sm font-semibold">
         {messages.sectionTitle}
