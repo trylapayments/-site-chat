@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
+import { AssignmentSidebarLiveRefresh } from "@/components/inbox/AssignmentSidebarLiveRefresh";
 import { VisitorSidebarLiveRefresh } from "@/components/inbox/VisitorSidebarLiveRefresh";
 import { CustomerTimeline } from "@/components/inbox/CustomerTimeline";
 import { Button } from "@/components/ui/button";
@@ -109,6 +110,10 @@ export function ConversationSidebar({
         workspaceId={workspaceId}
         visitorSessionId={conversation.visitor_session_id}
         contactId={conversation.contact?.id ?? null}
+      />
+      <AssignmentSidebarLiveRefresh
+        workspaceId={workspaceId}
+        conversationId={conversationId}
       />
 
       <section className="space-y-3">

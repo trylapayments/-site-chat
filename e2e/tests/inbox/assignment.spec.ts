@@ -26,6 +26,11 @@ async function openAssignmentConversation(page: Page, marker: string) {
   await expect(page.getByTestId("assignment-panel")).toBeVisible({
     timeout: 30_000,
   });
+  await expect(page.getByTestId("assignment-realtime-ready")).toHaveAttribute(
+    "data-realtime-state",
+    "connected",
+    { timeout: 60_000 },
+  );
 }
 
 /**
@@ -94,8 +99,12 @@ test.describe("conversation assignment & queues", () => {
     await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i);
     await expect(operatorB.getByTestId("assignment-take")).toHaveCount(0);
 
-    // Operator B cannot silently steal via Take (button absent when assigned to other)
-    // Explicit take RPC conflict is covered by pgTAP; UI hides Take when assigned.
+    // Return B to All so workspace inbox CDC can observe the transfer live.
+    await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=all`);
+    await waitForOperatorInboxRealtimeReady(operatorB);
+    await expect(operatorB.getByRole("row").filter({ hasText: marker })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Transfer A → B (admin@local.test)
     await openAssignmentConversation(operatorA, marker);
@@ -108,8 +117,8 @@ test.describe("conversation assignment & queues", () => {
     await adminOption.click();
     await waitForAssignmentMutation(operatorA, /transferred/i);
 
-    // Live thread on B should pick up the transfer via CDC → router.refresh().
-    await expect(operatorB.getByTestId("assignment-current")).toContainText(ADMIN_EMAIL, {
+    const bRowAfterTransfer = operatorB.getByRole("row").filter({ hasText: marker });
+    await expect(bRowAfterTransfer.getByTestId("inbox-row-assignee")).toContainText(ADMIN_EMAIL, {
       timeout: 60_000,
     });
 
