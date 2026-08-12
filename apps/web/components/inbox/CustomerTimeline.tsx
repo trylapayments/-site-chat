@@ -147,6 +147,7 @@ export function CustomerTimeline({
 
   const loadInitial = () => {
     const { isCurrent } = beginLoadRequest();
+    setLoadingOlder(false);
     startTransition(async () => {
       setError(null);
       const result = await listCustomerTimelineAction(workspaceSlug, {
