@@ -12,6 +12,7 @@ export * from "./schemas/visitor";
 export * from "./schemas/timeline";
 export * from "./visitor/index";
 export * from "./timeline/index";
+export * from "./assignment/index";
 export * from "./realtime/merge-messages";
 export * from "./realtime/merge-conversations";
 export * from "./realtime/connection-state";

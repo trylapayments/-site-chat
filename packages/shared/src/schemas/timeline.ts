@@ -95,11 +95,21 @@ export const conversationStatusChangedMetadataSchema = timelineMetaBase
 
 export const conversationAssignedMetadataSchema = timelineMetaBase
   .extend({
-    assignee_member_id: z.string().uuid().nullable(),
+    from_member_id: z.string().uuid().nullable().optional(),
+    from_member_label: z.string().max(200).nullable().optional(),
+    to_member_id: z.string().uuid().nullable().optional(),
+    to_member_label: z.string().max(200).nullable().optional(),
+    /** @deprecated Prefer to_member_id — kept for backward-compatible rows. */
+    assignee_member_id: z.string().uuid().nullable().optional(),
+    /** @deprecated Prefer to_member_label */
     assignee_label: z.string().max(200).nullable().optional(),
+    /** @deprecated Prefer from_member_id */
     previous_assignee_member_id: z.string().uuid().nullable().optional(),
   })
   .strict();
+
+export const conversationTransferredMetadataSchema = conversationAssignedMetadataSchema;
+export const conversationUnassignedMetadataSchema = conversationAssignedMetadataSchema;
 
 export const customerTimelineEventTypeSchema = z.enum(CUSTOMER_TIMELINE_EVENT_TYPES);
 export const customerTimelineActorTypeSchema = z.enum(CUSTOMER_TIMELINE_ACTOR_TYPES);

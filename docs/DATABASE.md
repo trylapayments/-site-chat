@@ -383,7 +383,10 @@ Message threads between visitors and agents.
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
 | visitor_session_id | UUID | NOT NULL, FK → visitor_sessions | |
 | contact_id | UUID | NULL, FK → contacts | Denormalized for query performance |
-| assigned_to | UUID | NULL, FK → workspace_members | Current assignee |
+| assigned_to | UUID | NULL, FK → workspace_members | Current assignee (`NULL` = unassigned queue) |
+| assigned_at | TIMESTAMPTZ | NULL | When current assignee was set |
+| assigned_by_member_id | UUID | NULL, FK → workspace_members | Member who performed current assignment |
+| assignment_version | BIGINT | NOT NULL DEFAULT 0 | Monotonic CAS revision for concurrent Take/Assign |
 | status | app_conversation_status | NOT NULL DEFAULT 'open' | |
 | subject | TEXT | NULL | Optional subject line |
 | source_url | TEXT | NULL | URL where conversation started (sanitized; origin + path + allowlisted UTM only) |
@@ -399,8 +402,12 @@ Message threads between visitors and agents.
 **Indexes:**
 - `idx_conversations_inbox` ON `(workspace_id, status, last_message_at DESC NULLS LAST)`
 - `idx_conversations_assigned` ON `(workspace_id, assigned_to, status)` WHERE `assigned_to IS NOT NULL`
+- `idx_conversations_assignee_activity` ON `(workspace_id, assigned_to, last_message_at DESC NULLS LAST)` WHERE `assigned_to IS NOT NULL`
+- `idx_conversations_unassigned_queue` ON `(workspace_id, status, last_message_at DESC NULLS LAST)` WHERE `assigned_to IS NULL`
 - `idx_conversations_visitor_session` ON `(visitor_session_id)`
 - `idx_conversations_contact` ON `(contact_id)` WHERE `contact_id IS NOT NULL`
+
+**Assignment RPCs** (see `docs/CONVERSATION-ASSIGNMENT.md`): `take_conversation`, `assign_conversation`, `unassign_conversation`. Mutations use row lock + `assignment_version` CAS and never bump `last_message_at`.
 
 ### 7.2 messages
 

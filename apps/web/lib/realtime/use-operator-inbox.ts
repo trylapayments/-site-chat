@@ -5,6 +5,7 @@ import type {
   ListConversationsQuery,
 } from "@site-chat/shared";
 import {
+  assignmentNeedsEnrichmentRefresh,
   computeUnreadAfterVisitorMessage,
   conversationListItemFromChange,
   conversationListItemFromMessage,
@@ -226,6 +227,10 @@ export function useLiveInboxList(input: {
 
         if (!existing) {
           void refreshList();
+        } else if (assignmentNeedsEnrichmentRefresh(existing, parsed.data)) {
+          // Assignee UUID changed — refresh for display_label enrichment and
+          // keep Mine/Unassigned queues consistent without polling.
+          scheduleRefresh();
         }
       },
       onMemberReadChange: (raw) => {

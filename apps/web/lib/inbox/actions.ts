@@ -2,6 +2,7 @@
 
 import {
   assignConversationSchema,
+  AssignmentError,
   cancelUploadsRequestSchema,
   completeUploadsRequestSchema,
   initiateUploadsDataSchema,
@@ -14,9 +15,13 @@ import {
   sendOperatorMessageResultSchema,
   markConversationDeliveredSchema,
   markConversationReadSchema,
+  parseAssignmentErrorMessage,
   sendMessageSchema,
+  takeConversationSchema,
+  unassignConversationSchema,
   updateConversationStatusSchema,
   VisitorIdentityError,
+  type AssignmentMutationResult,
   type InitiateUploadsData,
   type ListCustomerTimelineResult,
   type MarkConversationDeliveredResult,
@@ -42,6 +47,8 @@ import {
   markConversationDelivered,
   markConversationRead,
   sendOperatorMessage,
+  takeConversation,
+  unassignConversation,
   updateConversationStatus,
   updateVisitorProfile,
 } from "@/lib/inbox/queries";
@@ -58,13 +65,23 @@ export type InboxActionResult =
       data?:
         | SendOperatorMessageResult
         | MarkConversationReadResult
-        | MarkConversationDeliveredResult;
+        | MarkConversationDeliveredResult
+        | AssignmentMutationResult;
     }
-  | { success: false; message: string };
+  | { success: false; message: string; code?: string };
 
 function mapActionError(error: unknown): InboxActionResult {
   if (error instanceof CapabilityError) {
-    return { success: false, message: error.message };
+    return { success: false, message: error.message, code: "FORBIDDEN" };
+  }
+  if (error instanceof AssignmentError) {
+    return { success: false, message: error.message, code: error.code };
+  }
+  if (error instanceof Error) {
+    const typed = parseAssignmentErrorMessage(error.message);
+    if (typed) {
+      return { success: false, message: typed.message, code: typed.code };
+    }
   }
   return { success: false, message: "Something went wrong. Please try again." };
 }
@@ -117,11 +134,46 @@ export async function sendMessageAction(
   }
 }
 
+export async function takeConversationAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    expectedVersion?: number;
+  },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = takeConversationSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid take request." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "assign_conversations");
+
+    const result = await takeConversation(
+      supabase,
+      workspace.workspace_id,
+      parsed.data.conversationId,
+      parsed.data.expectedVersion,
+    );
+
+    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
+    revalidatePath(
+      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
+    );
+    return { success: true, data: result };
+  } catch (error) {
+    return mapActionError(error);
+  }
+}
+
 export async function assignConversationAction(
   workspaceSlug: string,
   input: {
     conversationId: string;
     assigneeMemberId: string | null;
+    expectedVersion?: number;
   },
 ): Promise<InboxActionResult> {
   try {
@@ -134,18 +186,60 @@ export async function assignConversationAction(
       await requireInboxMutationContext(workspaceSlug);
     requireCapability(workspace.role, "assign_conversations");
 
-    await assignConversation(
+    const result =
+      parsed.data.assigneeMemberId === null
+        ? await unassignConversation(
+            supabase,
+            workspace.workspace_id,
+            parsed.data.conversationId,
+            parsed.data.expectedVersion,
+          )
+        : await assignConversation(
+            supabase,
+            workspace.workspace_id,
+            parsed.data.conversationId,
+            parsed.data.assigneeMemberId,
+          );
+
+    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
+    revalidatePath(
+      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
+    );
+    return { success: true, data: result };
+  } catch (error) {
+    return mapActionError(error);
+  }
+}
+
+export async function unassignConversationAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    expectedVersion?: number;
+  },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = unassignConversationSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid unassign request." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "assign_conversations");
+
+    const result = await unassignConversation(
       supabase,
       workspace.workspace_id,
       parsed.data.conversationId,
-      parsed.data.assigneeMemberId,
+      parsed.data.expectedVersion,
     );
 
     revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
     revalidatePath(
       `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
     );
-    return { success: true };
+    return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
   }

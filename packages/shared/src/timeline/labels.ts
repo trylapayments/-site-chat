@@ -27,6 +27,8 @@ export const customerTimelineMessagesEn = {
     conversation_status_changed: "Conversation {{status}}",
     conversation_assigned: "Conversation assigned",
     conversation_assigned_to: "Assigned to {{name}}",
+    conversation_transferred: "Transferred from {{from}} to {{to}}",
+    conversation_transferred_to: "Transferred to {{name}}",
     conversation_unassigned: "Conversation unassigned",
     field_name: "Name changed to {{value}}",
     field_email: "Email changed to {{value}}",
@@ -148,8 +150,11 @@ export function formatTimelineEventDescription(
       });
     }
     case "conversation_assigned": {
-      const assignee = typeof meta.assignee_label === "string" ? meta.assignee_label : null;
-      if (!assignee && meta.assignee_member_id == null) {
+      const assignee =
+        (typeof meta.to_member_label === "string" ? meta.to_member_label : null) ??
+        (typeof meta.assignee_label === "string" ? meta.assignee_label : null);
+      const assigneeId = meta.to_member_id ?? meta.assignee_member_id;
+      if (!assignee && assigneeId == null) {
         return messages.event.conversation_unassigned;
       }
       if (assignee) {
@@ -159,6 +164,21 @@ export function formatTimelineEventDescription(
       }
       return messages.event.conversation_assigned;
     }
+    case "conversation_transferred": {
+      const from =
+        (typeof meta.from_member_label === "string" ? meta.from_member_label : null) ??
+        "previous assignee";
+      const to =
+        (typeof meta.to_member_label === "string" ? meta.to_member_label : null) ??
+        (typeof meta.assignee_label === "string" ? meta.assignee_label : null) ??
+        "assignee";
+      if (from && to && messages.event.conversation_transferred) {
+        return interpolate(messages.event.conversation_transferred, { from, to });
+      }
+      return interpolate(messages.event.conversation_transferred_to, { name: to });
+    }
+    case "conversation_unassigned":
+      return messages.event.conversation_unassigned;
     default: {
       const exhaustive: never = event.event_type;
       return String(exhaustive);

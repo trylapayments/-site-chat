@@ -5,6 +5,7 @@ export const APP_URL = "http://localhost:3000";
 export const WORKSPACE_SLUG = "acme-support";
 export const OPERATOR_EMAIL = "owner@local.test";
 export const ADMIN_EMAIL = "admin@local.test";
+export const AGENT_EMAIL = "agent@local.test";
 export const VIEWER_EMAIL = "viewer@local.test";
 export const OPERATOR_PASSWORD = "local-dev-password";
 export const SEEDED_OPEN_CONVERSATION_PREVIEW = "Can you help with pricing?";

@@ -442,7 +442,7 @@ SELECT ok(
       tests.fixture('workspace_a')::uuid,
       tests.fixture('conversation_a')::uuid,
       NULL
-    ) ->> 'assigned_to') IS NULL
+    ) -> 'assignment' ->> 'assignee_member_id') IS NULL
   ),
   'agent can unassign conversation'
 );

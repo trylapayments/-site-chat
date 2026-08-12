@@ -6,6 +6,9 @@ All notable changes to Site Chat are documented in this file.
 
 ### Added
 
+- Conversation Assignment & Queues: durable `assigned_at` / `assigned_by_member_id` / `assignment_version` on conversations; `take_conversation` / `assign_conversation` / `unassign_conversation` RPCs with row-lock + version CAS; Mine / Unassigned / All inbox filters; assignee picker; realtime queue updates; timeline events `conversation_assigned` / `conversation_transferred` / `conversation_unassigned`.
+- Docs: `docs/CONVERSATION-ASSIGNMENT.md`, `docs/adr/ADR-005-conversation-assignment.md`; updates to Architecture, Database, Security, Customer Timeline, Roadmap.
+- pgTAP: `supabase/tests/database/015_conversation_assignment.test.sql`; shared Vitest assignment suite; Playwright assignment E2E.
 - Customer Timeline foundation: durable `customer_timeline_events` with DB-side emission, canonical taxonomy, keyset pagination (`list_customer_timeline`), operator sidebar Timeline panel, and realtime INSERT subscriptions.
 - Timeline events for page views, conversation start/status/assignment, concise message milestones, attachments, and identity changes (no-op patches emit nothing).
 - Docs: `docs/CUSTOMER-TIMELINE.md`, `docs/adr/ADR-004-customer-timeline-events.md`; updates to Architecture, Database, Security, Privacy, Data Retention, Roadmap.
