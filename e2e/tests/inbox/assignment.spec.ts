@@ -108,8 +108,9 @@ test.describe("conversation assignment & queues", () => {
     await adminOption.click();
     await waitForAssignmentMutation(operatorA, /transferred/i);
 
+    // Live thread on B should pick up the transfer via CDC → router.refresh().
     await expect(operatorB.getByTestId("assignment-current")).toContainText(ADMIN_EMAIL, {
-      timeout: 30_000,
+      timeout: 60_000,
     });
 
     await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);

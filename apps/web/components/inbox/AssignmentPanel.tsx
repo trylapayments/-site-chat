@@ -77,6 +77,8 @@ export function AssignmentPanel({
   ]);
 
   // Live assignee updates from CDC (authoritative refresh via router).
+  // Always refresh on conversation row changes — do not gate on a closed-over
+  // assignee id (stale closures / partial payloads would skip the update).
   useEffect(() => {
     const unsubscribe = subscribeOperatorConversation({
       workspaceId,
@@ -84,22 +86,12 @@ export function AssignmentPanel({
       onMessageInsert: () => {
         // Assignment panel only cares about conversation row updates.
       },
-      onConversationChange: (raw) => {
-        const assignedTo = Reflect.get(raw, "assigned_to");
-        const currentId = assignee?.member_id ?? null;
-        const nextId =
-          typeof assignedTo === "string"
-            ? assignedTo
-            : assignedTo === null
-              ? null
-              : currentId;
-        if (nextId !== currentId) {
-          router.refresh();
-        }
+      onConversationChange: () => {
+        router.refresh();
       },
     });
     return unsubscribe;
-  }, [assignee?.member_id, conversationId, router, workspaceId]);
+  }, [conversationId, router, workspaceId]);
 
   useEffect(() => {
     if (pickerOpen) {
