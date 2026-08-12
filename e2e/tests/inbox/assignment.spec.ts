@@ -37,14 +37,15 @@ async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
   await expect(page.getByTestId("assignment-live")).toHaveText(successPattern, {
     timeout: 30_000,
   });
-  await expect(page.getByTestId("assignment-panel")).toHaveAttribute(
-    "data-pending",
-    "false",
-    { timeout: 30_000 },
-  );
+  await expect(page.getByTestId("assignment-panel")).toHaveAttribute("data-pending", "false", {
+    timeout: 30_000,
+  });
 }
 
-async function startVisitorConversation(browser: import("@playwright/test").Browser, marker: string) {
+async function startVisitorConversation(
+  browser: import("@playwright/test").Browser,
+  marker: string,
+) {
   const context = await browser.newContext();
   const page = await context.newPage();
   await openWidget(page);
@@ -112,10 +113,9 @@ test.describe("conversation assignment & queues", () => {
     await waitForAssignmentMutation(operatorA, /transferred/i);
 
     const bRowAfterTransfer = operatorB.getByRole("row").filter({ hasText: marker });
-    await expect(bRowAfterTransfer.getByTestId("inbox-row-assignee")).toContainText(
-      ADMIN_EMAIL,
-      { timeout: 60_000 },
-    );
+    await expect(bRowAfterTransfer.getByTestId("inbox-row-assignee")).toContainText(ADMIN_EMAIL, {
+      timeout: 60_000,
+    });
 
     await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
     await waitForOperatorInboxRealtimeReady(operatorB);
@@ -287,25 +287,19 @@ test.describe("conversation assignment & queues", () => {
     test.setTimeout(180_000);
     const orderMarkerOld = `assign-order-old-${Date.now()}`;
     const orderMarkerNew = `assign-order-new-${Date.now()}`;
-    const { context: visitorOldContext } = await startVisitorConversation(
-      browser,
-      orderMarkerOld,
-    );
-    const { context: visitorNewContext } = await startVisitorConversation(
-      browser,
-      orderMarkerNew,
-    );
 
     const operatorContext = await browser.newContext();
     const operator = await operatorContext.newPage();
     await prepareInbox(operator, AGENT_EMAIL);
 
+    const { context: visitorOldContext } = await startVisitorConversation(browser, orderMarkerOld);
     await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operator);
     await openAssignmentConversation(operator, orderMarkerOld);
     await operator.getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operator, /assigned to you/i);
 
+    const { context: visitorNewContext } = await startVisitorConversation(browser, orderMarkerNew);
     await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operator);
     await openAssignmentConversation(operator, orderMarkerNew);
