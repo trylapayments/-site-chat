@@ -23,9 +23,21 @@ async function prepareInbox(page: Page, email: string) {
 async function openAssignmentConversation(page: Page, marker: string) {
   await openOperatorConversation(page, marker);
   await waitForOperatorThreadRealtimeReady(page);
-  await expect(page.getByTestId("assignment-current")).toBeVisible({
+  await expect(page.getByTestId("assignment-panel")).toBeVisible({
     timeout: 30_000,
   });
+}
+
+/**
+ * Wait until the Take/Assign/Unassign server action finishes.
+ * Optimistic UI can clear "Unassigned" before the RPC commits; navigating away
+ * aborts the in-flight Next.js server action and leaves the DB unchanged.
+ */
+async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
+  await expect(page.getByTestId("assignment-live")).toHaveText(successPattern, {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("assignment-panel")).toHaveAttribute("data-pending", "false");
 }
 
 test.describe("conversation assignment & queues", () => {
@@ -58,9 +70,7 @@ test.describe("conversation assignment & queues", () => {
     await openAssignmentConversation(operatorA, marker);
     await expect(operatorA.getByTestId("assignment-current")).toHaveText(/Unassigned/i);
     await operatorA.getByTestId("assignment-take").click();
-    await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
-      timeout: 30_000,
-    });
+    await waitForAssignmentMutation(operatorA, /assigned to you/i);
 
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
     await waitForOperatorInboxRealtimeReady(operatorA);
@@ -85,26 +95,16 @@ test.describe("conversation assignment & queues", () => {
     // Operator B cannot silently steal via Take (button absent when assigned to other)
     // Explicit take RPC conflict is covered by pgTAP; UI hides Take when assigned.
 
-    // Transfer A → B
+    // Transfer A → B (admin@local.test)
     await openAssignmentConversation(operatorA, marker);
     await operatorA.getByTestId("assignment-open-picker").click();
     await expect(operatorA.getByTestId("assignment-picker")).toBeVisible();
-    // Pick admin member (second messaging member in seed).
-    const memberOptions = operatorA.locator('[data-testid^="assignment-member-"]');
-    await expect(memberOptions.first()).toBeVisible({ timeout: 15_000 });
-    // Prefer a non-current option.
-    const count = await memberOptions.count();
-    let transferred = false;
-    for (let i = 0; i < count; i += 1) {
-      const option = memberOptions.nth(i);
-      const selected = await option.getAttribute("aria-selected");
-      if (selected !== "true") {
-        await option.click();
-        transferred = true;
-        break;
-      }
-    }
-    expect(transferred).toBe(true);
+    const adminOption = operatorA
+      .locator('[data-testid^="assignment-member-"]')
+      .filter({ hasText: ADMIN_EMAIL });
+    await expect(adminOption).toBeVisible({ timeout: 15_000 });
+    await adminOption.click();
+    await waitForAssignmentMutation(operatorA, /transferred/i);
 
     await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
       timeout: 30_000,
@@ -119,9 +119,7 @@ test.describe("conversation assignment & queues", () => {
     // Unassign returns to Unassigned queue
     await openAssignmentConversation(operatorB, marker);
     await operatorB.getByTestId("assignment-unassign").click();
-    await expect(operatorB.getByTestId("assignment-current")).toHaveText(/Unassigned/i, {
-      timeout: 30_000,
-    });
+    await waitForAssignmentMutation(operatorB, /unassigned/i);
 
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
@@ -161,6 +159,16 @@ test.describe("conversation assignment & queues", () => {
     ]);
 
     // Both UIs converge on the single winner (not Unassigned); conflict path refreshes.
+    await expect(operatorA.getByTestId("assignment-panel")).toHaveAttribute(
+      "data-pending",
+      "false",
+      { timeout: 30_000 },
+    );
+    await expect(operatorB.getByTestId("assignment-panel")).toHaveAttribute(
+      "data-pending",
+      "false",
+      { timeout: 30_000 },
+    );
     await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
       timeout: 30_000,
     });
@@ -171,10 +179,10 @@ test.describe("conversation assignment & queues", () => {
       .poll(
         async () => {
           const aId =
-            (await operatorA.getByTestId("assignment-current").getAttribute("data-assignee-id")) ??
+            (await operatorA.getByTestId("assignment-panel").getAttribute("data-assignee-id")) ??
             "";
           const bId =
-            (await operatorB.getByTestId("assignment-current").getAttribute("data-assignee-id")) ??
+            (await operatorB.getByTestId("assignment-panel").getAttribute("data-assignee-id")) ??
             "";
           return aId.length > 0 && aId === bId;
         },
@@ -195,9 +203,7 @@ test.describe("conversation assignment & queues", () => {
     });
     await openAssignmentConversation(operatorA, multiMarker);
     await operatorA.getByTestId("assignment-take").click();
-    await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
-      timeout: 30_000,
-    });
+    await waitForAssignmentMutation(operatorA, /assigned to you/i);
 
     // Tab 2 Mine list should gain the conversation via realtime (no stale optimistic).
     await operatorATab2.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
@@ -217,9 +223,7 @@ test.describe("conversation assignment & queues", () => {
     await prepareInbox(operatorB, ADMIN_EMAIL);
     await openAssignmentConversation(operatorB, reconnectMarker);
     await operatorB.getByTestId("assignment-take").click();
-    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
-      timeout: 30_000,
-    });
+    await waitForAssignmentMutation(operatorB, /assigned to you/i);
 
     await operatorA.context().setOffline(false);
     await waitForOperatorThreadRealtimeReady(operatorA);
@@ -236,12 +240,14 @@ test.describe("conversation assignment & queues", () => {
     await waitForOperatorInboxRealtimeReady(operatorA);
     await openAssignmentConversation(operatorA, orderMarkerOld);
     await operatorA.getByTestId("assignment-take").click();
+    await waitForAssignmentMutation(operatorA, /assigned to you/i);
 
     await sendWidgetMessage(visitor, orderMarkerNew);
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
     await openAssignmentConversation(operatorA, orderMarkerNew);
     await operatorA.getByTestId("assignment-take").click();
+    await waitForAssignmentMutation(operatorA, /assigned to you/i);
 
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
     await waitForOperatorInboxRealtimeReady(operatorA);

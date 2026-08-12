@@ -212,7 +212,13 @@ export function AssignmentPanel({
   }
 
   return (
-    <section className="space-y-3" aria-labelledby="assignment-heading">
+    <section
+      className="space-y-3"
+      aria-labelledby="assignment-heading"
+      data-testid="assignment-panel"
+      data-pending={isPending ? "true" : "false"}
+      data-assignee-id={assignee?.member_id ?? ""}
+    >
       <h2 id="assignment-heading" className="text-sm font-semibold">
         {messages.sectionTitle}
       </h2>
@@ -233,6 +239,7 @@ export function AssignmentPanel({
         className="sr-only"
         aria-live="polite"
         aria-atomic="true"
+        data-testid="assignment-live"
       >
         {statusMessage ?? error ?? ""}
       </div>
