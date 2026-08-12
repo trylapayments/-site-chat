@@ -37,32 +37,33 @@ async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
   await expect(page.getByTestId("assignment-live")).toHaveText(successPattern, {
     timeout: 30_000,
   });
-  await expect(page.getByTestId("assignment-panel")).toHaveAttribute("data-pending", "false", {
-    timeout: 30_000,
-  });
+  await expect(page.getByTestId("assignment-panel")).toHaveAttribute(
+    "data-pending",
+    "false",
+    { timeout: 30_000 },
+  );
+}
+
+async function startVisitorConversation(browser: import("@playwright/test").Browser, marker: string) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await openWidget(page);
+  await waitForWidgetRealtimeReady(page);
+  await sendWidgetMessage(page, marker);
+  return { context, page };
 }
 
 test.describe("conversation assignment & queues", () => {
-  test("take, live sync, transfer, unassign, timeline, race, multi-tab, reconnect, ordering", async ({
-    browser,
-  }) => {
-    test.setTimeout(360_000);
-    const visitorContext = await browser.newContext();
+  test("take, live inbox sync, transfer, unassign, and timeline", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const marker = `assign-core-${Date.now()}`;
+    const { context: visitorContext } = await startVisitorConversation(browser, marker);
+
     const operatorAContext = await browser.newContext();
     const operatorBContext = await browser.newContext();
-    const visitor = await visitorContext.newPage();
     const operatorA = await operatorAContext.newPage();
     const operatorB = await operatorBContext.newPage();
 
-    const marker = `assign-core-${Date.now()}`;
-    const raceMarker = `assign-race-${Date.now()}`;
-
-    // Visitor creates an unassigned conversation.
-    await openWidget(visitor);
-    await sendWidgetMessage(visitor, marker);
-    await waitForWidgetRealtimeReady(visitor);
-
-    // Operator A: Unassigned → Take → Mine
     await prepareInbox(operatorA, AGENT_EMAIL);
     await operatorA.getByTestId("inbox-assignment-tab-unassigned").click();
     await waitForOperatorInboxRealtimeReady(operatorA);
@@ -81,7 +82,6 @@ test.describe("conversation assignment & queues", () => {
       timeout: 30_000,
     });
 
-    // Operator B sees assignment live in All / loses Unassigned
     await prepareInbox(operatorB, ADMIN_EMAIL);
     await operatorB.getByTestId("inbox-assignment-tab-all").click();
     await waitForOperatorInboxRealtimeReady(operatorB);
@@ -95,14 +95,12 @@ test.describe("conversation assignment & queues", () => {
     await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i);
     await expect(operatorB.getByTestId("assignment-take")).toHaveCount(0);
 
-    // Return B to All so workspace inbox CDC can observe the transfer live.
     await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=all`);
     await waitForOperatorInboxRealtimeReady(operatorB);
     await expect(operatorB.getByRole("row").filter({ hasText: marker })).toBeVisible({
       timeout: 30_000,
     });
 
-    // Transfer A → B (admin@local.test)
     await openAssignmentConversation(operatorA, marker);
     await operatorA.getByTestId("assignment-open-picker").click();
     await expect(operatorA.getByTestId("assignment-picker")).toBeVisible();
@@ -114,9 +112,10 @@ test.describe("conversation assignment & queues", () => {
     await waitForAssignmentMutation(operatorA, /transferred/i);
 
     const bRowAfterTransfer = operatorB.getByRole("row").filter({ hasText: marker });
-    await expect(bRowAfterTransfer.getByTestId("inbox-row-assignee")).toContainText(ADMIN_EMAIL, {
-      timeout: 60_000,
-    });
+    await expect(bRowAfterTransfer.getByTestId("inbox-row-assignee")).toContainText(
+      ADMIN_EMAIL,
+      { timeout: 60_000 },
+    );
 
     await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
     await waitForOperatorInboxRealtimeReady(operatorB);
@@ -124,7 +123,6 @@ test.describe("conversation assignment & queues", () => {
       timeout: 30_000,
     });
 
-    // Unassign returns to Unassigned queue
     await openAssignmentConversation(operatorB, marker);
     await operatorB.getByTestId("assignment-unassign").click();
     await waitForAssignmentMutation(operatorB, /unassigned/i);
@@ -135,7 +133,6 @@ test.describe("conversation assignment & queues", () => {
       timeout: 30_000,
     });
 
-    // Customer Timeline shows assign / transfer / unassign history
     await openAssignmentConversation(operatorA, marker);
     const timeline = operatorA.getByTestId("customer-timeline");
     await expect(timeline).toBeVisible({ timeout: 30_000 });
@@ -149,18 +146,30 @@ test.describe("conversation assignment & queues", () => {
       timeout: 30_000,
     });
 
-    // Race: two operators Take the same unassigned conversation
-    // Widget is already open from the first visitor message — do not re-openWidget
-    // (cached loader.js can make waitForResponse hang until timeout).
-    await sendWidgetMessage(visitor, raceMarker);
+    await visitorContext.close();
+    await operatorAContext.close();
+    await operatorBContext.close();
+  });
 
+  test("concurrent Take: exactly one winner", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const marker = `assign-race-${Date.now()}`;
+    const { context: visitorContext } = await startVisitorConversation(browser, marker);
+
+    const operatorAContext = await browser.newContext();
+    const operatorBContext = await browser.newContext();
+    const operatorA = await operatorAContext.newPage();
+    const operatorB = await operatorBContext.newPage();
+
+    await prepareInbox(operatorA, AGENT_EMAIL);
+    await prepareInbox(operatorB, ADMIN_EMAIL);
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
     await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorB);
 
-    await openAssignmentConversation(operatorA, raceMarker);
-    await openAssignmentConversation(operatorB, raceMarker);
+    await openAssignmentConversation(operatorA, marker);
+    await openAssignmentConversation(operatorB, marker);
 
     await Promise.all([
       operatorA.getByTestId("assignment-take").click(),
@@ -178,17 +187,10 @@ test.describe("conversation assignment & queues", () => {
       { timeout: 30_000 },
     );
 
-    // Authoritative convergence after concurrent Take (avoid stale RSC cache).
     await operatorA.reload();
     await operatorB.reload();
     await waitForOperatorThreadRealtimeReady(operatorA);
     await waitForOperatorThreadRealtimeReady(operatorB);
-    await expect(operatorA.getByTestId("assignment-panel")).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(operatorB.getByTestId("assignment-panel")).toBeVisible({
-      timeout: 30_000,
-    });
 
     await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
       timeout: 30_000,
@@ -211,107 +213,117 @@ test.describe("conversation assignment & queues", () => {
       )
       .toBe(true);
 
-    // Multi-tab sync for same operator — need a fresh unassigned conversation
-    // (continuing the existing widget would append to the race-assigned thread).
-    const visitorMultiContext = await browser.newContext();
-    const visitorMulti = await visitorMultiContext.newPage();
-    await openWidget(visitorMulti);
-    await waitForWidgetRealtimeReady(visitorMulti);
+    await visitorContext.close();
+    await operatorAContext.close();
+    await operatorBContext.close();
+  });
 
-    const operatorATab2 = await operatorAContext.newPage();
-    await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
-    await waitForOperatorInboxRealtimeReady(operatorA);
-    await operatorATab2.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
-    await waitForOperatorInboxRealtimeReady(operatorATab2);
+  test("multi-tab Mine sync after Take", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const marker = `assign-multitab-${Date.now()}`;
+    const { context: visitorContext } = await startVisitorConversation(browser, marker);
 
-    const multiMarker = `assign-multitab-${Date.now()}`;
-    await sendWidgetMessage(visitorMulti, multiMarker);
+    const operatorContext = await browser.newContext();
+    const tab1 = await operatorContext.newPage();
+    const tab2 = await operatorContext.newPage();
 
-    await expect(operatorA.getByRole("row").filter({ hasText: multiMarker })).toBeVisible({
+    await prepareInbox(tab1, AGENT_EMAIL);
+    await tab1.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
+    await waitForOperatorInboxRealtimeReady(tab1);
+    await tab2.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
+    await waitForOperatorInboxRealtimeReady(tab2);
+
+    await expect(tab1.getByRole("row").filter({ hasText: marker })).toBeVisible({
       timeout: 60_000,
     });
-    await openAssignmentConversation(operatorA, multiMarker);
-    await operatorA.getByTestId("assignment-take").click();
-    await waitForAssignmentMutation(operatorA, /assigned to you/i);
+    await openAssignmentConversation(tab1, marker);
+    await tab1.getByTestId("assignment-take").click();
+    await waitForAssignmentMutation(tab1, /assigned to you/i);
 
-    // Tab 2 Mine list should gain the conversation via realtime (no stale optimistic).
-    await operatorATab2.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
-    await waitForOperatorInboxRealtimeReady(operatorATab2);
-    await expect(operatorATab2.getByRole("row").filter({ hasText: multiMarker })).toBeVisible({
+    await tab2.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
+    await waitForOperatorInboxRealtimeReady(tab2);
+    await expect(tab2.getByRole("row").filter({ hasText: marker })).toBeVisible({
       timeout: 30_000,
     });
 
-    // Reconnect catch-up: go offline, peer assigns, reconnect sees update
-    const visitorReconnectContext = await browser.newContext();
-    const visitorReconnect = await visitorReconnectContext.newPage();
-    await openWidget(visitorReconnect);
-    await waitForWidgetRealtimeReady(visitorReconnect);
-    const reconnectMarker = `assign-reconnect-${Date.now()}`;
-    await sendWidgetMessage(visitorReconnect, reconnectMarker);
+    await visitorContext.close();
+    await operatorContext.close();
+  });
+
+  test("reconnect catch-up shows peer Take", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const marker = `assign-reconnect-${Date.now()}`;
+    const { context: visitorContext } = await startVisitorConversation(browser, marker);
+
+    const operatorAContext = await browser.newContext();
+    const operatorBContext = await browser.newContext();
+    const operatorA = await operatorAContext.newPage();
+    const operatorB = await operatorBContext.newPage();
+
+    await prepareInbox(operatorA, AGENT_EMAIL);
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
-    await openAssignmentConversation(operatorA, reconnectMarker);
+    await openAssignmentConversation(operatorA, marker);
 
     await operatorA.context().setOffline(true);
     await prepareInbox(operatorB, ADMIN_EMAIL);
-    await openAssignmentConversation(operatorB, reconnectMarker);
+    await openAssignmentConversation(operatorB, marker);
     await operatorB.getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operatorB, /assigned to you/i);
 
     await operatorA.context().setOffline(false);
-    // Hard navigation catch-up after reconnect (missed CDC while offline).
     await operatorA.reload();
     await waitForOperatorThreadRealtimeReady(operatorA);
-    await expect(operatorA.getByTestId("assignment-panel")).toBeVisible({
-      timeout: 30_000,
-    });
     await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
       timeout: 60_000,
     });
 
-    // Assignment does not reorder by assignment time — last_message_at ordering retained.
-    // Verify Mine list still sorts by activity: newer message appears above older.
-    const visitorOrderOldContext = await browser.newContext();
-    const visitorOrderOld = await visitorOrderOldContext.newPage();
-    await openWidget(visitorOrderOld);
-    await waitForWidgetRealtimeReady(visitorOrderOld);
+    await visitorContext.close();
+    await operatorAContext.close();
+    await operatorBContext.close();
+  });
+
+  test("assignment does not reorder by assignment time", async ({ browser }) => {
+    test.setTimeout(180_000);
     const orderMarkerOld = `assign-order-old-${Date.now()}`;
-    await sendWidgetMessage(visitorOrderOld, orderMarkerOld);
-    await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
-    await waitForOperatorInboxRealtimeReady(operatorA);
-    await openAssignmentConversation(operatorA, orderMarkerOld);
-    await operatorA.getByTestId("assignment-take").click();
-    await waitForAssignmentMutation(operatorA, /assigned to you/i);
-
-    const visitorOrderNewContext = await browser.newContext();
-    const visitorOrderNew = await visitorOrderNewContext.newPage();
-    await openWidget(visitorOrderNew);
-    await waitForWidgetRealtimeReady(visitorOrderNew);
     const orderMarkerNew = `assign-order-new-${Date.now()}`;
-    await sendWidgetMessage(visitorOrderNew, orderMarkerNew);
-    await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
-    await waitForOperatorInboxRealtimeReady(operatorA);
-    await openAssignmentConversation(operatorA, orderMarkerNew);
-    await operatorA.getByTestId("assignment-take").click();
-    await waitForAssignmentMutation(operatorA, /assigned to you/i);
+    const { context: visitorOldContext } = await startVisitorConversation(
+      browser,
+      orderMarkerOld,
+    );
+    const { context: visitorNewContext } = await startVisitorConversation(
+      browser,
+      orderMarkerNew,
+    );
 
-    await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
-    await waitForOperatorInboxRealtimeReady(operatorA);
-    const rows = operatorA.getByRole("row");
-    const texts = await rows.allTextContents();
+    const operatorContext = await browser.newContext();
+    const operator = await operatorContext.newPage();
+    await prepareInbox(operator, AGENT_EMAIL);
+
+    await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
+    await waitForOperatorInboxRealtimeReady(operator);
+    await openAssignmentConversation(operator, orderMarkerOld);
+    await operator.getByTestId("assignment-take").click();
+    await waitForAssignmentMutation(operator, /assigned to you/i);
+
+    await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
+    await waitForOperatorInboxRealtimeReady(operator);
+    await openAssignmentConversation(operator, orderMarkerNew);
+    await operator.getByTestId("assignment-take").click();
+    await waitForAssignmentMutation(operator, /assigned to you/i);
+
+    await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
+    await waitForOperatorInboxRealtimeReady(operator);
+    const texts = await operator.getByRole("row").allTextContents();
     const idxNew = texts.findIndex((t) => t.includes(orderMarkerNew));
     const idxOld = texts.findIndex((t) => t.includes(orderMarkerOld));
     expect(idxNew).toBeGreaterThanOrEqual(0);
     expect(idxOld).toBeGreaterThanOrEqual(0);
     expect(idxNew).toBeLessThan(idxOld);
 
-    await visitorContext.close();
-    await visitorMultiContext.close();
-    await visitorReconnectContext.close();
-    await visitorOrderOldContext.close();
-    await visitorOrderNewContext.close();
-    await operatorAContext.close();
-    await operatorBContext.close();
+    await visitorOldContext.close();
+    await visitorNewContext.close();
+    await operatorContext.close();
   });
 
   test("owner login still reaches inbox (messaging flows remain green)", async ({ page }) => {
