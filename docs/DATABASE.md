@@ -369,6 +369,8 @@ Durable customer/product history for operator Timeline and future CRM/AI/analyti
 
 **RPC:** `list_customer_timeline(p_workspace_id, p_query jsonb)` — membership via `workspace_is_accessible`; visitors/anon cannot execute.
 
+**Assignment event types (v1):** `conversation_assigned`, `conversation_transferred`, `conversation_unassigned` — see `docs/CONVERSATION-ASSIGNMENT.md`.
+
 ---
 
 ## 7. Conversation Tables
