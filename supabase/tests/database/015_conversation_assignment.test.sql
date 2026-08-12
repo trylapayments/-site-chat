@@ -328,11 +328,13 @@ SELECT lives_ok(
   'reassign to agent_a before deactivate test'
 );
 
+-- Direct status writes require elevated role (RLS blocks authenticated UPDATEs)
+SELECT tests.clear_auth();
+
 UPDATE public.workspace_members
-SET status = 'deactivated'
+SET status = 'deactivated', updated_at = now()
 WHERE id = tests.fixture('agent_member_b')::uuid;
 
-SELECT tests.clear_auth();
 SELECT tests.authenticate_as(
   tests.fixture('agent_a')::uuid,
   'assign-agent-a@test.local'
@@ -350,9 +352,16 @@ SELECT throws_like(
 );
 
 -- Restore agent_b for later tests
+SELECT tests.clear_auth();
+
 UPDATE public.workspace_members
-SET status = 'active'
+SET status = 'active', updated_at = now()
 WHERE id = tests.fixture('agent_member_b')::uuid;
+
+SELECT tests.authenticate_as(
+  tests.fixture('agent_a')::uuid,
+  'assign-agent-a@test.local'
+);
 
 SELECT is(
   (
