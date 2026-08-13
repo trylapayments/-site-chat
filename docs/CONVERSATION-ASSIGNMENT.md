@@ -78,6 +78,8 @@ RLS on `conversations` remains SELECT-only for members; mutations go through `SE
 
 Deactivating or removing a member clears their assignments back to the unassigned queue (PRD): assignee, `assigned_at`, and `assigned_by` are cleared, `assignment_version` is incremented, and exactly one `conversation_unassigned` timeline event is emitted per conversation. Removal does **not** rely on FK `ON DELETE SET NULL` alone.
 
+`remove_workspace_member` is concurrency-safe: it `SELECT … FOR UPDATE`s the member row, marks `status = deactivated` (so `assert_assignable_member` fails), clears assignments, then `DELETE`s. Assign locks the assignee `FOR SHARE`, so a concurrent assign either blocks then fails or fails immediately — it never succeeds against a member mid-removal.
+
 ---
 
 ## 6. Queue model (v1)

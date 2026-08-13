@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(44);
+SELECT plan(53);
 
 CREATE TEMP TABLE assignment_fixtures (
   key text PRIMARY KEY,
@@ -723,6 +723,203 @@ SELECT is(
   ),
   1,
   'remove emits exactly one conversation_unassigned event'
+);
+
+-- ---------------------------------------------------------------------------
+-- Concurrent remove vs assign: member becomes non-assignable before DELETE
+-- (pgTAP runs in one outer transaction; dblink cannot see uncommitted
+-- fixtures. Simulate remove's critical section: mark deactivated, prove
+-- assign fails, then finish remove and assert durable cleanup.)
+-- ---------------------------------------------------------------------------
+
+SELECT tests.clear_auth();
+
+DO $$
+DECLARE
+  v_agent_d uuid;
+  v_agent_member_d uuid;
+  v_session uuid;
+  v_conversation uuid;
+BEGIN
+  v_agent_d := tests.create_auth_user('assign-agent-d@test.local');
+
+  INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
+  VALUES (
+    tests.fixture('workspace_a')::uuid,
+    v_agent_d,
+    'agent',
+    'active'
+  )
+  RETURNING id INTO v_agent_member_d;
+
+  INSERT INTO public.visitor_sessions (
+    workspace_id,
+    contact_id,
+    session_token_hash,
+    expires_at
+  )
+  VALUES (
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('contact_a')::uuid,
+    encode(extensions.digest('assign-session-race', 'sha256'), 'hex'),
+    now() + interval '1 day'
+  )
+  RETURNING id INTO v_session;
+
+  INSERT INTO public.conversations (
+    workspace_id,
+    visitor_session_id,
+    contact_id,
+    status,
+    last_message_at,
+    last_message_preview,
+    message_count
+  )
+  VALUES (
+    tests.fixture('workspace_a')::uuid,
+    v_session,
+    tests.fixture('contact_a')::uuid,
+    'open',
+    now() - interval '30 minutes',
+    'Race remove vs assign',
+    1
+  )
+  RETURNING id INTO v_conversation;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('agent_d', v_agent_d::text),
+    ('agent_member_d', v_agent_member_d::text),
+    ('conversation_race', v_conversation::text);
+END;
+$$;
+
+SELECT tests.authenticate_as(
+  tests.fixture('agent_a')::uuid,
+  'assign-agent-a@test.local'
+);
+
+SELECT lives_ok(
+  format(
+    $q$SELECT public.assign_conversation(%L::uuid, %L::uuid, %L::uuid)$q$,
+    tests.fixture('workspace_a'),
+    tests.fixture('conversation_race'),
+    tests.fixture('agent_member_d')
+  ),
+  'assign race conversation to agent_d before concurrent remove'
+);
+
+SELECT tests.clear_auth();
+
+DO $$
+DECLARE
+  v_version bigint;
+BEGIN
+  SELECT assignment_version INTO v_version
+  FROM public.conversations
+  WHERE id = tests.fixture('conversation_race')::uuid;
+
+  INSERT INTO tests.fixtures (key, value) VALUES
+    ('conversation_race_version_before_remove', v_version::text);
+
+  -- Simulate remove's "mark non-assignable" step while the member row is
+  -- still present (before DELETE). Concurrent assign must fail here.
+  UPDATE public.workspace_members
+  SET
+    status = 'deactivated',
+    updated_at = now()
+  WHERE id = tests.fixture('agent_member_d')::uuid;
+END;
+$$;
+
+SELECT tests.authenticate_as(
+  tests.fixture('agent_a')::uuid,
+  'assign-agent-a@test.local'
+);
+
+SELECT throws_like(
+  format(
+    $q$SELECT public.assign_conversation(%L::uuid, %L::uuid, %L::uuid)$q$,
+    tests.fixture('workspace_a'),
+    tests.fixture('conversation_a'),
+    tests.fixture('agent_member_d')
+  ),
+  'MEMBER_NOT_ASSIGNABLE%',
+  'assign to member mid-remove is rejected'
+);
+
+SELECT tests.clear_auth();
+SELECT tests.authenticate_as(
+  tests.fixture('owner_a')::uuid,
+  'assign-owner-a@test.local'
+);
+
+SELECT lives_ok(
+  format(
+    $q$SELECT public.remove_workspace_member(%L::uuid)$q$,
+    tests.fixture('agent_member_d')
+  ),
+  'owner finishes remove of agent_d after concurrent assign rejected'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM public.workspace_members
+    WHERE id = tests.fixture('agent_member_d')::uuid
+  ),
+  0,
+  'member removed after concurrent assign attempt'
+);
+
+SELECT is(
+  (
+    SELECT assigned_to
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_race')::uuid
+  ),
+  NULL,
+  'race remove clears assignee'
+);
+
+SELECT is(
+  (
+    SELECT assigned_at
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_race')::uuid
+  ),
+  NULL,
+  'race remove clears assigned_at'
+);
+
+SELECT is(
+  (
+    SELECT assigned_by_member_id
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_race')::uuid
+  ),
+  NULL,
+  'race remove clears assigned_by'
+);
+
+SELECT is(
+  (
+    SELECT assignment_version
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_race')::uuid
+  ),
+  tests.fixture('conversation_race_version_before_remove')::bigint + 1,
+  'race remove increments assignment_version'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM public.customer_timeline_events
+    WHERE conversation_id = tests.fixture('conversation_race')::uuid
+      AND event_type = 'conversation_unassigned'
+  ),
+  1,
+  'race remove emits exactly one conversation_unassigned event'
 );
 
 -- ---------------------------------------------------------------------------
