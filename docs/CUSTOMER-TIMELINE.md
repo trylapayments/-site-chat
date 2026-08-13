@@ -56,8 +56,12 @@ Canonical shared constants live in `@site-chat/shared` (`CUSTOMER_TIMELINE_EVENT
 | `conversation_assigned` | `NULL → member` | from/to member id + safe labels |
 | `conversation_transferred` | `member → other member` | from/to member id + safe labels |
 | `conversation_unassigned` | `member → NULL` | from member id + safe labels |
+| `internal_note_created` | Note create | `note_id`, author labels — **no body** |
+| `internal_note_updated` | Note update | `note_id`, author/updater labels — **no body** |
+| `internal_note_deleted` | Soft delete | `note_id`, author/deleter labels — **no body** |
+| `mention_created` | New mention on a note | `note_id`, mentioned + author labels |
 
-Assignment mutations use `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS. No-ops emit nothing. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005.
+Assignment mutations use `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS. No-ops emit nothing. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005. Internal notes use dedicated RPCs; see `docs/INTERNAL-NOTES.md` and ADR-006.
 
 ---
 
@@ -70,6 +74,7 @@ Assignment mutations use `take_conversation` / `assign_conversation` / `unassign
 | Attachments | `dedupe_key = message:{id}:attachment` (one event per message) |
 | Conversation started | `conversation:{id}:started` |
 | Identity | Only when name/email/phone **actually change**; no-op patches emit nothing |
+| Internal notes | `internal_note:{id}:created` / `:updated:{epoch}` / `:deleted`; mentions `internal_note:{id}:mention:{member_id}` |
 | Emit helper | `ON CONFLICT (workspace_id, dedupe_key) DO NOTHING` |
 
 Retries of the same durable action must not create duplicate timeline history.

@@ -296,10 +296,16 @@ Message inserts trigger Realtime events filtered by `conversation_id`. Both widg
 | `workspace:{id}:inbox` | New conversations, assignment changes | All online agents in workspace |
 | `workspace:{id}:inbox` | Message/conversation CDC + `conversation_member_reads` CDC for multi-tab unread | Online operators in workspace |
 | `conversation:{id}` | Open-thread conversation CDC (assignee/status) + messages | Agents viewing the thread |
+| `conversation-notes:{id}` | Internal note INSERT/UPDATE CDC | Messaging-role operators on Notes tab |
+| `notifications:{memberId}` | Mention (and future) notification INSERT | Recipient member only |
 
 ### 6.2.0 Conversation assignment
 
 Current assignee is stored on `conversations` (`assigned_to`, `assigned_at`, `assigned_by_member_id`, `assignment_version`). Mutations go through `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS so concurrent Take has exactly one winner. History is emitted to Customer Timeline (`conversation_assigned` / `conversation_transferred` / `conversation_unassigned`). Inbox filters: Mine / Unassigned / All. Assignment never bumps `last_message_at`. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005.
+
+### 6.2.0a Internal notes
+
+Operator-only notes live in `internal_notes` (not `messages`). Soft delete, `@mentions`, durable mention `notifications`, timeline events (`internal_note_created` / `updated` / `deleted`, `mention_created`), and CDC on `internal_notes` with list catch-up merge. Visitors/viewers never receive notes. See `docs/INTERNAL-NOTES.md` and ADR-006.
 
 ### 6.2.1 Read receipts and unread counters
 

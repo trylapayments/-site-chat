@@ -323,6 +323,68 @@ export function subscribeOperatorConversation(input: {
   });
 }
 
+/**
+ * Live internal notes for an open conversation (operator-only via RLS).
+ * Soft deletes arrive as UPDATE with deleted_at set.
+ */
+export function subscribeOperatorInternalNotes(input: {
+  workspaceId: string;
+  conversationId: string;
+  onNoteChange: (payload: Record<string, unknown>) => void;
+  onConnectionChange?: RealtimeConnectionListener;
+}): () => void {
+  const supabase = createClient();
+
+  return subscribeWithOperatorAuth({
+    supabase,
+    channelName: `conversation-notes:${input.conversationId}`,
+    onConnectionChange: input.onConnectionChange,
+    bindings: [
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "internal_notes",
+        filter: `conversation_id=eq.${input.conversationId}`,
+        handler: input.onNoteChange,
+      },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "internal_notes",
+        filter: `conversation_id=eq.${input.conversationId}`,
+        handler: input.onNoteChange,
+      },
+    ],
+  });
+}
+
+/**
+ * Durable in-app notifications for the current member (mention realtime).
+ */
+export function subscribeOperatorNotifications(input: {
+  workspaceId: string;
+  memberId: string;
+  onInsert: (payload: Record<string, unknown>) => void;
+  onConnectionChange?: RealtimeConnectionListener;
+}): () => void {
+  const supabase = createClient();
+
+  return subscribeWithOperatorAuth({
+    supabase,
+    channelName: `notifications:${input.memberId}`,
+    onConnectionChange: input.onConnectionChange,
+    bindings: [
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `recipient_id=eq.${input.memberId}`,
+        handler: input.onInsert,
+      },
+    ],
+  });
+}
+
 export function subscribeOperatorVisitorContext(input: {
   workspaceId: string;
   visitorSessionId: string;

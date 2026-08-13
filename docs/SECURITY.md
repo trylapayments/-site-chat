@@ -144,11 +144,14 @@ See [PRD.md](./PRD.md) Section 3 for the user-facing permission matrix. Implemen
 | Manage billing | Check `role = 'owner'` in Server Action; Stripe Customer Portal session created server-side |
 | Invite member | Check `role IN ('owner', 'admin')`; verify seat limit against subscription |
 | Send message | Check active membership + `role IN ('owner', 'admin', 'agent')` |
+| Manage internal notes | Capability `manage_internal_notes` (owner/admin/agent); RPC `require_notes_access` / `require_messaging_role`; viewers cannot read or write; visitors have no RPC path |
 | Assign conversation | Capability `assign_conversations` (owner/admin/agent); RPC `require_messaging_role`; assignee must be active messaging-role member in same workspace; Take/Assign/Transfer/Unassign use CAS (`ASSIGNMENT_CONFLICT` on stale or raced version) |
 | View audit logs | Check `role IN ('owner', 'admin', 'viewer')` |
 | Export data | Check `role IN ('owner', 'admin')`; log audit event |
 
 Assignment RPCs (`take_conversation`, `assign_conversation`, `unassign_conversation`) are `SECURITY DEFINER` with `search_path = ''`, `REVOKE ALL FROM PUBLIC`, `GRANT EXECUTE TO authenticated` only. `app_private.apply_conversation_assignment` is not executable by `authenticated`/`anon`. Visitors have no path to these RPCs. See `docs/CONVERSATION-ASSIGNMENT.md`.
+
+Internal note RPCs follow the same SECURITY DEFINER pattern. RLS on `internal_notes` / `internal_note_mentions` allows SELECT only for owner/admin/agent. Inbox search never returns note-body matches for viewers. See `docs/INTERNAL-NOTES.md`.
 
 ---
 

@@ -124,7 +124,7 @@ The MVP is complete when:
 - [ ] Agent presence (online/offline based on dashboard activity)
 - [ ] Workspace switcher for multi-workspace users
 - [ ] Typing indicators (broadcast channel)
-- [ ] Internal notes on conversations (agent-only messages)
+- [x] Internal notes on conversations (operator-only notes + @mentions, soft delete, timeline, realtime, search index prep — see `docs/INTERNAL-NOTES.md`)
 
 **Exit criteria:** Owner invites two agents; all three see shared inbox; assignment routes conversations correctly; viewer role can read but not write; RLS test suite passes.
 
@@ -145,7 +145,7 @@ The MVP is complete when:
 - [x] File attachment upload (widget + dashboard)
 - [x] Attachment display (inline images, download links)
 - [ ] Storage quota enforcement
-- [ ] Notification center (in-app, unread count)
+- [ ] Notification center (in-app, unread count) — durable `notifications` table + mention type shipped with internal notes; center UI remaining
 - [ ] Email notifications via Resend (configurable per agent)
 - [ ] Notification preferences UI
 
@@ -226,7 +226,7 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 |---------|-------|--------------|
 | Markdown message rendering (sanitized) | Richer agent replies | XSS-safe renderer |
 | Read receipts | Visitor engagement visibility | Message delivery tracking |
-| Conversation search (full-text) | Agent productivity | PostgreSQL tsvector index |
+| Conversation search (full-text) | Agent productivity | PostgreSQL tsvector index (`internal_notes.search_vector` already indexed for note bodies; extend to messages) |
 | Business hours / offline mode | Professional appearance | Widget visibility rules |
 | Proactive chat triggers (time on page) | Lead capture | Widget rule engine |
 | Browser push notifications | Faster agent response | Service worker, VAPID |
