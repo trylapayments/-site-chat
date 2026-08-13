@@ -120,7 +120,7 @@ The MVP is complete when:
 - [ ] Workspace member management UI (list, change role, deactivate)
 - [ ] Role-based UI gating (hide actions user cannot perform)
 - [ ] RLS policies for all core tables with role enforcement
-- [ ] Conversation assignment (assign to agent, unassigned queue)
+- [x] Conversation assignment (Take / Assign / Transfer / Unassign, Mine/Unassigned/All queues, CAS concurrency, timeline history)
 - [ ] Agent presence (online/offline based on dashboard activity)
 - [ ] Workspace switcher for multi-workspace users
 - [ ] Typing indicators (broadcast channel)

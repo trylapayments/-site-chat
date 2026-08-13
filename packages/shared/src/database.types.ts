@@ -446,7 +446,10 @@ export type Database = {
       }
       conversations: {
         Row: {
+          assigned_at: string | null
+          assigned_by_member_id: string | null
           assigned_to: string | null
+          assignment_version: number
           channel_type: Database["public"]["Enums"]["app_channel_type"]
           contact_id: string | null
           created_at: string
@@ -469,7 +472,10 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          assigned_at?: string | null
+          assigned_by_member_id?: string | null
           assigned_to?: string | null
+          assignment_version?: number
           channel_type?: Database["public"]["Enums"]["app_channel_type"]
           contact_id?: string | null
           created_at?: string
@@ -492,7 +498,10 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          assigned_at?: string | null
+          assigned_by_member_id?: string | null
           assigned_to?: string | null
+          assignment_version?: number
           channel_type?: Database["public"]["Enums"]["app_channel_type"]
           contact_id?: string | null
           created_at?: string
@@ -521,6 +530,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_conversations_assigned_by_workspace"
+            columns: ["assigned_by_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "fk_conversations_assigned_to_workspace"
@@ -1180,6 +1196,7 @@ export type Database = {
         Args: {
           p_assignee_member_id: string
           p_conversation_id: string
+          p_expected_version?: number
           p_workspace_id: string
         }
         Returns: Json
@@ -1324,6 +1341,22 @@ export type Database = {
       soft_delete_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
+      }
+      take_conversation: {
+        Args: {
+          p_conversation_id: string
+          p_expected_version?: number
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      unassign_conversation: {
+        Args: {
+          p_conversation_id: string
+          p_expected_version?: number
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       update_conversation_status: {
         Args: {

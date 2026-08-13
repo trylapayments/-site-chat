@@ -8,13 +8,13 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
+import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { VisitorSidebarLiveRefresh } from "@/components/inbox/VisitorSidebarLiveRefresh";
 import { CustomerTimeline } from "@/components/inbox/CustomerTimeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  assignConversationAction,
   updateConversationStatusAction,
   updateVisitorProfileAction,
 } from "@/lib/inbox/actions";
@@ -59,6 +59,7 @@ export function ConversationSidebar({
   conversationId,
   conversation,
   members,
+  memberId,
   canAssign,
   canUpdateStatus,
   canUpdateVisitor,
@@ -68,6 +69,7 @@ export function ConversationSidebar({
   conversationId: string;
   conversation: ConversationDetail;
   members: WorkspaceMemberOption[];
+  memberId: string;
   canAssign: boolean;
   canUpdateStatus: boolean;
   canUpdateVisitor: boolean;
@@ -298,39 +300,15 @@ export function ConversationSidebar({
         />
       ) : null}
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold">Assignment</h2>
-        {canAssign ? (
-          <select
-            disabled={isPending}
-            value={conversation.assigned_to?.member_id ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              startTransition(async () => {
-                const result = await assignConversationAction(workspaceSlug, {
-                  conversationId,
-                  assigneeMemberId: value || null,
-                });
-                if (result.success) {
-                  router.refresh();
-                }
-              });
-            }}
-            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-          >
-            <option value="">Unassigned</option>
-            {members.map((member) => (
-              <option key={member.member_id} value={member.member_id}>
-                {member.display_label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            {conversation.assigned_to?.display_label ?? "Unassigned"}
-          </p>
-        )}
-      </section>
+      <AssignmentPanel
+        workspaceId={workspaceId}
+        workspaceSlug={workspaceSlug}
+        conversationId={conversationId}
+        conversation={conversation}
+        members={members}
+        memberId={memberId}
+        canAssign={canAssign}
+      />
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">Status</h2>

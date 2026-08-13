@@ -120,6 +120,7 @@ export default async function ConversationDetailPage({
           conversationId={conversationId}
           conversation={conversation}
           members={members}
+          memberId={memberId}
           canAssign={can(workspace.role, "assign_conversations")}
           canUpdateStatus={can(workspace.role, "update_conversation_status")}
           canUpdateVisitor={can(workspace.role, "update_visitor_profile")}

@@ -53,9 +53,11 @@ Canonical shared constants live in `@site-chat/shared` (`CUSTOMER_TIMELINE_EVENT
 | `visitor_identified` | Host identify moves anonymous → named/email | `name`/`email`/`phone`, `changes[]` |
 | `visitor_profile_updated` | Host/operator profile patch with actual field diffs | `changes[]`, `source` |
 | `conversation_status_changed` | Status UPDATE (incl. reopen) | `from_status`, `to_status` |
-| `conversation_assigned` | `assigned_to` UPDATE | assignee id/label |
+| `conversation_assigned` | `NULL → member` | from/to member id + safe labels |
+| `conversation_transferred` | `member → other member` | from/to member id + safe labels |
+| `conversation_unassigned` | `member → NULL` | from member id + safe labels |
 
-Assignment/transfer uses the existing `assign_conversation` path (reassign = transfer). No fabricated transfer event type.
+Assignment mutations use `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS. No-ops emit nothing. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005.
 
 ---
 

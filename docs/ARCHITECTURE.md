@@ -294,13 +294,12 @@ Message inserts trigger Realtime events filtered by `conversation_id`. Both widg
 |-----------------|---------|-------------|
 | `conversation:{id}` | New messages, status changes (postgres_changes) | Agents (dashboard) |
 | `workspace:{id}:inbox` | New conversations, assignment changes | All online agents in workspace |
-| `widget-conversation:{topic_key}` | Server-originated visitor-safe `message.created` Broadcast | Visitor (scoped JWT, SELECT only) + authorized operators (SELECT) |
-| `widget-ephemeral:{topic_key}` | Typing (`typing.v1`), Presence, receipt cursors (`receipt.v1`) | Visitor (scoped JWT, SELECT+INSERT) + authorized operators (SELECT+INSERT) |
 | `workspace:{id}:inbox` | Message/conversation CDC + `conversation_member_reads` CDC for multi-tab unread | Online operators in workspace |
+| `conversation:{id}` | Open-thread conversation CDC (assignee/status) + messages | Agents viewing the thread |
 
-Postgres changes are used for persistent events (messages, conversation updates, operator read cursors). Private Broadcast on `widget-conversation` delivers durable visitor-safe messages. Typing, Presence, and receipt cursor mirrors use a **separate** private ephemeral topic so visitors cannot INSERT forged `message.created` events onto the message transport.
+### 6.2.0 Conversation assignment
 
-Operators continue to receive durable messages via `postgres_changes`. Typing, presence, and receipts use the opaque visitor topic key (`visitor_realtime_topic_key`) derived into both topic names — never raw conversation, workspace, session, or member IDs in the widget JWT.
+Current assignee is stored on `conversations` (`assigned_to`, `assigned_at`, `assigned_by_member_id`, `assignment_version`). Mutations go through `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS so concurrent Take has exactly one winner. History is emitted to Customer Timeline (`conversation_assigned` / `conversation_transferred` / `conversation_unassigned`). Inbox filters: Mine / Unassigned / All. Assignment never bumps `last_message_at`. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005.
 
 ### 6.2.1 Read receipts and unread counters
 

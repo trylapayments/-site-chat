@@ -1,4 +1,5 @@
 import {
+  assignmentMutationResultSchema,
   conversationDetailSchema,
   inboxUnreadTotalResultSchema,
   listConversationsQuerySchema,
@@ -9,9 +10,11 @@ import {
   listMessagesResultSchema,
   markConversationDeliveredResultSchema,
   markConversationReadResultSchema,
+  parseAssignmentErrorMessage,
   sendOperatorMessageResultSchema,
   visitorProfileSchema,
   workspaceMemberOptionSchema,
+  type AssignmentMutationResult,
   type ConversationDetail,
   type InboxUnreadTotalResult,
   type ListConversationsQuery,
@@ -133,23 +136,102 @@ export async function sendOperatorMessage(
   );
 }
 
+function throwAssignmentRpcError(error: unknown): never {
+  let message: string | null = null;
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (error && typeof error === "object" && "message" in error) {
+    const candidate = Reflect.get(error, "message");
+    if (typeof candidate === "string") {
+      message = candidate;
+    }
+  }
+  const typed = parseAssignmentErrorMessage(message);
+  if (typed) {
+    throw typed;
+  }
+  throw error instanceof Error ? error : new Error("Assignment failed");
+}
+
+export async function takeConversation(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  conversationId: string,
+  expectedVersion?: number,
+): Promise<AssignmentMutationResult> {
+  const { data, error } = await callPublicRpc(supabase, "take_conversation", {
+    p_workspace_id: workspaceId,
+    p_conversation_id: conversationId,
+    ...(expectedVersion !== undefined
+      ? { p_expected_version: expectedVersion }
+      : {}),
+  });
+
+  if (error) {
+    throwAssignmentRpcError(error);
+  }
+
+  return parseRpcResult(
+    assignmentMutationResultSchema,
+    data,
+    "take_conversation",
+  );
+}
+
 export async function assignConversation(
   supabase: AppSupabaseClient,
   workspaceId: string,
   conversationId: string,
-  assigneeMemberId: string | null,
-): Promise<ConversationDetail> {
+  assigneeMemberId: string,
+  expectedVersion?: number,
+): Promise<AssignmentMutationResult> {
   const { data, error } = await callPublicRpc(supabase, "assign_conversation", {
     p_workspace_id: workspaceId,
     p_conversation_id: conversationId,
-    p_assignee_member_id: assigneeMemberId as unknown as string,
+    p_assignee_member_id: assigneeMemberId,
+    ...(expectedVersion !== undefined
+      ? { p_expected_version: expectedVersion }
+      : {}),
   });
 
   if (error) {
-    throw error;
+    throwAssignmentRpcError(error);
   }
 
-  return parseRpcResult(conversationDetailSchema, data, "assign_conversation");
+  return parseRpcResult(
+    assignmentMutationResultSchema,
+    data,
+    "assign_conversation",
+  );
+}
+
+export async function unassignConversation(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  conversationId: string,
+  expectedVersion?: number,
+): Promise<AssignmentMutationResult> {
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "unassign_conversation",
+    {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+      ...(expectedVersion !== undefined
+        ? { p_expected_version: expectedVersion }
+        : {}),
+    },
+  );
+
+  if (error) {
+    throwAssignmentRpcError(error);
+  }
+
+  return parseRpcResult(
+    assignmentMutationResultSchema,
+    data,
+    "unassign_conversation",
+  );
 }
 
 export async function updateConversationStatus(

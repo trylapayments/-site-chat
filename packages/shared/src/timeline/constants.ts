@@ -21,6 +21,8 @@ export const CUSTOMER_TIMELINE_EVENT_TYPES = [
   "visitor_profile_updated",
   "conversation_status_changed",
   "conversation_assigned",
+  "conversation_transferred",
+  "conversation_unassigned",
 ] as const;
 
 export type CustomerTimelineEventType = (typeof CUSTOMER_TIMELINE_EVENT_TYPES)[number];
@@ -49,5 +51,7 @@ export const CUSTOMER_TIMELINE_LABEL_KEYS = {
     visitor_profile_updated: "timeline.event.visitor_profile_updated",
     conversation_status_changed: "timeline.event.conversation_status_changed",
     conversation_assigned: "timeline.event.conversation_assigned",
+    conversation_transferred: "timeline.event.conversation_transferred",
+    conversation_unassigned: "timeline.event.conversation_unassigned",
   },
 } as const;

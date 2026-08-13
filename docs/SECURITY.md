@@ -133,6 +133,7 @@ Application-layer checks are never skipped with the assumption that RLS alone is
 - `owner` role cannot be removed unless ownership is transferred or workspace is deleted.
 - Admins cannot promote themselves to owner.
 - Deactivated members (`status = 'deactivated'`) fail all authorization checks immediately.
+- Deactivating a member clears `conversations.assigned_to` for conversations they owned (returns them to the unassigned queue without bumping `last_message_at`).
 
 ### 3.4 Permission Matrix (Detailed)
 
@@ -143,8 +144,11 @@ See [PRD.md](./PRD.md) Section 3 for the user-facing permission matrix. Implemen
 | Manage billing | Check `role = 'owner'` in Server Action; Stripe Customer Portal session created server-side |
 | Invite member | Check `role IN ('owner', 'admin')`; verify seat limit against subscription |
 | Send message | Check active membership + `role IN ('owner', 'admin', 'agent')` |
+| Assign conversation | Capability `assign_conversations` (owner/admin/agent); RPC `require_messaging_role`; assignee must be active messaging-role member in same workspace; Take/Assign/Transfer/Unassign use CAS (`ASSIGNMENT_CONFLICT` on stale or raced version) |
 | View audit logs | Check `role IN ('owner', 'admin', 'viewer')` |
 | Export data | Check `role IN ('owner', 'admin')`; log audit event |
+
+Assignment RPCs (`take_conversation`, `assign_conversation`, `unassign_conversation`) are `SECURITY DEFINER` with `search_path = ''`, `REVOKE ALL FROM PUBLIC`, `GRANT EXECUTE TO authenticated` only. `app_private.apply_conversation_assignment` is not executable by `authenticated`/`anon`. Visitors have no path to these RPCs. See `docs/CONVERSATION-ASSIGNMENT.md`.
 
 ---
 

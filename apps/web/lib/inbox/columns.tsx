@@ -1,6 +1,7 @@
 "use client";
 
 import type { ConversationListItem } from "@site-chat/shared";
+import { assignmentMessagesEn } from "@site-chat/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 
@@ -10,6 +11,8 @@ import {
   formatRelativeTime,
 } from "@/lib/inbox/search-params";
 import { cn } from "@/lib/utils";
+
+const assignmentMessages = assignmentMessagesEn;
 
 function StatusBadge({ status }: { status: ConversationListItem["status"] }) {
   return (
@@ -81,10 +84,15 @@ export function createInboxColumns(
     },
     {
       id: "assigned_to",
-      header: "Assignee",
+      header: assignmentMessages.assigneeColumn,
       cell: ({ row }) => (
-        <span className="text-sm">
-          {row.original.assigned_to?.display_label ?? "Unassigned"}
+        <span
+          className="text-sm"
+          data-testid="inbox-row-assignee"
+          data-assignee-id={row.original.assigned_to?.member_id ?? ""}
+        >
+          {row.original.assigned_to?.display_label ??
+            assignmentMessages.unassigned}
         </span>
       ),
     },

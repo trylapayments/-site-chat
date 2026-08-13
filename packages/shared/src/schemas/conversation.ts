@@ -89,6 +89,12 @@ export const conversationDetailSchema = z
     status: conversationStatusSchema,
     channel_type: channelTypeSchema,
     assigned_to: assigneeSchema,
+    /** When the current assignee was set; null when unassigned. */
+    assigned_at: z.string().nullable().optional(),
+    /** Member who performed the current assignment. */
+    assigned_by: assigneeSchema.optional(),
+    /** Monotonic assignment revision for CAS / concurrency. */
+    assignment_version: z.number().int().nonnegative().optional(),
     contact: contactDetailSchema,
     visitor_session_id: z.string().uuid(),
     /**
@@ -246,10 +252,50 @@ export const assignConversationSchema = z
   .object({
     conversationId: z.string().uuid(),
     assigneeMemberId: z.string().uuid().nullable(),
+    expectedVersion: z.number().int().nonnegative().optional(),
   })
   .strict();
 
 export type AssignConversationInput = z.infer<typeof assignConversationSchema>;
+
+export const takeConversationSchema = z
+  .object({
+    conversationId: z.string().uuid(),
+    expectedVersion: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+export type TakeConversationInput = z.infer<typeof takeConversationSchema>;
+
+export const unassignConversationSchema = z
+  .object({
+    conversationId: z.string().uuid(),
+    expectedVersion: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+export type UnassignConversationInput = z.infer<typeof unassignConversationSchema>;
+
+export const assignmentStateSchema = z
+  .object({
+    assignee_member_id: z.string().uuid().nullable(),
+    assigned_at: z.string().nullable(),
+    assigned_by_member_id: z.string().uuid().nullable(),
+    assignment_version: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type AssignmentState = z.infer<typeof assignmentStateSchema>;
+
+export const assignmentMutationResultSchema = z
+  .object({
+    conversation: conversationDetailSchema,
+    changed: z.boolean(),
+    assignment: assignmentStateSchema,
+  })
+  .strict();
+
+export type AssignmentMutationResult = z.infer<typeof assignmentMutationResultSchema>;
 
 export const updateConversationStatusSchema = z
   .object({
