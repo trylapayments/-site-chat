@@ -125,6 +125,7 @@ Typed errors (stable prefixes → `NoteError` in `@site-chat/shared`):
 - Operator thread notes channel: INSERT/UPDATE filtered by `conversation_id`
 - Soft delete arrives as UPDATE with `deleted_at`
 - On connect / CDC: **authoritative** catch-up via `list_internal_notes` with `authoritative: true`, returning active items + soft-delete **tombstones**. Client `reconcileNotesCatchUp` applies tombstones so a delete missed while disconnected is removed; CDC creates that arrive during an in-flight catch-up are retained (not wiped by a stale empty page)
+- Soft-delete also records a **session-local tombstone** and aborts in-flight catch-up so a response that still lists the note cannot resurrect it after the operator deleted it
 - Selecting the Internal Notes tab triggers catch-up so peers load creates even if CDC was delayed
 - Conversation switches bump a generation counter and abort in-flight catch-up (`AbortController`) so stale responses never merge into the wrong thread
 - Mentioned operators also receive notification INSERT on `recipient_id`

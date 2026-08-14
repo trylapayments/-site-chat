@@ -377,6 +377,7 @@ function NoteCard({
   canWrite,
   onUpdated,
   onDeleted,
+  onDeleteFailed,
 }: {
   note: InternalNote;
   workspaceSlug: string;
@@ -385,6 +386,7 @@ function NoteCard({
   canWrite: boolean;
   onUpdated: (note: InternalNote) => void;
   onDeleted: (noteId: string) => void;
+  onDeleteFailed: (noteId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -444,6 +446,9 @@ function NoteCard({
     if (isPending) return;
     setError(null);
     setIsPending(true);
+    // Optimistic local tombstone + abort in-flight catch-up before the RPC
+    // returns, so a stale list cannot resurrect the note.
+    onDeleted(note.id);
     void (async () => {
       try {
         const result = await softDeleteInternalNoteAction(workspaceSlug, {
@@ -451,11 +456,12 @@ function NoteCard({
           conversationId,
         });
         if (!result.success) {
+          onDeleteFailed(note.id);
           setError(result.message);
           return;
         }
-        onDeleted(note.id);
       } catch (err) {
+        onDeleteFailed(note.id);
         setError(err instanceof Error ? err.message : "Unable to delete note.");
       } finally {
         setIsPending(false);
@@ -605,16 +611,24 @@ export function InternalNotesPanel({
   canManage: boolean;
   active?: boolean;
 }) {
-  const { notes, setNotes, connectionState, mentionFlash, error, retry } =
-    useLiveInternalNotes({
-      workspaceId,
-      workspaceSlug,
-      conversationId,
-      memberId,
-      initialNotes,
-      enabled: canManage,
-      active,
-    });
+  const {
+    notes,
+    setNotes,
+    connectionState,
+    mentionFlash,
+    error,
+    markNoteDeleted,
+    clearLocalTombstone,
+    retry,
+  } = useLiveInternalNotes({
+    workspaceId,
+    workspaceSlug,
+    conversationId,
+    memberId,
+    initialNotes,
+    enabled: canManage,
+    active,
+  });
 
   if (!canManage) {
     return (
@@ -678,10 +692,10 @@ export function InternalNotesPanel({
               onUpdated={(updated) => {
                 setNotes((current) => mergeInternalNotes(current, [updated]));
               }}
-              onDeleted={(noteId) => {
-                setNotes((current) =>
-                  current.filter((item) => item.id !== noteId),
-                );
+              onDeleted={markNoteDeleted}
+              onDeleteFailed={(noteId) => {
+                clearLocalTombstone(noteId);
+                retry();
               }}
             />
           ))

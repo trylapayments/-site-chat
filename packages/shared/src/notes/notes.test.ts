@@ -169,6 +169,22 @@ describe("mergeInternalNotes + catch-up", () => {
     expect(next.map((n) => n.id)).toEqual(["n-cdc"]);
   });
 
+  it("local/session tombstone blocks stale catch-up from resurrecting a deleted note", () => {
+    const current: InternalNote[] = [];
+    const active = [note({ id: "n1", body: "already deleted locally" })];
+    const tombstones = [
+      note({
+        id: "n1",
+        deleted_at: "2026-08-13T15:00:00.000Z",
+        updated_at: "2026-08-13T15:00:00.000Z",
+      }),
+    ];
+    const next = reconcileNotesCatchUp(current, active, tombstones, {
+      authoritativeReplace: true,
+    });
+    expect(next).toEqual([]);
+  });
+
   it("applyInternalNoteRealtimeChange removes soft-deleted notes", () => {
     const current = [note({ id: "n1" })];
     const next = applyInternalNoteRealtimeChange(

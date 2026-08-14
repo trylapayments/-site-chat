@@ -66,6 +66,11 @@ export function useLiveInternalNotes(input: {
   const catchUpSinceRef = useRef<string>(new Date().toISOString());
   const initialNotesRef = useRef(input.initialNotes);
   initialNotesRef.current = input.initialNotes;
+  /**
+   * Session-local soft-delete ids. Prevents an in-flight catch-up that still
+   * lists a note from resurrecting it after the operator deleted it.
+   */
+  const localTombstoneIdsRef = useRef<Set<string>>(new Set());
 
   const invalidateInFlight = useCallback(() => {
     conversationGenerationRef.current += 1;
@@ -73,10 +78,26 @@ export function useLiveInternalNotes(input: {
     catchUpAbortRef.current = null;
   }, []);
 
+  const markNoteDeleted = useCallback(
+    (noteId: string) => {
+      localTombstoneIdsRef.current.add(noteId);
+      // Drop any catch-up that started before this delete — it may still contain
+      // the note and would otherwise re-merge it into local state.
+      invalidateInFlight();
+      setNotes((current) => current.filter((note) => note.id !== noteId));
+    },
+    [invalidateInFlight],
+  );
+
+  const clearLocalTombstone = useCallback((noteId: string) => {
+    localTombstoneIdsRef.current.delete(noteId);
+  }, []);
+
   // Reset only when the conversation changes — do NOT depend on initialNotes
   // referential identity (parent re-renders would abort peer catch-up).
   useEffect(() => {
     invalidateInFlight();
+    localTombstoneIdsRef.current = new Set();
     setNotes(initialNotesRef.current);
     catchUpSinceRef.current = new Date().toISOString();
     setError(null);
@@ -118,7 +139,22 @@ export function useLiveInternalNotes(input: {
         }
 
         setError(null);
-        const tombstones = result.data.tombstones;
+        const localTombstones: InternalNote[] = [
+          ...localTombstoneIdsRef.current,
+        ].map((id) => ({
+          id,
+          workspace_id: input.workspaceId,
+          conversation_id: conversationId,
+          author_member_id: null,
+          author_display_label: "Former member",
+          body: "(deleted)",
+          client_note_id: null,
+          created_at: new Date(0).toISOString(),
+          updated_at: new Date(0).toISOString(),
+          deleted_at: new Date().toISOString(),
+          mentions: [],
+        }));
+        const tombstones = [...result.data.tombstones, ...localTombstones];
         setNotes((current) =>
           reconcileNotesCatchUp(current, result.data.items, tombstones, {
             authoritativeReplace:
@@ -139,7 +175,12 @@ export function useLiveInternalNotes(input: {
         setError(err instanceof Error ? err.message : "Unable to load notes.");
       }
     },
-    [input.conversationId, input.enabled, input.workspaceSlug],
+    [
+      input.conversationId,
+      input.enabled,
+      input.workspaceId,
+      input.workspaceSlug,
+    ],
   );
 
   useEffect(() => {
@@ -161,18 +202,24 @@ export function useLiveInternalNotes(input: {
       onNoteChange: (payload) => {
         const row = (payload.new ?? payload) as Record<string, unknown>;
         const partial = rowToPartialNote(row);
-        if (partial?.deleted_at) {
+        if (!partial) {
+          void catchUp("authoritative");
+          return;
+        }
+        if (
+          partial.deleted_at ||
+          localTombstoneIdsRef.current.has(partial.id)
+        ) {
+          localTombstoneIdsRef.current.add(partial.id);
           setNotes((current) =>
             current.filter((note) => note.id !== partial.id),
           );
           return;
         }
         // Optimistic CDC merge so peers see the note even if catch-up is delayed.
-        if (partial) {
-          setNotes((current) =>
-            applyInternalNoteRealtimeChange(current, partial),
-          );
-        }
+        setNotes((current) =>
+          applyInternalNoteRealtimeChange(current, partial),
+        );
         // Mentions / author label may be incomplete on CDC — refresh.
         void catchUp("authoritative");
       },
@@ -240,6 +287,8 @@ export function useLiveInternalNotes(input: {
     connectionState,
     mentionFlash,
     error,
+    markNoteDeleted,
+    clearLocalTombstone,
     retry: () => {
       void catchUp("authoritative");
     },

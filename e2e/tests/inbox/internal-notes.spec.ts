@@ -168,13 +168,23 @@ test.describe("internal notes + mentions", () => {
       { timeout: 30_000 },
     );
 
-    // Simulate reconnect by reloading conversation notes tab.
+    // Simulate reconnect by reloading the conversation URL.
     await agentPage.reload();
     await waitForOperatorThreadRealtimeReady(agentPage);
+    // Reload can land on the thread without the notes tab selected; if the
+    // conversation route failed over to the list, re-open by marker.
+    if (!/\/inbox\/[0-9a-f-]+/i.test(agentPage.url())) {
+      await waitForOperatorInboxRealtimeReady(agentPage);
+      await openOperatorConversation(agentPage, marker);
+      await waitForOperatorThreadRealtimeReady(agentPage);
+    }
     await agentPage.getByTestId("conversation-tab-notes").click();
     await expect(agentPage.getByTestId("internal-notes-panel")).toBeVisible({
       timeout: 30_000,
     });
+    // Tab flip forces an authoritative catch-up when SSR notes fetch was empty.
+    await agentPage.getByTestId("conversation-tab-messages").click();
+    await agentPage.getByTestId("conversation-tab-notes").click();
     await expect(agentPage.getByTestId("internal-note-item").filter({ hasText: body })).toHaveCount(
       1,
       { timeout: 60_000 },
