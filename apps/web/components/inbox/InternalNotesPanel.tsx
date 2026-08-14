@@ -1,10 +1,14 @@
 "use client";
 
 import {
+  createClientNoteId,
+  detectMentionTrigger,
   filterMentionableMembers,
+  formatMentionToken,
   internalNotesMessagesEn,
+  mentionIdsForSubmit,
   mergeInternalNotes,
-  mergeMentionMemberIds,
+  pruneMentionBindings,
   splitNoteBodyWithMentions,
   type InternalNote,
   type WorkspaceMemberOption,
@@ -16,6 +20,7 @@ import {
   useState,
   useTransition,
   type KeyboardEvent,
+  type RefObject,
 } from "react";
 
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
@@ -111,6 +116,128 @@ function MentionAutocomplete({
   );
 }
 
+function useMentionDraft(
+  members: WorkspaceMemberOption[],
+  textareaRef: RefObject<HTMLTextAreaElement | null>,
+  initialBody = "",
+) {
+  const [body, setBody] = useState(initialBody);
+  const [, setBindings] = useState(() => new Map<string, string>());
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const filteredMentions = useMemo(
+    () =>
+      mentionQuery === null
+        ? []
+        : filterMentionableMembers(members, mentionQuery),
+    [members, mentionQuery],
+  );
+
+  function syncMentionTrigger(value: string, caret: number) {
+    const trigger = detectMentionTrigger(value, caret);
+    if (!trigger) {
+      setMentionQuery(null);
+      return;
+    }
+    setMentionQuery(trigger.query);
+    setMentionIndex(0);
+  }
+
+  function applyBodyChange(value: string, caret: number) {
+    setBody(value);
+    setBindings((current) => pruneMentionBindings(value, current));
+    syncMentionTrigger(value, caret);
+  }
+
+  function resetDraft(nextBody = "") {
+    setBody(nextBody);
+    setBindings(new Map());
+    setMentionQuery(null);
+    setMentionIndex(0);
+  }
+
+  function insertMention(member: WorkspaceMemberOption) {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const caret = textarea.selectionStart;
+    const trigger = detectMentionTrigger(body, caret);
+    if (!trigger) return;
+
+    const token = formatMentionToken(member);
+    const before = body.slice(0, trigger.replaceStart);
+    const after = body.slice(caret);
+    const needsSpace = after.length === 0 || !/^\s/.test(after);
+    const nextBody = `${before}${token}${needsSpace ? " " : ""}${after}`;
+
+    setBody(nextBody);
+    setBindings((current) => {
+      const next = new Map(current);
+      next.set(member.member_id, member.display_label);
+      return pruneMentionBindings(nextBody, next);
+    });
+    setMentionQuery(null);
+    setMentionIndex(0);
+
+    const nextCaret = before.length + token.length + (needsSpace ? 1 : 0);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(nextCaret, nextCaret);
+    });
+  }
+
+  function onMentionKeyDown(
+    event: KeyboardEvent<HTMLTextAreaElement>,
+  ): boolean {
+    if (mentionQuery === null) {
+      return false;
+    }
+
+    if (filteredMentions.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setMentionIndex((index) => (index + 1) % filteredMentions.length);
+        return true;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setMentionIndex(
+          (index) =>
+            (index - 1 + filteredMentions.length) % filteredMentions.length,
+        );
+        return true;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        const member = filteredMentions[mentionIndex];
+        if (member) {
+          insertMention(member);
+        }
+        return true;
+      }
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMentionQuery(null);
+      return true;
+    }
+
+    return false;
+  }
+
+  return {
+    body,
+    mentionQuery,
+    mentionIndex,
+    applyBodyChange,
+    syncMentionTrigger,
+    resetDraft,
+    insertMention,
+    onMentionKeyDown,
+  };
+}
+
 function NoteComposer({
   workspaceSlug,
   conversationId,
@@ -124,65 +251,31 @@ function NoteComposer({
   canWrite: boolean;
   onCreated: (note: InternalNote) => void;
 }) {
-  const [body, setBody] = useState("");
-  const [mentionedIds, setMentionedIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const clientNoteIdRef = useRef(createClientNoteId());
+  const {
+    body,
+    mentionQuery,
+    mentionIndex,
+    applyBodyChange,
+    syncMentionTrigger,
+    resetDraft,
+    insertMention,
+    onMentionKeyDown,
+  } = useMentionDraft(members, textareaRef);
 
-  const filteredMentions = useMemo(
-    () =>
-      mentionQuery === null
-        ? []
-        : filterMentionableMembers(members, mentionQuery),
-    [members, mentionQuery],
-  );
-
-  function detectMentionQuery(value: string, caret: number) {
-    const before = value.slice(0, caret);
-    const match = /(?:^|\s)@([^\s@]*)$/.exec(before);
-    if (!match) {
-      setMentionQuery(null);
-      return;
-    }
-    setMentionQuery(match[1] ?? "");
-    setMentionIndex(0);
-  }
-
-  function insertMention(member: WorkspaceMemberOption) {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const caret = textarea.selectionStart;
-    const before = body.slice(0, caret);
-    const after = body.slice(caret);
-    const replaced = before.replace(/(?:^|\s)@([^\s@]*)$/, (full) => {
-      const leadingSpace =
-        full.startsWith(" ") || full.startsWith("\n") ? full.slice(0, 1) : "";
-      const token = member.display_label.includes("@")
-        ? localMentionToken(member.display_label)
-        : member.display_label;
-      return `${leadingSpace}@${token}`;
-    });
-    const nextBody = `${replaced} ${after}`.replace(/\s+$/, " ");
-    setBody(nextBody.trimEnd() + (after.startsWith(" ") ? "" : " "));
-    setMentionedIds((current) =>
-      current.includes(member.member_id)
-        ? current
-        : [...current, member.member_id],
-    );
-    setMentionQuery(null);
-    requestAnimationFrame(() => {
-      textarea.focus();
-    });
+  function clearDraft() {
+    resetDraft("");
+    clientNoteIdRef.current = createClientNoteId();
   }
 
   function submit() {
     const trimmed = body.trim();
     if (!trimmed || !canWrite || isPending) return;
-    const clientNoteId = crypto.randomUUID();
-    const mentionIds = mergeMentionMemberIds(mentionedIds, trimmed, members);
+    const clientNoteId = clientNoteIdRef.current;
+    const mentionIds = mentionIdsForSubmit(body);
     setError(null);
     startTransition(async () => {
       const result = await createInternalNoteAction(workspaceSlug, {
@@ -198,38 +291,13 @@ function NoteComposer({
       if (result.data && "id" in result.data && "body" in result.data) {
         onCreated(result.data);
       }
-      setBody("");
-      setMentionedIds([]);
-      setMentionQuery(null);
+      clearDraft();
     });
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (mentionQuery !== null && filteredMentions.length > 0) {
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setMentionIndex((index) => (index + 1) % filteredMentions.length);
-        return;
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setMentionIndex(
-          (index) =>
-            (index - 1 + filteredMentions.length) % filteredMentions.length,
-        );
-        return;
-      }
-      if (event.key === "Enter" || event.key === "Tab") {
-        event.preventDefault();
-        const member = filteredMentions[mentionIndex];
-        if (member) insertMention(member);
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setMentionQuery(null);
-        return;
-      }
+    if (onMentionKeyDown(event)) {
+      return;
     }
 
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -264,13 +332,11 @@ function NoteComposer({
         value={body}
         disabled={isPending}
         onChange={(event) => {
-          const value = event.target.value;
-          setBody(value);
-          detectMentionQuery(value, event.target.selectionStart);
+          applyBodyChange(event.target.value, event.target.selectionStart);
         }}
         onKeyDown={onKeyDown}
         onClick={(event) => {
-          detectMentionQuery(
+          syncMentionTrigger(
             event.currentTarget.value,
             event.currentTarget.selectionStart,
           );
@@ -297,12 +363,6 @@ function NoteComposer({
   );
 }
 
-function localMentionToken(label: string): string {
-  const at = label.indexOf("@");
-  if (at > 0) return label.slice(0, at);
-  return label;
-}
-
 function NoteCard({
   note,
   workspaceSlug,
@@ -321,22 +381,33 @@ function NoteCard({
   onDeleted: (noteId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(note.body);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const {
+    body: draft,
+    mentionQuery,
+    mentionIndex,
+    applyBodyChange,
+    syncMentionTrigger,
+    resetDraft,
+    insertMention,
+    onMentionKeyDown,
+  } = useMentionDraft(members, textareaRef, note.body);
 
   useEffect(() => {
-    setDraft(note.body);
-  }, [note.body, note.id]);
+    if (editing) {
+      return;
+    }
+    resetDraft(note.body);
+    // resetDraft is intentionally omitted: only re-sync when the note identity/body changes while not editing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- draft sync from note props
+  }, [note.body, note.id, editing]);
 
   function save() {
     const trimmed = draft.trim();
     if (!trimmed) return;
-    const mentionIds = mergeMentionMemberIds(
-      note.mentions.map((m) => m.member_id),
-      trimmed,
-      members,
-    );
+    const mentionIds = mentionIdsForSubmit(draft);
     setError(null);
     startTransition(async () => {
       const result = await updateInternalNoteAction(workspaceSlug, {
@@ -369,6 +440,10 @@ function NoteCard({
       }
       onDeleted(note.id);
     });
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    onMentionKeyDown(event);
   }
 
   return (
@@ -416,7 +491,7 @@ function NoteCard({
                   disabled={isPending}
                   onClick={() => {
                     setEditing(false);
-                    setDraft(note.body);
+                    resetDraft(note.body);
                   }}
                 >
                   {messages.cancel}
@@ -430,6 +505,7 @@ function NoteCard({
                   variant="ghost"
                   disabled={isPending}
                   onClick={() => {
+                    resetDraft(note.body);
                     setEditing(true);
                   }}
                 >
@@ -451,14 +527,32 @@ function NoteCard({
         ) : null}
       </div>
       {editing ? (
-        <textarea
-          className="min-h-[72px] w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm"
-          value={draft}
-          disabled={isPending}
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
-        />
+        <div className="relative">
+          {mentionQuery !== null ? (
+            <MentionAutocomplete
+              members={members}
+              query={mentionQuery}
+              activeIndex={mentionIndex}
+              onSelect={insertMention}
+            />
+          ) : null}
+          <textarea
+            className="min-h-[72px] w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm"
+            ref={textareaRef}
+            value={draft}
+            disabled={isPending}
+            onChange={(event) => {
+              applyBodyChange(event.target.value, event.target.selectionStart);
+            }}
+            onKeyDown={onKeyDown}
+            onClick={(event) => {
+              syncMentionTrigger(
+                event.currentTarget.value,
+                event.currentTarget.selectionStart,
+              );
+            }}
+          />
+        </div>
       ) : (
         <NoteBody note={note} />
       )}
@@ -531,7 +625,9 @@ export function InternalNotesPanel({
             type="button"
             size="sm"
             variant="secondary"
-            onClick={() => void retry()}
+            onClick={() => {
+              retry();
+            }}
           >
             {messages.retry}
           </Button>
