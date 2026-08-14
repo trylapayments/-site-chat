@@ -449,18 +449,18 @@ Operator-only private notes on conversations. See `docs/INTERNAL-NOTES.md` and A
 | id | UUID | PK | |
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
 | conversation_id | UUID | NOT NULL | Composite FK with workspace |
-| author_member_id | UUID | NULL, FK → workspace_members | Null only after member removal |
+| author_member_id | UUID | NULL, FK → workspace_members | Composite FK `ON DELETE SET NULL (author_member_id)` so `workspace_id` stays intact |
 | body | TEXT | NOT NULL, 1–4000 | |
-| client_note_id | UUID | NULL | Create idempotency |
+| client_note_id | UUID | NULL | Create idempotency via atomic `INSERT … ON CONFLICT` |
 | search_vector | TSVECTOR | GENERATED | GIN-indexed for search / PR #32 |
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL | |
-| deleted_at | TIMESTAMPTZ | NULL | Soft delete |
+| deleted_at | TIMESTAMPTZ | NULL | Soft delete (authoritative list returns tombstones) |
 
-**Related:** `internal_note_mentions (note_id, mentioned_member_id)` unique; messaging-role targets only.
+**Related:** `internal_note_mentions (note_id, mentioned_member_id)` unique; messaging-role targets only; edit replaces the mention set (no sticky union).
 
-**RPCs:** `list_internal_notes`, `create_internal_note`, `update_internal_note`, `soft_delete_internal_note`, `get_internal_note`.
+**RPCs:** `list_internal_notes` (supports `authoritative` + `catch_up_since` → `tombstones`), `create_internal_note`, `update_internal_note` (no-op when body + mentions unchanged; concurrent edits are LWW), `soft_delete_internal_note`, `get_internal_note`.
 
-**RLS:** SELECT for owner/admin/agent only. No direct writes. Visitors/viewers have no access.
+**RLS:** SELECT for owner/admin/agent only. No direct writes. Visitors/viewers have no access. Note/mention timeline events are hidden from viewers (RLS + list RPC).
 
 **Search:** `list_conversations` `q` matches note bodies/FTS for messaging roles only (never viewers).
 

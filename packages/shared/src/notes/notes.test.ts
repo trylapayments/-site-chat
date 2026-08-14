@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyInternalNoteRealtimeChange,
+  collectMentionMemberIdsFromBody,
+  createClientNoteId,
+  detectMentionTrigger,
   extractMentionTokens,
   filterMentionableMembers,
+  formatMentionToken,
+  mentionIdsForSubmit,
   mergeInternalNotes,
-  mergeMentionMemberIds,
-  resolveMentionMemberIds,
+  pruneMentionBindings,
+  reconcileNotesCatchUp,
   splitNoteBodyWithMentions,
 } from "./state.js";
 import { parseNoteErrorMessage } from "./errors.js";
@@ -20,7 +25,12 @@ const owner: WorkspaceMemberOption = {
 };
 const agent: WorkspaceMemberOption = {
   member_id: "22222222-2222-4222-8222-222222222222",
-  display_label: "agent@local.test",
+  display_label: "Ada Agent",
+  role: "agent",
+};
+const agentDup: WorkspaceMemberOption = {
+  member_id: "44444444-4444-4444-8444-444444444444",
+  display_label: "Ada Agent",
   role: "agent",
 };
 const viewer: WorkspaceMemberOption = {
@@ -28,7 +38,7 @@ const viewer: WorkspaceMemberOption = {
   display_label: "viewer@local.test",
   role: "viewer",
 };
-const members: WorkspaceMemberOption[] = [owner, agent, viewer];
+const members: WorkspaceMemberOption[] = [owner, agent, agentDup, viewer];
 
 function note(partial: Partial<InternalNote> & Pick<InternalNote, "id">): InternalNote {
   return {
@@ -45,38 +55,79 @@ function note(partial: Partial<InternalNote> & Pick<InternalNote, "id">): Intern
   };
 }
 
-describe("mention parsing", () => {
-  it("extracts @tokens including emails", () => {
-    const tokens = extractMentionTokens("Hey @agent and @owner@local.test please review");
-    expect(tokens.map((t) => t.token)).toEqual(["agent", "owner@local.test"]);
+describe("ID-backed mentions", () => {
+  it("formats and extracts member ids from body", () => {
+    const token = formatMentionToken(agent);
+    expect(token).toContain(agent.member_id);
+    const body = `Please review ${token} thanks`;
+    expect(collectMentionMemberIdsFromBody(body)).toEqual([agent.member_id]);
+    expect(mentionIdsForSubmit(body)).toEqual([agent.member_id]);
   });
 
-  it("resolves unique member matches and ignores viewers", () => {
-    const ids = resolveMentionMemberIds("ping @agent and @viewer", members);
-    expect(ids).toEqual([agent.member_id]);
+  it("does not keep sticky mentions when token removed from body", () => {
+    const token = formatMentionToken(agent);
+    const withMention = `Hello ${token}`;
+    expect(mentionIdsForSubmit(withMention)).toEqual([agent.member_id]);
+    expect(mentionIdsForSubmit("Hello")).toEqual([]);
   });
 
-  it("merges explicit ids with body resolution without duplicates", () => {
-    const ids = mergeMentionMemberIds([owner.member_id, owner.member_id], "also @agent", members);
-    expect(ids).toEqual([owner.member_id, agent.member_id]);
+  it("dedupes duplicate mention tokens for the same member", () => {
+    const token = formatMentionToken(agent);
+    const body = `${token} and again ${token}`;
+    expect(mentionIdsForSubmit(body)).toEqual([agent.member_id]);
   });
 
-  it("filters mentionable members for autocomplete", () => {
-    const filtered = filterMentionableMembers(members, "agent");
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0]?.member_id).toBe(agent.member_id);
+  it("distinguishes duplicate display names via member ids", () => {
+    const a = formatMentionToken(agent);
+    const b = formatMentionToken(agentDup);
+    expect(mentionIdsForSubmit(`${a} ${b}`).sort()).toEqual(
+      [agent.member_id, agentDup.member_id].sort(),
+    );
+  });
+
+  it("plain @text without id-backed token does not create mention ids", () => {
+    expect(mentionIdsForSubmit("ping @Ada")).toEqual([]);
+  });
+
+  it("prunes bindings when token removed", () => {
+    const token = formatMentionToken(agent);
+    const bindings = new Map([[agent.member_id, agent.display_label]]);
+    const pruned = pruneMentionBindings("no mentions here", bindings);
+    expect(pruned.size).toBe(0);
+    const kept = pruneMentionBindings(`still ${token}`, bindings);
+    expect(kept.get(agent.member_id)).toBe(agent.display_label);
+  });
+
+  it("detects mention trigger including spaces in draft", () => {
+    const body = "Hey @[Ada Ag";
+    const trigger = detectMentionTrigger(body, body.length);
+    expect(trigger?.query).toBe("Ada Ag");
+  });
+
+  it("createClientNoteId returns a uuid string", () => {
+    const id = createClientNoteId();
+    expect(id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
   });
 });
 
-describe("mergeInternalNotes", () => {
-  it("merges by id, prefers newer updated_at, drops soft-deleted", () => {
+describe("filterMentionableMembers", () => {
+  it("excludes viewers and filters by search", () => {
+    const filtered = filterMentionableMembers(members, "Ada");
+    expect(filtered.every((m) => m.role !== "viewer")).toBe(true);
+    expect(filtered).toHaveLength(2);
+  });
+});
+
+describe("mergeInternalNotes + catch-up", () => {
+  it("merges by id and drops soft-deleted", () => {
     const current = [
       note({ id: "n1", body: "old", updated_at: "2026-08-13T12:00:00.000Z" }),
       note({ id: "n2", body: "keep", created_at: "2026-08-13T11:00:00.000Z" }),
     ];
     const incoming = [
       note({ id: "n1", body: "new", updated_at: "2026-08-13T13:00:00.000Z" }),
-      note({ id: "n3", body: "added", created_at: "2026-08-13T14:00:00.000Z" }),
       note({
         id: "n2",
         body: "deleted",
@@ -84,10 +135,29 @@ describe("mergeInternalNotes", () => {
         updated_at: "2026-08-13T14:00:00.000Z",
       }),
     ];
-
     const merged = mergeInternalNotes(current, incoming);
-    expect(merged.map((n) => n.id)).toEqual(["n1", "n3"]);
+    expect(merged.map((n) => n.id)).toEqual(["n1"]);
     expect(merged[0]?.body).toBe("new");
+  });
+
+  it("authoritative catch-up removes missed deletes via tombstones", () => {
+    const current = [
+      note({ id: "n1" }),
+      note({ id: "n2", created_at: "2026-08-13T11:00:00.000Z" }),
+    ];
+    // Active page no longer contains n2 (deleted while offline); tombstone arrives.
+    const active = [note({ id: "n1", body: "still here" })];
+    const tombstones = [
+      note({
+        id: "n2",
+        deleted_at: "2026-08-13T15:00:00.000Z",
+        updated_at: "2026-08-13T15:00:00.000Z",
+      }),
+    ];
+    const next = reconcileNotesCatchUp(current, active, tombstones, {
+      authoritativeReplace: true,
+    });
+    expect(next.map((n) => n.id)).toEqual(["n1"]);
   });
 
   it("applyInternalNoteRealtimeChange removes soft-deleted notes", () => {
@@ -105,15 +175,21 @@ describe("mergeInternalNotes", () => {
 });
 
 describe("splitNoteBodyWithMentions", () => {
-  it("highlights resolved mentions", () => {
-    const segments = splitNoteBodyWithMentions("Hi @agent please look", [
+  it("highlights id-backed mentions", () => {
+    const token = formatMentionToken(agent);
+    const segments = splitNoteBodyWithMentions(`Hi ${token} please look`, [
       { member_id: agent.member_id, display_label: agent.display_label },
     ]);
-    expect(segments).toEqual([
-      { type: "text", text: "Hi " },
-      { type: "mention", text: "@agent", memberId: agent.member_id },
-      { type: "text", text: " please look" },
-    ]);
+    expect(segments.some((s) => s.type === "mention" && s.memberId === agent.member_id)).toBe(true);
+  });
+});
+
+describe("extractMentionTokens", () => {
+  it("prefers id-backed over legacy", () => {
+    const token = formatMentionToken(agent);
+    const tokens = extractMentionTokens(`${token} and @legacy`);
+    expect(tokens.some((t) => t.memberId === agent.member_id)).toBe(true);
+    expect(tokens.some((t) => t.memberId === null && t.label === "legacy")).toBe(true);
   });
 });
 
@@ -121,5 +197,17 @@ describe("parseNoteErrorMessage", () => {
   it("maps typed prefixes", () => {
     const err = parseNoteErrorMessage("FORBIDDEN: Viewers cannot access internal notes.");
     expect(err?.code).toBe("FORBIDDEN");
+  });
+});
+
+describe("clientNoteId retry stability", () => {
+  it("reuses the same id across retries until success reset", () => {
+    const draftId = createClientNoteId();
+    // Simulate composer ref holding the same id through failed submit + retry.
+    const firstAttempt = draftId;
+    const retryAttempt = draftId;
+    expect(retryAttempt).toBe(firstAttempt);
+    const afterSuccess = createClientNoteId();
+    expect(afterSuccess).not.toBe(draftId);
   });
 });

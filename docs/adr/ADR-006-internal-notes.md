@@ -32,7 +32,11 @@ The inbox foundation already has `messages.is_internal` (visitor/widget isolatio
 ## Consequences
 
 - Product notes and chat messages remain separate UX surfaces (Messages / Internal Notes tabs)
-- Member removal sets `author_member_id` NULL so note history survives (`Former member` label)
+- Member removal uses column-specific `ON DELETE SET NULL (author_member_id)` so `workspace_id` remains intact and note history survives (`Former member` label)
+- Viewers are excluded from note CRUD and from note/mention timeline events at the database layer (RLS + list RPC)
+- Create idempotency is atomic (`client_note_id` + `ON CONFLICT`); mention re-add notifies again (no lifetime unique suppression)
+- Concurrent note edits are last-write-wins in v1 (no CAS)
+- Reconnect uses authoritative list + tombstones so missed soft-deletes reconcile without inferring deletion from a truncated page
 - Phase 3 notification center builds on the same `notifications` table
 - Global search (PR #32) can reuse `search_vector` under existing RLS
 

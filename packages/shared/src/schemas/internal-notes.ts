@@ -31,6 +31,25 @@ export const internalNoteSchema = z
 
 export type InternalNote = z.infer<typeof internalNoteSchema>;
 
+export const listInternalNotesResultSchema = z
+  .object({
+    items: z.array(internalNoteSchema),
+    tombstones: z.array(internalNoteSchema).optional().default([]),
+    has_more: z.boolean(),
+    next_before: z
+      .object({
+        created_at: z.string().min(1),
+        id: z.string().uuid(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    authoritative: z.boolean().optional().default(false),
+  })
+  .strict();
+
+export type ListInternalNotesResult = z.infer<typeof listInternalNotesResultSchema>;
+
 export const listInternalNotesQuerySchema = z
   .object({
     limit: z
@@ -55,28 +74,15 @@ export const listInternalNotesQuerySchema = z
       .strict()
       .optional(),
     include_deleted: z.boolean().optional().default(false),
+    /** Soft-delete tombstones + notes updated at/after this watermark. */
+    catch_up_since: z.string().min(1).optional(),
+    /** Reconnect: replace active set + apply tombstones (missed deletes). */
+    authoritative: z.boolean().optional().default(false),
   })
   .strict();
 
 export type ListInternalNotesQuery = z.input<typeof listInternalNotesQuerySchema>;
 export type ListInternalNotesQueryParsed = z.output<typeof listInternalNotesQuerySchema>;
-
-export const listInternalNotesResultSchema = z
-  .object({
-    items: z.array(internalNoteSchema),
-    has_more: z.boolean(),
-    next_before: z
-      .object({
-        created_at: z.string().min(1),
-        id: z.string().uuid(),
-      })
-      .strict()
-      .nullable()
-      .optional(),
-  })
-  .strict();
-
-export type ListInternalNotesResult = z.infer<typeof listInternalNotesResultSchema>;
 
 export const createInternalNoteSchema = z
   .object({

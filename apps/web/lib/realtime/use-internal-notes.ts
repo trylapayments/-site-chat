@@ -2,7 +2,7 @@
 
 import {
   internalNoteSchema,
-  mergeInternalNotes,
+  reconcileNotesCatchUp,
   type ConnectionState,
   type InternalNote,
 } from "@site-chat/shared";
@@ -39,34 +39,88 @@ export function useLiveInternalNotes(input: {
     useState<ConnectionState>("connecting");
   const [mentionFlash, setMentionFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const catchUpInFlight = useRef(false);
+
   const notesRef = useRef(notes);
   notesRef.current = notes;
 
-  useEffect(() => {
-    setNotes(input.initialNotes);
-  }, [input.conversationId, input.initialNotes]);
+  /** Bumped on conversation change so stale catch-up never merges into the wrong thread. */
+  const conversationGenerationRef = useRef(0);
+  const catchUpAbortRef = useRef<AbortController | null>(null);
+  const conversationIdRef = useRef(input.conversationId);
+  conversationIdRef.current = input.conversationId;
+  const catchUpSinceRef = useRef<string>(new Date().toISOString());
 
-  const catchUp = useCallback(async () => {
-    if (!input.enabled || catchUpInFlight.current) {
-      return;
-    }
-    catchUpInFlight.current = true;
-    try {
-      const result = await listInternalNotesAction(input.workspaceSlug, {
-        conversationId: input.conversationId,
-        limit: 100,
-      });
-      if (!result.success) {
-        setError(result.message);
+  const invalidateInFlight = useCallback(() => {
+    conversationGenerationRef.current += 1;
+    catchUpAbortRef.current?.abort();
+    catchUpAbortRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    invalidateInFlight();
+    setNotes(input.initialNotes);
+    catchUpSinceRef.current = new Date().toISOString();
+    setError(null);
+  }, [input.conversationId, input.initialNotes, invalidateInFlight]);
+
+  const catchUp = useCallback(
+    async (mode: "authoritative" | "incremental" = "authoritative") => {
+      if (!input.enabled) {
         return;
       }
-      setError(null);
-      setNotes((current) => mergeInternalNotes(current, result.data.items));
-    } finally {
-      catchUpInFlight.current = false;
-    }
-  }, [input.conversationId, input.enabled, input.workspaceSlug]);
+
+      const generation = conversationGenerationRef.current;
+      const conversationId = input.conversationId;
+      catchUpAbortRef.current?.abort();
+      const controller = new AbortController();
+      catchUpAbortRef.current = controller;
+
+      try {
+        const result = await listInternalNotesAction(input.workspaceSlug, {
+          conversationId,
+          limit: 100,
+          authoritative: mode === "authoritative",
+          catch_up_since:
+            mode === "authoritative" ? undefined : catchUpSinceRef.current,
+        });
+
+        if (
+          controller.signal.aborted ||
+          generation !== conversationGenerationRef.current ||
+          conversationId !== conversationIdRef.current
+        ) {
+          return;
+        }
+
+        if (!result.success) {
+          setError(result.message);
+          return;
+        }
+
+        setError(null);
+        const tombstones = result.data.tombstones;
+        setNotes((current) =>
+          reconcileNotesCatchUp(current, result.data.items, tombstones, {
+            authoritativeReplace:
+              mode === "authoritative" || result.data.authoritative,
+          }),
+        );
+        catchUpSinceRef.current = new Date().toISOString();
+      } catch (err) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (
+          generation !== conversationGenerationRef.current ||
+          conversationId !== conversationIdRef.current
+        ) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Unable to load notes.");
+      }
+    },
+    [input.conversationId, input.enabled, input.workspaceSlug],
+  );
 
   useEffect(() => {
     if (!input.enabled) {
@@ -80,7 +134,8 @@ export function useLiveInternalNotes(input: {
       onConnectionChange: (status) => {
         setConnectionState(status);
         if (status === "connected") {
-          void catchUp();
+          // Authoritative reload reconciles missed soft-deletes (tombstones).
+          void catchUp("authoritative");
         }
       },
       onNoteChange: (payload) => {
@@ -92,8 +147,8 @@ export function useLiveInternalNotes(input: {
           );
           return;
         }
-        // Mentions / author label may be missing on CDC — catch up for durable shape.
-        void catchUp();
+        // Mentions / author label may be missing on CDC — authoritative catch-up.
+        void catchUp("authoritative");
       },
     });
 
@@ -114,12 +169,13 @@ export function useLiveInternalNotes(input: {
                 ? row.title
                 : "You were mentioned in an internal note";
             setMentionFlash(title);
-            void catchUp();
+            void catchUp("authoritative");
           },
         })
       : () => undefined;
 
     return () => {
+      invalidateInFlight();
       unsubscribeNotes();
       unsubscribeNotifications();
     };
@@ -129,6 +185,7 @@ export function useLiveInternalNotes(input: {
     input.enabled,
     input.memberId,
     input.workspaceId,
+    invalidateInFlight,
   ]);
 
   useEffect(() => {
@@ -149,6 +206,8 @@ export function useLiveInternalNotes(input: {
     connectionState,
     mentionFlash,
     error,
-    retry: catchUp,
+    retry: () => {
+      void catchUp("authoritative");
+    },
   };
 }

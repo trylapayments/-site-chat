@@ -74,10 +74,12 @@ Assignment mutations use `take_conversation` / `assign_conversation` / `unassign
 | Attachments | `dedupe_key = message:{id}:attachment` (one event per message) |
 | Conversation started | `conversation:{id}:started` |
 | Identity | Only when name/email/phone **actually change**; no-op patches emit nothing |
-| Internal notes | `internal_note:{id}:created` / `:updated:{epoch}` / `:deleted`; mentions `internal_note:{id}:mention:{member_id}` |
+| Internal notes | `internal_note:{id}:created` / `:updated:{epoch}` / `:deleted`; mentions `internal_note:{id}:mention_row:{mention_row_id}` (re-add after remove can emit again) |
 | Emit helper | `ON CONFLICT (workspace_id, dedupe_key) DO NOTHING` |
 
 Retries of the same durable action must not create duplicate timeline history.
+
+**Viewer isolation:** For `role = viewer`, both direct SELECT / Realtime RLS on `customer_timeline_events` and `list_customer_timeline` exclude `internal_note_created`, `internal_note_updated`, `internal_note_deleted`, and `mention_created`. Owner/admin/agent retain these events. Do not rely on UI filtering.
 
 ---
 

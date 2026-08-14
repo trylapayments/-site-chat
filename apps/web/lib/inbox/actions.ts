@@ -706,6 +706,8 @@ export async function listInternalNotesAction(
     after?: { created_at: string; id: string };
     before?: { created_at: string; id: string };
     limit?: number;
+    catch_up_since?: string;
+    authoritative?: boolean;
   },
 ): Promise<
   | { success: true; data: Awaited<ReturnType<typeof fetchInternalNotes>> }
@@ -729,6 +731,12 @@ export async function listInternalNotesAction(
         ...(input.limit !== undefined ? { limit: input.limit } : {}),
         ...(input.after ? { after: input.after } : {}),
         ...(input.before ? { before: input.before } : {}),
+        ...(input.catch_up_since
+          ? { catch_up_since: input.catch_up_since }
+          : {}),
+        ...(input.authoritative !== undefined
+          ? { authoritative: input.authoritative }
+          : {}),
       },
     );
     return { success: true, data };

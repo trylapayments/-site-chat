@@ -4,12 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(32);
-
-CREATE TEMP TABLE note_fixtures (
-  key text PRIMARY KEY,
-  value text NOT NULL
-);
+SELECT plan(75);
 
 TRUNCATE tests.fixtures;
 
@@ -107,7 +102,7 @@ BEGIN
   LIMIT 1
   RETURNING id INTO v_conversation_b;
 
-  INSERT INTO note_fixtures(key, value) VALUES
+  INSERT INTO tests.fixtures (key, value) VALUES
     ('workspace_a', v_workspace_a::text),
     ('workspace_b', v_workspace_b::text),
     ('owner_a', v_owner_a::text),
@@ -124,11 +119,198 @@ BEGIN
 END;
 $$;
 
--- Create note + mentions
+-- ---------------------------------------------------------------------------
+-- Privilege matrix: public RPCs + app_private lockdown
+-- ---------------------------------------------------------------------------
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'public.create_internal_note(uuid, uuid, text, uuid, uuid[])',
+    'execute'
+  ),
+  'authenticated can execute create_internal_note'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'public.list_internal_notes(uuid, uuid, jsonb)',
+    'execute'
+  ),
+  'authenticated can execute list_internal_notes'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    'public.create_internal_note(uuid, uuid, text, uuid, uuid[])',
+    'execute'
+  ),
+  'anon cannot execute create_internal_note'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'public',
+    'public.create_internal_note(uuid, uuid, text, uuid, uuid[])',
+    'execute'
+  ),
+  'PUBLIC cannot execute create_internal_note'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.sync_internal_note_mentions(uuid, uuid, uuid, uuid, uuid[], boolean)',
+    'execute'
+  ),
+  'authenticated cannot execute sync_internal_note_mentions'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    'app_private.sync_internal_note_mentions(uuid, uuid, uuid, uuid, uuid[], boolean)',
+    'execute'
+  ),
+  'anon cannot execute sync_internal_note_mentions'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'public',
+    'app_private.sync_internal_note_mentions(uuid, uuid, uuid, uuid, uuid[], boolean)',
+    'execute'
+  ),
+  'PUBLIC cannot execute sync_internal_note_mentions'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'service_role',
+    'app_private.sync_internal_note_mentions(uuid, uuid, uuid, uuid, uuid[], boolean)',
+    'execute'
+  ),
+  'service_role cannot execute sync_internal_note_mentions directly'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.create_internal_note(uuid, uuid, text, uuid, uuid[])',
+    'execute'
+  ),
+  'authenticated cannot execute app_private.create_internal_note'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.update_internal_note(uuid, uuid, text, uuid[])',
+    'execute'
+  ),
+  'authenticated cannot execute app_private.update_internal_note'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.soft_delete_internal_note(uuid, uuid)',
+    'execute'
+  ),
+  'authenticated cannot execute app_private.soft_delete_internal_note'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.list_internal_notes(uuid, uuid, jsonb)',
+    'execute'
+  ),
+  'authenticated cannot execute app_private.list_internal_notes'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.get_internal_note(uuid, uuid)',
+    'execute'
+  ),
+  'authenticated cannot execute app_private.get_internal_note'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.require_notes_access(uuid)',
+    'execute'
+  ),
+  'authenticated cannot execute require_notes_access'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.assert_mentionable_member(uuid, uuid)',
+    'execute'
+  ),
+  'authenticated cannot execute assert_mentionable_member'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'app_private.resolve_note_contact_id(uuid, uuid)',
+    'execute'
+  ),
+  'authenticated cannot execute resolve_note_contact_id'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'app_private.user_workspace_ids()',
+    'execute'
+  ),
+  'authenticated retains user_workspace_ids'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'app_private.user_workspace_role(uuid)',
+    'execute'
+  ),
+  'authenticated retains user_workspace_role'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'app_private.workspace_is_accessible(uuid)',
+    'execute'
+  ),
+  'authenticated retains workspace_is_accessible'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'app_private.get_caller_member_id(uuid)',
+    'execute'
+  ),
+  'authenticated retains get_caller_member_id'
+);
+
+-- ---------------------------------------------------------------------------
+-- Create note + mentions + timeline + notifications
+-- ---------------------------------------------------------------------------
+
 SELECT lives_ok(
   $$
     SELECT tests.authenticate_as(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'agent_a'),
+      tests.fixture('agent_a')::uuid,
       'notes-agent-a@test.local'
     );
   $$,
@@ -137,19 +319,36 @@ SELECT lives_ok(
 
 SELECT isnt(
   public.create_internal_note(
-    (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-    (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
-    'Please review pricing with @notes-agent-b',
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('conversation_a')::uuid,
+    'Please review pricing with agent B',
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
-    ARRAY[(SELECT value::uuid FROM note_fixtures WHERE key = 'agent_member_b')]
+    ARRAY[tests.fixture('agent_member_b')::uuid]
   )->>'id',
   NULL,
   'agent can create internal note'
 );
 
+SELECT lives_ok(
+  $$
+    SELECT tests.clear_auth();
+    INSERT INTO tests.fixtures (key, value)
+    SELECT 'note_1', id::text
+    FROM public.internal_notes
+    WHERE conversation_id = tests.fixture('conversation_a')::uuid
+      AND client_note_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
+    LIMIT 1;
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  'store note_1 fixture id'
+);
+
 SELECT is(
   (SELECT count(*)::integer FROM public.internal_notes
-   WHERE conversation_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a')
+   WHERE conversation_id = tests.fixture('conversation_a')::uuid
      AND deleted_at IS NULL),
   1,
   'note row persisted'
@@ -157,7 +356,7 @@ SELECT is(
 
 SELECT is(
   (SELECT count(*)::integer FROM public.internal_note_mentions
-   WHERE note_id = (SELECT id FROM public.internal_notes LIMIT 1)),
+   WHERE note_id = tests.fixture('note_1')::uuid),
   1,
   'mention row persisted'
 );
@@ -165,7 +364,8 @@ SELECT is(
 SELECT is(
   (SELECT count(*)::integer FROM public.notifications
    WHERE type = 'mention'
-     AND recipient_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'agent_member_b')),
+     AND recipient_id = tests.fixture('agent_member_b')::uuid
+     AND resource_id = tests.fixture('note_1')::uuid),
   1,
   'durable mention notification created'
 );
@@ -173,7 +373,7 @@ SELECT is(
 SELECT is(
   (SELECT count(*)::integer FROM public.customer_timeline_events
    WHERE event_type = 'internal_note_created'
-     AND conversation_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a')),
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
   1,
   'timeline internal_note_created emitted once'
 );
@@ -181,61 +381,164 @@ SELECT is(
 SELECT is(
   (SELECT count(*)::integer FROM public.customer_timeline_events
    WHERE event_type = 'mention_created'
-     AND conversation_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a')),
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
   1,
   'timeline mention_created emitted once'
 );
 
--- Idempotent create via client_note_id
+-- Idempotent create via client_note_id (atomic ON CONFLICT)
 SELECT is(
   (
     SELECT count(DISTINCT id)::integer FROM (
       SELECT (public.create_internal_note(
-        (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-        (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
-        'Please review pricing with @notes-agent-b',
+        tests.fixture('workspace_a')::uuid,
+        tests.fixture('conversation_a')::uuid,
+        'Please review pricing with agent B',
         'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
-        ARRAY[(SELECT value::uuid FROM note_fixtures WHERE key = 'agent_member_b')]
+        ARRAY[tests.fixture('agent_member_b')::uuid]
       )->>'id')::uuid AS id
-      FROM generate_series(1, 3)
+      FROM generate_series(1, 5)
     ) retries
   ),
   1,
-  'client_note_id prevents duplicate notes'
+  'client_note_id prevents duplicate notes under retries'
 );
 
 SELECT is(
   (SELECT count(*)::integer FROM public.customer_timeline_events
    WHERE event_type = 'internal_note_created'
-     AND conversation_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a')),
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
   1,
   'duplicate create does not duplicate timeline created event'
 );
 
--- Edit
+SELECT is(
+  (SELECT count(*)::integer FROM public.internal_note_mentions
+   WHERE note_id = tests.fixture('note_1')::uuid),
+  1,
+  'duplicate create does not duplicate mention rows'
+);
+
+SELECT is(
+  (SELECT count(*)::integer FROM public.notifications
+   WHERE type = 'mention'
+     AND resource_id = tests.fixture('note_1')::uuid),
+  1,
+  'duplicate create does not duplicate notifications'
+);
+
+-- ---------------------------------------------------------------------------
+-- Mention edit: remove then re-add notifies again
+-- ---------------------------------------------------------------------------
+
 SELECT ok(
   (public.update_internal_note(
-    (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-    (SELECT id FROM public.internal_notes WHERE deleted_at IS NULL LIMIT 1),
-    'Updated note body mentioning agent B',
-    ARRAY[(SELECT value::uuid FROM note_fixtures WHERE key = 'agent_member_b')]
-  )->>'body') = 'Updated note body mentioning agent B',
-  'agent can update note body'
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_1')::uuid,
+    'Updated note body without mentions',
+    ARRAY[]::uuid[]
+  )->>'body') = 'Updated note body without mentions',
+  'agent can update note body and clear mentions'
+);
+
+SELECT is(
+  (SELECT count(*)::integer FROM public.internal_note_mentions
+   WHERE note_id = tests.fixture('note_1')::uuid),
+  0,
+  'removing mention deletes internal_note_mentions row'
 );
 
 SELECT is(
   (SELECT count(*)::integer FROM public.customer_timeline_events
    WHERE event_type = 'internal_note_updated'
-     AND conversation_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a')),
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
   1,
-  'timeline internal_note_updated emitted'
+  'timeline internal_note_updated emitted on body change'
 );
 
--- Viewer cannot list or create
+-- No-op edit: same body + empty mentions → no extra updated event
+SELECT ok(
+  (public.update_internal_note(
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_1')::uuid,
+    'Updated note body without mentions',
+    ARRAY[]::uuid[]
+  )->>'body') = 'Updated note body without mentions',
+  'no-op edit returns current note'
+);
+
+SELECT is(
+  (SELECT count(*)::integer FROM public.customer_timeline_events
+   WHERE event_type = 'internal_note_updated'
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
+  1,
+  'no-op edit does not emit another internal_note_updated'
+);
+
+SELECT ok(
+  (public.update_internal_note(
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_1')::uuid,
+    'Updated note body mentioning agent B again',
+    ARRAY[tests.fixture('agent_member_b')::uuid]
+  )->>'body') IS NOT NULL,
+  're-add mention on edit succeeds'
+);
+
+SELECT is(
+  (SELECT count(*)::integer FROM public.internal_note_mentions
+   WHERE note_id = tests.fixture('note_1')::uuid
+     AND mentioned_member_id = tests.fixture('agent_member_b')::uuid),
+  1,
+  're-added mention inserts a new mention row'
+);
+
+SELECT is(
+  (SELECT count(*)::integer FROM public.notifications
+   WHERE type = 'mention'
+     AND recipient_id = tests.fixture('agent_member_b')::uuid
+     AND resource_id = tests.fixture('note_1')::uuid),
+  2,
+  're-adding a mention notifies again'
+);
+
+SELECT is(
+  (SELECT count(*)::integer FROM public.customer_timeline_events
+   WHERE event_type = 'mention_created'
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
+  2,
+  're-adding a mention emits another mention_created'
+);
+
+-- Duplicate mention ids in one submit collapse to one row
+SELECT ok(
+  (public.update_internal_note(
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_1')::uuid,
+    'Deduped mentions',
+    ARRAY[
+      tests.fixture('agent_member_b')::uuid,
+      tests.fixture('agent_member_b')::uuid
+    ]
+  )->>'body') = 'Deduped mentions',
+  'update with duplicate mention ids succeeds'
+);
+
+SELECT is(
+  (SELECT count(*)::integer FROM public.internal_note_mentions
+   WHERE note_id = tests.fixture('note_1')::uuid),
+  1,
+  'duplicate mention ids result in one mention row'
+);
+
+-- ---------------------------------------------------------------------------
+-- Viewer isolation: notes CRUD + timeline events
+-- ---------------------------------------------------------------------------
+
 SELECT lives_ok(
   $$
     SELECT tests.authenticate_as(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'viewer_a'),
+      tests.fixture('viewer_a')::uuid,
       'notes-viewer-a@test.local'
     );
   $$,
@@ -245,8 +548,8 @@ SELECT lives_ok(
 SELECT throws_like(
   $$
     SELECT public.list_internal_notes(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
       '{}'::jsonb
     );
   $$,
@@ -257,8 +560,8 @@ SELECT throws_like(
 SELECT throws_like(
   $$
     SELECT public.create_internal_note(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
       'viewer note',
       NULL,
       NULL
@@ -270,26 +573,95 @@ SELECT throws_like(
 
 SELECT is(
   (SELECT count(*)::integer FROM public.internal_notes
-   WHERE workspace_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a')),
+   WHERE workspace_id = tests.fixture('workspace_a')::uuid),
   0,
   'viewer RLS cannot SELECT notes'
 );
 
--- Soft delete
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.customer_timeline_events
+    WHERE conversation_id = tests.fixture('conversation_a')::uuid
+      AND event_type IN (
+        'internal_note_created',
+        'internal_note_updated',
+        'internal_note_deleted',
+        'mention_created'
+      )
+  ),
+  0,
+  'viewer direct SELECT sees zero note/mention timeline events'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM jsonb_array_elements(
+      public.list_customer_timeline(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'contact_id', tests.fixture('contact_a')::uuid,
+          'conversation_id', tests.fixture('conversation_a')::uuid,
+          'limit', 50
+        )
+      )->'items'
+    ) AS item
+    WHERE item->>'event_type' IN (
+      'internal_note_created',
+      'internal_note_updated',
+      'internal_note_deleted',
+      'mention_created'
+    )
+  ),
+  0,
+  'viewer list_customer_timeline returns zero note/mention events'
+);
+
+-- Agent still sees note timeline events
 SELECT lives_ok(
   $$
     SELECT tests.authenticate_as(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'agent_a'),
+      tests.fixture('agent_a')::uuid,
       'notes-agent-a@test.local'
     );
   $$,
-  're-authenticate agent A'
+  're-authenticate agent A after viewer checks'
 );
 
 SELECT ok(
+  (
+    SELECT count(*) > 0
+    FROM public.customer_timeline_events
+    WHERE conversation_id = tests.fixture('conversation_a')::uuid
+      AND event_type = 'internal_note_created'
+  ),
+  'agent can still SELECT internal_note_created events'
+);
+
+SELECT ok(
+  (
+    SELECT count(*) > 0
+    FROM jsonb_array_elements(
+      public.list_customer_timeline(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'contact_id', tests.fixture('contact_a')::uuid,
+          'conversation_id', tests.fixture('conversation_a')::uuid,
+          'limit', 50
+        )
+      )->'items'
+    ) AS item
+    WHERE item->>'event_type' = 'internal_note_created'
+  ),
+  'agent list_customer_timeline includes internal_note_created'
+);
+
+-- Soft delete
+SELECT ok(
   (public.soft_delete_internal_note(
-    (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-    (SELECT id FROM public.internal_notes LIMIT 1)
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_1')::uuid
   )->>'deleted_at') IS NOT NULL,
   'soft delete sets deleted_at'
 );
@@ -297,7 +669,7 @@ SELECT ok(
 SELECT is(
   (SELECT count(*)::integer FROM public.customer_timeline_events
    WHERE event_type = 'internal_note_deleted'
-     AND conversation_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a')),
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
   1,
   'timeline internal_note_deleted emitted once'
 );
@@ -305,8 +677,8 @@ SELECT is(
 SELECT is(
   jsonb_array_length(
     public.list_internal_notes(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
       '{}'::jsonb
     )->'items'
   ),
@@ -314,11 +686,21 @@ SELECT is(
   'list excludes soft-deleted notes'
 );
 
--- Soft-delete idempotent
+SELECT ok(
+  jsonb_array_length(
+    public.list_internal_notes(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      jsonb_build_object('authoritative', true)
+    )->'tombstones'
+  ) >= 1,
+  'authoritative list returns soft-delete tombstones'
+);
+
 SELECT ok(
   (public.soft_delete_internal_note(
-    (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-    (SELECT id FROM public.internal_notes LIMIT 1)
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_1')::uuid
   )->>'deleted_at') IS NOT NULL,
   'soft delete is idempotent'
 );
@@ -326,27 +708,17 @@ SELECT ok(
 SELECT is(
   (SELECT count(*)::integer FROM public.customer_timeline_events
    WHERE event_type = 'internal_note_deleted'
-     AND conversation_id = (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a')),
+     AND conversation_id = tests.fixture('conversation_a')::uuid),
   1,
   'idempotent soft delete does not duplicate deleted timeline event'
 );
 
 -- Workspace isolation
-SELECT lives_ok(
-  $$
-    SELECT tests.authenticate_as(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'agent_a'),
-      'notes-agent-a@test.local'
-    );
-  $$,
-  'authenticate agent for isolation'
-);
-
 SELECT throws_like(
   $$
     SELECT public.create_internal_note(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_b'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
+      tests.fixture('workspace_b')::uuid,
+      tests.fixture('conversation_a')::uuid,
       'cross tenant',
       NULL,
       NULL
@@ -360,12 +732,12 @@ SELECT throws_like(
 SELECT lives_ok(
   $$
     SELECT tests.authenticate_as(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'agent_a'),
+      tests.fixture('agent_a')::uuid,
       'notes-agent-a@test.local'
     );
     PERFORM public.create_internal_note(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
       'unique-search-token-notes-xyz',
       'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
       NULL
@@ -379,7 +751,7 @@ SELECT ok(
     SELECT count(*) > 0
     FROM jsonb_array_elements(
       public.list_conversations(
-        (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
+        tests.fixture('workspace_a')::uuid,
         jsonb_build_object('q', 'unique-search-token-notes-xyz')
       )->'items'
     ) AS item
@@ -387,11 +759,10 @@ SELECT ok(
   'inbox search finds conversation via note body for agents'
 );
 
--- Viewer search must not hit notes
 SELECT lives_ok(
   $$
     SELECT tests.authenticate_as(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'viewer_a'),
+      tests.fixture('viewer_a')::uuid,
       'notes-viewer-a@test.local'
     );
   $$,
@@ -403,7 +774,7 @@ SELECT is(
     SELECT count(*)::integer
     FROM jsonb_array_elements(
       public.list_conversations(
-        (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
+        tests.fixture('workspace_a')::uuid,
         jsonb_build_object('q', 'unique-search-token-notes-xyz')
       )->'items'
     ) AS item
@@ -416,7 +787,7 @@ SELECT is(
 SELECT lives_ok(
   $$
     SELECT tests.authenticate_as(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'agent_a'),
+      tests.fixture('agent_a')::uuid,
       'notes-agent-a@test.local'
     );
   $$,
@@ -428,9 +799,9 @@ SELECT throws_ok(
     INSERT INTO public.internal_notes (
       workspace_id, conversation_id, author_member_id, body
     ) VALUES (
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'agent_member_a'),
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      tests.fixture('agent_member_a')::uuid,
       'direct insert'
     );
   $$,
@@ -442,15 +813,102 @@ SELECT throws_ok(
 SELECT throws_like(
   $$
     SELECT public.create_internal_note(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
       'mention viewer',
       'cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid,
-      ARRAY[(SELECT value::uuid FROM note_fixtures WHERE key = 'viewer_member_a')]
+      ARRAY[tests.fixture('viewer_member_a')::uuid]
     );
   $$,
   '%MEMBER_NOT_MENTIONABLE%',
   'cannot mention viewer'
+);
+
+-- ---------------------------------------------------------------------------
+-- Author member removal: column-specific SET NULL on author_member_id
+-- ---------------------------------------------------------------------------
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_b')::uuid,
+      'notes-agent-b@test.local'
+    );
+    PERFORM public.create_internal_note(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      'Note authored by agent B for member-removal FK test',
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid,
+      NULL
+    );
+    PERFORM tests.clear_auth();
+    INSERT INTO tests.fixtures (key, value)
+    SELECT 'note_author_b', id::text
+    FROM public.internal_notes
+    WHERE client_note_id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid
+    LIMIT 1;
+  $$,
+  'agent B creates note for author-removal test'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('owner_a')::uuid,
+      'notes-owner-a@test.local'
+    );
+    SELECT public.remove_workspace_member(tests.fixture('agent_member_b')::uuid);
+  $$,
+  'owner can remove author member without FK failure'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.internal_notes
+    WHERE id = tests.fixture('note_author_b')::uuid
+  ),
+  1,
+  'note retained after author member removal'
+);
+
+SELECT is(
+  (
+    SELECT workspace_id::text
+    FROM public.internal_notes
+    WHERE id = tests.fixture('note_author_b')::uuid
+  ),
+  tests.fixture('workspace_a'),
+  'workspace_id unchanged after author member removal'
+);
+
+SELECT is(
+  (
+    SELECT author_member_id
+    FROM public.internal_notes
+    WHERE id = tests.fixture('note_author_b')::uuid
+  ),
+  NULL,
+  'author_member_id IS NULL after author member removal'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  'authenticate agent A to read former-member note'
+);
+
+SELECT is(
+  public.get_internal_note(
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_author_b')::uuid
+  )->>'author_display_label',
+  'Former member',
+  'UI payload shows Former member after author removal'
 );
 
 -- Anonymous / visitor cannot execute note RPCs
@@ -462,8 +920,8 @@ SELECT lives_ok(
 SELECT throws_like(
   $$
     SELECT public.list_internal_notes(
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'workspace_a'),
-      (SELECT value::uuid FROM note_fixtures WHERE key = 'conversation_a'),
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
       '{}'::jsonb
     );
   $$,

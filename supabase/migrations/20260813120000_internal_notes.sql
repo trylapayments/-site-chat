@@ -51,7 +51,7 @@ CREATE TABLE public.internal_notes (
   CONSTRAINT fk_internal_notes_author_workspace
     FOREIGN KEY (author_member_id, workspace_id)
     REFERENCES public.workspace_members (id, workspace_id)
-    ON DELETE SET NULL
+    ON DELETE SET NULL (author_member_id)
 );
 
 COMMENT ON TABLE public.internal_notes IS
@@ -145,9 +145,11 @@ CREATE INDEX idx_notifications_recipient
 CREATE INDEX idx_notifications_workspace_created
   ON public.notifications (workspace_id, created_at DESC);
 
--- Dedupe mention notifications per note+recipient (one durable row per mention).
-CREATE UNIQUE INDEX uq_notifications_mention_note_recipient
-  ON public.notifications (workspace_id, recipient_id, resource_id)
+-- Dedupe concurrent create only: one notification per (note, recipient, mention row).
+-- Re-adding a mention after removal inserts a new mention row → new notification.
+-- Lifetime suppression across remove/re-add is intentionally NOT used.
+CREATE INDEX idx_notifications_mention_note_recipient
+  ON public.notifications (workspace_id, recipient_id, resource_id, created_at DESC)
   WHERE type = 'mention' AND resource_type = 'internal_note';
 
 -- ---------------------------------------------------------------------------
@@ -362,8 +364,7 @@ DECLARE
   v_contact_id uuid;
   v_author_label text;
   v_mentioned_label text;
-  v_inserted boolean;
-  v_notif_id uuid;
+  v_mention_id uuid;
 BEGIN
   -- Deduplicate; self-mentions are allowed.
   IF p_mentioned_member_ids IS NOT NULL THEN
@@ -378,6 +379,7 @@ BEGIN
     PERFORM app_private.assert_mentionable_member(p_workspace_id, v_member_id);
   END LOOP;
 
+  -- Remove mentions no longer present in the submitted set (sticky-mention fix).
   DELETE FROM public.internal_note_mentions m
   WHERE m.note_id = p_note_id
     AND m.workspace_id = p_workspace_id
@@ -391,7 +393,7 @@ BEGIN
 
   FOREACH v_member_id IN ARRAY COALESCE(v_ids, ARRAY[]::uuid[])
   LOOP
-    v_inserted := false;
+    v_mention_id := NULL;
 
     INSERT INTO public.internal_note_mentions (
       workspace_id,
@@ -400,7 +402,12 @@ BEGIN
     )
     VALUES (p_workspace_id, p_note_id, v_member_id)
     ON CONFLICT (note_id, mentioned_member_id) DO NOTHING
-    RETURNING true INTO v_inserted;
+    RETURNING id INTO v_mention_id;
+
+    -- Only newly inserted mentions notify / emit timeline (re-add after remove notifies again).
+    IF v_mention_id IS NULL THEN
+      CONTINUE;
+    END IF;
 
     v_mentioned_label := app_private.member_display_label(v_member_id);
 
@@ -421,14 +428,9 @@ BEGIN
       left(coalesce(v_author_label, 'A teammate') || ' mentioned you', 1000),
       'internal_note',
       p_note_id
-    )
-    ON CONFLICT (workspace_id, recipient_id, resource_id)
-      WHERE type = 'mention' AND resource_type = 'internal_note'
-    DO NOTHING
-    RETURNING id INTO v_notif_id;
+    );
 
-    -- Timeline mention_created only once per note+member (dedupe_key).
-    IF p_emit_timeline AND v_contact_id IS NOT NULL AND COALESCE(v_inserted, false) THEN
+    IF p_emit_timeline AND v_contact_id IS NOT NULL THEN
       PERFORM app_private.emit_customer_timeline_event(
         p_workspace_id,
         v_contact_id,
@@ -440,13 +442,15 @@ BEGIN
           'mentioned_member_id', v_member_id,
           'mentioned_member_label', v_mentioned_label,
           'author_member_id', p_author_member_id,
-          'author_member_label', v_author_label
+          'author_member_label', v_author_label,
+          'mention_id', v_mention_id
         ),
         NULL,
         p_conversation_id,
         p_author_member_id,
         now(),
-        'internal_note:' || p_note_id::text || ':mention:' || v_member_id::text
+        -- Unique per mention row so remove→re-add can emit again.
+        'internal_note:' || p_note_id::text || ':mention_row:' || v_mention_id::text
       );
     END IF;
   END LOOP;
@@ -476,7 +480,7 @@ DECLARE
   v_body text;
   v_note public.internal_notes;
   v_contact_id uuid;
-  v_existing_id uuid;
+  v_is_new boolean := false;
 BEGIN
   PERFORM app_private.require_messaging_role(p_workspace_id);
   v_member_id := app_private.get_caller_member_id(p_workspace_id);
@@ -500,65 +504,93 @@ BEGIN
   END IF;
 
   IF p_client_note_id IS NOT NULL THEN
-    SELECT n.id
-    INTO v_existing_id
-    FROM public.internal_notes n
-    WHERE n.conversation_id = p_conversation_id
-      AND n.client_note_id = p_client_note_id
-    LIMIT 1;
-
-    IF v_existing_id IS NOT NULL THEN
-      SELECT n.* INTO v_note FROM public.internal_notes n WHERE n.id = v_existing_id;
-      RETURN app_private.build_internal_note_item(v_note);
-    END IF;
-  END IF;
-
-  INSERT INTO public.internal_notes (
-    workspace_id,
-    conversation_id,
-    author_member_id,
-    body,
-    client_note_id
-  )
-  VALUES (
-    p_workspace_id,
-    p_conversation_id,
-    v_member_id,
-    v_body,
-    p_client_note_id
-  )
-  RETURNING * INTO v_note;
-
-  PERFORM app_private.sync_internal_note_mentions(
-    p_workspace_id,
-    v_note.id,
-    p_conversation_id,
-    v_member_id,
-    p_mentioned_member_ids,
-    true
-  );
-
-  SELECT n.* INTO v_note FROM public.internal_notes n WHERE n.id = v_note.id;
-
-  v_contact_id := app_private.resolve_note_contact_id(p_workspace_id, p_conversation_id);
-  IF v_contact_id IS NOT NULL THEN
-    PERFORM app_private.emit_customer_timeline_event(
+    -- Atomic idempotency: concurrent creates with the same client_note_id
+    -- collapse to exactly one durable row (partial unique index).
+    INSERT INTO public.internal_notes (
+      workspace_id,
+      conversation_id,
+      author_member_id,
+      body,
+      client_note_id
+    )
+    VALUES (
       p_workspace_id,
-      v_contact_id,
-      'internal_note_created',
-      'operator',
-      jsonb_build_object(
-        'v', 1,
-        'note_id', v_note.id,
-        'author_member_id', v_member_id,
-        'author_member_label', app_private.member_display_label(v_member_id)
-      ),
-      NULL,
       p_conversation_id,
       v_member_id,
-      v_note.created_at,
-      'internal_note:' || v_note.id::text || ':created'
+      v_body,
+      p_client_note_id
+    )
+    ON CONFLICT (conversation_id, client_note_id) WHERE client_note_id IS NOT NULL
+    DO NOTHING
+    RETURNING * INTO v_note;
+
+    IF FOUND THEN
+      v_is_new := true;
+    ELSE
+      SELECT n.*
+      INTO v_note
+      FROM public.internal_notes n
+      WHERE n.conversation_id = p_conversation_id
+        AND n.client_note_id = p_client_note_id
+      LIMIT 1;
+
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'NOTE_NOT_FOUND: Idempotent create lost the note row.';
+      END IF;
+
+      RETURN app_private.build_internal_note_item(v_note);
+    END IF;
+  ELSE
+    INSERT INTO public.internal_notes (
+      workspace_id,
+      conversation_id,
+      author_member_id,
+      body,
+      client_note_id
+    )
+    VALUES (
+      p_workspace_id,
+      p_conversation_id,
+      v_member_id,
+      v_body,
+      NULL
+    )
+    RETURNING * INTO v_note;
+    v_is_new := true;
+  END IF;
+
+  IF v_is_new THEN
+    PERFORM app_private.sync_internal_note_mentions(
+      p_workspace_id,
+      v_note.id,
+      p_conversation_id,
+      v_member_id,
+      p_mentioned_member_ids,
+      true
     );
+
+    SELECT n.* INTO v_note FROM public.internal_notes n WHERE n.id = v_note.id;
+
+    v_contact_id := app_private.resolve_note_contact_id(p_workspace_id, p_conversation_id);
+    IF v_contact_id IS NOT NULL THEN
+      PERFORM app_private.emit_customer_timeline_event(
+        p_workspace_id,
+        v_contact_id,
+        'internal_note_created',
+        'operator',
+        jsonb_build_object(
+          'v', 1,
+          'note_id', v_note.id,
+          'author_member_id', v_member_id,
+          'author_member_label', app_private.member_display_label(v_member_id)
+        ),
+        NULL,
+        p_conversation_id,
+        v_member_id,
+        v_note.created_at,
+        'internal_note:' || v_note.id::text || ':created'
+      );
+    END IF;
   END IF;
 
   RETURN app_private.build_internal_note_item(v_note);
@@ -581,6 +613,10 @@ DECLARE
   v_body text;
   v_note public.internal_notes;
   v_contact_id uuid;
+  v_existing_ids uuid[] := ARRAY[]::uuid[];
+  v_new_ids uuid[] := ARRAY[]::uuid[];
+  v_body_changed boolean;
+  v_mentions_changed boolean;
 BEGIN
   PERFORM app_private.require_messaging_role(p_workspace_id);
   v_member_id := app_private.get_caller_member_id(p_workspace_id);
@@ -605,49 +641,72 @@ BEGIN
     RAISE EXCEPTION 'NOTE_DELETED: Internal note is deleted.';
   END IF;
 
-  IF v_note.body IS NOT DISTINCT FROM v_body THEN
-    -- Still allow mention set changes when body unchanged.
-    NULL;
+  SELECT COALESCE(array_agg(m.mentioned_member_id ORDER BY m.mentioned_member_id), ARRAY[]::uuid[])
+  INTO v_existing_ids
+  FROM public.internal_note_mentions m
+  WHERE m.note_id = p_note_id
+    AND m.workspace_id = p_workspace_id;
+
+  IF p_mentioned_member_ids IS NOT NULL THEN
+    SELECT COALESCE(array_agg(DISTINCT x ORDER BY x), ARRAY[]::uuid[])
+    INTO v_new_ids
+    FROM unnest(p_mentioned_member_ids) AS x
+    WHERE x IS NOT NULL;
   END IF;
 
-  UPDATE public.internal_notes
-  SET body = v_body
-  WHERE id = p_note_id
-    AND workspace_id = p_workspace_id
-  RETURNING * INTO v_note;
+  v_body_changed := v_note.body IS DISTINCT FROM v_body;
+  v_mentions_changed := v_existing_ids IS DISTINCT FROM v_new_ids;
 
-  PERFORM app_private.sync_internal_note_mentions(
-    p_workspace_id,
-    v_note.id,
-    v_note.conversation_id,
-    v_note.author_member_id,
-    p_mentioned_member_ids,
-    true
-  );
+  -- No-op edit: identical body + mention set → no write, no timeline spam.
+  IF NOT v_body_changed AND NOT v_mentions_changed THEN
+    RETURN app_private.build_internal_note_item(v_note);
+  END IF;
+
+  IF v_body_changed THEN
+    UPDATE public.internal_notes
+    SET body = v_body
+    WHERE id = p_note_id
+      AND workspace_id = p_workspace_id
+    RETURNING * INTO v_note;
+  END IF;
+
+  IF v_mentions_changed THEN
+    PERFORM app_private.sync_internal_note_mentions(
+      p_workspace_id,
+      v_note.id,
+      v_note.conversation_id,
+      COALESCE(v_note.author_member_id, v_member_id),
+      v_new_ids,
+      true
+    );
+  END IF;
 
   SELECT n.* INTO v_note FROM public.internal_notes n WHERE n.id = v_note.id;
 
-  v_contact_id := app_private.resolve_note_contact_id(p_workspace_id, v_note.conversation_id);
-  IF v_contact_id IS NOT NULL THEN
-    PERFORM app_private.emit_customer_timeline_event(
-      p_workspace_id,
-      v_contact_id,
-      'internal_note_updated',
-      'operator',
-      jsonb_build_object(
-        'v', 1,
-        'note_id', v_note.id,
-        'author_member_id', v_note.author_member_id,
-        'author_member_label', app_private.member_display_label(v_note.author_member_id),
-        'updated_by_member_id', v_member_id,
-        'updated_by_member_label', app_private.member_display_label(v_member_id)
-      ),
-      NULL,
-      v_note.conversation_id,
-      v_member_id,
-      v_note.updated_at,
-      'internal_note:' || v_note.id::text || ':updated:' || extract(epoch FROM v_note.updated_at)::text
-    );
+  -- Emit updated only when body changed (mention-only changes emit mention_created).
+  IF v_body_changed THEN
+    v_contact_id := app_private.resolve_note_contact_id(p_workspace_id, v_note.conversation_id);
+    IF v_contact_id IS NOT NULL THEN
+      PERFORM app_private.emit_customer_timeline_event(
+        p_workspace_id,
+        v_contact_id,
+        'internal_note_updated',
+        'operator',
+        jsonb_build_object(
+          'v', 1,
+          'note_id', v_note.id,
+          'author_member_id', v_note.author_member_id,
+          'author_member_label', app_private.member_display_label(v_note.author_member_id),
+          'updated_by_member_id', v_member_id,
+          'updated_by_member_label', app_private.member_display_label(v_member_id)
+        ),
+        NULL,
+        v_note.conversation_id,
+        v_member_id,
+        v_note.updated_at,
+        'internal_note:' || v_note.id::text || ':updated:' || extract(epoch FROM v_note.updated_at)::text
+      );
+    END IF;
   END IF;
 
   RETURN app_private.build_internal_note_item(v_note);
@@ -736,7 +795,10 @@ DECLARE
   v_after_created timestamptz;
   v_after_id uuid;
   v_include_deleted boolean := false;
+  v_catch_up_since timestamptz;
+  v_authoritative boolean := false;
   v_items jsonb := '[]'::jsonb;
+  v_tombstones jsonb := '[]'::jsonb;
   v_has_more boolean := false;
   v_next_before jsonb := NULL;
   v_row record;
@@ -755,6 +817,11 @@ BEGIN
 
   v_limit := LEAST(GREATEST(COALESCE((p_query ->> 'limit')::integer, 50), 1), 100);
   v_include_deleted := COALESCE((p_query ->> 'include_deleted')::boolean, false);
+  v_authoritative := COALESCE((p_query ->> 'authoritative')::boolean, false);
+
+  IF p_query ? 'catch_up_since' AND NULLIF(p_query ->> 'catch_up_since', '') IS NOT NULL THEN
+    v_catch_up_since := (p_query ->> 'catch_up_since')::timestamptz;
+  END IF;
 
   IF p_query ? 'before' AND jsonb_typeof(p_query -> 'before') = 'object' THEN
     v_before_created := (p_query -> 'before' ->> 'created_at')::timestamptz;
@@ -764,6 +831,48 @@ BEGIN
   IF p_query ? 'after' AND jsonb_typeof(p_query -> 'after') = 'object' THEN
     v_after_created := (p_query -> 'after' ->> 'created_at')::timestamptz;
     v_after_id := (p_query -> 'after' ->> 'id')::uuid;
+  END IF;
+
+  -- Authoritative reconnect: return full active page (newest limit) as source of truth,
+  -- plus soft-delete tombstones updated since catch_up_since (or all deleted in window).
+  IF v_authoritative THEN
+    SELECT COALESCE(
+      jsonb_agg(app_private.build_internal_note_item(n) ORDER BY n.created_at ASC, n.id ASC),
+      '[]'::jsonb
+    )
+    INTO v_items
+    FROM (
+      SELECT n.*
+      FROM public.internal_notes n
+      WHERE n.workspace_id = p_workspace_id
+        AND n.conversation_id = p_conversation_id
+        AND n.deleted_at IS NULL
+      ORDER BY n.created_at DESC, n.id DESC
+      LIMIT v_limit
+    ) n;
+
+    SELECT COALESCE(
+      jsonb_agg(app_private.build_internal_note_item(n) ORDER BY n.updated_at ASC, n.id ASC),
+      '[]'::jsonb
+    )
+    INTO v_tombstones
+    FROM public.internal_notes n
+    WHERE n.workspace_id = p_workspace_id
+      AND n.conversation_id = p_conversation_id
+      AND n.deleted_at IS NOT NULL
+      AND (
+        v_catch_up_since IS NULL
+        OR n.updated_at >= v_catch_up_since
+        OR n.deleted_at >= v_catch_up_since
+      );
+
+    RETURN jsonb_build_object(
+      'items', COALESCE(v_items, '[]'::jsonb),
+      'tombstones', COALESCE(v_tombstones, '[]'::jsonb),
+      'has_more', false,
+      'next_before', NULL,
+      'authoritative', true
+    );
   END IF;
 
   -- Newest page first (DESC), then reverse to chronological ASC for clients.
@@ -780,6 +889,11 @@ BEGIN
       AND (
         v_after_created IS NULL
         OR (n.created_at, n.id) > (v_after_created, v_after_id)
+      )
+      AND (
+        v_catch_up_since IS NULL
+        OR n.updated_at >= v_catch_up_since
+        OR n.created_at >= v_catch_up_since
       )
     ORDER BY n.created_at DESC, n.id DESC
     LIMIT v_limit + 1
@@ -799,10 +913,26 @@ BEGIN
     );
   END IF;
 
+  -- Soft-delete tombstones for catch-up windows (even when not include_deleted).
+  IF v_catch_up_since IS NOT NULL THEN
+    SELECT COALESCE(
+      jsonb_agg(app_private.build_internal_note_item(n) ORDER BY n.updated_at ASC, n.id ASC),
+      '[]'::jsonb
+    )
+    INTO v_tombstones
+    FROM public.internal_notes n
+    WHERE n.workspace_id = p_workspace_id
+      AND n.conversation_id = p_conversation_id
+      AND n.deleted_at IS NOT NULL
+      AND (n.updated_at >= v_catch_up_since OR n.deleted_at >= v_catch_up_since);
+  END IF;
+
   RETURN jsonb_build_object(
     'items', COALESCE(v_items, '[]'::jsonb),
+    'tombstones', COALESCE(v_tombstones, '[]'::jsonb),
     'has_more', v_has_more,
-    'next_before', v_next_before
+    'next_before', v_next_before,
+    'authoritative', false
   );
 END;
 $$;
@@ -1139,3 +1269,194 @@ CREATE POLICY notifications_select_authenticated
     app_private.workspace_is_accessible(workspace_id)
     AND recipient_id = app_private.get_caller_member_id(workspace_id)
   );
+
+-- ---------------------------------------------------------------------------
+-- Fix timeline actor composite FK: column-specific SET NULL (PG15+)
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.customer_timeline_events
+  DROP CONSTRAINT IF EXISTS fk_customer_timeline_events_actor_member_workspace;
+
+ALTER TABLE public.customer_timeline_events
+  ADD CONSTRAINT fk_customer_timeline_events_actor_member_workspace
+  FOREIGN KEY (actor_member_id, workspace_id)
+  REFERENCES public.workspace_members (id, workspace_id)
+  ON DELETE SET NULL (actor_member_id);
+
+-- ---------------------------------------------------------------------------
+-- Viewer isolation: hide operator-private note/mention timeline events
+-- Covers both RLS (direct SELECT + Realtime) and list_customer_timeline RPC.
+-- ---------------------------------------------------------------------------
+
+DROP POLICY IF EXISTS customer_timeline_events_select_member
+  ON public.customer_timeline_events;
+
+CREATE POLICY customer_timeline_events_select_member
+  ON public.customer_timeline_events
+  FOR SELECT
+  TO authenticated
+  USING (
+    app_private.workspace_is_accessible(workspace_id)
+    AND (
+      app_private.user_workspace_role(workspace_id) IS DISTINCT FROM 'viewer'
+      OR event_type NOT IN (
+        'internal_note_created',
+        'internal_note_updated',
+        'internal_note_deleted',
+        'mention_created'
+      )
+    )
+  );
+
+CREATE OR REPLACE FUNCTION app_private.list_customer_timeline(
+  p_workspace_id uuid,
+  p_query jsonb DEFAULT '{}'::jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_contact_id uuid;
+  v_conversation_id uuid;
+  v_limit integer;
+  v_before_occurred timestamptz;
+  v_before_id uuid;
+  v_rows jsonb := '[]'::jsonb;
+  v_has_more boolean := false;
+  v_next jsonb := NULL;
+  v_last jsonb;
+  v_role public.app_member_role;
+  v_hide_notes boolean := false;
+BEGIN
+  IF NOT app_private.workspace_is_accessible(p_workspace_id) THEN
+    RAISE EXCEPTION 'Workspace not accessible';
+  END IF;
+
+  IF p_query IS NULL OR jsonb_typeof(p_query) <> 'object' THEN
+    RAISE EXCEPTION 'query must be an object';
+  END IF;
+
+  v_contact_id := NULLIF(p_query ->> 'contact_id', '')::uuid;
+  IF v_contact_id IS NULL THEN
+    RAISE EXCEPTION 'contact_id is required';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.contacts c
+    WHERE c.id = v_contact_id
+      AND c.workspace_id = p_workspace_id
+  ) THEN
+    RAISE EXCEPTION 'Contact not found';
+  END IF;
+
+  v_role := app_private.user_workspace_role(p_workspace_id);
+  v_hide_notes := v_role = 'viewer';
+
+  v_conversation_id := NULLIF(p_query ->> 'conversation_id', '')::uuid;
+
+  v_limit := COALESCE((p_query ->> 'limit')::integer, 20);
+  IF v_limit < 1 THEN
+    v_limit := 1;
+  ELSIF v_limit > 50 THEN
+    v_limit := 50;
+  END IF;
+
+  IF p_query ? 'before'
+     AND p_query -> 'before' IS NOT NULL
+     AND jsonb_typeof(p_query -> 'before') = 'object' THEN
+    v_before_occurred := (p_query -> 'before' ->> 'occurred_at')::timestamptz;
+    v_before_id := (p_query -> 'before' ->> 'id')::uuid;
+    IF v_before_occurred IS NULL OR v_before_id IS NULL THEN
+      RAISE EXCEPTION 'Invalid before cursor';
+    END IF;
+  END IF;
+
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', q.id,
+        'workspace_id', q.workspace_id,
+        'contact_id', q.contact_id,
+        'visitor_session_id', q.visitor_session_id,
+        'conversation_id', q.conversation_id,
+        'event_type', q.event_type,
+        'actor_type', q.actor_type,
+        'actor_member_id', q.actor_member_id,
+        'metadata_json', q.metadata_json,
+        'occurred_at', q.occurred_at,
+        'created_at', q.created_at,
+        'dedupe_key', q.dedupe_key
+      )
+      ORDER BY q.occurred_at DESC, q.id DESC
+    ),
+    '[]'::jsonb
+  )
+  INTO v_rows
+  FROM (
+    SELECT e.*
+    FROM public.customer_timeline_events e
+    WHERE e.workspace_id = p_workspace_id
+      AND e.contact_id = v_contact_id
+      AND (v_conversation_id IS NULL OR e.conversation_id = v_conversation_id)
+      AND (
+        NOT v_hide_notes
+        OR e.event_type NOT IN (
+          'internal_note_created',
+          'internal_note_updated',
+          'internal_note_deleted',
+          'mention_created'
+        )
+      )
+      AND (
+        v_before_occurred IS NULL
+        OR (e.occurred_at < v_before_occurred)
+        OR (e.occurred_at = v_before_occurred AND e.id < v_before_id)
+      )
+    ORDER BY e.occurred_at DESC, e.id DESC
+    LIMIT v_limit + 1
+  ) q;
+
+  IF jsonb_array_length(v_rows) > v_limit THEN
+    v_has_more := true;
+    SELECT jsonb_agg(value ORDER BY ord)
+    INTO v_rows
+    FROM (
+      SELECT value, ord
+      FROM jsonb_array_elements(v_rows) WITH ORDINALITY AS t(value, ord)
+      WHERE ord <= v_limit
+    ) trimmed;
+  END IF;
+
+  IF v_has_more AND jsonb_array_length(v_rows) > 0 THEN
+    v_last := v_rows -> (jsonb_array_length(v_rows) - 1);
+    v_next := jsonb_build_object(
+      'occurred_at', v_last ->> 'occurred_at',
+      'id', v_last ->> 'id'
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'events', COALESCE(v_rows, '[]'::jsonb),
+    'next_before', v_next,
+    'has_more', v_has_more
+  );
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Lock down app_private EXECUTE after CREATE OR REPLACE (repo standard)
+-- ---------------------------------------------------------------------------
+
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM anon;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM authenticated;
+
+-- Intentional helpers used by RLS policies / authenticated clients.
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_ids() TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_role(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.workspace_is_accessible(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.get_caller_member_id(uuid) TO authenticated;
