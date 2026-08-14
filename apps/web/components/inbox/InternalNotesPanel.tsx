@@ -377,7 +377,6 @@ function NoteCard({
   canWrite,
   onUpdated,
   onDeleted,
-  onDeleteFailed,
 }: {
   note: InternalNote;
   workspaceSlug: string;
@@ -386,7 +385,6 @@ function NoteCard({
   canWrite: boolean;
   onUpdated: (note: InternalNote) => void;
   onDeleted: (noteId: string) => void;
-  onDeleteFailed: (noteId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -446,9 +444,6 @@ function NoteCard({
     if (isPending) return;
     setError(null);
     setIsPending(true);
-    // Optimistic local tombstone + abort in-flight catch-up before the RPC
-    // returns, so a stale list cannot resurrect the note.
-    onDeleted(note.id);
     void (async () => {
       try {
         const result = await softDeleteInternalNoteAction(workspaceSlug, {
@@ -456,12 +451,13 @@ function NoteCard({
           conversationId,
         });
         if (!result.success) {
-          onDeleteFailed(note.id);
           setError(result.message);
           return;
         }
+        // Tombstone + invalidate only after the durable soft-delete commits so a
+        // failed RPC cannot leave this client empty while peers still see the note.
+        onDeleted(note.id);
       } catch (err) {
-        onDeleteFailed(note.id);
         setError(err instanceof Error ? err.message : "Unable to delete note.");
       } finally {
         setIsPending(false);
@@ -618,7 +614,6 @@ export function InternalNotesPanel({
     mentionFlash,
     error,
     markNoteDeleted,
-    clearLocalTombstone,
     retry,
   } = useLiveInternalNotes({
     workspaceId,
@@ -693,10 +688,6 @@ export function InternalNotesPanel({
                 setNotes((current) => mergeInternalNotes(current, [updated]));
               }}
               onDeleted={markNoteDeleted}
-              onDeleteFailed={(noteId) => {
-                clearLocalTombstone(noteId);
-                retry();
-              }}
             />
           ))
         )}

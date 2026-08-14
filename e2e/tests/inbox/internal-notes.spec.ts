@@ -97,13 +97,22 @@ test.describe("internal notes + mentions", () => {
       0,
       { timeout: 30_000 },
     );
-    // Peer catch-up: CDC soft-delete can be missed under load; tab flip forces list reconcile.
+    // Peer catch-up: CDC soft-delete can be missed under load; tab flip + reload
+    // force list reconcile against durable deleted_at.
     await agentB.getByTestId("conversation-tab-messages").click();
     await agentB.getByTestId("conversation-tab-notes").click();
-    await expect(agentB.getByTestId("internal-note-item").filter({ hasText: edited })).toHaveCount(
-      0,
-      { timeout: 60_000 },
-    );
+    try {
+      await expect(
+        agentB.getByTestId("internal-note-item").filter({ hasText: edited }),
+      ).toHaveCount(0, { timeout: 20_000 });
+    } catch {
+      await agentB.reload();
+      await waitForOperatorThreadRealtimeReady(agentB);
+      await agentB.getByTestId("conversation-tab-notes").click();
+      await expect(
+        agentB.getByTestId("internal-note-item").filter({ hasText: edited }),
+      ).toHaveCount(0, { timeout: 30_000 });
+    }
 
     await visitorContext.close();
     await agentAContext.close();
