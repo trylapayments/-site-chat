@@ -124,7 +124,8 @@ Typed errors (stable prefixes → `NoteError` in `@site-chat/shared`):
 - `internal_notes` and `notifications` in `supabase_realtime` with `REPLICA IDENTITY FULL`
 - Operator thread notes channel: INSERT/UPDATE filtered by `conversation_id`
 - Soft delete arrives as UPDATE with `deleted_at`
-- On connect / CDC: **authoritative** catch-up via `list_internal_notes` with `authoritative: true`, returning active items + soft-delete **tombstones**. Client `reconcileNotesCatchUp` applies tombstones so a delete missed while disconnected is removed even when the truncated active page never included that id
+- On connect / CDC: **authoritative** catch-up via `list_internal_notes` with `authoritative: true`, returning active items + soft-delete **tombstones**. Client `reconcileNotesCatchUp` applies tombstones so a delete missed while disconnected is removed; CDC creates that arrive during an in-flight catch-up are retained (not wiped by a stale empty page)
+- Selecting the Internal Notes tab triggers catch-up so peers load creates even if CDC was delayed
 - Conversation switches bump a generation counter and abort in-flight catch-up (`AbortController`) so stale responses never merge into the wrong thread
 - Mentioned operators also receive notification INSERT on `recipient_id`
 
