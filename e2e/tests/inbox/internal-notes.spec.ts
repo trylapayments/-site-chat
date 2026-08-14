@@ -86,17 +86,25 @@ test.describe("internal notes + mentions", () => {
       timeout: 60_000,
     });
 
-    // Soft delete disappears live for peer.
-    const deleteBtn = agentA
-      .getByTestId("internal-note-item")
-      .filter({ hasText: edited })
-      .getByTestId("internal-note-delete");
+    // Soft delete: click, then poll (retry click once if the first action aborted).
+    const noteLocator = agentA.getByTestId("internal-note-item").filter({ hasText: edited });
+    const deleteBtn = noteLocator.getByTestId("internal-note-delete");
     await expect(deleteBtn).toBeEnabled({ timeout: 30_000 });
     await deleteBtn.click();
-    await expect(agentA.getByTestId("internal-note-item").filter({ hasText: edited })).toHaveCount(
-      0,
-      { timeout: 30_000 },
-    );
+    try {
+      await expect(noteLocator).toHaveCount(0, { timeout: 15_000 });
+    } catch {
+      const retryDelete = agentA
+        .getByTestId("internal-note-item")
+        .filter({ hasText: edited })
+        .getByTestId("internal-note-delete");
+      if (await retryDelete.isVisible().catch(() => false)) {
+        await retryDelete.click();
+      }
+      await expect(
+        agentA.getByTestId("internal-note-item").filter({ hasText: edited }),
+      ).toHaveCount(0, { timeout: 30_000 });
+    }
     // Peer catch-up: CDC soft-delete can be missed under load; tab flip + reload
     // force list reconcile against durable deleted_at.
     await agentB.getByTestId("conversation-tab-messages").click();

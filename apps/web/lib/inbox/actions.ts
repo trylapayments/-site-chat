@@ -852,7 +852,10 @@ export async function softDeleteInternalNoteAction(
     const result = await softDeleteInternalNote(
       supabase,
       workspace.workspace_id,
-      parsed.data,
+      {
+        ...parsed.data,
+        conversationId: input.conversationId,
+      },
     );
 
     revalidatePath(

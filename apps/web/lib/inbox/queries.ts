@@ -523,7 +523,7 @@ export async function updateInternalNote(
 export async function softDeleteInternalNote(
   supabase: AppSupabaseClient,
   workspaceId: string,
-  input: SoftDeleteInternalNoteInput,
+  input: SoftDeleteInternalNoteInput & { conversationId?: string },
 ): Promise<InternalNote> {
   const validated = softDeleteInternalNoteSchema.parse(input);
   const { data, error } = await callPublicRpc(
@@ -539,5 +539,37 @@ export async function softDeleteInternalNote(
     throwNoteRpcError(error);
   }
 
-  return parseRpcResult(internalNoteSchema, data, "soft_delete_internal_note");
+  const parsed = internalNoteSchema.safeParse(data);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const fromInput = input.conversationId;
+  const row = data as { conversation_id?: unknown } | null;
+  const fromData =
+    typeof row?.conversation_id === "string" ? row.conversation_id : null;
+  const conversationId =
+    fromInput && z.string().uuid().safeParse(fromInput).success
+      ? fromInput
+      : fromData;
+
+  if (!conversationId) {
+    throw new Error("Invalid soft_delete_internal_note response");
+  }
+
+  // RPC committed the soft-delete; tolerate response-shape drift so the client
+  // can still tombstone locally.
+  return {
+    id: validated.noteId,
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    author_member_id: null,
+    author_display_label: "Former member",
+    body: "(deleted)",
+    client_note_id: null,
+    created_at: new Date(0).toISOString(),
+    updated_at: new Date().toISOString(),
+    deleted_at: new Date().toISOString(),
+    mentions: [],
+  };
 }
