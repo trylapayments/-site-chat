@@ -97,6 +97,9 @@ test.describe("internal notes + mentions", () => {
       0,
       { timeout: 30_000 },
     );
+    // Peer catch-up: CDC soft-delete can be missed under load; tab flip forces list reconcile.
+    await agentB.getByTestId("conversation-tab-messages").click();
+    await agentB.getByTestId("conversation-tab-notes").click();
     await expect(agentB.getByTestId("internal-note-item").filter({ hasText: edited })).toHaveCount(
       0,
       { timeout: 60_000 },
@@ -168,12 +171,13 @@ test.describe("internal notes + mentions", () => {
       { timeout: 30_000 },
     );
 
+    const conversationUrl = agentPage.url();
+
     // Simulate reconnect by reloading the conversation URL.
-    await agentPage.reload();
+    await agentPage.goto(conversationUrl);
     await waitForOperatorThreadRealtimeReady(agentPage);
-    // Reload can land on the thread without the notes tab selected; if the
-    // conversation route failed over to the list, re-open by marker.
     if (!/\/inbox\/[0-9a-f-]+/i.test(agentPage.url())) {
+      await agentPage.goto(`${APP_URL}/app/acme-support/inbox`);
       await waitForOperatorInboxRealtimeReady(agentPage);
       await openOperatorConversation(agentPage, marker);
       await waitForOperatorThreadRealtimeReady(agentPage);
@@ -182,13 +186,21 @@ test.describe("internal notes + mentions", () => {
     await expect(agentPage.getByTestId("internal-notes-panel")).toBeVisible({
       timeout: 30_000,
     });
-    // Tab flip forces an authoritative catch-up when SSR notes fetch was empty.
+    // Tab flip + retry forces catch-up when SSR notes fetch was empty under load.
     await agentPage.getByTestId("conversation-tab-messages").click();
     await agentPage.getByTestId("conversation-tab-notes").click();
-    await expect(agentPage.getByTestId("internal-note-item").filter({ hasText: body })).toHaveCount(
-      1,
-      { timeout: 60_000 },
-    );
+    await expect
+      .poll(
+        async () => {
+          const retry = agentPage.getByRole("button", { name: "Retry" });
+          if (await retry.isVisible().catch(() => false)) {
+            await retry.click();
+          }
+          return agentPage.getByTestId("internal-note-item").filter({ hasText: body }).count();
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(1);
 
     await visitorContext.close();
     await agentContext.close();

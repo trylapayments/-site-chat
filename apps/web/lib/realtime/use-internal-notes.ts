@@ -201,6 +201,13 @@ export function useLiveInternalNotes(input: {
       },
       onNoteChange: (payload) => {
         const row = (payload.new ?? payload) as Record<string, unknown>;
+        // Soft-delete may arrive before strict parse succeeds — prefer id + deleted_at.
+        if (typeof row.id === "string" && row.deleted_at) {
+          localTombstoneIdsRef.current.add(row.id);
+          setNotes((current) => current.filter((note) => note.id !== row.id));
+          void catchUp("authoritative");
+          return;
+        }
         const partial = rowToPartialNote(row);
         if (!partial) {
           void catchUp("authoritative");
@@ -214,6 +221,7 @@ export function useLiveInternalNotes(input: {
           setNotes((current) =>
             current.filter((note) => note.id !== partial.id),
           );
+          void catchUp("authoritative");
           return;
         }
         // Optimistic CDC merge so peers see the note even if catch-up is delayed.
@@ -279,6 +287,23 @@ export function useLiveInternalNotes(input: {
       return;
     }
     void catchUp("authoritative");
+
+    function refreshOnVisible() {
+      if (document.visibilityState === "visible") {
+        void catchUp("authoritative");
+      }
+    }
+
+    function refreshOnFocus() {
+      void catchUp("authoritative");
+    }
+
+    document.addEventListener("visibilitychange", refreshOnVisible);
+    window.addEventListener("focus", refreshOnFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnVisible);
+      window.removeEventListener("focus", refreshOnFocus);
+    };
   }, [catchUp, input.active, input.enabled, input.conversationId]);
 
   return {

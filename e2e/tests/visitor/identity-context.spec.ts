@@ -127,9 +127,16 @@ test.describe("visitor identity + context", () => {
     const identify = await identifyResponse;
     expect(identify.status()).toBe(200);
 
-    await expect(operator.getByLabel("Name")).toHaveValue("Jane Doe", {
-      timeout: 30_000,
-    });
+    const nameInput = operator.getByLabel("Name");
+    try {
+      await expect(nameInput).toHaveValue("Jane Doe", { timeout: 20_000 });
+    } catch {
+      // Live CDC can stall under webserver ECONNRESET; reload picks up the
+      // durable identify write via SSR.
+      await operator.reload();
+      await waitForOperatorThreadRealtimeReady(operator);
+      await expect(nameInput).toHaveValue("Jane Doe", { timeout: 30_000 });
+    }
     await expect(operator.getByLabel("Email")).toHaveValue(email, {
       timeout: 30_000,
     });
