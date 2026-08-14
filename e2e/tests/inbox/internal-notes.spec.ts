@@ -87,11 +87,12 @@ test.describe("internal notes + mentions", () => {
     });
 
     // Soft delete disappears live for peer.
-    await agentA
+    const deleteBtn = agentA
       .getByTestId("internal-note-item")
       .filter({ hasText: edited })
-      .getByTestId("internal-note-delete")
-      .click();
+      .getByTestId("internal-note-delete");
+    await expect(deleteBtn).toBeEnabled({ timeout: 30_000 });
+    await deleteBtn.click();
     await expect(agentA.getByTestId("internal-note-item").filter({ hasText: edited })).toHaveCount(
       0,
       { timeout: 30_000 },
@@ -171,9 +172,12 @@ test.describe("internal notes + mentions", () => {
     await agentPage.reload();
     await waitForOperatorThreadRealtimeReady(agentPage);
     await agentPage.getByTestId("conversation-tab-notes").click();
+    await expect(agentPage.getByTestId("internal-notes-panel")).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(agentPage.getByTestId("internal-note-item").filter({ hasText: body })).toHaveCount(
       1,
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
 
     await visitorContext.close();

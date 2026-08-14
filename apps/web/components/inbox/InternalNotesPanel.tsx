@@ -18,7 +18,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useTransition,
   type KeyboardEvent,
   type RefObject,
 } from "react";
@@ -252,7 +251,7 @@ function NoteComposer({
   onCreated: (note: InternalNote) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const clientNoteIdRef = useRef(createClientNoteId());
   const {
@@ -277,22 +276,29 @@ function NoteComposer({
     const clientNoteId = clientNoteIdRef.current;
     const mentionIds = mentionIdsForSubmit(body);
     setError(null);
-    startTransition(async () => {
-      const result = await createInternalNoteAction(workspaceSlug, {
-        conversationId,
-        body: trimmed,
-        clientNoteId,
-        mentionedMemberIds: mentionIds,
-      });
-      if (!result.success) {
-        setError(result.message);
-        return;
+    setIsPending(true);
+    void (async () => {
+      try {
+        const result = await createInternalNoteAction(workspaceSlug, {
+          conversationId,
+          body: trimmed,
+          clientNoteId,
+          mentionedMemberIds: mentionIds,
+        });
+        if (!result.success) {
+          setError(result.message);
+          return;
+        }
+        if (result.data && "id" in result.data && "body" in result.data) {
+          onCreated(result.data);
+        }
+        clearDraft();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to save note.");
+      } finally {
+        setIsPending(false);
       }
-      if (result.data && "id" in result.data && "body" in result.data) {
-        onCreated(result.data);
-      }
-      clearDraft();
-    });
+    })();
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -382,7 +388,7 @@ function NoteCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     body: draft,
@@ -406,40 +412,55 @@ function NoteCard({
 
   function save() {
     const trimmed = draft.trim();
-    if (!trimmed) return;
+    if (!trimmed || isPending) return;
     const mentionIds = mentionIdsForSubmit(draft);
     setError(null);
-    startTransition(async () => {
-      const result = await updateInternalNoteAction(workspaceSlug, {
-        noteId: note.id,
-        body: trimmed,
-        mentionedMemberIds: mentionIds,
-        conversationId,
-      });
-      if (!result.success) {
-        setError(result.message);
-        return;
+    setIsPending(true);
+    void (async () => {
+      try {
+        const result = await updateInternalNoteAction(workspaceSlug, {
+          noteId: note.id,
+          body: trimmed,
+          mentionedMemberIds: mentionIds,
+          conversationId,
+        });
+        if (!result.success) {
+          setError(result.message);
+          return;
+        }
+        if (result.data && "id" in result.data) {
+          onUpdated(result.data);
+        }
+        setEditing(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to save note.");
+      } finally {
+        setIsPending(false);
       }
-      if (result.data && "id" in result.data) {
-        onUpdated(result.data);
-      }
-      setEditing(false);
-    });
+    })();
   }
 
   function remove() {
+    if (isPending) return;
     setError(null);
-    startTransition(async () => {
-      const result = await softDeleteInternalNoteAction(workspaceSlug, {
-        noteId: note.id,
-        conversationId,
-      });
-      if (!result.success) {
-        setError(result.message);
-        return;
+    setIsPending(true);
+    void (async () => {
+      try {
+        const result = await softDeleteInternalNoteAction(workspaceSlug, {
+          noteId: note.id,
+          conversationId,
+        });
+        if (!result.success) {
+          setError(result.message);
+          return;
+        }
+        onDeleted(note.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to delete note.");
+      } finally {
+        setIsPending(false);
       }
-      onDeleted(note.id);
-    });
+    })();
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
