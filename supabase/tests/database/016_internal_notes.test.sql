@@ -329,22 +329,14 @@ SELECT isnt(
   'agent can create internal note'
 );
 
-SELECT lives_ok(
-  $$
-    SELECT tests.clear_auth();
-    INSERT INTO tests.fixtures (key, value)
-    SELECT 'note_1', id::text
-    FROM public.internal_notes
-    WHERE conversation_id = tests.fixture('conversation_a')::uuid
-      AND client_note_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
-    LIMIT 1;
-    SELECT tests.authenticate_as(
-      tests.fixture('agent_a')::uuid,
-      'notes-agent-a@test.local'
-    );
-  $$,
-  'store note_1 fixture id'
-);
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'note_1', id::text
+FROM public.internal_notes
+WHERE conversation_id = tests.fixture('conversation_a')::uuid
+  AND client_note_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
+LIMIT 1;
 
 SELECT is(
   (SELECT count(*)::integer FROM public.internal_notes
@@ -361,6 +353,7 @@ SELECT is(
   'mention row persisted'
 );
 
+-- Notifications are recipient-scoped under RLS; count as postgres.
 SELECT is(
   (SELECT count(*)::integer FROM public.notifications
    WHERE type = 'mention'
@@ -384,6 +377,16 @@ SELECT is(
      AND conversation_id = tests.fixture('conversation_a')::uuid),
   1,
   'timeline mention_created emitted once'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  're-authenticate agent A after notification count'
 );
 
 -- Idempotent create via client_note_id (atomic ON CONFLICT)
@@ -419,12 +422,24 @@ SELECT is(
   'duplicate create does not duplicate mention rows'
 );
 
+SELECT tests.clear_auth();
+
 SELECT is(
   (SELECT count(*)::integer FROM public.notifications
    WHERE type = 'mention'
      AND resource_id = tests.fixture('note_1')::uuid),
   1,
   'duplicate create does not duplicate notifications'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  're-authenticate agent A before mention edit'
 );
 
 -- ---------------------------------------------------------------------------
@@ -493,6 +508,8 @@ SELECT is(
   're-added mention inserts a new mention row'
 );
 
+SELECT tests.clear_auth();
+
 SELECT is(
   (SELECT count(*)::integer FROM public.notifications
    WHERE type = 'mention'
@@ -500,6 +517,16 @@ SELECT is(
      AND resource_id = tests.fixture('note_1')::uuid),
   2,
   're-adding a mention notifies again'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  're-authenticate agent A after re-add notification count'
 );
 
 SELECT is(
@@ -605,7 +632,7 @@ SELECT is(
           'conversation_id', tests.fixture('conversation_a')::uuid,
           'limit', 50
         )
-      )->'items'
+      )->'events'
     ) AS item
     WHERE item->>'event_type' IN (
       'internal_note_created',
@@ -650,7 +677,7 @@ SELECT ok(
           'conversation_id', tests.fixture('conversation_a')::uuid,
           'limit', 50
         )
-      )->'items'
+      )->'events'
     ) AS item
     WHERE item->>'event_type' = 'internal_note_created'
   ),
@@ -735,7 +762,13 @@ SELECT lives_ok(
       tests.fixture('agent_a')::uuid,
       'notes-agent-a@test.local'
     );
-    PERFORM public.create_internal_note(
+  $$,
+  'authenticate agent A for searchable note'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_internal_note(
       tests.fixture('workspace_a')::uuid,
       tests.fixture('conversation_a')::uuid,
       'unique-search-token-notes-xyz',
@@ -794,7 +827,7 @@ SELECT lives_ok(
   'authenticate agent for direct write denial'
 );
 
-SELECT throws_ok(
+SELECT throws_like(
   $$
     INSERT INTO public.internal_notes (
       workspace_id, conversation_id, author_member_id, body
@@ -805,7 +838,7 @@ SELECT throws_ok(
       'direct insert'
     );
   $$,
-  '42501',
+  '%permission denied%',
   'direct INSERT into internal_notes denied'
 );
 
@@ -834,22 +867,30 @@ SELECT lives_ok(
       tests.fixture('agent_b')::uuid,
       'notes-agent-b@test.local'
     );
-    PERFORM public.create_internal_note(
+  $$,
+  'authenticate agent B for author-removal note'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_internal_note(
       tests.fixture('workspace_a')::uuid,
       tests.fixture('conversation_a')::uuid,
       'Note authored by agent B for member-removal FK test',
       'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid,
       NULL
     );
-    PERFORM tests.clear_auth();
-    INSERT INTO tests.fixtures (key, value)
-    SELECT 'note_author_b', id::text
-    FROM public.internal_notes
-    WHERE client_note_id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid
-    LIMIT 1;
   $$,
   'agent B creates note for author-removal test'
 );
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'note_author_b', id::text
+FROM public.internal_notes
+WHERE client_note_id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid
+LIMIT 1;
 
 SELECT lives_ok(
   $$
@@ -857,10 +898,19 @@ SELECT lives_ok(
       tests.fixture('owner_a')::uuid,
       'notes-owner-a@test.local'
     );
+  $$,
+  'authenticate owner to remove author member'
+);
+
+SELECT lives_ok(
+  $$
     SELECT public.remove_workspace_member(tests.fixture('agent_member_b')::uuid);
   $$,
   'owner can remove author member without FK failure'
 );
+
+-- Counts after member removal must run as postgres (bypass RLS).
+SELECT tests.clear_auth();
 
 SELECT is(
   (
