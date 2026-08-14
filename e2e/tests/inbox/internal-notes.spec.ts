@@ -52,17 +52,17 @@ test.describe("internal notes + mentions", () => {
       timeout: 30_000,
     });
 
-    const noteBody = `Internal note ${marker} please review @agent`;
+    // Avoid bare @tokens that open autocomplete mid-fill; ID-backed mentions
+    // are covered by unit/pgTAP. Plain body keeps this E2E focused on CDC.
+    const noteBody = `Internal note ${marker} please review`;
     await agentA.getByTestId("internal-note-composer").fill(noteBody);
-    // Mentions may open autocomplete; Escape closes if present, then send.
-    await agentA.keyboard.press("Escape");
     await agentA.getByTestId("internal-note-send").click();
 
     await expect(agentA.getByTestId("internal-note-item").filter({ hasText: marker })).toBeVisible({
       timeout: 30_000,
     });
 
-    // Realtime: peer agent sees the note without refresh.
+    // Realtime: peer agent sees the note without refresh (CDC merge + catch-up).
     await expect(agentB.getByTestId("internal-note-item").filter({ hasText: marker })).toBeVisible({
       timeout: 60_000,
     });

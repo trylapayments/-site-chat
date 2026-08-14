@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  applyInternalNoteRealtimeChange,
   internalNoteSchema,
   reconcileNotesCatchUp,
   type ConnectionState,
@@ -14,13 +15,25 @@ import {
   subscribeOperatorNotifications,
 } from "@/lib/realtime/operator-subscriptions";
 
+/**
+ * Map a Realtime CDC row to InternalNote. Pick known fields only — table rows
+ * include generated columns (e.g. search_vector) that fail strict schema parse.
+ */
 function rowToPartialNote(row: Record<string, unknown>): InternalNote | null {
   const parsed = internalNoteSchema.safeParse({
-    ...row,
+    id: row.id,
+    workspace_id: row.workspace_id,
+    conversation_id: row.conversation_id,
+    author_member_id: row.author_member_id ?? null,
     author_display_label:
       typeof row.author_display_label === "string"
         ? row.author_display_label
         : "Teammate",
+    body: row.body,
+    client_note_id: row.client_note_id ?? null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    deleted_at: row.deleted_at ?? null,
     mentions: Array.isArray(row.mentions) ? row.mentions : [],
   });
   return parsed.success ? parsed.data : null;
@@ -49,6 +62,8 @@ export function useLiveInternalNotes(input: {
   const conversationIdRef = useRef(input.conversationId);
   conversationIdRef.current = input.conversationId;
   const catchUpSinceRef = useRef<string>(new Date().toISOString());
+  const initialNotesRef = useRef(input.initialNotes);
+  initialNotesRef.current = input.initialNotes;
 
   const invalidateInFlight = useCallback(() => {
     conversationGenerationRef.current += 1;
@@ -56,12 +71,15 @@ export function useLiveInternalNotes(input: {
     catchUpAbortRef.current = null;
   }, []);
 
+  // Reset only when the conversation changes — do NOT depend on initialNotes
+  // referential identity (parent re-renders would abort peer catch-up).
   useEffect(() => {
     invalidateInFlight();
-    setNotes(input.initialNotes);
+    setNotes(initialNotesRef.current);
     catchUpSinceRef.current = new Date().toISOString();
     setError(null);
-  }, [input.conversationId, input.initialNotes, invalidateInFlight]);
+    setConnectionState("connecting");
+  }, [input.conversationId, invalidateInFlight]);
 
   const catchUp = useCallback(
     async (mode: "authoritative" | "incremental" = "authoritative") => {
@@ -147,7 +165,13 @@ export function useLiveInternalNotes(input: {
           );
           return;
         }
-        // Mentions / author label may be missing on CDC — authoritative catch-up.
+        // Optimistic CDC merge so peers see the note even if catch-up is delayed.
+        if (partial) {
+          setNotes((current) =>
+            applyInternalNoteRealtimeChange(current, partial),
+          );
+        }
+        // Mentions / author label may be incomplete on CDC — refresh.
         void catchUp("authoritative");
       },
     });
