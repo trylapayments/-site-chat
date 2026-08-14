@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(75);
+SELECT plan(80);
 
 TRUNCATE tests.fixtures;
 
