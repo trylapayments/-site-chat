@@ -121,6 +121,7 @@ export function ConversationMainPanel({
           members={members}
           initialNotes={initialNotes}
           canManage={canManageNotes}
+          active={tab === "notes"}
         />
       </div>
     </div>

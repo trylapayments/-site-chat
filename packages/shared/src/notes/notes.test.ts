@@ -160,6 +160,15 @@ describe("mergeInternalNotes + catch-up", () => {
     expect(next.map((n) => n.id)).toEqual(["n1"]);
   });
 
+  it("authoritative catch-up keeps CDC creates missing from a stale empty page", () => {
+    const current = [note({ id: "n-cdc", body: "from cdc" })];
+    const active: InternalNote[] = [];
+    const next = reconcileNotesCatchUp(current, active, [], {
+      authoritativeReplace: true,
+    });
+    expect(next.map((n) => n.id)).toEqual(["n-cdc"]);
+  });
+
   it("applyInternalNoteRealtimeChange removes soft-deleted notes", () => {
     const current = [note({ id: "n1" })];
     const next = applyInternalNoteRealtimeChange(

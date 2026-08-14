@@ -277,8 +277,18 @@ export function reconcileNotesCatchUp(
 
   if (options.authoritativeReplace) {
     const byId = new Map<string, InternalNote>();
+    // Server active page is the base for reconnect.
     for (const note of activeIncoming) {
       if (!note.deleted_at && !deletedIds.has(note.id)) {
+        byId.set(note.id, note);
+      }
+    }
+    // Keep CDC arrivals that landed while catch-up was in flight. Missed
+    // deletes are removed via tombstones — never by mere absence from a
+    // truncated active page.
+    for (const note of current) {
+      if (note.deleted_at || deletedIds.has(note.id)) continue;
+      if (!byId.has(note.id)) {
         byId.set(note.id, note);
       }
     }

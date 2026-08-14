@@ -46,6 +46,8 @@ export function useLiveInternalNotes(input: {
   memberId: string;
   initialNotes: InternalNote[];
   enabled: boolean;
+  /** When the notes tab becomes visible, refresh so peers catch creates without CDC. */
+  active?: boolean;
 }) {
   const [notes, setNotes] = useState<InternalNote[]>(input.initialNotes);
   const [connectionState, setConnectionState] =
@@ -223,6 +225,14 @@ export function useLiveInternalNotes(input: {
       clearTimeout(timer);
     };
   }, [mentionFlash]);
+
+  // Tab focus refresh: peers may miss CDC under multi-tab load; list is authoritative.
+  useEffect(() => {
+    if (!input.enabled || input.active === false) {
+      return;
+    }
+    void catchUp("authoritative");
+  }, [catchUp, input.active, input.enabled, input.conversationId]);
 
   return {
     notes,

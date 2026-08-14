@@ -573,6 +573,7 @@ export function InternalNotesPanel({
   members,
   initialNotes,
   canManage,
+  active = true,
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -581,6 +582,7 @@ export function InternalNotesPanel({
   members: WorkspaceMemberOption[];
   initialNotes: InternalNote[];
   canManage: boolean;
+  active?: boolean;
 }) {
   const { notes, setNotes, connectionState, mentionFlash, error, retry } =
     useLiveInternalNotes({
@@ -590,6 +592,7 @@ export function InternalNotesPanel({
       memberId,
       initialNotes,
       enabled: canManage,
+      active,
     });
 
   if (!canManage) {

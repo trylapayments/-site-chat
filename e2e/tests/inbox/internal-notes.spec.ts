@@ -62,7 +62,9 @@ test.describe("internal notes + mentions", () => {
       timeout: 30_000,
     });
 
-    // Realtime: peer agent sees the note without refresh (CDC merge + catch-up).
+    // Peer: re-select notes tab to trigger active catch-up (CDC + list reconcile).
+    await agentB.getByTestId("conversation-tab-messages").click();
+    await agentB.getByTestId("conversation-tab-notes").click();
     await expect(agentB.getByTestId("internal-note-item").filter({ hasText: marker })).toBeVisible({
       timeout: 60_000,
     });
