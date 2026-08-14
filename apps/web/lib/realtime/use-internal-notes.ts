@@ -60,7 +60,8 @@ export function useLiveInternalNotes(input: {
 
   /** Bumped on conversation change so stale catch-up never merges into the wrong thread. */
   const conversationGenerationRef = useRef(0);
-  const catchUpAbortRef = useRef<AbortController | null>(null);
+  /** Monotonic id: only the latest in-flight catch-up for this generation may apply. */
+  const catchUpRequestRef = useRef(0);
   const conversationIdRef = useRef(input.conversationId);
   conversationIdRef.current = input.conversationId;
   const catchUpSinceRef = useRef<string>(new Date().toISOString());
@@ -74,8 +75,7 @@ export function useLiveInternalNotes(input: {
 
   const invalidateInFlight = useCallback(() => {
     conversationGenerationRef.current += 1;
-    catchUpAbortRef.current?.abort();
-    catchUpAbortRef.current = null;
+    catchUpRequestRef.current += 1;
   }, []);
 
   const markNoteDeleted = useCallback(
@@ -111,10 +111,8 @@ export function useLiveInternalNotes(input: {
       }
 
       const generation = conversationGenerationRef.current;
+      const requestId = ++catchUpRequestRef.current;
       const conversationId = input.conversationId;
-      catchUpAbortRef.current?.abort();
-      const controller = new AbortController();
-      catchUpAbortRef.current = controller;
 
       try {
         const result = await listInternalNotesAction(input.workspaceSlug, {
@@ -125,8 +123,11 @@ export function useLiveInternalNotes(input: {
             mode === "authoritative" ? undefined : catchUpSinceRef.current,
         });
 
+        // Ignore stale responses: a newer catch-up or conversation switch won.
+        // Do not AbortController-cancel in-flight list calls — rapid refresh
+        // (tab focus, Retry, CDC) would starve and leave the panel empty.
         if (
-          controller.signal.aborted ||
+          requestId !== catchUpRequestRef.current ||
           generation !== conversationGenerationRef.current ||
           conversationId !== conversationIdRef.current
         ) {
@@ -163,10 +164,8 @@ export function useLiveInternalNotes(input: {
         );
         catchUpSinceRef.current = new Date().toISOString();
       } catch (err) {
-        if (controller.signal.aborted) {
-          return;
-        }
         if (
+          requestId !== catchUpRequestRef.current ||
           generation !== conversationGenerationRef.current ||
           conversationId !== conversationIdRef.current
         ) {

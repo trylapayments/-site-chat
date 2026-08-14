@@ -186,21 +186,17 @@ test.describe("internal notes + mentions", () => {
     await expect(agentPage.getByTestId("internal-notes-panel")).toBeVisible({
       timeout: 30_000,
     });
-    // Tab flip + retry forces catch-up when SSR notes fetch was empty under load.
+    // One catch-up kick (avoid hammering Retry — that starved in-flight lists).
     await agentPage.getByTestId("conversation-tab-messages").click();
     await agentPage.getByTestId("conversation-tab-notes").click();
-    await expect
-      .poll(
-        async () => {
-          const retry = agentPage.getByRole("button", { name: "Retry" });
-          if (await retry.isVisible().catch(() => false)) {
-            await retry.click();
-          }
-          return agentPage.getByTestId("internal-note-item").filter({ hasText: body }).count();
-        },
-        { timeout: 60_000 },
-      )
-      .toBe(1);
+    const retry = agentPage.getByRole("button", { name: "Retry" });
+    if (await retry.isVisible().catch(() => false)) {
+      await retry.click();
+    }
+    await expect(agentPage.getByTestId("internal-note-item").filter({ hasText: body })).toHaveCount(
+      1,
+      { timeout: 60_000 },
+    );
 
     await visitorContext.close();
     await agentContext.close();
