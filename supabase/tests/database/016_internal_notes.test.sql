@@ -1123,13 +1123,25 @@ SELECT ok(
   'soft-delete old tombstone note'
 );
 
--- Backdate updated_at so it falls outside a future watermark window.
+-- Backdate as table owner (postgres). Authenticated sessions cannot ALTER triggers.
+SELECT tests.clear_auth();
+
 ALTER TABLE public.internal_notes DISABLE TRIGGER trg_internal_notes_set_updated_at;
 UPDATE public.internal_notes
 SET updated_at = now() - interval '2 days',
     deleted_at = now() - interval '2 days'
 WHERE id = tests.fixture('note_old_tomb')::uuid;
 ALTER TABLE public.internal_notes ENABLE TRIGGER trg_internal_notes_set_updated_at;
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  're-auth agent for watermarked catch-up asserts'
+);
 
 SELECT is(
   (
