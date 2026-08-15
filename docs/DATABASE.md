@@ -454,11 +454,13 @@ Operator-only private notes on conversations. See `docs/INTERNAL-NOTES.md` and A
 | client_note_id | UUID | NULL | Create idempotency via atomic `INSERT … ON CONFLICT` |
 | search_vector | TSVECTOR | GENERATED | GIN-indexed for search / PR #32 |
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL | |
-| deleted_at | TIMESTAMPTZ | NULL | Soft delete (authoritative list returns tombstones) |
+| deleted_at | TIMESTAMPTZ | NULL | Soft delete; catch-up returns watermarked tombstones |
 
 **Related:** `internal_note_mentions (note_id, mentioned_member_id)` unique; messaging-role targets only; edit replaces the mention set (no sticky union).
 
-**RPCs:** `list_internal_notes` (supports `authoritative` + `catch_up_since` → `tombstones`), `create_internal_note`, `update_internal_note` (no-op when body + mentions unchanged; concurrent edits are LWW), `soft_delete_internal_note`, `get_internal_note`.
+**RPCs:** `list_internal_notes` (supports `authoritative` + required `catch_up_since` for bounded `tombstones`), `create_internal_note` (lifetime-unique `client_note_id`; soft-deleted conflict → `NOTE_DELETED`), `update_internal_note` (no-op when body + mentions unchanged; concurrent edits are LWW), `soft_delete_internal_note`, `get_internal_note`.
+
+**Indexes (notes):** conversation created (active), workspace updated (active), search GIN (active), author (active), **tombstones** `(workspace_id, conversation_id, updated_at DESC, id DESC) WHERE deleted_at IS NOT NULL`.
 
 **RLS:** SELECT for owner/admin/agent only. No direct writes. Visitors/viewers have no access. Note/mention timeline events are hidden from viewers (RLS + list RPC).
 
@@ -566,7 +568,7 @@ In-app notifications for workspace members. Table shipped with internal notes (m
 
 **Indexes:**
 - `idx_notifications_recipient` ON `(recipient_id, read_at NULLS FIRST, created_at DESC)`
-- Partial unique for mention dedupe: `(workspace_id, recipient_id, resource_id)` WHERE `type = 'mention' AND resource_type = 'internal_note'`
+- Non-unique partial index `idx_notifications_mention_note_recipient` ON `(workspace_id, recipient_id, resource_id, created_at DESC)` WHERE `type = 'mention' AND resource_type = 'internal_note'` — supports mention history lookups. **Re-adding a mention after removal inserts a new mention row and notifies again**; there is intentionally no lifetime unique constraint that would suppress future mention notifications.
 
 **RLS:** SELECT for recipient only.
 

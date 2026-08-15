@@ -85,6 +85,13 @@ CREATE INDEX idx_internal_notes_author
   ON public.internal_notes (author_member_id)
   WHERE deleted_at IS NULL;
 
+-- Tombstone / catch-up scans: soft-deleted rows by conversation + updated_at.
+-- Soft-delete bumps updated_at via trg_internal_notes_set_updated_at, so
+-- catch_up_since filters on updated_at use this partial index.
+CREATE INDEX idx_internal_notes_conversation_tombstones
+  ON public.internal_notes (workspace_id, conversation_id, updated_at DESC, id DESC)
+  WHERE deleted_at IS NOT NULL;
+
 CREATE TRIGGER trg_internal_notes_set_updated_at
   BEFORE UPDATE ON public.internal_notes
   FOR EACH ROW
@@ -538,6 +545,12 @@ BEGIN
         RAISE EXCEPTION 'NOTE_NOT_FOUND: Idempotent create lost the note row.';
       END IF;
 
+      -- Lifetime unique client_note_id: never treat a soft-deleted row as a
+      -- successful active create (lost-response retry after delete).
+      IF v_note.deleted_at IS NOT NULL THEN
+        RAISE EXCEPTION 'NOTE_DELETED: This note was deleted. Save again as a new note.';
+      END IF;
+
       RETURN app_private.build_internal_note_item(v_note);
     END IF;
   ELSE
@@ -833,8 +846,9 @@ BEGIN
     v_after_id := (p_query -> 'after' ->> 'id')::uuid;
   END IF;
 
-  -- Authoritative reconnect: return full active page (newest limit) as source of truth,
-  -- plus soft-delete tombstones updated since catch_up_since (or all deleted in window).
+  -- Authoritative reconnect: newest active page (bounded) + tombstones since
+  -- catch_up_since only. Clients must pass catch_up_since; when omitted, tombstones
+  -- are empty (no unbounded deleted-row scan). Active page remains bounded by limit.
   IF v_authoritative THEN
     SELECT COALESCE(
       jsonb_agg(app_private.build_internal_note_item(n) ORDER BY n.created_at ASC, n.id ASC),
@@ -851,20 +865,18 @@ BEGIN
       LIMIT v_limit
     ) n;
 
-    SELECT COALESCE(
-      jsonb_agg(app_private.build_internal_note_item(n) ORDER BY n.updated_at ASC, n.id ASC),
-      '[]'::jsonb
-    )
-    INTO v_tombstones
-    FROM public.internal_notes n
-    WHERE n.workspace_id = p_workspace_id
-      AND n.conversation_id = p_conversation_id
-      AND n.deleted_at IS NOT NULL
-      AND (
-        v_catch_up_since IS NULL
-        OR n.updated_at >= v_catch_up_since
-        OR n.deleted_at >= v_catch_up_since
-      );
+    IF v_catch_up_since IS NOT NULL THEN
+      SELECT COALESCE(
+        jsonb_agg(app_private.build_internal_note_item(n) ORDER BY n.updated_at ASC, n.id ASC),
+        '[]'::jsonb
+      )
+      INTO v_tombstones
+      FROM public.internal_notes n
+      WHERE n.workspace_id = p_workspace_id
+        AND n.conversation_id = p_conversation_id
+        AND n.deleted_at IS NOT NULL
+        AND n.updated_at >= v_catch_up_since;
+    END IF;
 
     RETURN jsonb_build_object(
       'items', COALESCE(v_items, '[]'::jsonb),
@@ -924,7 +936,7 @@ BEGIN
     WHERE n.workspace_id = p_workspace_id
       AND n.conversation_id = p_conversation_id
       AND n.deleted_at IS NOT NULL
-      AND (n.updated_at >= v_catch_up_since OR n.deleted_at >= v_catch_up_since);
+      AND n.updated_at >= v_catch_up_since;
   END IF;
 
   RETURN jsonb_build_object(

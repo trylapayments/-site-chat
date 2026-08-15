@@ -358,3 +358,52 @@ export function splitNoteBodyWithMentions(
 export function createClientNoteId(): string {
   return crypto.randomUUID();
 }
+
+/**
+ * Seed catch-up watermark from known notes (SSR / local state).
+ * Uses the max updated_at so subsequent catch-up only fetches newer changes
+ * and tombstones — never an unbounded deleted-row scan.
+ */
+export function seedNotesCatchUpWatermark(
+  notes: readonly InternalNote[],
+  fallbackIso: string = new Date().toISOString(),
+): string {
+  let maxMs = Number.NaN;
+  for (const note of notes) {
+    const updated = Date.parse(note.updated_at);
+    if (Number.isFinite(updated) && (!Number.isFinite(maxMs) || updated > maxMs)) {
+      maxMs = updated;
+    }
+  }
+  if (!Number.isFinite(maxMs)) {
+    return fallbackIso;
+  }
+  return new Date(maxMs).toISOString();
+}
+
+/**
+ * Advance watermark after a successful catch-up. Never moves backward.
+ * Considers active items + tombstones so deletes advance the cursor too.
+ */
+export function advanceNotesCatchUpWatermark(
+  currentWatermark: string,
+  items: readonly InternalNote[],
+  tombstones: readonly InternalNote[] = [],
+  responseIso: string = new Date().toISOString(),
+): string {
+  let maxMs = Date.parse(currentWatermark);
+  if (!Number.isFinite(maxMs)) {
+    maxMs = 0;
+  }
+  for (const note of [...items, ...tombstones]) {
+    const updated = Date.parse(note.updated_at);
+    if (Number.isFinite(updated) && updated > maxMs) {
+      maxMs = updated;
+    }
+  }
+  const responseMs = Date.parse(responseIso);
+  if (Number.isFinite(responseMs) && responseMs > maxMs) {
+    maxMs = responseMs;
+  }
+  return new Date(maxMs).toISOString();
+}

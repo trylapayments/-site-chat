@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  advanceNotesCatchUpWatermark,
   applyInternalNoteRealtimeChange,
   internalNoteSchema,
   reconcileNotesCatchUp,
+  seedNotesCatchUpWatermark,
   type ConnectionState,
   type InternalNote,
 } from "@site-chat/shared";
@@ -64,7 +66,9 @@ export function useLiveInternalNotes(input: {
   const catchUpRequestRef = useRef(0);
   const conversationIdRef = useRef(input.conversationId);
   conversationIdRef.current = input.conversationId;
-  const catchUpSinceRef = useRef<string>(new Date().toISOString());
+  const catchUpSinceRef = useRef<string>(
+    seedNotesCatchUpWatermark(input.initialNotes),
+  );
   const initialNotesRef = useRef(input.initialNotes);
   initialNotesRef.current = input.initialNotes;
   /**
@@ -99,88 +103,90 @@ export function useLiveInternalNotes(input: {
     invalidateInFlight();
     localTombstoneIdsRef.current = new Set();
     setNotes(initialNotesRef.current);
-    catchUpSinceRef.current = new Date().toISOString();
+    catchUpSinceRef.current = seedNotesCatchUpWatermark(
+      initialNotesRef.current,
+    );
     setError(null);
     setConnectionState("connecting");
   }, [input.conversationId, invalidateInFlight]);
 
-  const catchUp = useCallback(
-    async (mode: "authoritative" | "incremental" = "authoritative") => {
-      if (!input.enabled) {
+  const catchUp = useCallback(async () => {
+    if (!input.enabled) {
+      return;
+    }
+
+    const generation = conversationGenerationRef.current;
+    const requestId = ++catchUpRequestRef.current;
+    const conversationId = input.conversationId;
+    const watermark = catchUpSinceRef.current;
+
+    try {
+      const result = await listInternalNotesAction(input.workspaceSlug, {
+        conversationId,
+        limit: 100,
+        authoritative: true,
+        // Always pass watermark so tombstone scans stay bounded.
+        catch_up_since: watermark,
+      });
+
+      // Ignore stale responses: a newer catch-up or conversation switch won.
+      if (
+        requestId !== catchUpRequestRef.current ||
+        generation !== conversationGenerationRef.current ||
+        conversationId !== conversationIdRef.current
+      ) {
         return;
       }
 
-      const generation = conversationGenerationRef.current;
-      const requestId = ++catchUpRequestRef.current;
-      const conversationId = input.conversationId;
-
-      try {
-        const result = await listInternalNotesAction(input.workspaceSlug, {
-          conversationId,
-          limit: 100,
-          authoritative: mode === "authoritative",
-          catch_up_since:
-            mode === "authoritative" ? undefined : catchUpSinceRef.current,
-        });
-
-        // Ignore stale responses: a newer catch-up or conversation switch won.
-        // Do not AbortController-cancel in-flight list calls — rapid refresh
-        // (tab focus, Retry, CDC) would starve and leave the panel empty.
-        if (
-          requestId !== catchUpRequestRef.current ||
-          generation !== conversationGenerationRef.current ||
-          conversationId !== conversationIdRef.current
-        ) {
-          return;
-        }
-
-        if (!result.success) {
-          setError(result.message);
-          return;
-        }
-
-        setError(null);
-        const localTombstones: InternalNote[] = [
-          ...localTombstoneIdsRef.current,
-        ].map((id) => ({
-          id,
-          workspace_id: input.workspaceId,
-          conversation_id: conversationId,
-          author_member_id: null,
-          author_display_label: "Former member",
-          body: "(deleted)",
-          client_note_id: null,
-          created_at: new Date(0).toISOString(),
-          updated_at: new Date(0).toISOString(),
-          deleted_at: new Date().toISOString(),
-          mentions: [],
-        }));
-        const tombstones = [...result.data.tombstones, ...localTombstones];
-        setNotes((current) =>
-          reconcileNotesCatchUp(current, result.data.items, tombstones, {
-            authoritativeReplace:
-              mode === "authoritative" || result.data.authoritative,
-          }),
-        );
-        catchUpSinceRef.current = new Date().toISOString();
-      } catch (err) {
-        if (
-          requestId !== catchUpRequestRef.current ||
-          generation !== conversationGenerationRef.current ||
-          conversationId !== conversationIdRef.current
-        ) {
-          return;
-        }
-        setError(err instanceof Error ? err.message : "Unable to load notes.");
+      if (!result.success) {
+        setError(result.message);
+        return;
       }
-    },
-    [
-      input.conversationId,
-      input.enabled,
-      input.workspaceId,
-      input.workspaceSlug,
-    ],
-  );
+
+      setError(null);
+      const localTombstones: InternalNote[] = [
+        ...localTombstoneIdsRef.current,
+      ].map((id) => ({
+        id,
+        workspace_id: input.workspaceId,
+        conversation_id: conversationId,
+        author_member_id: null,
+        author_display_label: "Former member",
+        body: "(deleted)",
+        client_note_id: null,
+        created_at: new Date(0).toISOString(),
+        updated_at: new Date(0).toISOString(),
+        deleted_at: new Date().toISOString(),
+        mentions: [],
+      }));
+      const tombstones = [...result.data.tombstones, ...localTombstones];
+      setNotes((current) =>
+        reconcileNotesCatchUp(current, result.data.items, tombstones, {
+          authoritativeReplace: true,
+        }),
+      );
+      // Advance watermark only after a successful apply for this conversation.
+      catchUpSinceRef.current = advanceNotesCatchUpWatermark(
+        watermark,
+        result.data.items,
+        result.data.tombstones,
+      );
+    } catch (err) {
+      if (
+        requestId !== catchUpRequestRef.current ||
+        generation !== conversationGenerationRef.current ||
+        conversationId !== conversationIdRef.current
+      ) {
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Unable to load notes.");
+    }
+  }, [
+    input.conversationId,
+    input.enabled,
+    input.workspaceId,
+    input.workspaceSlug,
+  ]);
 
   useEffect(() => {
     if (!input.enabled) {
@@ -194,8 +200,8 @@ export function useLiveInternalNotes(input: {
       onConnectionChange: (status) => {
         setConnectionState(status);
         if (status === "connected") {
-          // Authoritative reload reconciles missed soft-deletes (tombstones).
-          void catchUp("authoritative");
+          // Watermarked authoritative catch-up reconciles missed soft-deletes.
+          void catchUp();
         }
       },
       onNoteChange: (payload) => {
@@ -204,12 +210,13 @@ export function useLiveInternalNotes(input: {
         if (typeof row.id === "string" && row.deleted_at) {
           localTombstoneIdsRef.current.add(row.id);
           setNotes((current) => current.filter((note) => note.id !== row.id));
-          void catchUp("authoritative");
+          // Lightweight local merge is enough; no full resync.
           return;
         }
         const partial = rowToPartialNote(row);
         if (!partial) {
-          void catchUp("authoritative");
+          // Incomplete CDC row — resync once with watermark.
+          void catchUp();
           return;
         }
         if (
@@ -220,15 +227,13 @@ export function useLiveInternalNotes(input: {
           setNotes((current) =>
             current.filter((note) => note.id !== partial.id),
           );
-          void catchUp("authoritative");
           return;
         }
-        // Optimistic CDC merge so peers see the note even if catch-up is delayed.
+        // Optimistic CDC merge; mentions/author label may be incomplete until
+        // tab focus / reconnect catch-up, but avoid per-event DB resync.
         setNotes((current) =>
           applyInternalNoteRealtimeChange(current, partial),
         );
-        // Mentions / author label may be incomplete on CDC — refresh.
-        void catchUp("authoritative");
       },
     });
 
@@ -249,7 +254,7 @@ export function useLiveInternalNotes(input: {
                 ? row.title
                 : "You were mentioned in an internal note";
             setMentionFlash(title);
-            void catchUp("authoritative");
+            // Flash only — note CDC / focus catch-up loads the body.
           },
         })
       : () => undefined;
@@ -280,28 +285,22 @@ export function useLiveInternalNotes(input: {
     };
   }, [mentionFlash]);
 
-  // Tab focus refresh: peers may miss CDC under multi-tab load; list is authoritative.
+  // Tab focus / visibility: peers may miss CDC under multi-tab load.
   useEffect(() => {
     if (!input.enabled || input.active === false) {
       return;
     }
-    void catchUp("authoritative");
+    void catchUp();
 
     function refreshOnVisible() {
       if (document.visibilityState === "visible") {
-        void catchUp("authoritative");
+        void catchUp();
       }
     }
 
-    function refreshOnFocus() {
-      void catchUp("authoritative");
-    }
-
     document.addEventListener("visibilitychange", refreshOnVisible);
-    window.addEventListener("focus", refreshOnFocus);
     return () => {
       document.removeEventListener("visibilitychange", refreshOnVisible);
-      window.removeEventListener("focus", refreshOnFocus);
     };
   }, [catchUp, input.active, input.enabled, input.conversationId]);
 
@@ -314,7 +313,7 @@ export function useLiveInternalNotes(input: {
     markNoteDeleted,
     clearLocalTombstone,
     retry: () => {
-      void catchUp("authoritative");
+      void catchUp();
     },
   };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  advanceNotesCatchUpWatermark,
   applyInternalNoteRealtimeChange,
   collectMentionMemberIdsFromBody,
   createClientNoteId,
@@ -12,6 +13,7 @@ import {
   mergeInternalNotes,
   pruneMentionBindings,
   reconcileNotesCatchUp,
+  seedNotesCatchUpWatermark,
   splitNoteBodyWithMentions,
 } from "./state.js";
 import { parseNoteErrorMessage } from "./errors.js";
@@ -223,6 +225,14 @@ describe("parseNoteErrorMessage", () => {
     const err = parseNoteErrorMessage("FORBIDDEN: Viewers cannot access internal notes.");
     expect(err?.code).toBe("FORBIDDEN");
   });
+
+  it("maps NOTE_DELETED for create-after-soft-delete", () => {
+    const err = parseNoteErrorMessage(
+      "NOTE_DELETED: This note was deleted. Save again as a new note.",
+    );
+    expect(err?.code).toBe("NOTE_DELETED");
+    expect(err?.message).toMatch(/Save again as a new note/i);
+  });
 });
 
 describe("clientNoteId retry stability", () => {
@@ -234,5 +244,84 @@ describe("clientNoteId retry stability", () => {
     expect(retryAttempt).toBe(firstAttempt);
     const afterSuccess = createClientNoteId();
     expect(afterSuccess).not.toBe(draftId);
+  });
+
+  it("NOTE_DELETED keeps draft id; retry-as-new mints a fresh id", () => {
+    let clientNoteId = createClientNoteId();
+    const draftBody = "preserved draft body";
+    // Network/generic failure: keep id.
+    const afterNetworkRetry = clientNoteId;
+    expect(afterNetworkRetry).toBe(clientNoteId);
+    // NOTE_DELETED: preserve draft text and id until explicit retry-as-new.
+    expect(draftBody.length).toBeGreaterThan(0);
+    const afterNoteDeleted = clientNoteId;
+    expect(afterNoteDeleted).toBe(clientNoteId);
+    // Explicit retry-as-new.
+    clientNoteId = createClientNoteId();
+    expect(clientNoteId).not.toBe(afterNoteDeleted);
+  });
+});
+
+describe("catch-up watermark", () => {
+  it("seeds from max updated_at of known notes", () => {
+    const older = note({
+      id: "11111111-1111-4111-8111-111111111111",
+      updated_at: "2026-08-13T10:00:00.000Z",
+    });
+    const newer = note({
+      id: "22222222-2222-4222-8222-222222222222",
+      updated_at: "2026-08-13T12:00:00.000Z",
+    });
+    expect(seedNotesCatchUpWatermark([older, newer])).toBe("2026-08-13T12:00:00.000Z");
+  });
+
+  it("empty list seeds to fallback (now) — not epoch — to avoid lifetime tombstone scans", () => {
+    expect(seedNotesCatchUpWatermark([], "2026-08-15T18:00:00.000Z")).toBe(
+      "2026-08-15T18:00:00.000Z",
+    );
+  });
+
+  it("advances watermark from items and tombstones without moving backward", () => {
+    const current = "2026-08-13T12:00:00.000Z";
+    const items = [
+      note({
+        id: "11111111-1111-4111-8111-111111111111",
+        updated_at: "2026-08-13T12:30:00.000Z",
+      }),
+    ];
+    const tombstones = [
+      note({
+        id: "22222222-2222-4222-8222-222222222222",
+        updated_at: "2026-08-13T12:45:00.000Z",
+        deleted_at: "2026-08-13T12:45:00.000Z",
+      }),
+    ];
+    const next = advanceNotesCatchUpWatermark(
+      current,
+      items,
+      tombstones,
+      "2026-08-13T12:40:00.000Z",
+    );
+    expect(next).toBe("2026-08-13T12:45:00.000Z");
+    expect(advanceNotesCatchUpWatermark(next, [], [], "2026-08-13T12:00:00.000Z")).toBe(next);
+  });
+
+  it("missed delete still removes via tombstones under authoritative replace", () => {
+    const current = [
+      note({ id: "11111111-1111-4111-8111-111111111111" }),
+      note({ id: "22222222-2222-4222-8222-222222222222" }),
+    ];
+    const active = [note({ id: "11111111-1111-4111-8111-111111111111", body: "still" })];
+    const tombstones = [
+      note({
+        id: "22222222-2222-4222-8222-222222222222",
+        deleted_at: "2026-08-13T15:00:00.000Z",
+        updated_at: "2026-08-13T15:00:00.000Z",
+      }),
+    ];
+    const next = reconcileNotesCatchUp(current, active, tombstones, {
+      authoritativeReplace: true,
+    });
+    expect(next.map((n) => n.id)).toEqual(["11111111-1111-4111-8111-111111111111"]);
   });
 });

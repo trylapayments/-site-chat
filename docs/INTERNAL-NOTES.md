@@ -89,8 +89,9 @@ Enforcement: Server Action capability + `app_private.require_notes_access` / `re
 
 ### Create idempotency
 
-- Client generates one `clientNoteId` when a draft begins; reuses it across submit / transport retry / ambiguous retry; resets only after authoritative success or explicit draft reset.
-- Server uses atomic `INSERT … ON CONFLICT (conversation_id, client_note_id) … DO NOTHING`. Concurrent identical keys produce exactly one durable note, one created timeline event, and mention/notification side effects only for the winner.
+- Client generates one `clientNoteId` when a draft begins; reuses it across submit / transport retry / ambiguous retry; resets only after authoritative success or explicit draft reset (`retry as new`).
+- Server uses atomic `INSERT … ON CONFLICT (conversation_id, client_note_id) … DO NOTHING`. Concurrent identical keys on an **active** row produce exactly one durable note, one created timeline event, and mention/notification side effects only for the winner.
+- `client_note_id` is lifetime-unique (partial unique index includes soft-deleted rows). If a retry conflicts with a soft-deleted row, the server raises **`NOTE_DELETED`** and does **not** return success, resurrect content, or emit new timeline/mention/notification side effects. The client keeps the draft and offers **Save as new note** (fresh `clientNoteId`).
 
 ### Concurrent edits (v1)
 
@@ -124,11 +125,12 @@ Typed errors (stable prefixes → `NoteError` in `@site-chat/shared`):
 - `internal_notes` and `notifications` in `supabase_realtime` with `REPLICA IDENTITY FULL`
 - Operator thread notes channel: INSERT/UPDATE filtered by `conversation_id`
 - Soft delete arrives as UPDATE with `deleted_at`
-- On connect / CDC: **authoritative** catch-up via `list_internal_notes` with `authoritative: true`, returning active items + soft-delete **tombstones**. Client `reconcileNotesCatchUp` applies tombstones so a delete missed while disconnected is removed; CDC creates that arrive during an in-flight catch-up are retained (not wiped by a stale empty page)
-- Soft-delete also records a **session-local tombstone** and aborts in-flight catch-up so a response that still lists the note cannot resurrect it after the operator deleted it
-- Selecting the Internal Notes tab triggers catch-up so peers load creates even if CDC was delayed
-- Conversation switches bump a generation counter so stale catch-up responses never merge into the wrong thread (latest request-id wins; in-flight list calls are not AbortController-cancelled, which previously starved refreshes under rapid Retry/focus)
-- Mentioned operators also receive notification INSERT on `recipient_id`
+- **CDC:** apply lightweight local merge when the row parses (including soft-delete removal). Do **not** fire a full DB catch-up on every CDC/mention flash.
+- **Catch-up** (connect, notes-tab focus/visibility, Retry): `list_internal_notes` with `authoritative: true` **and** a client watermark `catch_up_since`. Returns the newest active page (bounded) plus soft-delete **tombstones with `updated_at >= catch_up_since` only** — never an unbounded deleted-row scan. Index: `idx_internal_notes_conversation_tombstones` on `(workspace_id, conversation_id, updated_at DESC, id DESC) WHERE deleted_at IS NOT NULL`.
+- Client seeds the watermark from `max(updated_at)` of SSR/local notes (or “now” when empty), advances it only after a successful catch-up apply for the current conversation generation, and ignores stale responses after a conversation switch.
+- Soft-delete also records a **session-local tombstone** and invalidates in-flight catch-up so a response that still lists the note cannot resurrect it after the operator deleted it
+- Conversation switches bump a generation counter so stale catch-up responses never merge into the wrong thread (latest request-id wins; in-flight list calls are not AbortController-cancelled)
+- Mentioned operators also receive notification INSERT on `recipient_id` (flash only; body comes from note CDC / focus catch-up)
 
 Visitors never subscribe to these tables (RLS + no widget wiring). Note bodies never appear in widget APIs, visitor Realtime, or visitor-facing timeline.
 
@@ -174,4 +176,4 @@ Notes use amber-tinted surfaces, author avatar initials, timestamps, mention hig
 - No full notification center UI (durable rows + realtime flash only)
 - Author display label is email-based until `display_name` lands
 - Notes are not mixed into the message transcript (separate tab by design)
-- Authoritative catch-up tombstones cover soft-deletes updated/deleted in the catch-up window; clients should prefer authoritative reconnect over inferring deletes from a truncated active page alone
+- Authoritative catch-up always sends a `catch_up_since` watermark; tombstones are limited to soft-deletes with `updated_at >= watermark` (supported by `idx_internal_notes_conversation_tombstones`). Missed deletes in-window still reconcile; full-history tombstone scans are not used.

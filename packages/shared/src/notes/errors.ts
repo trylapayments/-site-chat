@@ -66,7 +66,7 @@ function defaultMessageForCode(code: NoteErrorCode): string {
     case "NOTE_NOT_FOUND":
       return "Internal note not found.";
     case "NOTE_DELETED":
-      return "This note has been deleted.";
+      return "This note was deleted. Save again as a new note.";
     case "CONVERSATION_NOT_FOUND":
       return "Conversation not found.";
     case "MEMBER_NOT_FOUND":

@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(80);
+SELECT plan(98);
 
 TRUNCATE tests.fixtures;
 
@@ -713,15 +713,30 @@ SELECT is(
   'list excludes soft-deleted notes'
 );
 
-SELECT ok(
+SELECT is(
   jsonb_array_length(
     public.list_internal_notes(
       tests.fixture('workspace_a')::uuid,
       tests.fixture('conversation_a')::uuid,
       jsonb_build_object('authoritative', true)
     )->'tombstones'
+  ),
+  0,
+  'authoritative without catch_up_since returns no tombstones (bounded)'
+);
+
+SELECT ok(
+  jsonb_array_length(
+    public.list_internal_notes(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      jsonb_build_object(
+        'authoritative', true,
+        'catch_up_since', (now() - interval '1 hour')::text
+      )
+    )->'tombstones'
   ) >= 1,
-  'authoritative list returns soft-delete tombstones'
+  'authoritative with catch_up_since returns soft-delete tombstones in window'
 );
 
 SELECT ok(
@@ -977,6 +992,231 @@ SELECT throws_like(
   $$,
   '%',
   'unauthenticated cannot list notes'
+);
+
+-- ---------------------------------------------------------------------------
+-- Create after soft-delete with same client_note_id → NOTE_DELETED
+-- ---------------------------------------------------------------------------
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  'authenticate agent A for create-after-delete idempotency'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_internal_note(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      'idempotent-deleted-body',
+      'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'::uuid,
+      ARRAY[tests.fixture('agent_member_a')::uuid]
+    );
+  $$,
+  'create note for soft-delete idempotency case'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'note_idem_del', id::text
+FROM public.internal_notes
+WHERE client_note_id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'::uuid
+LIMIT 1;
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  're-auth agent A to soft-delete idempotency note'
+);
+
+SELECT ok(
+  (public.soft_delete_internal_note(
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_idem_del')::uuid
+  )->>'deleted_at') IS NOT NULL,
+  'soft-delete note used for create-after-delete test'
+);
+
+SELECT throws_like(
+  $$
+    SELECT public.create_internal_note(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      'idempotent-deleted-body-retry',
+      'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'::uuid,
+      NULL
+    );
+  $$,
+  '%NOTE_DELETED%',
+  'create with soft-deleted client_note_id raises NOTE_DELETED'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.internal_notes
+    WHERE client_note_id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'::uuid
+      AND deleted_at IS NULL
+  ),
+  0,
+  'create-after-delete does not resurrect an active note'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.customer_timeline_events
+    WHERE event_type = 'internal_note_created'
+      AND (metadata_json->>'note_id') = tests.fixture('note_idem_del')
+  ),
+  1,
+  'create-after-delete does not duplicate created timeline event'
+);
+
+-- Watermarked tombstones: old deletes excluded
+SELECT lives_ok(
+  $$
+    SELECT public.create_internal_note(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      'old-tombstone-note',
+      'ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid,
+      NULL
+    );
+  $$,
+  'create note that will become an old tombstone'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'note_old_tomb', id::text
+FROM public.internal_notes
+WHERE client_note_id = 'ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid
+LIMIT 1;
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  'auth for old tombstone soft-delete'
+);
+
+SELECT ok(
+  (public.soft_delete_internal_note(
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_old_tomb')::uuid
+  )->>'deleted_at') IS NOT NULL,
+  'soft-delete old tombstone note'
+);
+
+-- Backdate updated_at so it falls outside a future watermark window.
+ALTER TABLE public.internal_notes DISABLE TRIGGER trg_internal_notes_set_updated_at;
+UPDATE public.internal_notes
+SET updated_at = now() - interval '2 days',
+    deleted_at = now() - interval '2 days'
+WHERE id = tests.fixture('note_old_tomb')::uuid;
+ALTER TABLE public.internal_notes ENABLE TRIGGER trg_internal_notes_set_updated_at;
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM jsonb_array_elements(
+      public.list_internal_notes(
+        tests.fixture('workspace_a')::uuid,
+        tests.fixture('conversation_a')::uuid,
+        jsonb_build_object(
+          'authoritative', true,
+          'catch_up_since', (now() - interval '1 hour')::text
+        )
+      )->'tombstones'
+    ) AS t
+    WHERE t->>'id' = tests.fixture('note_old_tomb')
+  ),
+  0,
+  'authoritative catch_up_since excludes old tombstones'
+);
+
+SELECT ok(
+  (
+    SELECT count(*)::integer
+    FROM jsonb_array_elements(
+      public.list_internal_notes(
+        tests.fixture('workspace_a')::uuid,
+        tests.fixture('conversation_a')::uuid,
+        jsonb_build_object(
+          'authoritative', true,
+          'catch_up_since', (now() - interval '1 hour')::text
+        )
+      )->'tombstones'
+    ) AS t
+    WHERE t->>'id' = tests.fixture('note_idem_del')
+  ) >= 1,
+  'authoritative catch_up_since includes recent tombstones'
+);
+
+-- Soft-deleted notes excluded from inbox search
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM jsonb_array_elements(
+      public.list_conversations(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'idempotent-deleted-body')
+      )->'items'
+    ) AS item
+  ),
+  0,
+  'soft-deleted note body excluded from inbox search'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'public.create_internal_note(uuid, uuid, text, uuid, uuid[])',
+    'execute'
+  ),
+  'authenticated can execute public.create_internal_note'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'public.get_internal_note(uuid, uuid)',
+    'execute'
+  ),
+  'authenticated can execute public.get_internal_note'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'public.update_internal_note(uuid, uuid, text, uuid[])',
+    'execute'
+  ),
+  'authenticated can execute public.update_internal_note'
+);
+
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'public.soft_delete_internal_note(uuid, uuid)',
+    'execute'
+  ),
+  'authenticated can execute public.soft_delete_internal_note'
 );
 
 SELECT * FROM finish();

@@ -251,6 +251,7 @@ function NoteComposer({
   onCreated: (note: InternalNote) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const clientNoteIdRef = useRef(createClientNoteId());
@@ -268,6 +269,16 @@ function NoteComposer({
   function clearDraft() {
     resetDraft("");
     clientNoteIdRef.current = createClientNoteId();
+    setError(null);
+    setErrorCode(null);
+  }
+
+  function retryAsNew() {
+    // Explicit new create after NOTE_DELETED — mint a fresh idempotency key.
+    clientNoteIdRef.current = createClientNoteId();
+    setError(null);
+    setErrorCode(null);
+    submit();
   }
 
   function submit() {
@@ -276,6 +287,7 @@ function NoteComposer({
     const clientNoteId = clientNoteIdRef.current;
     const mentionIds = mentionIdsForSubmit(body);
     setError(null);
+    setErrorCode(null);
     setIsPending(true);
     void (async () => {
       try {
@@ -287,6 +299,9 @@ function NoteComposer({
         });
         if (!result.success) {
           setError(result.message);
+          setErrorCode(result.code ?? null);
+          // NOTE_DELETED and other errors must preserve the draft + clientNoteId
+          // (except retry-as-new, which mints a new id explicitly).
           return;
         }
         if (result.data && "id" in result.data && "body" in result.data) {
@@ -295,6 +310,7 @@ function NoteComposer({
         clearDraft();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to save note.");
+        setErrorCode(null);
       } finally {
         setIsPending(false);
       }
@@ -350,19 +366,38 @@ function NoteComposer({
       />
       <div className="flex items-center justify-between gap-2">
         <p className="text-muted-foreground text-xs">{messages.mentionHint}</p>
-        <Button
-          type="button"
-          size="sm"
-          data-testid="internal-note-send"
-          disabled={isPending || body.trim().length === 0}
-          onClick={submit}
-        >
-          {isPending ? messages.saving : messages.send}
-        </Button>
+        <div className="flex items-center gap-2">
+          {errorCode === "NOTE_DELETED" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              data-testid="internal-note-retry-as-new"
+              disabled={isPending || body.trim().length === 0}
+              onClick={retryAsNew}
+            >
+              {messages.retryAsNew}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            data-testid="internal-note-send"
+            disabled={isPending || body.trim().length === 0}
+            onClick={submit}
+          >
+            {isPending ? messages.saving : messages.send}
+          </Button>
+        </div>
       </div>
       {error ? (
-        <p className="text-destructive text-sm" role="alert">
-          {error}
+        <p
+          className="text-destructive text-sm"
+          role="alert"
+          data-testid="internal-note-composer-error"
+          data-error-code={errorCode ?? undefined}
+        >
+          {errorCode === "NOTE_DELETED" ? messages.noteDeletedRetry : error}
         </p>
       ) : null}
     </div>

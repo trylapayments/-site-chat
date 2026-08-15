@@ -18,6 +18,8 @@ export const internalNotesMessagesEn = {
   cancel: "Cancel",
   delete: "Delete",
   deleted: "Note deleted",
+  noteDeletedRetry: "This note was deleted. Save again as a new note.",
+  retryAsNew: "Save as new note",
   mentionHint: "Type @ to mention a teammate",
   mentionEmpty: "No teammates match",
   viewerDenied: "Viewers cannot access internal notes.",
