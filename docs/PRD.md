@@ -72,7 +72,10 @@ Roles are scoped to a **workspace**. A single user may belong to multiple worksp
 | Invite and remove members | ✓ | ✓ | — | — |
 | Change member roles | ✓ | ✓ | — | — |
 | Configure widget and domains | ✓ | ✓ | — | — |
-| Manage canned responses | ✓ | ✓ | ✓ | — |
+| Manage shared canned responses | ✓ | ✓ | — | — |
+| Manage own personal canned responses | ✓ | ✓ | ✓ | — |
+| Insert and favorite canned responses | ✓ | ✓ | ✓ | — |
+| View canned responses | ✓ | ✓ | ✓ | ✓ |
 | Send and receive messages | ✓ | ✓ | ✓ | — |
 | Assign and transfer conversations | ✓ | ✓ | ✓ | — |
 | View conversations | ✓ | ✓ | ✓ | ✓ |
@@ -214,10 +217,12 @@ Platform operators (Site Chat staff) use a separate internal admin surface not e
 **Requirements:**
 
 - Scoped to workspace; not shared across workspaces.
-- Fields: title, body (plain text with variable placeholders), shortcut (e.g., `/greeting`), category (optional), created by, usage count.
-- Variables for MVP: `{{visitor.name}}`, `{{agent.name}}`, `{{workspace.name}}`.
+- Two visibility scopes: **shared** snippets curated for the workspace, and **personal** snippets private to one member.
+- Fields: title, body (plain text with variable placeholders), shortcut (e.g., `/greeting`), folder (optional), created by, usage count, per-member favorite.
+- Variables for MVP: `{{visitor.name}}`, `{{visitor.email}}`, `{{operator.name}}`, `{{workspace.name}}`, `{{conversation.id}}`. `{{agent.name}}` is accepted as an alias of `{{operator.name}}`, which is the canonical spelling because the dashboard calls members operators.
+- Variables are substituted when a snippet is inserted, not when it is saved; unknown tokens are left as typed.
 - Accessible via shortcut autocomplete in the message composer.
-- CRUD restricted to Admin and above; Agents have read and use access.
+- CRUD for shared snippets restricted to Admin and above; Agents have read and use access plus full CRUD over their own personal snippets. Viewers may read the library but cannot insert or favorite.
 
 ### 4.11 Notifications
 

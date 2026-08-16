@@ -1,6 +1,6 @@
 # Canned Responses
 
-**Status:** Database layer implemented (v1); dashboard UI and Server Actions not yet built  
+**Status:** Implemented (v1) — database, shared schemas, Server Actions, settings UI and composer insertion  
 **Last updated:** 2026-08-16
 
 Related: [ARCHITECTURE.md](./ARCHITECTURE.md), [DATABASE.md](./DATABASE.md), [SECURITY.md](./SECURITY.md), [INTERNAL-NOTES.md](./INTERNAL-NOTES.md), [adr/ADR-007-canned-responses.md](./adr/ADR-007-canned-responses.md)
@@ -11,16 +11,30 @@ Related: [ARCHITECTURE.md](./ARCHITECTURE.md), [DATABASE.md](./DATABASE.md), [SE
 
 Agents answer the same questions all day. Canned responses are reusable reply snippets they can insert from the composer by typing a shortcut (`/greeting`) or by searching.
 
-v1 delivers, at the database layer:
+v1 delivers:
 
 - **Shared** snippets curated by owners and admins, and **personal** snippets private to one member
 - Folders for grouping, scoped the same way as the snippets inside them
 - Per-member favorites that sort to the top of the picker
 - Shortcut autocomplete with exact and prefix matching, plus typo-tolerant search (`pg_trgm`) and full-text search
+- `{{variable}}` substitution at insertion time (§8)
 - `usage_count` telemetry for "most used" ordering
 - Soft delete with reconnect catch-up tombstones and realtime publication
+- A settings library (create / edit / delete / favorite / folders) and `/shortcut` insertion from the reply composer
 
-Migration: `supabase/migrations/20260816120000_canned_responses.sql`.
+Key files:
+
+| Layer            | Location                                                                          |
+| ---------------- | --------------------------------------------------------------------------------- |
+| Migration        | `supabase/migrations/20260816120000_canned_responses.sql`                          |
+| Database tests   | `supabase/tests/017_canned_responses.test.sql`                                     |
+| Shared schemas   | `packages/shared/src/schemas/canned-responses.ts`                                  |
+| Shared helpers   | `packages/shared/src/canned/` (`variables`, `slash`, `search`, `state`, `errors`)   |
+| Queries/actions  | `apps/web/lib/canned/`                                                            |
+| Realtime         | `apps/web/lib/realtime/use-canned-responses.ts`                                    |
+| Settings UI      | `apps/web/components/settings/CannedResponsesManager.tsx`                          |
+| Composer         | `apps/web/components/inbox/CannedSlashMenu.tsx`                                    |
+| E2E              | `e2e/tests/inbox/canned-responses.spec.ts`                                         |
 
 ---
 
@@ -88,6 +102,14 @@ Unique on `(member_id, canned_response_id)`, composite FKs cascade on both sides
 | visitor / widget      | No path     | No path           | No path        | No path       | No path             |
 
 Reading a snippet is reference material, so viewers may list it. *Using* one implies sending a reply, which viewers cannot do — `require_canned_use_access` rejects them for favorites and usage recording, and `require_canned_view_access` is the weaker gate used by the list and get RPCs.
+
+The dashboard mirrors these gates with three capabilities in `packages/shared/src/permissions/capabilities.ts`:
+
+| Capability                          | Roles                          | Guards                                                    |
+| ----------------------------------- | ------------------------------ | --------------------------------------------------------- |
+| `view_canned_responses`             | owner, admin, agent, viewer    | Settings route guard, list actions                        |
+| `use_canned_responses`              | owner, admin, agent            | Favorite, usage, personal CRUD, composer slash menu       |
+| `manage_workspace_canned_responses` | owner, admin                   | Create/update/delete of `visibility = 'workspace'` rows   |
 
 Enforcement layers:
 
@@ -186,21 +208,108 @@ The trigram index expression must stay byte-identical to the expression in `list
 
 Visitors never subscribe to these tables (RLS plus no widget wiring). Snippet bodies never appear in widget APIs or visitor realtime; only the message an agent actually sends does.
 
+The dashboard subscribes through `subscribeOperatorCannedResponses` (one channel, three `postgres_changes` bindings: snippets and folders filtered by `workspace_id`, favorites filtered by the caller's `member_id`). CDC rows are not merged directly: they carry no display labels and no per-caller `is_favorited`, so a non-delete change schedules a coalesced authoritative catch-up (250 ms) instead of a lossy partial merge. Soft deletes apply immediately from the CDC row, and a session-local tombstone set prevents an in-flight list from resurrecting a row the operator just deleted.
+
 ---
 
-## 8. Retention
+## 8. Variables
+
+Bodies store `{{token}}` verbatim. Substitution happens in the browser at insertion time, so editing a snippet immediately changes what every later insertion renders, and a snippet in the library never contains one conversation's data.
+
+| Token                 | Source                                              |
+| --------------------- | --------------------------------------------------- |
+| `{{visitor.name}}`    | `conversation.contact.name`                          |
+| `{{visitor.email}}`   | `conversation.contact.email`                         |
+| `{{operator.name}}`   | Display label of the member inserting the snippet     |
+| `{{workspace.name}}`  | Current workspace name                                |
+| `{{conversation.id}}` | Open conversation's id                                |
+
+`{{agent.name}}` is accepted as an alias of `{{operator.name}}` because PRD §4.10 documents that spelling; the dashboard calls members "operators", so `operator.name` is canonical and is the token the variable chips insert.
+
+Resolution rules (`packages/shared/src/canned/variables.ts`):
+
+- Inner whitespace is tolerated (`{{ visitor.name }}`), and token names are matched case-insensitively.
+- An **unknown** token is left untouched, so a typo stays visible to the operator instead of silently vanishing.
+- A **known** token with no value resolves to the empty string. Sending literal `{{visitor.name}}` to a customer is worse than an empty slot the operator can see and fix before pressing send. `interpolateCannedBody(body, ctx, { missing: "token" })` keeps the placeholder when a caller wants preview semantics instead.
+
+Substitution is plain text replacement into a `<textarea>`; there is no HTML rendering, so no injection surface. The operator always sees the interpolated text and must press Send.
+
+---
+
+## 9. Application layer
+
+### Shared package
+
+`packages/shared/src/schemas/canned-responses.ts` mirrors `build_canned_response_item` / `build_canned_folder_item` as strict Zod objects, plus the query and mutation inputs. Shortcut inputs accept what an operator types (`/Refund `) and normalize to storage form (`refund`) before validation, so the client and `normalize_canned_shortcut` agree.
+
+`packages/shared/src/canned/` holds the framework-free logic:
+
+| Module         | Responsibility                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| `errors.ts`    | `CannedError` plus `parseCannedErrorMessage` for every typed prefix in §5                            |
+| `variables.ts` | Token list, extraction, interpolation (§8)                                                          |
+| `slash.ts`     | `detectSlashTrigger` / `replaceSlashTrigger` / shortcut display and normalization                    |
+| `search.ts`    | Client-side ranking of an already-loaded list for the slash menu and settings search                 |
+| `state.ts`     | Realtime merge, catch-up reconcile and watermark seed/advance for snippets **and** folders            |
+| `messages.ts`  | English operator copy                                                                              |
+
+`search.ts` never replaces the SQL search — it only keeps an in-memory list responsive while typing. Its weights follow the RPC's intent (exact shortcut, then prefix, then title, then body, with a favorite nudge), and ties prefer a personal snippet over a shared one, matching the personal-first shadowing rule.
+
+### Server Actions
+
+`apps/web/lib/canned/queries.ts` wraps the RPCs and validates every payload; `actions.ts` exposes them as Server Actions returning `{ success: true, data } | { success: false, message, code? }`. Every action resolves the workspace from the URL slug through the caller's membership (`requireCannedWorkspace`) — never from a client-supplied workspace id — and then asserts the capability for the operation:
+
+| Action                                                       | Capability                                        |
+| ------------------------------------------------------------ | ------------------------------------------------- |
+| `listCannedResponsesAction`, `listCannedResponseFoldersAction`| `view_canned_responses`                           |
+| `setCannedResponseFavoriteAction`, `recordCannedResponseUsageAction` | `use_canned_responses`                     |
+| create / update / soft delete of a **shared** row or folder   | `manage_workspace_canned_responses`               |
+| create / update / soft delete of a **personal** row or folder  | `use_canned_responses`                            |
+
+Because visibility is immutable, update and delete read the stored row's visibility first and gate on that, rather than trusting the submitted scope. Ownership itself is re-checked in the RPC. Mutations revalidate the settings route (and the inbox layout when the composer's library changed); `recordCannedResponseUsageAction` deliberately revalidates nothing, since `usage_count` does not bump `updated_at`.
+
+---
+
+## 10. Dashboard UI
+
+`/app/[workspaceSlug]/settings/canned-responses` renders the library from an SSR prefetch and keeps it live through `useLiveCannedResponses`:
+
+- Scope tabs: All / Shared / Personal / Favorites
+- Folder sidebar with create, inline rename and delete (deleting a folder unfiles its snippets, it never deletes them)
+- Search over the loaded list; when the page was truncated (`has_more`) the query is sent to the RPC instead, so a large library still searches everything
+- Create/edit form with title, body, shortcut, visibility (locked after create) and folder, plus variable chips that insert tokens at the caret and a warning listing unrecognized `{{tokens}}`
+- Favorite toggle and two-step soft delete, both applied optimistically and rolled back if the action fails
+
+Role behaviour: a viewer gets a read-only list, an agent can manage only their own personal snippets and folders while shared rows stay read-only apart from favoriting, and owners/admins manage everything.
+
+In the reply composer (`LiveConversationThread`), typing `/` at a word boundary opens `CannedSlashMenu`, using the same keyboard model as `@mention` autocomplete (Arrow keys, Enter/Tab to insert, Escape to dismiss). A slash inside a URL or mid-word does not trigger it. Selecting an entry replaces the `/query` with the interpolated body, then calls `recordCannedResponseUsageAction` fire-and-forget. The menu appears only for roles that may both send messages and use snippets.
+
+---
+
+## 11. Retention
 
 Soft-deleted snippets and folders are retained indefinitely until the workspace is purged, matching `docs/DATA-RETENTION.md`. Workspace deletion cascades all three tables.
 
 ---
 
-## 9. Known v1 limitations
+## 12. Tests
 
-- No dashboard UI, Server Actions, or `@site-chat/shared` schemas yet — this migration is the database contract those will build on
-- Variable substitution (`{{visitor.name}}`, `{{agent.name}}`, `{{workspace.name}}`) is stored verbatim in `body`; rendering is a client concern and is not implemented
+| Layer      | Location                                                                              |
+| ---------- | ------------------------------------------------------------------------------------- |
+| pgTAP      | `supabase/tests/017_canned_responses.test.sql` — RLS, scopes, typed errors, catch-up    |
+| Vitest     | `packages/shared/src/canned/canned.test.ts` — variables, slash, ranking, merge, errors  |
+| Vitest     | `apps/web/lib/permissions/can.test.ts` — the three capabilities per role                |
+| Playwright | `e2e/tests/inbox/canned-responses.spec.ts` — publish, insert with variables, personal isolation, viewer read-only, favorite + soft delete |
+
+---
+
+## 13. Known v1 limitations
+
 - Visibility cannot be changed after create (copy instead)
 - Concurrent edits are last-write-wins (no CAS)
-- No shortcut resolution order is defined for a personal snippet shadowing a shared one; the composer decides (personal-first is the intended behaviour)
 - `usage_count` is eventually consistent for other members
 - No usage analytics beyond the raw counter, and no "most used" ordering in the list RPC yet
 - Snippets are not surfaced in inbox search (`list_conversations` `q`)
+- The settings library and the composer both load at most 200 snippets per page; beyond that, search reaches the RPC rather than paginating
+- Snippet bodies are plain text: no rich text, attachments or per-snippet locales
+- Folder ordering is stored (`sort_order`) but the UI has no drag-and-drop reorder yet
