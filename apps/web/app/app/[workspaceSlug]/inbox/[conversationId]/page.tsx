@@ -88,15 +88,20 @@ export default async function ConversationDetailPage({
     can(workspace.role, "use_canned_responses");
 
   // Prefetched so `/shortcut` resolves on the first keystroke; the composer's
-  // realtime hook keeps the list fresh from there.
+  // realtime hook keeps the list fresh from there. Failure must not block the
+  // conversation shell (notes SSR / messages still load).
   let initialCannedResponses: CannedResponse[] = [];
   if (canUseCannedResponses) {
-    const canned = await fetchCannedResponses(
-      supabase,
-      workspace.workspace_id,
-      { limit: 200, include_folders: false },
-    );
-    initialCannedResponses = canned.items;
+    try {
+      const canned = await fetchCannedResponses(
+        supabase,
+        workspace.workspace_id,
+        { limit: 200, include_folders: false },
+      );
+      initialCannedResponses = canned.items;
+    } catch {
+      initialCannedResponses = [];
+    }
   }
 
   const { flags: aiFlags } = await loadWorkspaceAIConfig(

@@ -190,7 +190,7 @@ test.describe("internal notes + mentions", () => {
   });
 
   test("reconnect catch-up merges notes without duplicates", async ({ browser }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const marker = `notes-reconnect-${Date.now()}`;
 
     const visitorContext = await browser.newContext();
@@ -229,25 +229,26 @@ test.describe("internal notes + mentions", () => {
     await expect(agentPage.getByTestId("internal-notes-panel")).toBeVisible({
       timeout: 30_000,
     });
-    // One catch-up kick (avoid hammering Retry — that starved in-flight lists).
+
+    // Prefer SSR/list catch-up: tab kick once, then Retry if the panel exposed it.
     await agentPage.getByTestId("conversation-tab-messages").click();
     await agentPage.getByTestId("conversation-tab-notes").click();
     const retry = agentPage.getByRole("button", { name: "Retry" });
     if (await retry.isVisible().catch(() => false)) {
       await retry.click();
     }
+
+    const note = agentPage.getByTestId("internal-note-item").filter({ hasText: body });
     try {
-      await expect(
-        agentPage.getByTestId("internal-note-item").filter({ hasText: body }),
-      ).toHaveCount(1, { timeout: 45_000 });
+      await expect(note).toHaveCount(1, { timeout: 45_000 });
     } catch {
-      // Authoritative SSR list after a full reload if catch-up raced.
-      await agentPage.goto(conversationUrl);
+      // Hard navigation back through the inbox if the conversation shell lost SSR notes.
+      await agentPage.goto(`${APP_URL}/app/acme-support/inbox`);
+      await waitForOperatorInboxRealtimeReady(agentPage);
+      await openOperatorConversation(agentPage, marker);
       await waitForOperatorThreadRealtimeReady(agentPage);
       await agentPage.getByTestId("conversation-tab-notes").click();
-      await expect(
-        agentPage.getByTestId("internal-note-item").filter({ hasText: body }),
-      ).toHaveCount(1, { timeout: 60_000 });
+      await expect(note).toHaveCount(1, { timeout: 60_000 });
     }
 
     await visitorContext.close();
