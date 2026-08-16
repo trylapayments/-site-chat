@@ -1,4 +1,4 @@
-import { can } from "@site-chat/shared";
+import { can, type CannedResponse } from "@site-chat/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -10,6 +10,7 @@ import { MarkConversationRead } from "@/components/inbox/ConversationThread";
 import { loadWorkspaceAIConfig } from "@/lib/ai/config";
 import { requireUser } from "@/lib/auth/session";
 import { toAppRoute } from "@/lib/auth/redirect";
+import { fetchCannedResponses } from "@/lib/canned/queries";
 import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
@@ -82,6 +83,27 @@ export default async function ConversationDetailPage({
     }
   }
 
+  const canUseCannedResponses =
+    can(workspace.role, "send_messages") &&
+    can(workspace.role, "use_canned_responses");
+
+  // Prefetched so `/shortcut` resolves on the first keystroke; the composer's
+  // realtime hook keeps the list fresh from there. Failure must not block the
+  // conversation shell (notes SSR / messages still load).
+  let initialCannedResponses: CannedResponse[] = [];
+  if (canUseCannedResponses) {
+    try {
+      const canned = await fetchCannedResponses(
+        supabase,
+        workspace.workspace_id,
+        { limit: 200, include_folders: false },
+      );
+      initialCannedResponses = canned.items;
+    } catch {
+      initialCannedResponses = [];
+    }
+  }
+
   const { flags: aiFlags } = await loadWorkspaceAIConfig(
     supabase,
     workspace.workspace_id,
@@ -120,6 +142,7 @@ export default async function ConversationDetailPage({
           <ConversationMainPanel
             workspaceId={workspace.workspace_id}
             workspaceSlug={workspaceSlug}
+            workspaceName={workspace.name}
             conversationId={conversationId}
             ephemeralTopic={conversation.visitor_ephemeral_topic}
             memberId={memberId}
@@ -131,9 +154,13 @@ export default async function ConversationDetailPage({
               lastReadSequence: conversation.visitor_last_read_sequence,
             }}
             initialNotes={initialNotes}
+            initialCannedResponses={initialCannedResponses}
+            visitorName={conversation.contact?.name ?? null}
+            visitorEmail={conversation.contact?.email ?? null}
             members={members}
             canSend={can(workspace.role, "send_messages")}
             canManageNotes={canManageNotes}
+            canUseCannedResponses={canUseCannedResponses}
             aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
           />
         </section>

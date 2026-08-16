@@ -135,8 +135,8 @@ The MVP is complete when:
 **Goal:** Tools that make agents efficient and workspaces configurable.
 
 **Deliverables:**
-- [ ] Canned responses CRUD and autocomplete in composer
-- [ ] Variable substitution in canned responses
+- [x] Canned responses CRUD and autocomplete in composer (shared + personal scopes, folders, favorites, `/shortcut` slash menu)
+- [x] Variable substitution in canned responses (`visitor.name`, `visitor.email`, `operator.name`, `workspace.name`, `conversation.id`)
 - [x] Contact / visitor identity foundation (opaque `public_id`, auto-create on session, widget identify, operator profile update)
 - [x] Visitor context (session device/UTM fields, `visitor_page_views`, page-view API + 30s dedupe)
 - [x] Customer Timeline (durable `customer_timeline_events`, operator sidebar, keyset pagination, realtime)
@@ -149,7 +149,7 @@ The MVP is complete when:
 - [ ] Email notifications via Resend (configurable per agent)
 - [ ] Notification preferences UI
 
-**Notes:** This phase’s identity + context foundation (docs + schema/RPCs) delivers durable visitor contacts, host `SiteChat.identify`, page-view trail, and privacy defaults (no raw IP / no fingerprinting). Customer Timeline adds a durable event store for operator history and future CRM/AI/analytics (`docs/CUSTOMER-TIMELINE.md`). Remaining work: contacts list UI, widget prompt UX, and retention purge jobs (`docs/DATA-RETENTION.md`).
+**Notes:** This phase’s identity + context foundation (docs + schema/RPCs) delivers durable visitor contacts, host `SiteChat.identify`, page-view trail, and privacy defaults (no raw IP / no fingerprinting). Customer Timeline adds a durable event store for operator history and future CRM/AI/analytics (`docs/CUSTOMER-TIMELINE.md`). Canned responses ship end to end — migration, RPCs, shared schemas, Server Actions, settings library and composer insertion (`docs/CANNED-RESPONSES.md`). Remaining work: contacts list UI, widget prompt UX, and retention purge jobs (`docs/DATA-RETENTION.md`).
 
 **Exit criteria:** Agent uses canned response with visitor name variable; visitor uploads image visible in dashboard; contact created automatically when visitor provides email; agent receives email notification for new conversation.
 

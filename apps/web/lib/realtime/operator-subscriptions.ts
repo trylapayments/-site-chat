@@ -28,16 +28,18 @@ async function applyOperatorRealtimeAuth(
   return true;
 }
 
+type OperatorBinding = {
+  event: "INSERT" | "UPDATE" | "DELETE";
+  schema: string;
+  table: string;
+  filter: string;
+  handler: (payload: Record<string, unknown>) => void;
+};
+
 function subscribeWithOperatorAuth(input: {
   supabase: OperatorSupabaseClient;
   channelName: string;
-  bindings: Array<{
-    event: "INSERT" | "UPDATE";
-    schema: string;
-    table: string;
-    filter: string;
-    handler: (payload: Record<string, unknown>) => void;
-  }>;
+  bindings: OperatorBinding[];
   onConnectionChange?: RealtimeConnectionListener;
 }): () => void {
   let currentStatus: RealtimeConnectionListener extends (
@@ -114,7 +116,10 @@ function subscribeWithOperatorAuth(input: {
           filter: binding.filter,
         },
         (payload) => {
-          binding.handler(payload.new);
+          // DELETE carries the removed row in `old` (REPLICA IDENTITY FULL).
+          binding.handler(
+            binding.event === "DELETE" ? payload.old : payload.new,
+          );
         },
       );
     }
@@ -355,6 +360,87 @@ export function subscribeOperatorInternalNotes(input: {
         handler: input.onNoteChange,
       },
     ],
+  });
+}
+
+/**
+ * Live canned responses, folders and the caller's own favorites.
+ *
+ * Snippets and folders are workspace-filtered (RLS still hides other members'
+ * personal rows); favorites are filtered to the calling member because pins are
+ * private. Soft deletes arrive as UPDATE with `deleted_at` set, while
+ * un-favoriting is a real DELETE.
+ */
+export function subscribeOperatorCannedResponses(input: {
+  workspaceId: string;
+  memberId: string;
+  onResponseChange: (payload: Record<string, unknown>) => void;
+  onFolderChange?: (payload: Record<string, unknown>) => void;
+  onFavoriteChange?: (payload: Record<string, unknown>) => void;
+  onConnectionChange?: RealtimeConnectionListener;
+}): () => void {
+  const supabase = createClient();
+
+  const bindings: OperatorBinding[] = [
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "canned_responses",
+      filter: `workspace_id=eq.${input.workspaceId}`,
+      handler: input.onResponseChange,
+    },
+    {
+      event: "UPDATE",
+      schema: "public",
+      table: "canned_responses",
+      filter: `workspace_id=eq.${input.workspaceId}`,
+      handler: input.onResponseChange,
+    },
+  ];
+
+  if (input.onFolderChange) {
+    bindings.push(
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "canned_response_folders",
+        filter: `workspace_id=eq.${input.workspaceId}`,
+        handler: input.onFolderChange,
+      },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "canned_response_folders",
+        filter: `workspace_id=eq.${input.workspaceId}`,
+        handler: input.onFolderChange,
+      },
+    );
+  }
+
+  if (input.onFavoriteChange && input.memberId) {
+    bindings.push(
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "canned_response_favorites",
+        filter: `member_id=eq.${input.memberId}`,
+        handler: input.onFavoriteChange,
+      },
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "canned_response_favorites",
+        filter: `member_id=eq.${input.memberId}`,
+        handler: input.onFavoriteChange,
+      },
+    );
+  }
+
+  return subscribeWithOperatorAuth({
+    supabase,
+    channelName: `canned-responses:${input.workspaceId}`,
+    onConnectionChange: input.onConnectionChange,
+    bindings,
   });
 }
 

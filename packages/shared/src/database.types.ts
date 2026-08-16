@@ -263,6 +263,213 @@ export type Database = {
           },
         ]
       }
+      canned_response_favorites: {
+        Row: {
+          canned_response_id: string
+          created_at: string
+          id: string
+          member_id: string
+          workspace_id: string
+        }
+        Insert: {
+          canned_response_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          workspace_id: string
+        }
+        Update: {
+          canned_response_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canned_response_favorites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_canned_response_favorites_member_workspace"
+            columns: ["member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_canned_response_favorites_response_workspace"
+            columns: ["canned_response_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "canned_responses"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
+      canned_response_folders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          name: string
+          owner_member_id: string | null
+          sort_order: number
+          updated_at: string
+          updated_by: string | null
+          visibility: Database["public"]["Enums"]["app_canned_visibility"]
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name: string
+          owner_member_id?: string | null
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+          visibility: Database["public"]["Enums"]["app_canned_visibility"]
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          owner_member_id?: string | null
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+          visibility?: Database["public"]["Enums"]["app_canned_visibility"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canned_response_folders_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_canned_response_folders_created_by_workspace"
+            columns: ["created_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_canned_response_folders_owner_workspace"
+            columns: ["owner_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_canned_response_folders_updated_by_workspace"
+            columns: ["updated_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
+      canned_responses: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          folder_id: string | null
+          id: string
+          owner_member_id: string | null
+          search_vector: unknown
+          shortcut: string | null
+          title: string
+          updated_at: string
+          updated_by: string | null
+          usage_count: number
+          visibility: Database["public"]["Enums"]["app_canned_visibility"]
+          workspace_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          folder_id?: string | null
+          id?: string
+          owner_member_id?: string | null
+          search_vector?: unknown
+          shortcut?: string | null
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          usage_count?: number
+          visibility: Database["public"]["Enums"]["app_canned_visibility"]
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          folder_id?: string | null
+          id?: string
+          owner_member_id?: string | null
+          search_vector?: unknown
+          shortcut?: string | null
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          usage_count?: number
+          visibility?: Database["public"]["Enums"]["app_canned_visibility"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canned_responses_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_canned_responses_created_by_workspace"
+            columns: ["created_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_canned_responses_folder_workspace"
+            columns: ["folder_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "canned_response_folders"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_canned_responses_owner_workspace"
+            columns: ["owner_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_canned_responses_updated_by_workspace"
+            columns: ["updated_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           continuity_token_hash: string | null
@@ -1372,6 +1579,26 @@ export type Database = {
         }
         Returns: number
       }
+      create_canned_response: {
+        Args: {
+          p_body: string
+          p_folder_id?: string
+          p_shortcut?: string
+          p_title: string
+          p_visibility?: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      create_canned_response_folder: {
+        Args: {
+          p_name: string
+          p_sort_order?: number
+          p_visibility: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       create_internal_note: {
         Args: {
           p_body: string
@@ -1431,6 +1658,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_canned_response: {
+        Args: { p_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       get_conversation: {
         Args: { p_conversation_id: string; p_workspace_id: string }
         Returns: Json
@@ -1446,6 +1677,14 @@ export type Database = {
       list_accessible_workspaces: { Args: never; Returns: Json }
       list_assignable_members: {
         Args: { p_workspace_id: string }
+        Returns: Json
+      }
+      list_canned_response_folders: {
+        Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      list_canned_responses: {
+        Args: { p_query?: Json; p_workspace_id: string }
         Returns: Json
       }
       list_conversations: {
@@ -1500,6 +1739,10 @@ export type Database = {
         Args: { p_member_id: string }
         Returns: undefined
       }
+      record_canned_response_usage: {
+        Args: { p_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       remove_workspace_member: {
         Args: { p_member_id: string }
         Returns: undefined
@@ -1517,9 +1760,21 @@ export type Database = {
         }
         Returns: Json
       }
+      set_canned_response_favorite: {
+        Args: { p_favorited: boolean; p_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       set_last_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
+      }
+      soft_delete_canned_response: {
+        Args: { p_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      soft_delete_canned_response_folder: {
+        Args: { p_id: string; p_workspace_id: string }
+        Returns: Json
       }
       soft_delete_internal_note: {
         Args: { p_note_id: string; p_workspace_id: string }
@@ -1541,6 +1796,26 @@ export type Database = {
         Args: {
           p_conversation_id: string
           p_expected_version?: number
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      update_canned_response: {
+        Args: {
+          p_body: string
+          p_folder_id: string
+          p_id: string
+          p_shortcut: string
+          p_title: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      update_canned_response_folder: {
+        Args: {
+          p_id: string
+          p_name: string
+          p_sort_order: number
           p_workspace_id: string
         }
         Returns: Json
@@ -1720,6 +1995,7 @@ export type Database = {
         | "failed"
         | "cancelled"
         | "expired"
+      app_canned_visibility: "workspace" | "personal"
       app_channel_type: "widget"
       app_conversation_status: "open" | "pending" | "resolved" | "closed"
       app_device_type: "desktop" | "mobile" | "tablet" | "bot" | "unknown"
@@ -1880,6 +2156,7 @@ export const Constants = {
         "cancelled",
         "expired",
       ],
+      app_canned_visibility: ["workspace", "personal"],
       app_channel_type: ["widget"],
       app_conversation_status: ["open", "pending", "resolved", "closed"],
       app_device_type: ["desktop", "mobile", "tablet", "bot", "unknown"],

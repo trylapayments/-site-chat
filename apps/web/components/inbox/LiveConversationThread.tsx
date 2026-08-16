@@ -1,7 +1,12 @@
 "use client";
 
-import type { MessageItem, ReceiptCursors } from "@site-chat/shared";
+import type {
+  CannedResponse,
+  MessageItem,
+  ReceiptCursors,
+} from "@site-chat/shared";
 import {
+  cannedResponsesMessagesEn,
   createOptimisticMessage,
   deriveMessageReceiptStatus,
   genericSenderLabel,
@@ -9,6 +14,7 @@ import {
   mergeMessages,
   mergeReceiptCursors,
   toMessageViewFromOperatorRow,
+  type CannedVariableContext,
   type MessageView,
 } from "@site-chat/shared";
 import {
@@ -21,10 +27,15 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  CannedSlashMenu,
+  useCannedSlash,
+} from "@/components/inbox/CannedSlashMenu";
 import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
 import { OperatorMessageAttachments } from "@/components/inbox/MessageAttachments";
 import { MessageReceiptIndicator } from "@/components/inbox/MessageReceiptIndicator";
 import { SuggestedReplyPanel } from "@/components/inbox/SuggestedReplyPanel";
+import { recordCannedResponseUsageAction } from "@/lib/canned/actions";
 import {
   fetchVisitorReceiptCursorsAction,
   markConversationDeliveredAction,
@@ -35,7 +46,10 @@ import {
   subscribeOperatorConversationEphemeral,
   type OperatorEphemeralController,
 } from "@/lib/realtime/operator-ephemeral";
+import { useLiveCannedResponses } from "@/lib/realtime/use-canned-responses";
 import { useLiveConversationThread } from "@/lib/realtime/use-operator-inbox";
+
+const cannedMessages = cannedResponsesMessagesEn;
 
 function mapInitialMessages(messages: MessageItem[]): MessageView[] {
   return messages.map((message) =>
@@ -56,24 +70,35 @@ function mapInitialMessages(messages: MessageItem[]): MessageView[] {
 export function LiveConversationThread({
   workspaceId,
   workspaceSlug,
+  workspaceName,
   conversationId,
   ephemeralTopic,
   memberId,
   memberDisplayLabel,
   initialMessages,
   initialVisitorReceipts,
+  initialCannedResponses,
+  visitorName,
+  visitorEmail,
   canSend,
+  canUseCannedResponses,
   aiSuggestedRepliesEnabled = false,
 }: {
   workspaceId: string;
   workspaceSlug: string;
+  workspaceName: string;
   conversationId: string;
   ephemeralTopic: string;
   memberId: string;
   memberDisplayLabel?: string | null;
   initialMessages: MessageItem[];
   initialVisitorReceipts: ReceiptCursors;
+  /** Prefetched on the conversation page; empty when the role cannot use them. */
+  initialCannedResponses: CannedResponse[];
+  visitorName: string | null;
+  visitorEmail: string | null;
   canSend: boolean;
+  canUseCannedResponses: boolean;
   aiSuggestedRepliesEnabled?: boolean;
 }) {
   // Stabilize mapped props so useLiveConversationThread's effect does not see a
@@ -110,6 +135,17 @@ export function LiveConversationThread({
         return merged.advanced ? merged.next : current;
       });
     },
+  });
+
+  // Prefetch covers the first keystroke; live CDC keeps the slash menu current
+  // when the shared library changes while the conversation stays open.
+  const cannedEnabled = canUseCannedResponses && canSend && Boolean(memberId);
+  const { responses: cannedResponses } = useLiveCannedResponses({
+    workspaceId,
+    workspaceSlug,
+    memberId,
+    initialResponses: initialCannedResponses,
+    enabled: cannedEnabled,
   });
 
   const initialDelivered = initialVisitorReceipts.lastDeliveredSequence;
@@ -332,6 +368,15 @@ export function LiveConversationThread({
         conversationId={conversationId}
         canSend={canSend}
         aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
+        cannedResponses={cannedEnabled ? cannedResponses : []}
+        cannedEnabled={cannedEnabled}
+        cannedContext={{
+          visitorName,
+          visitorEmail,
+          operatorName: memberDisplayLabel ?? null,
+          workspaceName,
+          conversationId,
+        }}
         messages={messages}
         setMessages={setMessages}
         onComposerChange={(text) => {
@@ -427,6 +472,9 @@ function LiveReplyComposer({
   conversationId,
   canSend,
   aiSuggestedRepliesEnabled,
+  cannedResponses,
+  cannedEnabled,
+  cannedContext,
   messages,
   setMessages,
   onComposerChange,
@@ -438,6 +486,9 @@ function LiveReplyComposer({
   conversationId: string;
   canSend: boolean;
   aiSuggestedRepliesEnabled: boolean;
+  cannedResponses: CannedResponse[];
+  cannedEnabled: boolean;
+  cannedContext: CannedVariableContext;
   messages: MessageView[];
   setMessages: (updater: (current: MessageView[]) => MessageView[]) => void;
   onComposerChange: (text: string) => void;
@@ -455,6 +506,23 @@ function LiveReplyComposer({
   const uploadAbortRef = useRef<AbortController | null>(null);
   const clientMessageIdRef = useRef<string | null>(null);
   const lastMarkedVisitorSequenceRef = useRef(0);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const canned = useCannedSlash({
+    items: cannedResponses,
+    enabled: cannedEnabled,
+    body,
+    textareaRef: bodyRef,
+    context: cannedContext,
+    onInsert: (next, used) => {
+      setBody(next.body);
+      onComposerChange(next.body);
+      // Usage telemetry must never block or fail an insertion.
+      void recordCannedResponseUsageAction(workspaceSlug, {
+        cannedResponseId: used.id,
+      });
+    },
+  });
 
   useEffect(() => {
     for (const message of messages) {
@@ -471,11 +539,14 @@ function LiveReplyComposer({
 
   const onClearTypingRef = useRef(onClearTyping);
   onClearTypingRef.current = onClearTyping;
+  const closeCannedRef = useRef(canned.close);
+  closeCannedRef.current = canned.close;
 
   useEffect(() => {
     // Conversation switch: clear composer typing state.
     setBody("");
     onClearTypingRef.current();
+    closeCannedRef.current();
   }, [conversationId]);
 
   if (!canSend) {
@@ -826,30 +897,58 @@ function LiveReplyComposer({
           {uploadProgress}
         </p>
       ) : null}
-      <textarea
-        id="reply-body"
-        value={body}
-        onChange={(event) => {
-          const next = event.target.value;
-          setBody(next);
-          onComposerChange(next);
-        }}
-        onPaste={(event) => {
-          const files = Array.from(event.clipboardData.items)
-            .filter((item) => item.kind === "file")
-            .map((item) => item.getAsFile())
-            .filter((file): file is File => file !== null);
-          if (files.length > 0) {
-            event.preventDefault();
-            setPendingFiles((current) => [...current, ...files].slice(0, 10));
-          }
-        }}
-        rows={4}
-        maxLength={4000}
-        placeholder="Write a reply..."
-        disabled={isPending}
-        className="border-input bg-background w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm"
-      />
+      <div className="relative">
+        {canned.query !== null ? (
+          <CannedSlashMenu
+            options={canned.options}
+            activeIndex={canned.activeIndex}
+            onSelect={canned.select}
+          />
+        ) : null}
+        <textarea
+          id="reply-body"
+          ref={bodyRef}
+          value={body}
+          onChange={(event) => {
+            const next = event.target.value;
+            setBody(next);
+            onComposerChange(next);
+            canned.sync(next, event.target.selectionStart);
+          }}
+          onKeyDown={(event) => {
+            canned.onKeyDown(event);
+          }}
+          onBlur={() => {
+            canned.close();
+          }}
+          onClick={(event) => {
+            canned.sync(body, event.currentTarget.selectionStart);
+          }}
+          onPaste={(event) => {
+            const files = Array.from(event.clipboardData.items)
+              .filter((item) => item.kind === "file")
+              .map((item) => item.getAsFile())
+              .filter((file): file is File => file !== null);
+            if (files.length > 0) {
+              event.preventDefault();
+              setPendingFiles((current) => [...current, ...files].slice(0, 10));
+            }
+          }}
+          rows={4}
+          maxLength={4000}
+          placeholder="Write a reply..."
+          disabled={isPending}
+          className="border-input bg-background w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm"
+        />
+      </div>
+      {cannedEnabled ? (
+        <p
+          className="text-muted-foreground mt-1 text-xs"
+          data-testid="canned-slash-hint"
+        >
+          {cannedMessages.slashHint}
+        </p>
+      ) : null}
       {error ? <p className="text-destructive mt-2 text-sm">{error}</p> : null}
       <div className="mt-3 flex items-center justify-between gap-2">
         <Button
