@@ -542,6 +542,70 @@ export function subscribeOperatorCustomerTimeline(input: {
   });
 }
 
+/**
+ * Contact profile CDC: identity updates, tag assignments, and custom field
+ * values. Company link changes surface via contacts.company_id UPDATE.
+ * Consumers should refetch get_contact_profile on change / reconnect.
+ */
+export function subscribeOperatorContactProfile(input: {
+  workspaceId: string;
+  contactId: string;
+  onChange: (payload: Record<string, unknown>) => void;
+  onConnectionChange?: RealtimeConnectionListener;
+}): () => void {
+  const supabase = createClient();
+
+  return subscribeWithOperatorAuth({
+    supabase,
+    channelName: `contact-profile:${input.contactId}`,
+    onConnectionChange: input.onConnectionChange,
+    bindings: [
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "contacts",
+        filter: `id=eq.${input.contactId}`,
+        handler: input.onChange,
+      },
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "contact_tag_assignments",
+        filter: `contact_id=eq.${input.contactId}`,
+        handler: input.onChange,
+      },
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "contact_tag_assignments",
+        filter: `contact_id=eq.${input.contactId}`,
+        handler: input.onChange,
+      },
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "custom_field_values",
+        filter: `contact_id=eq.${input.contactId}`,
+        handler: input.onChange,
+      },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "custom_field_values",
+        filter: `contact_id=eq.${input.contactId}`,
+        handler: input.onChange,
+      },
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "custom_field_values",
+        filter: `contact_id=eq.${input.contactId}`,
+        handler: input.onChange,
+      },
+    ],
+  });
+}
+
 function mapChannelStatus(
   status: REALTIME_SUBSCRIBE_STATES,
   previous:

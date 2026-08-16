@@ -101,6 +101,10 @@ export const tagRemovedMetadataSchema = timelineMetaBase
   .extend({
     tag_id: z.string().uuid(),
     tag_name: z.string().max(64),
+    tag_color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional(),
     source: z.enum(["unassign", "tag_deleted"]).optional(),
   })
   .strict();

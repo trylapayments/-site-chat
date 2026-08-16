@@ -63,6 +63,7 @@ export function workspaceNavPath(slug: string, segment: string): string {
 }
 
 export const SETTINGS_SECTION_CANNED_RESPONSES = "canned-responses";
+export const SETTINGS_SECTION_CRM = "crm";
 
 export function workspaceSettingsPath(slug: string, section?: string): string {
   const settings = workspaceNavPath(slug, "settings");
@@ -72,6 +73,17 @@ export function workspaceSettingsPath(slug: string, section?: string): string {
   }
 
   return `${settings}/${section}`;
+}
+
+export function workspaceContactsPath(
+  slug: string,
+  contactId?: string,
+): string {
+  const contacts = workspaceNavPath(slug, "contacts");
+  if (!contactId) {
+    return contacts;
+  }
+  return `${contacts}/${contactId}`;
 }
 
 export function buildWorkspaceSwitchDestination(
