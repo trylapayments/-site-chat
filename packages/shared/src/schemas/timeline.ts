@@ -111,6 +111,28 @@ export const conversationAssignedMetadataSchema = timelineMetaBase
 export const conversationTransferredMetadataSchema = conversationAssignedMetadataSchema;
 export const conversationUnassignedMetadataSchema = conversationAssignedMetadataSchema;
 
+export const internalNoteTimelineMetadataSchema = timelineMetaBase
+  .extend({
+    note_id: z.string().uuid(),
+    author_member_id: z.string().uuid().nullable().optional(),
+    author_member_label: z.string().max(200).nullable().optional(),
+    updated_by_member_id: z.string().uuid().nullable().optional(),
+    updated_by_member_label: z.string().max(200).nullable().optional(),
+    deleted_by_member_id: z.string().uuid().nullable().optional(),
+    deleted_by_member_label: z.string().max(200).nullable().optional(),
+  })
+  .strict();
+
+export const mentionCreatedMetadataSchema = timelineMetaBase
+  .extend({
+    note_id: z.string().uuid(),
+    mentioned_member_id: z.string().uuid(),
+    mentioned_member_label: z.string().max(200).nullable().optional(),
+    author_member_id: z.string().uuid().nullable().optional(),
+    author_member_label: z.string().max(200).nullable().optional(),
+  })
+  .strict();
+
 export const customerTimelineEventTypeSchema = z.enum(CUSTOMER_TIMELINE_EVENT_TYPES);
 export const customerTimelineActorTypeSchema = z.enum(CUSTOMER_TIMELINE_ACTOR_TYPES);
 

@@ -424,7 +424,7 @@ Individual messages within a conversation.
 | sender_type | app_message_sender_type | NOT NULL | |
 | sender_id | UUID | NULL | workspace_member.id or visitor_session.id |
 | body | TEXT | NOT NULL | Plain text content |
-| is_internal | BOOLEAN | NOT NULL DEFAULT false | Internal notes (agent-only) |
+| is_internal | BOOLEAN | NOT NULL DEFAULT false | Defense-in-depth flag; product internal notes live in `internal_notes` |
 | delivery_status | app_message_delivery_status | NOT NULL DEFAULT 'sent' | |
 | client_message_id | UUID | NULL | Client deduplication key |
 | metadata_json | JSONB | NOT NULL DEFAULT '{}' | |
@@ -439,6 +439,32 @@ Individual messages within a conversation.
 **Triggers:**
 - `trg_messages_update_conversation` — on INSERT, increment `conversations.message_count`, update `last_message_at` and `last_message_preview`.
 - `trg_messages_increment_usage` — on INSERT where `sender_type = 'visitor'` and conversation is new, increment `workspace_subscriptions.conversations_used`.
+
+### 7.2.1 internal_notes
+
+Operator-only private notes on conversations. See `docs/INTERNAL-NOTES.md` and ADR-006.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | |
+| workspace_id | UUID | NOT NULL, FK → workspaces | |
+| conversation_id | UUID | NOT NULL | Composite FK with workspace |
+| author_member_id | UUID | NULL, FK → workspace_members | Composite FK `ON DELETE SET NULL (author_member_id)` so `workspace_id` stays intact |
+| body | TEXT | NOT NULL, 1–4000 | |
+| client_note_id | UUID | NULL | Create idempotency via atomic `INSERT … ON CONFLICT` |
+| search_vector | TSVECTOR | GENERATED | GIN-indexed for search / PR #32 |
+| created_at / updated_at | TIMESTAMPTZ | NOT NULL | |
+| deleted_at | TIMESTAMPTZ | NULL | Soft delete; catch-up returns watermarked tombstones |
+
+**Related:** `internal_note_mentions (note_id, mentioned_member_id)` unique; messaging-role targets only; edit replaces the mention set (no sticky union).
+
+**RPCs:** `list_internal_notes` (supports `authoritative` + `catch_up_since` for bounded `tombstones`, returns `server_watermark` DB cursor), `create_internal_note` (lifetime-unique `client_note_id`; soft-deleted conflict → `NOTE_DELETED`), `update_internal_note` (no-op when body + mentions unchanged; concurrent edits are LWW), `soft_delete_internal_note`, `get_internal_note`.
+
+**Indexes (notes):** conversation created (active), workspace updated (active), search GIN (active), author (active), **tombstones** `(workspace_id, conversation_id, updated_at DESC, id DESC) WHERE deleted_at IS NOT NULL`.
+
+**RLS:** SELECT for owner/admin/agent only. No direct writes. Visitors/viewers have no access. Note/mention timeline events are hidden from viewers (RLS + list RPC).
+
+**Search:** `list_conversations` `q` matches note bodies/FTS for messaging roles only (never viewers).
 
 ### 7.3 message_attachments
 
@@ -525,23 +551,26 @@ Pending team member invitations.
 
 ### 9.1 notifications
 
-In-app notifications for workspace members.
+In-app notifications for workspace members. Table shipped with internal notes (mention delivery); notification center UI remains Phase 3.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
 | recipient_id | UUID | NOT NULL, FK → workspace_members | |
-| type | app_notification_type | NOT NULL | |
+| type | app_notification_type | NOT NULL | Includes `mention` |
 | title | TEXT | NOT NULL | |
 | body | TEXT | NULL | |
-| resource_type | TEXT | NULL | e.g., `conversation` |
+| resource_type | TEXT | NULL | e.g., `internal_note` |
 | resource_id | UUID | NULL | |
 | read_at | TIMESTAMPTZ | NULL | |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 **Indexes:**
 - `idx_notifications_recipient` ON `(recipient_id, read_at NULLS FIRST, created_at DESC)`
+- Non-unique partial index `idx_notifications_mention_note_recipient` ON `(workspace_id, recipient_id, resource_id, created_at DESC)` WHERE `type = 'mention' AND resource_type = 'internal_note'` — supports mention history lookups. **Re-adding a mention after removal inserts a new mention row and notifies again**; there is intentionally no lifetime unique constraint that would suppress future mention notifications.
+
+**RLS:** SELECT for recipient only.
 
 ### 9.2 notification_preferences
 

@@ -6,6 +6,7 @@ All notable changes to Site Chat are documented in this file.
 
 ### Added
 
+- Internal Notes + @mentions (v1): durable `internal_notes` / `internal_note_mentions` / mention `notifications`; soft delete; ID-backed composer tokens; Customer Timeline note/mention events (hidden from Viewer); operator realtime with watermarked catch-up + tombstone index; create idempotency via lifetime-unique `client_note_id` (`NOTE_DELETED` when retrying a soft-deleted key); docs `docs/INTERNAL-NOTES.md`, ADR-006; pgTAP `016_internal_notes.test.sql`.
 - Conversation Assignment & Queues: durable `assigned_at` / `assigned_by_member_id` / `assignment_version` on conversations; `take_conversation` / `assign_conversation` / `unassign_conversation` RPCs with row-lock + version CAS; Mine / Unassigned / All inbox filters; assignee picker; realtime queue updates; timeline events `conversation_assigned` / `conversation_transferred` / `conversation_unassigned`.
 - Docs: `docs/CONVERSATION-ASSIGNMENT.md`, `docs/adr/ADR-005-conversation-assignment.md`; updates to Architecture, Database, Security, Customer Timeline, Roadmap.
 - pgTAP: `supabase/tests/database/015_conversation_assignment.test.sql`; shared Vitest assignment suite; Playwright assignment E2E.

@@ -1,31 +1,44 @@
 import {
   assignmentMutationResultSchema,
   conversationDetailSchema,
+  createInternalNoteSchema,
   inboxUnreadTotalResultSchema,
+  internalNoteSchema,
   listConversationsQuerySchema,
   listConversationsResultSchema,
   listCustomerTimelineQuerySchema,
   listCustomerTimelineResultSchema,
+  listInternalNotesQuerySchema,
+  listInternalNotesResultSchema,
   listMessagesQuerySchema,
   listMessagesResultSchema,
   markConversationDeliveredResultSchema,
   markConversationReadResultSchema,
   parseAssignmentErrorMessage,
+  parseNoteErrorMessage,
   sendOperatorMessageResultSchema,
+  softDeleteInternalNoteSchema,
+  updateInternalNoteSchema,
   visitorProfileSchema,
   workspaceMemberOptionSchema,
   type AssignmentMutationResult,
   type ConversationDetail,
+  type CreateInternalNoteInput,
   type InboxUnreadTotalResult,
+  type InternalNote,
   type ListConversationsQuery,
   type ListConversationsResult,
   type ListCustomerTimelineQuery,
   type ListCustomerTimelineResult,
+  type ListInternalNotesQuery,
+  type ListInternalNotesResult,
   type ListMessagesQuery,
   type ListMessagesResult,
   type MarkConversationDeliveredResult,
   type MarkConversationReadResult,
   type SendOperatorMessageResult,
+  type SoftDeleteInternalNoteInput,
+  type UpdateInternalNoteInput,
   type VisitorProfile,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
@@ -413,4 +426,150 @@ export async function fetchCustomerTimeline(
     data,
     "list_customer_timeline",
   );
+}
+
+function throwNoteRpcError(error: unknown): never {
+  let message: string | null = null;
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (error && typeof error === "object" && "message" in error) {
+    const candidate = Reflect.get(error, "message");
+    if (typeof candidate === "string") {
+      message = candidate;
+    }
+  }
+  const typed = parseNoteErrorMessage(message);
+  if (typed) {
+    throw typed;
+  }
+  throw error instanceof Error
+    ? error
+    : new Error("Internal note operation failed");
+}
+
+export async function fetchInternalNotes(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  conversationId: string,
+  query: ListInternalNotesQuery = {},
+): Promise<ListInternalNotesResult> {
+  const validated = listInternalNotesQuerySchema.parse(query);
+  const { data, error } = await callPublicRpc(supabase, "list_internal_notes", {
+    p_workspace_id: workspaceId,
+    p_conversation_id: conversationId,
+    p_query: validated,
+  });
+
+  if (error) {
+    throwNoteRpcError(error);
+  }
+
+  return parseRpcResult(
+    listInternalNotesResultSchema,
+    data,
+    "list_internal_notes",
+  );
+}
+
+export async function createInternalNote(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  input: CreateInternalNoteInput,
+): Promise<InternalNote> {
+  const validated = createInternalNoteSchema.parse(input);
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "create_internal_note",
+    {
+      p_workspace_id: workspaceId,
+      p_conversation_id: validated.conversationId,
+      p_body: validated.body,
+      p_client_note_id: validated.clientNoteId,
+      p_mentioned_member_ids: validated.mentionedMemberIds,
+    },
+  );
+
+  if (error) {
+    throwNoteRpcError(error);
+  }
+
+  return parseRpcResult(internalNoteSchema, data, "create_internal_note");
+}
+
+export async function updateInternalNote(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  input: UpdateInternalNoteInput,
+): Promise<InternalNote> {
+  const validated = updateInternalNoteSchema.parse(input);
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "update_internal_note",
+    {
+      p_workspace_id: workspaceId,
+      p_note_id: validated.noteId,
+      p_body: validated.body,
+      p_mentioned_member_ids: validated.mentionedMemberIds,
+    },
+  );
+
+  if (error) {
+    throwNoteRpcError(error);
+  }
+
+  return parseRpcResult(internalNoteSchema, data, "update_internal_note");
+}
+
+export async function softDeleteInternalNote(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  input: SoftDeleteInternalNoteInput & { conversationId?: string },
+): Promise<InternalNote> {
+  const validated = softDeleteInternalNoteSchema.parse(input);
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "soft_delete_internal_note",
+    {
+      p_workspace_id: workspaceId,
+      p_note_id: validated.noteId,
+    },
+  );
+
+  if (error) {
+    throwNoteRpcError(error);
+  }
+
+  const parsed = internalNoteSchema.safeParse(data);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const fromInput = input.conversationId;
+  const row = data as { conversation_id?: unknown } | null;
+  const fromData =
+    typeof row?.conversation_id === "string" ? row.conversation_id : null;
+  const conversationId =
+    fromInput && z.string().uuid().safeParse(fromInput).success
+      ? fromInput
+      : fromData;
+
+  if (!conversationId) {
+    throw new Error("Invalid soft_delete_internal_note response");
+  }
+
+  // RPC committed the soft-delete; tolerate response-shape drift so the client
+  // can still tombstone locally.
+  return {
+    id: validated.noteId,
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    author_member_id: null,
+    author_display_label: "Former member",
+    body: "(deleted)",
+    client_note_id: null,
+    created_at: new Date(0).toISOString(),
+    updated_at: new Date().toISOString(),
+    deleted_at: new Date().toISOString(),
+    mentions: [],
+  };
 }

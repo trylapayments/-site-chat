@@ -30,6 +30,10 @@ export const customerTimelineMessagesEn = {
     conversation_transferred: "Transferred from {{from}} to {{to}}",
     conversation_transferred_to: "Transferred to {{name}}",
     conversation_unassigned: "Conversation unassigned",
+    internal_note_created: "Internal note added",
+    internal_note_updated: "Internal note updated",
+    internal_note_deleted: "Internal note deleted",
+    mention_created: "Mentioned {{name}}",
     field_name: "Name changed to {{value}}",
     field_email: "Email changed to {{value}}",
     field_phone: "Phone changed to {{value}}",
@@ -176,6 +180,18 @@ export function formatTimelineEventDescription(
     }
     case "conversation_unassigned":
       return messages.event.conversation_unassigned;
+    case "internal_note_created":
+      return messages.event.internal_note_created;
+    case "internal_note_updated":
+      return messages.event.internal_note_updated;
+    case "internal_note_deleted":
+      return messages.event.internal_note_deleted;
+    case "mention_created": {
+      const name =
+        (typeof meta.mentioned_member_label === "string" ? meta.mentioned_member_label : null) ??
+        "teammate";
+      return interpolate(messages.event.mention_created, { name });
+    }
     default: {
       const exhaustive: never = event.event_type;
       return String(exhaustive);

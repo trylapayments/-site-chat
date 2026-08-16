@@ -649,6 +649,113 @@ export type Database = {
           },
         ]
       }
+      internal_note_mentions: {
+        Row: {
+          created_at: string
+          id: string
+          mentioned_member_id: string
+          note_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mentioned_member_id: string
+          note_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mentioned_member_id?: string
+          note_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_internal_note_mentions_member_workspace"
+            columns: ["mentioned_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_internal_note_mentions_note_workspace"
+            columns: ["note_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "internal_notes"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "internal_note_mentions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      internal_notes: {
+        Row: {
+          author_member_id: string | null
+          body: string
+          client_note_id: string | null
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          search_vector: unknown
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          author_member_id?: string | null
+          body: string
+          client_note_id?: string | null
+          conversation_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          search_vector?: unknown
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          author_member_id?: string | null
+          body?: string
+          client_note_id?: string | null
+          conversation_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          search_vector?: unknown
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_internal_notes_author_workspace"
+            columns: ["author_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_internal_notes_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "internal_notes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           conversation_id: string
@@ -807,6 +914,60 @@ export type Database = {
           },
           {
             foreignKeyName: "messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          read_at: string | null
+          recipient_id: string
+          resource_id: string | null
+          resource_type: string | null
+          title: string
+          type: Database["public"]["Enums"]["app_notification_type"]
+          workspace_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          recipient_id: string
+          resource_id?: string | null
+          resource_type?: string | null
+          title: string
+          type: Database["public"]["Enums"]["app_notification_type"]
+          workspace_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          recipient_id?: string
+          resource_id?: string | null
+          resource_type?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["app_notification_type"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_notifications_recipient_workspace"
+            columns: ["recipient_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "notifications_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1211,6 +1372,16 @@ export type Database = {
         }
         Returns: number
       }
+      create_internal_note: {
+        Args: {
+          p_body: string
+          p_client_note_id?: string
+          p_conversation_id: string
+          p_mentioned_member_ids?: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       create_workspace: {
         Args: { p_name: string; p_slug: string }
         Returns: Json
@@ -1268,6 +1439,10 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: Json
       }
+      get_internal_note: {
+        Args: { p_note_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       list_accessible_workspaces: { Args: never; Returns: Json }
       list_assignable_members: {
         Args: { p_workspace_id: string }
@@ -1279,6 +1454,14 @@ export type Database = {
       }
       list_customer_timeline: {
         Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      list_internal_notes: {
+        Args: {
+          p_conversation_id: string
+          p_query?: Json
+          p_workspace_id: string
+        }
         Returns: Json
       }
       list_messages: {
@@ -1338,6 +1521,10 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: undefined
       }
+      soft_delete_internal_note: {
+        Args: { p_note_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       soft_delete_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
@@ -1362,6 +1549,15 @@ export type Database = {
         Args: {
           p_conversation_id: string
           p_status: Database["public"]["Enums"]["app_conversation_status"]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      update_internal_note: {
+        Args: {
+          p_body: string
+          p_mentioned_member_ids?: string[]
+          p_note_id: string
           p_workspace_id: string
         }
         Returns: Json
@@ -1531,6 +1727,12 @@ export type Database = {
       app_member_status: "active" | "deactivated"
       app_message_delivery_status: "sent" | "delivered" | "failed"
       app_message_sender_type: "visitor" | "agent" | "system"
+      app_notification_type:
+        | "conversation_new"
+        | "conversation_assigned"
+        | "mention"
+        | "billing_payment_failed"
+        | "trial_ending"
       app_workspace_status: "active" | "suspended" | "pending_deletion"
     }
     CompositeTypes: {
@@ -1685,6 +1887,13 @@ export const Constants = {
       app_member_status: ["active", "deactivated"],
       app_message_delivery_status: ["sent", "delivered", "failed"],
       app_message_sender_type: ["visitor", "agent", "system"],
+      app_notification_type: [
+        "conversation_new",
+        "conversation_assigned",
+        "mention",
+        "billing_payment_failed",
+        "trial_ending",
+      ],
       app_workspace_status: ["active", "suspended", "pending_deletion"],
     },
   },

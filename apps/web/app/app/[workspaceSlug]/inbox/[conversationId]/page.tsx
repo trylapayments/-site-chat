@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 
 import { DashboardPage } from "@/components/dashboard/layout/DashboardPage";
 import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPageHeader";
+import { ConversationMainPanel } from "@/components/inbox/ConversationMainPanel";
 import { ConversationSidebar } from "@/components/inbox/ConversationSidebar";
-import { LiveConversationThread } from "@/components/inbox/LiveConversationThread";
 import { MarkConversationRead } from "@/components/inbox/ConversationThread";
 import { loadWorkspaceAIConfig } from "@/lib/ai/config";
 import { requireUser } from "@/lib/auth/session";
@@ -15,6 +15,7 @@ import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   fetchAssignableMembers,
   fetchConversation,
+  fetchInternalNotes,
   fetchMessages,
 } from "@/lib/inbox/queries";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
@@ -57,9 +58,29 @@ export default async function ConversationDetailPage({
     notFound();
   }
 
-  const members = can(workspace.role, "assign_conversations")
-    ? await fetchAssignableMembers(supabase, workspace.workspace_id)
-    : [];
+  const canManageNotes = can(workspace.role, "manage_internal_notes");
+  const canAssign = can(workspace.role, "assign_conversations");
+
+  const members =
+    canManageNotes || canAssign
+      ? await fetchAssignableMembers(supabase, workspace.workspace_id)
+      : [];
+
+  let initialNotes: Awaited<ReturnType<typeof fetchInternalNotes>>["items"] =
+    [];
+  if (canManageNotes) {
+    try {
+      const notesResult = await fetchInternalNotes(
+        supabase,
+        workspace.workspace_id,
+        conversationId,
+        { limit: 100 },
+      );
+      initialNotes = notesResult.items;
+    } catch {
+      initialNotes = [];
+    }
+  }
 
   const { flags: aiFlags } = await loadWorkspaceAIConfig(
     supabase,
@@ -96,7 +117,7 @@ export default async function ConversationDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <section className="rounded-lg border p-4">
-          <LiveConversationThread
+          <ConversationMainPanel
             workspaceId={workspace.workspace_id}
             workspaceSlug={workspaceSlug}
             conversationId={conversationId}
@@ -109,7 +130,10 @@ export default async function ConversationDetailPage({
                 conversation.visitor_last_delivered_sequence,
               lastReadSequence: conversation.visitor_last_read_sequence,
             }}
+            initialNotes={initialNotes}
+            members={members}
             canSend={can(workspace.role, "send_messages")}
+            canManageNotes={canManageNotes}
             aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
           />
         </section>
@@ -121,7 +145,7 @@ export default async function ConversationDetailPage({
           conversation={conversation}
           members={members}
           memberId={memberId}
-          canAssign={can(workspace.role, "assign_conversations")}
+          canAssign={canAssign}
           canUpdateStatus={can(workspace.role, "update_conversation_status")}
           canUpdateVisitor={can(workspace.role, "update_visitor_profile")}
         />

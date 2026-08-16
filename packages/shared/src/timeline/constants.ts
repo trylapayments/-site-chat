@@ -23,6 +23,10 @@ export const CUSTOMER_TIMELINE_EVENT_TYPES = [
   "conversation_assigned",
   "conversation_transferred",
   "conversation_unassigned",
+  "internal_note_created",
+  "internal_note_updated",
+  "internal_note_deleted",
+  "mention_created",
 ] as const;
 
 export type CustomerTimelineEventType = (typeof CUSTOMER_TIMELINE_EVENT_TYPES)[number];
@@ -53,5 +57,9 @@ export const CUSTOMER_TIMELINE_LABEL_KEYS = {
     conversation_assigned: "timeline.event.conversation_assigned",
     conversation_transferred: "timeline.event.conversation_transferred",
     conversation_unassigned: "timeline.event.conversation_unassigned",
+    internal_note_created: "timeline.event.internal_note_created",
+    internal_note_updated: "timeline.event.internal_note_updated",
+    internal_note_deleted: "timeline.event.internal_note_deleted",
+    mention_created: "timeline.event.mention_created",
   },
 } as const;

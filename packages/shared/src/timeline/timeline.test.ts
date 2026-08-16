@@ -54,6 +54,10 @@ describe("timeline event taxonomy", () => {
       "conversation_assigned",
       "conversation_transferred",
       "conversation_unassigned",
+      "internal_note_created",
+      "internal_note_updated",
+      "internal_note_deleted",
+      "mention_created",
     ]);
     expect(isCustomerTimelineEventType("typing_started")).toBe(false);
     expect(isCustomerTimelineEventType("page_viewed")).toBe(true);

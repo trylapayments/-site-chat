@@ -17,6 +17,13 @@ describe("can", () => {
     expect(can("viewer", "send_messages")).toBe(false);
   });
 
+  it("restricts manage_internal_notes to owner, admin, and agent", () => {
+    expect(can("owner", "manage_internal_notes")).toBe(true);
+    expect(can("admin", "manage_internal_notes")).toBe(true);
+    expect(can("agent", "manage_internal_notes")).toBe(true);
+    expect(can("viewer", "manage_internal_notes")).toBe(false);
+  });
+
   it("restricts assign_conversations to owner, admin, and agent", () => {
     expect(can("owner", "assign_conversations")).toBe(true);
     expect(can("admin", "assign_conversations")).toBe(true);

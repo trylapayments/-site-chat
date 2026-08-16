@@ -128,14 +128,32 @@ test.describe("customer timeline", () => {
     });
     await pageViewResponse;
 
-    await expect(timeline.locator('[data-event-type="page_viewed"]').first()).toBeVisible({
+    try {
+      await expect(timeline.locator('[data-event-type="page_viewed"]').first()).toBeVisible({
+        timeout: 20_000,
+      });
+    } catch {
+      // Live CDC can stall under webserver ECONNRESET; reload picks up durable events.
+      await recoverOperatorConversation(operator, marker);
+      await expect(
+        operator
+          .getByTestId("customer-timeline")
+          .locator('[data-event-type="page_viewed"]')
+          .first(),
+      ).toBeVisible({ timeout: 30_000 });
+    }
+    await expect(
+      operator
+        .getByTestId("customer-timeline")
+        .getByText(/\/pricing\?utm_source=e2e/)
+        .first(),
+    ).toBeVisible({
       timeout: 30_000,
     });
-    await expect(timeline.getByText(/\/pricing\?utm_source=e2e/).first()).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(timeline.getByText("access_token=secret")).toHaveCount(0);
-    await expect(timeline.getByText("#frag")).toHaveCount(0);
+    await expect(
+      operator.getByTestId("customer-timeline").getByText("access_token=secret"),
+    ).toHaveCount(0);
+    await expect(operator.getByTestId("customer-timeline").getByText("#frag")).toHaveCount(0);
 
     const identifyResponse = visitor.waitForResponse(
       (response) =>

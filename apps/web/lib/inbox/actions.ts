@@ -5,8 +5,10 @@ import {
   AssignmentError,
   cancelUploadsRequestSchema,
   completeUploadsRequestSchema,
+  createInternalNoteSchema,
   initiateUploadsDataSchema,
   listCustomerTimelineQuerySchema,
+  NoteError,
   normalizeVisitorEmail,
   normalizeVisitorName,
   normalizeVisitorPhone,
@@ -16,13 +18,17 @@ import {
   markConversationDeliveredSchema,
   markConversationReadSchema,
   parseAssignmentErrorMessage,
+  parseNoteErrorMessage,
+  softDeleteInternalNoteSchema,
   sendMessageSchema,
   takeConversationSchema,
   unassignConversationSchema,
   updateConversationStatusSchema,
+  updateInternalNoteSchema,
   VisitorIdentityError,
   type AssignmentMutationResult,
   type InitiateUploadsData,
+  type InternalNote,
   type ListCustomerTimelineResult,
   type MarkConversationDeliveredResult,
   type MarkConversationReadResult,
@@ -42,14 +48,18 @@ import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   assignConversation,
+  createInternalNote,
   fetchConversation,
   fetchCustomerTimeline,
+  fetchInternalNotes,
   markConversationDelivered,
   markConversationRead,
   sendOperatorMessage,
+  softDeleteInternalNote,
   takeConversation,
   unassignConversation,
   updateConversationStatus,
+  updateInternalNote,
   updateVisitorProfile,
 } from "@/lib/inbox/queries";
 import {
@@ -66,7 +76,8 @@ export type InboxActionResult =
         | SendOperatorMessageResult
         | MarkConversationReadResult
         | MarkConversationDeliveredResult
-        | AssignmentMutationResult;
+        | AssignmentMutationResult
+        | InternalNote;
     }
   | { success: false; message: string; code?: string };
 
@@ -77,10 +88,25 @@ function mapActionError(error: unknown): InboxActionResult {
   if (error instanceof AssignmentError) {
     return { success: false, message: error.message, code: error.code };
   }
+  if (error instanceof NoteError) {
+    return { success: false, message: error.message, code: error.code };
+  }
   if (error instanceof Error) {
-    const typed = parseAssignmentErrorMessage(error.message);
-    if (typed) {
-      return { success: false, message: typed.message, code: typed.code };
+    const typedAssignment = parseAssignmentErrorMessage(error.message);
+    if (typedAssignment) {
+      return {
+        success: false,
+        message: typedAssignment.message,
+        code: typedAssignment.code,
+      };
+    }
+    const typedNote = parseNoteErrorMessage(error.message);
+    if (typedNote) {
+      return {
+        success: false,
+        message: typedNote.message,
+        code: typedNote.code,
+      };
     }
   }
   return { success: false, message: "Something went wrong. Please try again." };
@@ -670,5 +696,173 @@ export async function fetchVisitorReceiptCursorsAction(
       success: false,
       message: "Unable to load receipt cursors.",
     };
+  }
+}
+
+export async function listInternalNotesAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    after?: { created_at: string; id: string };
+    before?: { created_at: string; id: string };
+    limit?: number;
+    catch_up_since?: string;
+    authoritative?: boolean;
+  },
+): Promise<
+  | { success: true; data: Awaited<ReturnType<typeof fetchInternalNotes>> }
+  | { success: false; message: string; code?: string }
+> {
+  try {
+    const conversationId = z.string().uuid().safeParse(input.conversationId);
+    if (!conversationId.success) {
+      return { success: false, message: "Invalid conversation." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "manage_internal_notes");
+
+    const data = await fetchInternalNotes(
+      supabase,
+      workspace.workspace_id,
+      conversationId.data,
+      {
+        ...(input.limit !== undefined ? { limit: input.limit } : {}),
+        ...(input.after ? { after: input.after } : {}),
+        ...(input.before ? { before: input.before } : {}),
+        ...(input.catch_up_since
+          ? { catch_up_since: input.catch_up_since }
+          : {}),
+        ...(input.authoritative !== undefined
+          ? { authoritative: input.authoritative }
+          : {}),
+      },
+    );
+    return { success: true, data };
+  } catch (error) {
+    if (error instanceof CapabilityError) {
+      return { success: false, message: error.message, code: "FORBIDDEN" };
+    }
+    if (error instanceof NoteError) {
+      return { success: false, message: error.message, code: error.code };
+    }
+    if (error instanceof Error) {
+      const typedNote = parseNoteErrorMessage(error.message);
+      if (typedNote) {
+        return {
+          success: false,
+          message: typedNote.message,
+          code: typedNote.code,
+        };
+      }
+    }
+    return { success: false, message: "Unable to load notes." };
+  }
+}
+
+export async function createInternalNoteAction(
+  workspaceSlug: string,
+  input: {
+    conversationId: string;
+    body: string;
+    clientNoteId?: string;
+    mentionedMemberIds?: string[];
+  },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = createInternalNoteSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: "Invalid note." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "manage_internal_notes");
+
+    const result = await createInternalNote(
+      supabase,
+      workspace.workspace_id,
+      parsed.data,
+    );
+
+    revalidatePath(
+      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
+    );
+    return { success: true, data: result };
+  } catch (error) {
+    return mapActionError(error);
+  }
+}
+
+export async function updateInternalNoteAction(
+  workspaceSlug: string,
+  input: {
+    noteId: string;
+    body: string;
+    mentionedMemberIds?: string[];
+    conversationId: string;
+  },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = updateInternalNoteSchema.safeParse({
+      noteId: input.noteId,
+      body: input.body,
+      mentionedMemberIds: input.mentionedMemberIds,
+    });
+    if (!parsed.success) {
+      return { success: false, message: "Invalid note update." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "manage_internal_notes");
+
+    const result = await updateInternalNote(
+      supabase,
+      workspace.workspace_id,
+      parsed.data,
+    );
+
+    revalidatePath(
+      `${workspaceNavPath(workspaceSlug, "inbox")}/${input.conversationId}`,
+    );
+    return { success: true, data: result };
+  } catch (error) {
+    return mapActionError(error);
+  }
+}
+
+export async function softDeleteInternalNoteAction(
+  workspaceSlug: string,
+  input: { noteId: string; conversationId: string },
+): Promise<InboxActionResult> {
+  try {
+    const parsed = softDeleteInternalNoteSchema.safeParse({
+      noteId: input.noteId,
+    });
+    if (!parsed.success) {
+      return { success: false, message: "Invalid note." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "manage_internal_notes");
+
+    const result = await softDeleteInternalNote(
+      supabase,
+      workspace.workspace_id,
+      {
+        ...parsed.data,
+        conversationId: input.conversationId,
+      },
+    );
+
+    revalidatePath(
+      `${workspaceNavPath(workspaceSlug, "inbox")}/${input.conversationId}`,
+    );
+    return { success: true, data: result };
+  } catch (error) {
+    return mapActionError(error);
   }
 }
