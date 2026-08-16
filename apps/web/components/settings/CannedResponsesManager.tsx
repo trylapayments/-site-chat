@@ -112,7 +112,6 @@ export function CannedResponsesManager({
     error: liveError,
     applyResponse,
     markResponseDeleted,
-    clearResponseTombstone,
     applyFolder,
     markFolderDeleted,
     retry,
