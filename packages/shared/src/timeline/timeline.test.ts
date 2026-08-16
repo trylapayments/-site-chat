@@ -58,6 +58,11 @@ describe("timeline event taxonomy", () => {
       "internal_note_updated",
       "internal_note_deleted",
       "mention_created",
+      "tag_added",
+      "tag_removed",
+      "company_linked",
+      "company_unlinked",
+      "custom_field_updated",
     ]);
     expect(isCustomerTimelineEventType("typing_started")).toBe(false);
     expect(isCustomerTimelineEventType("page_viewed")).toBe(true);

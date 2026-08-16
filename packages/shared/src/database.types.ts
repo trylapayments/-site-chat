@@ -470,51 +470,198 @@ export type Database = {
           },
         ]
       }
+      companies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          domain: string | null
+          id: string
+          industry: string | null
+          name: string
+          size: string | null
+          updated_at: string
+          updated_by: string | null
+          website: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          domain?: string | null
+          id?: string
+          industry?: string | null
+          name: string
+          size?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          website?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          domain?: string | null
+          id?: string
+          industry?: string | null
+          name?: string
+          size?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          website?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_tag_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          contact_id: string
+          id: string
+          tag_id: string
+          workspace_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          contact_id: string
+          id?: string
+          tag_id: string
+          workspace_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          contact_id?: string
+          id?: string
+          tag_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_tag_assignments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_tags: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          name: string
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_tags_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
+          company_id: string | null
           continuity_token_hash: string | null
+          country_code: string | null
           created_at: string
           custom_attributes_json: Json
           email: string | null
           first_seen_at: string
           id: string
+          job_title: string | null
           last_seen_at: string
+          locale: string | null
           name: string | null
           phone: string | null
           phone_e164: string | null
           public_id: string
+          search_vector: unknown
           updated_at: string
           visit_count: number
           workspace_id: string
         }
         Insert: {
+          company_id?: string | null
           continuity_token_hash?: string | null
+          country_code?: string | null
           created_at?: string
           custom_attributes_json?: Json
           email?: string | null
           first_seen_at?: string
           id?: string
+          job_title?: string | null
           last_seen_at?: string
+          locale?: string | null
           name?: string | null
           phone?: string | null
           phone_e164?: string | null
           public_id?: string
+          search_vector?: unknown
           updated_at?: string
           visit_count?: number
           workspace_id: string
         }
         Update: {
+          company_id?: string | null
           continuity_token_hash?: string | null
+          country_code?: string | null
           created_at?: string
           custom_attributes_json?: Json
           email?: string | null
           first_seen_at?: string
           id?: string
+          job_title?: string | null
           last_seen_at?: string
+          locale?: string | null
           name?: string | null
           phone?: string | null
           phone_e164?: string | null
           public_id?: string
+          search_vector?: unknown
           updated_at?: string
           visit_count?: number
           workspace_id?: string
@@ -522,6 +669,112 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "contacts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_field_definitions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          field_type: Database["public"]["Enums"]["app_custom_field_type"]
+          id: string
+          is_required: boolean
+          key: string
+          label: string
+          options_json: Json
+          sort_order: number
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          field_type: Database["public"]["Enums"]["app_custom_field_type"]
+          id?: string
+          is_required?: boolean
+          key: string
+          label: string
+          options_json?: Json
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          field_type?: Database["public"]["Enums"]["app_custom_field_type"]
+          id?: string
+          is_required?: boolean
+          key?: string
+          label?: string
+          options_json?: Json
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_field_definitions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_field_values: {
+        Row: {
+          contact_id: string
+          created_at: string
+          field_id: string
+          id: string
+          updated_at: string
+          value_boolean: boolean | null
+          value_date: string | null
+          value_number: number | null
+          value_select: string | null
+          value_text: string | null
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          field_id: string
+          id?: string
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_date?: string | null
+          value_number?: number | null
+          value_select?: string | null
+          value_text?: string | null
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          field_id?: string
+          id?: string
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_date?: string | null
+          value_number?: number | null
+          value_select?: string | null
+          value_text?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_field_values_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1560,6 +1813,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      assign_contact_tag: {
+        Args: {
+          p_contact_id: string
+          p_tag_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       assign_conversation: {
         Args: {
           p_assignee_member_id: string
@@ -1579,6 +1840,14 @@ export type Database = {
         }
         Returns: number
       }
+      clear_contact_custom_field_value: {
+        Args: {
+          p_contact_id: string
+          p_field_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       create_canned_response: {
         Args: {
           p_body: string
@@ -1595,6 +1864,33 @@ export type Database = {
           p_name: string
           p_sort_order?: number
           p_visibility: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      create_company: {
+        Args: {
+          p_domain?: string
+          p_industry?: string
+          p_name: string
+          p_size?: string
+          p_website?: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      create_contact_tag: {
+        Args: { p_color: string; p_name: string; p_workspace_id: string }
+        Returns: Json
+      }
+      create_custom_field_definition: {
+        Args: {
+          p_field_type: string
+          p_is_required?: boolean
+          p_key: string
+          p_label: string
+          p_options_json?: Json
+          p_sort_order?: number
           p_workspace_id: string
         }
         Returns: Json
@@ -1662,6 +1958,14 @@ export type Database = {
         Args: { p_id: string; p_workspace_id: string }
         Returns: Json
       }
+      get_company: {
+        Args: { p_company_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      get_contact_profile: {
+        Args: { p_contact_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       get_conversation: {
         Args: { p_conversation_id: string; p_workspace_id: string }
         Returns: Json
@@ -1672,6 +1976,14 @@ export type Database = {
       }
       get_internal_note: {
         Args: { p_note_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      link_contact_company: {
+        Args: {
+          p_company_id: string
+          p_contact_id: string
+          p_workspace_id: string
+        }
         Returns: Json
       }
       list_accessible_workspaces: { Args: never; Returns: Json }
@@ -1687,8 +1999,24 @@ export type Database = {
         Args: { p_query?: Json; p_workspace_id: string }
         Returns: Json
       }
+      list_companies: {
+        Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      list_contact_tags: {
+        Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      list_contacts: {
+        Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
       list_conversations: {
         Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      list_custom_field_definitions: {
+        Args: { p_workspace_id: string }
         Returns: Json
       }
       list_customer_timeline: {
@@ -1764,6 +2092,15 @@ export type Database = {
         Args: { p_favorited: boolean; p_id: string; p_workspace_id: string }
         Returns: Json
       }
+      set_contact_custom_field_value: {
+        Args: {
+          p_contact_id: string
+          p_field_id: string
+          p_value?: Json
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       set_last_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
@@ -1774,6 +2111,18 @@ export type Database = {
       }
       soft_delete_canned_response_folder: {
         Args: { p_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      soft_delete_company: {
+        Args: { p_company_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      soft_delete_contact_tag: {
+        Args: { p_tag_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      soft_delete_custom_field_definition: {
+        Args: { p_field_id: string; p_workspace_id: string }
         Returns: Json
       }
       soft_delete_internal_note: {
@@ -1792,12 +2141,24 @@ export type Database = {
         }
         Returns: Json
       }
+      unassign_contact_tag: {
+        Args: {
+          p_contact_id: string
+          p_tag_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       unassign_conversation: {
         Args: {
           p_conversation_id: string
           p_expected_version?: number
           p_workspace_id: string
         }
+        Returns: Json
+      }
+      unlink_contact_company: {
+        Args: { p_contact_id: string; p_workspace_id: string }
         Returns: Json
       }
       update_canned_response: {
@@ -1820,10 +2181,43 @@ export type Database = {
         }
         Returns: Json
       }
+      update_company: {
+        Args: {
+          p_company_id: string
+          p_patch?: Json
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      update_contact_profile: {
+        Args: {
+          p_contact_id: string
+          p_patch?: Json
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      update_contact_tag: {
+        Args: {
+          p_color?: string
+          p_name?: string
+          p_tag_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       update_conversation_status: {
         Args: {
           p_conversation_id: string
           p_status: Database["public"]["Enums"]["app_conversation_status"]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      update_custom_field_definition: {
+        Args: {
+          p_field_id: string
+          p_patch?: Json
           p_workspace_id: string
         }
         Returns: Json
@@ -1998,6 +2392,7 @@ export type Database = {
       app_canned_visibility: "workspace" | "personal"
       app_channel_type: "widget"
       app_conversation_status: "open" | "pending" | "resolved" | "closed"
+      app_custom_field_type: "text" | "number" | "boolean" | "date" | "select"
       app_device_type: "desktop" | "mobile" | "tablet" | "bot" | "unknown"
       app_member_role: "owner" | "admin" | "agent" | "viewer"
       app_member_status: "active" | "deactivated"
@@ -2159,6 +2554,7 @@ export const Constants = {
       app_canned_visibility: ["workspace", "personal"],
       app_channel_type: ["widget"],
       app_conversation_status: ["open", "pending", "resolved", "closed"],
+      app_custom_field_type: ["text", "number", "boolean", "date", "select"],
       app_device_type: ["desktop", "mobile", "tablet", "bot", "unknown"],
       app_member_role: ["owner", "admin", "agent", "viewer"],
       app_member_status: ["active", "deactivated"],

@@ -27,6 +27,11 @@ export const CUSTOMER_TIMELINE_EVENT_TYPES = [
   "internal_note_updated",
   "internal_note_deleted",
   "mention_created",
+  "tag_added",
+  "tag_removed",
+  "company_linked",
+  "company_unlinked",
+  "custom_field_updated",
 ] as const;
 
 export type CustomerTimelineEventType = (typeof CUSTOMER_TIMELINE_EVENT_TYPES)[number];
@@ -61,5 +66,10 @@ export const CUSTOMER_TIMELINE_LABEL_KEYS = {
     internal_note_updated: "timeline.event.internal_note_updated",
     internal_note_deleted: "timeline.event.internal_note_deleted",
     mention_created: "timeline.event.mention_created",
+    tag_added: "timeline.event.tag_added",
+    tag_removed: "timeline.event.tag_removed",
+    company_linked: "timeline.event.company_linked",
+    company_unlinked: "timeline.event.company_unlinked",
+    custom_field_updated: "timeline.event.custom_field_updated",
   },
 } as const;
