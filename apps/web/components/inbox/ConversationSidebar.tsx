@@ -2,23 +2,31 @@
 
 import {
   conversationStatusSchema,
+  crmMessagesEn,
+  type ContactTagSummary,
   type ConversationDetail,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { VisitorSidebarLiveRefresh } from "@/components/inbox/VisitorSidebarLiveRefresh";
 import { CustomerTimeline } from "@/components/inbox/CustomerTimeline";
+import { ContactTagChip } from "@/components/crm/ContactTagsEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toAppRoute } from "@/lib/auth/redirect";
+import { workspaceContactsPath } from "@/lib/dashboard/routes";
 import {
   updateConversationStatusAction,
   updateVisitorProfileAction,
 } from "@/lib/inbox/actions";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
+
+const crmMessages = crmMessagesEn;
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
@@ -63,6 +71,7 @@ export function ConversationSidebar({
   canAssign,
   canUpdateStatus,
   canUpdateVisitor,
+  contactTags = [],
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -73,6 +82,7 @@ export function ConversationSidebar({
   canAssign: boolean;
   canUpdateStatus: boolean;
   canUpdateVisitor: boolean;
+  contactTags?: ContactTagSummary[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -200,6 +210,23 @@ export function ConversationSidebar({
             ) : null}
           </div>
         )}
+
+        {contactTags.length > 0 ? (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {contactTags.slice(0, 6).map((tag) => (
+              <ContactTagChip key={tag.id} tag={tag} />
+            ))}
+          </div>
+        ) : null}
+
+        {contact?.id ? (
+          <Link
+            href={toAppRoute(workspaceContactsPath(workspaceSlug, contact.id))}
+            className="text-primary text-sm font-medium hover:underline"
+          >
+            {crmMessages.viewProfile}
+          </Link>
+        ) : null}
       </section>
 
       <section className="space-y-3">

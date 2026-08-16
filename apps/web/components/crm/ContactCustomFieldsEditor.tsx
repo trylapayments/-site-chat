@@ -1,0 +1,207 @@
+"use client";
+
+import {
+  crmMessagesEn,
+  type ContactCustomFieldEntry,
+  type ContactProfile,
+} from "@site-chat/shared";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  clearContactCustomFieldValueAction,
+  setContactCustomFieldValueAction,
+} from "@/lib/crm/actions";
+
+const messages = crmMessagesEn;
+
+function valueToInput(entry: ContactCustomFieldEntry): string {
+  if (entry.value === null) {
+    return "";
+  }
+  if (typeof entry.value === "boolean") {
+    return entry.value ? "true" : "false";
+  }
+  return String(entry.value);
+}
+
+function FieldEditor({
+  workspaceSlug,
+  contactId,
+  entry,
+  canEdit,
+}: {
+  workspaceSlug: string;
+  contactId: string;
+  entry: ContactCustomFieldEntry;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState(valueToInput(entry));
+
+  useEffect(() => {
+    setDraft(valueToInput(entry));
+    setError(null);
+  }, [entry]);
+
+  if (!canEdit) {
+    return (
+      <div className="space-y-0.5">
+        <p className="text-muted-foreground text-xs">{entry.label}</p>
+        <p className="text-sm">
+          {entry.value === null ? "—" : String(entry.value)}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={`cf-${entry.field_id}`}>{entry.label}</Label>
+      {entry.field_type === "boolean" ? (
+        <select
+          id={`cf-${entry.field_id}`}
+          className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
+          value={draft}
+          disabled={isPending}
+          onChange={(event) => {
+            setDraft(event.target.value);
+          }}
+        >
+          <option value="">—</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      ) : entry.field_type === "select" ? (
+        <select
+          id={`cf-${entry.field_id}`}
+          className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
+          value={draft}
+          disabled={isPending}
+          onChange={(event) => {
+            setDraft(event.target.value);
+          }}
+        >
+          <option value="">—</option>
+          {entry.options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <Input
+          id={`cf-${entry.field_id}`}
+          type={
+            entry.field_type === "number"
+              ? "number"
+              : entry.field_type === "date"
+                ? "date"
+                : "text"
+          }
+          value={draft}
+          disabled={isPending}
+          onChange={(event) => {
+            setDraft(event.target.value);
+          }}
+        />
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={isPending}
+          onClick={() => {
+            setError(null);
+            startTransition(async () => {
+              let value: string | number | boolean | null = draft;
+              if (draft.trim() === "") {
+                value = null;
+              } else if (entry.field_type === "number") {
+                value = Number(draft);
+              } else if (entry.field_type === "boolean") {
+                value = draft === "true";
+              }
+              const result = await setContactCustomFieldValueAction(
+                workspaceSlug,
+                {
+                  contactId,
+                  fieldId: entry.field_id,
+                  value,
+                },
+              );
+              if (result.success) {
+                router.refresh();
+              } else {
+                setError(result.message);
+              }
+            });
+          }}
+        >
+          {messages.save}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={isPending || entry.value === null}
+          onClick={() => {
+            setError(null);
+            startTransition(async () => {
+              const result = await clearContactCustomFieldValueAction(
+                workspaceSlug,
+                {
+                  contactId,
+                  fieldId: entry.field_id,
+                },
+              );
+              if (result.success) {
+                router.refresh();
+              } else {
+                setError(result.message);
+              }
+            });
+          }}
+        >
+          {messages.clear}
+        </Button>
+      </div>
+      {error ? <p className="text-destructive text-xs">{error}</p> : null}
+    </div>
+  );
+}
+
+export function ContactCustomFieldsEditor({
+  workspaceSlug,
+  profile,
+  canEdit,
+}: {
+  workspaceSlug: string;
+  profile: ContactProfile;
+  canEdit: boolean;
+}) {
+  if (profile.custom_fields.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">{messages.noCustomFields}</p>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {profile.custom_fields.map((entry) => (
+        <FieldEditor
+          key={entry.field_id}
+          workspaceSlug={workspaceSlug}
+          contactId={profile.id}
+          entry={entry}
+          canEdit={canEdit}
+        />
+      ))}
+    </div>
+  );
+}

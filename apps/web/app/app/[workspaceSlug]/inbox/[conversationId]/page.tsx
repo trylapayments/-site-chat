@@ -1,4 +1,8 @@
-import { can, type CannedResponse } from "@site-chat/shared";
+import {
+  can,
+  type CannedResponse,
+  type ContactTagSummary,
+} from "@site-chat/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,6 +15,7 @@ import { loadWorkspaceAIConfig } from "@/lib/ai/config";
 import { requireUser } from "@/lib/auth/session";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { fetchCannedResponses } from "@/lib/canned/queries";
+import { fetchContactProfile } from "@/lib/crm/queries";
 import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
@@ -111,6 +116,20 @@ export default async function ConversationDetailPage({
   const aiSuggestedRepliesEnabled =
     can(workspace.role, "send_messages") && aiFlags.suggestedReplies;
 
+  let contactTags: ContactTagSummary[] = [];
+  if (conversation.contact?.id && can(workspace.role, "view_contact_profile")) {
+    try {
+      const profile = await fetchContactProfile(
+        supabase,
+        workspace.workspace_id,
+        conversation.contact.id,
+      );
+      contactTags = profile.tags;
+    } catch {
+      contactTags = [];
+    }
+  }
+
   const maxSequence = messages.items.reduce(
     (max, message) => Math.max(max, message.sequence_number),
     0,
@@ -175,6 +194,7 @@ export default async function ConversationDetailPage({
           canAssign={canAssign}
           canUpdateStatus={can(workspace.role, "update_conversation_status")}
           canUpdateVisitor={can(workspace.role, "update_visitor_profile")}
+          contactTags={contactTags}
         />
       </div>
     </DashboardPage>
