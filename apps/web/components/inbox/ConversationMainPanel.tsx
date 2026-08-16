@@ -2,6 +2,7 @@
 
 import {
   internalNotesMessagesEn,
+  type CannedResponse,
   type InternalNote,
   type MessageItem,
   type ReceiptCursors,
@@ -19,6 +20,7 @@ type Tab = "messages" | "notes";
 export function ConversationMainPanel({
   workspaceId,
   workspaceSlug,
+  workspaceName,
   conversationId,
   ephemeralTopic,
   memberId,
@@ -26,13 +28,18 @@ export function ConversationMainPanel({
   initialMessages,
   initialVisitorReceipts,
   initialNotes,
+  initialCannedResponses,
+  visitorName,
+  visitorEmail,
   members,
   canSend,
   canManageNotes,
+  canUseCannedResponses,
   aiSuggestedRepliesEnabled = false,
 }: {
   workspaceId: string;
   workspaceSlug: string;
+  workspaceName: string;
   conversationId: string;
   ephemeralTopic: string;
   memberId: string;
@@ -40,9 +47,13 @@ export function ConversationMainPanel({
   initialMessages: MessageItem[];
   initialVisitorReceipts: ReceiptCursors;
   initialNotes: InternalNote[];
+  initialCannedResponses: CannedResponse[];
+  visitorName: string | null;
+  visitorEmail: string | null;
   members: WorkspaceMemberOption[];
   canSend: boolean;
   canManageNotes: boolean;
+  canUseCannedResponses: boolean;
   aiSuggestedRepliesEnabled?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("messages");
@@ -97,13 +108,18 @@ export function ConversationMainPanel({
         <LiveConversationThread
           workspaceId={workspaceId}
           workspaceSlug={workspaceSlug}
+          workspaceName={workspaceName}
           conversationId={conversationId}
           ephemeralTopic={ephemeralTopic}
           memberId={memberId}
           memberDisplayLabel={memberDisplayLabel}
           initialMessages={initialMessages}
           initialVisitorReceipts={initialVisitorReceipts}
+          initialCannedResponses={initialCannedResponses}
+          visitorName={visitorName}
+          visitorEmail={visitorEmail}
           canSend={canSend}
+          canUseCannedResponses={canUseCannedResponses}
           aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
         />
       </div>
