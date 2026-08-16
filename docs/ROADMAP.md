@@ -140,7 +140,7 @@ The MVP is complete when:
 - [x] Contact / visitor identity foundation (opaque `public_id`, auto-create on session, widget identify, operator profile update)
 - [x] Visitor context (session device/UTM fields, `visitor_page_views`, page-view API + 30s dedupe)
 - [x] Customer Timeline (durable `customer_timeline_events`, operator sidebar, keyset pagination, realtime)
-- [ ] Contact list page with linked conversations
+- [x] Visitor Profile / CRM-lite (companies, tags, typed custom fields, contact list + profile UI, settings; `contacts.search_vector` + `list_contacts` q — search readiness for PR #32)
 - [ ] Visitor identification UX polish in widget (name/email prompt UI)
 - [x] File attachment upload (widget + dashboard)
 - [x] Attachment display (inline images, download links)
@@ -149,7 +149,7 @@ The MVP is complete when:
 - [ ] Email notifications via Resend (configurable per agent)
 - [ ] Notification preferences UI
 
-**Notes:** This phase’s identity + context foundation (docs + schema/RPCs) delivers durable visitor contacts, host `SiteChat.identify`, page-view trail, and privacy defaults (no raw IP / no fingerprinting). Customer Timeline adds a durable event store for operator history and future CRM/AI/analytics (`docs/CUSTOMER-TIMELINE.md`). Canned responses ship end to end — migration, RPCs, shared schemas, Server Actions, settings library and composer insertion (`docs/CANNED-RESPONSES.md`). Remaining work: contacts list UI, widget prompt UX, and retention purge jobs (`docs/DATA-RETENTION.md`).
+**Notes:** This phase’s identity + context foundation (docs + schema/RPCs) delivers durable visitor contacts, host `SiteChat.identify`, page-view trail, and privacy defaults (no raw IP / no fingerprinting). Customer Timeline adds a durable event store for operator history and future CRM/AI/analytics (`docs/CUSTOMER-TIMELINE.md`). Canned responses ship end to end — migration, RPCs, shared schemas, Server Actions, settings library and composer insertion (`docs/CANNED-RESPONSES.md`). Visitor Profile / CRM-lite ships companies, tags, typed custom fields, contact list/profile UI, and search-ready `contacts.search_vector` for PR #32 (`docs/VISITOR-PROFILE.md`, ADR-008). Remaining work: widget prompt UX, and retention purge jobs (`docs/DATA-RETENTION.md`).
 
 **Exit criteria:** Agent uses canned response with visitor name variable; visitor uploads image visible in dashboard; contact created automatically when visitor provides email; agent receives email notification for new conversation.
 
@@ -245,7 +245,7 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 | Slack notifications | Agent workflow fit | Slack app, OAuth |
 | AI suggested replies | Agent efficiency | **Foundation shipped** — see `docs/AI-ARCHITECTURE.md`; expand models/settings UX |
 | Chatbot / auto-responder | After-hours coverage | AI foundation, conversation routing, visitor-safe prompts |
-| Custom attributes on contacts | Host identify attributes shipped (JSONB bounds); admin UI / CRM fields still later | Schema + identify RPCs exist; admin UI pending |
+| Custom attributes on contacts | Host identify JSONB shipped; **CRM-lite typed custom fields + admin UI shipped** (`docs/VISITOR-PROFILE.md`) | Full CRM (deals/pipelines) still later; host JSONB unchanged |
 | SLA tracking and alerts | Enterprise support teams | Timer system, reporting |
 | Advanced analytics dashboard | Business insights | Data warehouse or aggregation |
 | SAML/OIDC SSO | Enterprise security requirement | Supabase Auth enterprise |

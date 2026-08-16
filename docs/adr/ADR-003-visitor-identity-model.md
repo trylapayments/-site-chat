@@ -82,7 +82,7 @@ Not implemented. Documented here so the interface contract is settled before any
 - Verified identify (HMAC/JWT-signed assertion) — see "Verified identity (future)" above
 - Retention purge jobs (`settings_json.privacy.visitorDataRetentionDays`)
 - Export/delete UX
-- Optional CRM/company/custom-field expansion (explicit non-goal now)
+- Optional CRM/company/custom-field expansion (shipped later as CRM-lite — see ADR-008 / `docs/VISITOR-PROFILE.md`)
 
 ---
 

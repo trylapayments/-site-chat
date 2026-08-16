@@ -60,8 +60,13 @@ Canonical shared constants live in `@site-chat/shared` (`CUSTOMER_TIMELINE_EVENT
 | `internal_note_updated` | Note update | `note_id`, author/updater labels — **no body** |
 | `internal_note_deleted` | Soft delete | `note_id`, author/deleter labels — **no body** |
 | `mention_created` | New mention on a note | `note_id`, mentioned + author labels |
+| `tag_added` | Contact tag assigned (new assignment only) | `tag_id`, `tag_name`, `tag_color` |
+| `tag_removed` | Contact tag unassigned or removed via tag soft-delete | `tag_id`, `tag_name` |
+| `company_linked` | Contact linked to a company (explicit link or profile `company_id`) | `company_id`, `company_name`, `previous_company_id` |
+| `company_unlinked` | Contact unlinked from a company (explicit unlink / profile clear) | `previous_company_id` |
+| `custom_field_updated` | Custom field value set or cleared with a real change | `field_id`, `key`, `from`, `to` |
 
-Assignment mutations use `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS. No-ops emit nothing. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005. Internal notes use dedicated RPCs; see `docs/INTERNAL-NOTES.md` and ADR-006.
+Assignment mutations use `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS. No-ops emit nothing. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005. Internal notes use dedicated RPCs; see `docs/INTERNAL-NOTES.md` and ADR-006. CRM-lite profile/tag/company/custom-field events: see `docs/VISITOR-PROFILE.md` and ADR-008. **Company soft-delete** clears `company_id` on linked contacts without emitting per-contact `company_unlinked` (bulk unlink; avoids timeline spam).
 
 ---
 

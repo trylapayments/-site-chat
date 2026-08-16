@@ -80,6 +80,8 @@ AI subsystem details: `docs/AI-ARCHITECTURE.md`, `docs/AI-SECURITY.md`, `docs/AI
 
 Visitor identity + context: `docs/VISITOR-IDENTITY.md`, `docs/PRIVACY.md`, `docs/DATA-RETENTION.md`, `docs/adr/ADR-003-visitor-identity-model.md`.
 
+Visitor Profile / CRM-lite (companies, tags, typed custom fields, contact list + profile): `docs/VISITOR-PROFILE.md`, `docs/adr/ADR-008-crm-companies-custom-fields.md`.
+
 ---
 
 ## 3. Multi-Tenancy Model
@@ -308,6 +310,8 @@ Current assignee is stored on `conversations` (`assigned_to`, `assigned_at`, `as
 Operator-only notes live in `internal_notes` (not `messages`). Soft delete, `@mentions`, durable mention `notifications`, timeline events (`internal_note_created` / `updated` / `deleted`, `mention_created`), and CDC on `internal_notes` with list catch-up merge. Visitors/viewers never receive notes. See `docs/INTERNAL-NOTES.md` and ADR-006.
 
 Canned responses live in `canned_responses` (with `canned_response_folders` and per-member `canned_response_favorites`). Workspace-shared and personal scopes share one table; mutations are Server Actions over SECURITY DEFINER RPCs (RLS is SELECT-only for realtime). Composer `/shortcut` insertion interpolates `{{visitor.*}}` / `{{operator.name}}` / `{{workspace.name}}` / `{{conversation.id}}` at insert time. See `docs/CANNED-RESPONSES.md` and ADR-007.
+
+CRM-lite extends `contacts` with optional `company_id`, profile fields, workspace `contact_tags` / `companies` / typed `custom_field_*` tables. Mutations are Server Actions over SECURITY DEFINER RPCs (RLS SELECT-only). Host `custom_attributes_json` stays separate from operator custom fields. Contact `search_vector` prepares PR #32 global search. See `docs/VISITOR-PROFILE.md` and ADR-008.
 
 ### 6.2.1 Read receipts and unread counters
 
