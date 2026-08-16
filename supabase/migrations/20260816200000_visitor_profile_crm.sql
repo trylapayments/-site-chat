@@ -2557,7 +2557,11 @@ BEGIN
   WHERE c.workspace_id = p_workspace_id
     AND c.company_id = p_company_id;
 
-  -- Soft delete does not fire FK ON DELETE; unlink contacts explicitly (no bulk timeline).
+  -- Soft delete does not fire FK ON DELETE; unlink contacts explicitly.
+  -- Intentionally does NOT emit per-contact company_unlinked timeline events:
+  -- bulk soft-delete would spam every linked contact's timeline. Explicit
+  -- unlink_contact_company / update_contact_profile company_id=null still emit
+  -- company_unlinked for the single contact being changed.
   UPDATE public.contacts c
   SET company_id = NULL, updated_at = now()
   WHERE c.workspace_id = p_workspace_id
@@ -3446,7 +3450,7 @@ BEGIN
         v_company_id := (p_patch ->> 'company_id')::uuid;
       EXCEPTION
         WHEN invalid_text_representation THEN
-          RAISE EXCEPTION 'company_id must be a uuid or null';
+          RAISE EXCEPTION 'INVALID_COMPANY_ID: company_id must be a uuid or null.';
       END;
 
       SELECT co.*
@@ -3457,7 +3461,7 @@ BEGIN
         AND co.deleted_at IS NULL;
 
       IF NOT FOUND THEN
-        RAISE EXCEPTION 'Company not found';
+        RAISE EXCEPTION 'COMPANY_NOT_FOUND: Company not found.';
       END IF;
     END IF;
   END IF;
