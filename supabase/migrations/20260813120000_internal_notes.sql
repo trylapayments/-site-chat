@@ -814,6 +814,7 @@ DECLARE
   v_tombstones jsonb := '[]'::jsonb;
   v_has_more boolean := false;
   v_next_before jsonb := NULL;
+  v_server_watermark timestamptz;
   v_row record;
   v_count integer := 0;
 BEGIN
@@ -878,12 +879,27 @@ BEGIN
         AND n.updated_at >= v_catch_up_since;
     END IF;
 
+    -- DB cursor only: never clock_timestamp()/now() — those can skip concurrent deletes.
+    SELECT MAX(ts)
+    INTO v_server_watermark
+    FROM (
+      SELECT v_catch_up_since AS ts
+      WHERE v_catch_up_since IS NOT NULL
+      UNION ALL
+      SELECT (elem ->> 'updated_at')::timestamptz
+      FROM jsonb_array_elements(COALESCE(v_items, '[]'::jsonb)) AS elem
+      UNION ALL
+      SELECT (elem ->> 'updated_at')::timestamptz
+      FROM jsonb_array_elements(COALESCE(v_tombstones, '[]'::jsonb)) AS elem
+    ) s;
+
     RETURN jsonb_build_object(
       'items', COALESCE(v_items, '[]'::jsonb),
       'tombstones', COALESCE(v_tombstones, '[]'::jsonb),
       'has_more', false,
       'next_before', NULL,
-      'authoritative', true
+      'authoritative', true,
+      'server_watermark', to_jsonb(v_server_watermark)
     );
   END IF;
 
@@ -939,12 +955,26 @@ BEGIN
       AND n.updated_at >= v_catch_up_since;
   END IF;
 
+  SELECT MAX(ts)
+  INTO v_server_watermark
+  FROM (
+    SELECT v_catch_up_since AS ts
+    WHERE v_catch_up_since IS NOT NULL
+    UNION ALL
+    SELECT (elem ->> 'updated_at')::timestamptz
+    FROM jsonb_array_elements(COALESCE(v_items, '[]'::jsonb)) AS elem
+    UNION ALL
+    SELECT (elem ->> 'updated_at')::timestamptz
+    FROM jsonb_array_elements(COALESCE(v_tombstones, '[]'::jsonb)) AS elem
+  ) s;
+
   RETURN jsonb_build_object(
     'items', COALESCE(v_items, '[]'::jsonb),
     'tombstones', COALESCE(v_tombstones, '[]'::jsonb),
     'has_more', v_has_more,
     'next_before', v_next_before,
-    'authoritative', false
+    'authoritative', false,
+    'server_watermark', to_jsonb(v_server_watermark)
   );
 END;
 $$;

@@ -458,7 +458,7 @@ Operator-only private notes on conversations. See `docs/INTERNAL-NOTES.md` and A
 
 **Related:** `internal_note_mentions (note_id, mentioned_member_id)` unique; messaging-role targets only; edit replaces the mention set (no sticky union).
 
-**RPCs:** `list_internal_notes` (supports `authoritative` + required `catch_up_since` for bounded `tombstones`), `create_internal_note` (lifetime-unique `client_note_id`; soft-deleted conflict → `NOTE_DELETED`), `update_internal_note` (no-op when body + mentions unchanged; concurrent edits are LWW), `soft_delete_internal_note`, `get_internal_note`.
+**RPCs:** `list_internal_notes` (supports `authoritative` + `catch_up_since` for bounded `tombstones`, returns `server_watermark` DB cursor), `create_internal_note` (lifetime-unique `client_note_id`; soft-deleted conflict → `NOTE_DELETED`), `update_internal_note` (no-op when body + mentions unchanged; concurrent edits are LWW), `soft_delete_internal_note`, `get_internal_note`.
 
 **Indexes (notes):** conversation created (active), workspace updated (active), search GIN (active), author (active), **tombstones** `(workspace_id, conversation_id, updated_at DESC, id DESC) WHERE deleted_at IS NOT NULL`.
 

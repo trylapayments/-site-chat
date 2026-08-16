@@ -45,6 +45,12 @@ export const listInternalNotesResultSchema = z
       .nullable()
       .optional(),
     authoritative: z.boolean().optional().default(false),
+    /**
+     * Postgres-side catch-up cursor: GREATEST(catch_up_since, max returned
+     * updated_at). Clients must advance only from this / returned row times —
+     * never client Date.now().
+     */
+    server_watermark: z.string().min(1).nullable().optional(),
   })
   .strict();
 

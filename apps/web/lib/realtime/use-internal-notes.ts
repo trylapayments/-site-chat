@@ -66,7 +66,7 @@ export function useLiveInternalNotes(input: {
   const catchUpRequestRef = useRef(0);
   const conversationIdRef = useRef(input.conversationId);
   conversationIdRef.current = input.conversationId;
-  const catchUpSinceRef = useRef<string>(
+  const catchUpSinceRef = useRef<string | null>(
     seedNotesCatchUpWatermark(input.initialNotes),
   );
   const initialNotesRef = useRef(input.initialNotes);
@@ -125,8 +125,8 @@ export function useLiveInternalNotes(input: {
         conversationId,
         limit: 100,
         authoritative: true,
-        // Always pass watermark so tombstone scans stay bounded.
-        catch_up_since: watermark,
+        // Pass watermark only when it originated from server note timestamps.
+        ...(watermark ? { catch_up_since: watermark } : {}),
       });
 
       // Ignore stale responses: a newer catch-up or conversation switch won.
@@ -165,11 +165,12 @@ export function useLiveInternalNotes(input: {
           authoritativeReplace: true,
         }),
       );
-      // Advance watermark only after a successful apply for this conversation.
+      // Advance only from server-originated timestamps (RPC cursor + rows).
       catchUpSinceRef.current = advanceNotesCatchUpWatermark(
         watermark,
         result.data.items,
         result.data.tombstones,
+        result.data.server_watermark,
       );
     } catch (err) {
       if (

@@ -1180,6 +1180,137 @@ SELECT ok(
   'authoritative catch_up_since includes recent tombstones'
 );
 
+-- server_watermark is a DB cursor (GREATEST of catch_up_since + returned updated_at),
+-- never an unbound wall-clock jump past observed row times.
+SELECT ok(
+  (
+    WITH params AS (
+      SELECT (now() - interval '1 hour') AS since
+    ),
+    resp AS (
+      SELECT public.list_internal_notes(
+        tests.fixture('workspace_a')::uuid,
+        tests.fixture('conversation_a')::uuid,
+        jsonb_build_object(
+          'authoritative', true,
+          'catch_up_since', (SELECT since::text FROM params)
+        )
+      ) AS body
+    )
+    SELECT
+      (body ->> 'server_watermark') IS NOT NULL
+      AND (body ->> 'server_watermark')::timestamptz = (
+        SELECT MAX(ts)
+        FROM (
+          SELECT (SELECT since FROM params) AS ts
+          UNION ALL
+          SELECT (t ->> 'updated_at')::timestamptz
+          FROM jsonb_array_elements(body -> 'tombstones') AS t
+          UNION ALL
+          SELECT (i ->> 'updated_at')::timestamptz
+          FROM jsonb_array_elements(body -> 'items') AS i
+        ) s
+      )
+    FROM resp
+  ),
+  'server_watermark equals GREATEST(catch_up_since, returned updated_at)'
+);
+
+-- Watermark T10 must not skip a delete at T11 (cursor must not jump to client now).
+SELECT lives_ok(
+  $$
+    SELECT public.create_internal_note(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      'watermark-cursor-note',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+      NULL
+    );
+  $$,
+  'create note for watermark cursor regression'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'note_wm_cursor', id::text
+FROM public.internal_notes
+WHERE client_note_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
+LIMIT 1;
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'wm_t10', updated_at::text
+FROM public.internal_notes
+WHERE id = tests.fixture('note_wm_cursor')::uuid;
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'notes-agent-a@test.local'
+    );
+  $$,
+  're-auth for watermark cursor soft-delete'
+);
+
+SELECT ok(
+  (public.soft_delete_internal_note(
+    tests.fixture('workspace_a')::uuid,
+    tests.fixture('note_wm_cursor')::uuid
+  )->>'deleted_at') IS NOT NULL,
+  'soft-delete note after watermark T10'
+);
+
+SELECT ok(
+  (
+    SELECT count(*)::integer
+    FROM jsonb_array_elements(
+      public.list_internal_notes(
+        tests.fixture('workspace_a')::uuid,
+        tests.fixture('conversation_a')::uuid,
+        jsonb_build_object(
+          'authoritative', true,
+          'catch_up_since', tests.fixture('wm_t10')
+        )
+      )->'tombstones'
+    ) AS t
+    WHERE t->>'id' = tests.fixture('note_wm_cursor')
+  ) >= 1,
+  'catch-up since T10 still returns tombstone deleted at T11'
+);
+
+SELECT ok(
+  (
+    WITH resp AS (
+      SELECT public.list_internal_notes(
+        tests.fixture('workspace_a')::uuid,
+        tests.fixture('conversation_a')::uuid,
+        jsonb_build_object(
+          'authoritative', true,
+          'catch_up_since', tests.fixture('wm_t10')
+        )
+      ) AS body
+    )
+    SELECT
+      (body ->> 'server_watermark')::timestamptz
+        >= (tests.fixture('wm_t10'))::timestamptz
+      AND (body ->> 'server_watermark')::timestamptz = (
+        SELECT MAX(ts)
+        FROM (
+          SELECT (tests.fixture('wm_t10'))::timestamptz AS ts
+          UNION ALL
+          SELECT (t ->> 'updated_at')::timestamptz
+          FROM jsonb_array_elements(body -> 'tombstones') AS t
+          UNION ALL
+          SELECT (i ->> 'updated_at')::timestamptz
+          FROM jsonb_array_elements(body -> 'items') AS i
+        ) s
+      )
+    FROM resp
+  ),
+  'server_watermark after delete equals GREATEST(T10, returned updated_at)'
+);
+
 -- Soft-deleted notes excluded from inbox search
 SELECT is(
   (

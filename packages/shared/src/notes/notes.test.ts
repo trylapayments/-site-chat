@@ -275,10 +275,8 @@ describe("catch-up watermark", () => {
     expect(seedNotesCatchUpWatermark([older, newer])).toBe("2026-08-13T12:00:00.000Z");
   });
 
-  it("empty list seeds to fallback (now) — not epoch — to avoid lifetime tombstone scans", () => {
-    expect(seedNotesCatchUpWatermark([], "2026-08-15T18:00:00.000Z")).toBe(
-      "2026-08-15T18:00:00.000Z",
-    );
+  it("empty list seeds to null — never client clock / epoch", () => {
+    expect(seedNotesCatchUpWatermark([])).toBeNull();
   });
 
   it("advances watermark from items and tombstones without moving backward", () => {
@@ -296,14 +294,72 @@ describe("catch-up watermark", () => {
         deleted_at: "2026-08-13T12:45:00.000Z",
       }),
     ];
-    const next = advanceNotesCatchUpWatermark(
-      current,
-      items,
-      tombstones,
-      "2026-08-13T12:40:00.000Z",
-    );
+    const next = advanceNotesCatchUpWatermark(current, items, tombstones);
     expect(next).toBe("2026-08-13T12:45:00.000Z");
-    expect(advanceNotesCatchUpWatermark(next, [], [], "2026-08-13T12:00:00.000Z")).toBe(next);
+    expect(advanceNotesCatchUpWatermark(next, [], [])).toBe(next);
+  });
+
+  it("never advances past server timestamps when client clock is ahead (regression)", () => {
+    const serverMax = "2026-08-13T10:00:00.000Z";
+    const items = [
+      note({
+        id: "11111111-1111-4111-8111-111111111111",
+        updated_at: serverMax,
+      }),
+    ];
+    // Old bug defaulted a 4th arg to Date.now() and jumped the cursor past DB time.
+    // New signature has no client-clock parameter — empty response keeps T10.
+    const next = advanceNotesCatchUpWatermark(serverMax, items, []);
+    expect(next).toBe(serverMax);
+    expect(advanceNotesCatchUpWatermark(serverMax, [], [])).toBe(serverMax);
+  });
+
+  it("uses optional RPC server_watermark when it is the GREATEST server cursor", () => {
+    const current = "2026-08-13T10:00:00.000Z";
+    const items = [
+      note({
+        id: "11111111-1111-4111-8111-111111111111",
+        updated_at: "2026-08-13T10:00:00.000Z",
+      }),
+    ];
+    // RPC may echo GREATEST(catch_up_since, max returned updated_at).
+    expect(advanceNotesCatchUpWatermark(current, items, [], "2026-08-13T10:00:00.000Z")).toBe(
+      "2026-08-13T10:00:00.000Z",
+    );
+  });
+
+  it("missed delete after watermark T10 still reconciles tombstone at T11", () => {
+    const watermarkT10 = "2026-08-13T10:00:00.000Z";
+    const noteId = "22222222-2222-4222-8222-222222222222";
+    const afterCatchUp = [
+      note({
+        id: "11111111-1111-4111-8111-111111111111",
+        updated_at: watermarkT10,
+      }),
+      note({ id: noteId, updated_at: watermarkT10 }),
+    ];
+    const advanced = advanceNotesCatchUpWatermark(watermarkT10, afterCatchUp, []);
+    expect(advanced).toBe(watermarkT10);
+
+    const tombstoneT11 = note({
+      id: noteId,
+      deleted_at: "2026-08-13T10:00:01.000Z",
+      updated_at: "2026-08-13T10:00:01.000Z",
+    });
+    // Next catch-up with >= watermark still includes T11 tombstone.
+    expect(Date.parse(tombstoneT11.updated_at)).toBeGreaterThanOrEqual(
+      Date.parse(advanced ?? watermarkT10),
+    );
+    const next = reconcileNotesCatchUp(
+      afterCatchUp,
+      [note({ id: "11111111-1111-4111-8111-111111111111", updated_at: watermarkT10 })],
+      [tombstoneT11],
+      { authoritativeReplace: true },
+    );
+    expect(next.map((n) => n.id)).toEqual(["11111111-1111-4111-8111-111111111111"]);
+    expect(advanceNotesCatchUpWatermark(advanced, next, [tombstoneT11])).toBe(
+      "2026-08-13T10:00:01.000Z",
+    );
   });
 
   it("missed delete still removes via tombstones under authoritative replace", () => {

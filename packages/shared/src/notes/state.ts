@@ -361,13 +361,11 @@ export function createClientNoteId(): string {
 
 /**
  * Seed catch-up watermark from known notes (SSR / local state).
- * Uses the max updated_at so subsequent catch-up only fetches newer changes
- * and tombstones — never an unbounded deleted-row scan.
+ * Uses max server `updated_at` only — never the browser clock.
+ * Empty list → null (omit `catch_up_since` so tombstone scans stay empty,
+ * not lifetime-unbounded).
  */
-export function seedNotesCatchUpWatermark(
-  notes: readonly InternalNote[],
-  fallbackIso: string = new Date().toISOString(),
-): string {
+export function seedNotesCatchUpWatermark(notes: readonly InternalNote[]): string | null {
   let maxMs = Number.NaN;
   for (const note of notes) {
     const updated = Date.parse(note.updated_at);
@@ -376,34 +374,50 @@ export function seedNotesCatchUpWatermark(
     }
   }
   if (!Number.isFinite(maxMs)) {
-    return fallbackIso;
+    return null;
   }
   return new Date(maxMs).toISOString();
 }
 
 /**
- * Advance watermark after a successful catch-up. Never moves backward.
- * Considers active items + tombstones so deletes advance the cursor too.
+ * Advance the catch-up watermark after a successful authoritative response.
+ *
+ * The watermark is a **database cursor**, never a client clock.
+ * Result = MAX(previous, returned active updated_at, returned tombstone
+ * updated_at, optional RPC `server_watermark`). Never uses Date.now() /
+ * request end time — advancing past DB time can permanently skip deletes.
  */
 export function advanceNotesCatchUpWatermark(
-  currentWatermark: string,
+  currentWatermark: string | null | undefined,
   items: readonly InternalNote[],
   tombstones: readonly InternalNote[] = [],
-  responseIso: string = new Date().toISOString(),
-): string {
-  let maxMs = Date.parse(currentWatermark);
-  if (!Number.isFinite(maxMs)) {
-    maxMs = 0;
+  serverWatermark?: string | null,
+): string | null {
+  let maxMs = Number.NaN;
+
+  if (currentWatermark) {
+    const currentMs = Date.parse(currentWatermark);
+    if (Number.isFinite(currentMs)) {
+      maxMs = currentMs;
+    }
   }
+
+  if (serverWatermark) {
+    const serverMs = Date.parse(serverWatermark);
+    if (Number.isFinite(serverMs) && (!Number.isFinite(maxMs) || serverMs > maxMs)) {
+      maxMs = serverMs;
+    }
+  }
+
   for (const note of [...items, ...tombstones]) {
     const updated = Date.parse(note.updated_at);
-    if (Number.isFinite(updated) && updated > maxMs) {
+    if (Number.isFinite(updated) && (!Number.isFinite(maxMs) || updated > maxMs)) {
       maxMs = updated;
     }
   }
-  const responseMs = Date.parse(responseIso);
-  if (Number.isFinite(responseMs) && responseMs > maxMs) {
-    maxMs = responseMs;
+
+  if (!Number.isFinite(maxMs)) {
+    return null;
   }
   return new Date(maxMs).toISOString();
 }
