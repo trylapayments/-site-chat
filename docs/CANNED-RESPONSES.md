@@ -27,7 +27,7 @@ Key files:
 | Layer            | Location                                                                          |
 | ---------------- | --------------------------------------------------------------------------------- |
 | Migration        | `supabase/migrations/20260816120000_canned_responses.sql`                          |
-| Database tests   | `supabase/tests/017_canned_responses.test.sql`                                     |
+| Database tests   | `supabase/tests/database/017_canned_responses.test.sql`                             |
 | Shared schemas   | `packages/shared/src/schemas/canned-responses.ts`                                  |
 | Shared helpers   | `packages/shared/src/canned/` (`variables`, `slash`, `search`, `state`, `errors`)   |
 | Queries/actions  | `apps/web/lib/canned/`                                                            |
@@ -296,7 +296,7 @@ Soft-deleted snippets and folders are retained indefinitely until the workspace 
 
 | Layer      | Location                                                                              |
 | ---------- | ------------------------------------------------------------------------------------- |
-| pgTAP      | `supabase/tests/017_canned_responses.test.sql` — RLS, scopes, typed errors, catch-up    |
+| pgTAP      | `supabase/tests/database/017_canned_responses.test.sql` — RLS, scopes, typed errors, catch-up |
 | Vitest     | `packages/shared/src/canned/canned.test.ts` — variables, slash, ranking, merge, errors  |
 | Vitest     | `apps/web/lib/permissions/can.test.ts` — the three capabilities per role                |
 | Playwright | `e2e/tests/inbox/canned-responses.spec.ts` — publish, insert with variables, personal isolation, viewer read-only, favorite + soft delete |
