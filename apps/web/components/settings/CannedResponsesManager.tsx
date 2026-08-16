@@ -238,16 +238,16 @@ export function CannedResponsesManager({
 
   async function removeResponse(item: CannedResponse) {
     setActionError(null);
-    markResponseDeleted(item.id);
+    // Await the Server Action before removing from the list. Optimistic removal
+    // raced with reload/navigation and could resurrect a still-active SSR row.
     const result = await softDeleteCannedResponseAction(workspaceSlug, {
       cannedResponseId: item.id,
     });
     if (!result.success) {
-      clearResponseTombstone(item.id);
-      applyResponse(item);
       setActionError(result.message);
       return;
     }
+    markResponseDeleted(item.id);
     if (form?.id === item.id) {
       setForm(null);
     }
