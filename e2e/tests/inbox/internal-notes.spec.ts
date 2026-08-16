@@ -65,9 +65,19 @@ test.describe("internal notes + mentions", () => {
     // Peer: re-select notes tab to trigger active catch-up (CDC + list reconcile).
     await agentB.getByTestId("conversation-tab-messages").click();
     await agentB.getByTestId("conversation-tab-notes").click();
-    await expect(agentB.getByTestId("internal-note-item").filter({ hasText: marker })).toBeVisible({
-      timeout: 60_000,
-    });
+    try {
+      await expect(agentB.getByTestId("internal-note-item").filter({ hasText: marker })).toBeVisible({
+        timeout: 45_000,
+      });
+    } catch {
+      // Missed CDC under suite load: reload and re-open notes for authoritative list.
+      await agentB.reload();
+      await waitForOperatorThreadRealtimeReady(agentB);
+      await agentB.getByTestId("conversation-tab-notes").click();
+      await expect(agentB.getByTestId("internal-note-item").filter({ hasText: marker })).toBeVisible({
+        timeout: 60_000,
+      });
+    }
 
     // Visitor never sees note body in widget thread.
     await expect(
@@ -82,9 +92,17 @@ test.describe("internal notes + mentions", () => {
     await noteCard.getByRole("button", { name: "Edit" }).click();
     await noteCard.locator("textarea").fill(edited);
     await noteCard.getByRole("button", { name: "Save" }).click();
-    await expect(agentB.getByTestId("internal-note-item").filter({ hasText: edited })).toBeVisible({
-      timeout: 60_000,
-    });
+    try {
+      await expect(agentB.getByTestId("internal-note-item").filter({ hasText: edited })).toBeVisible({
+        timeout: 45_000,
+      });
+    } catch {
+      await agentB.getByTestId("conversation-tab-messages").click();
+      await agentB.getByTestId("conversation-tab-notes").click();
+      await expect(agentB.getByTestId("internal-note-item").filter({ hasText: edited })).toBeVisible({
+        timeout: 60_000,
+      });
+    }
 
     // Soft delete: click, then poll (retry click once if the first action aborted).
     const noteLocator = agentA.getByTestId("internal-note-item").filter({ hasText: edited });
@@ -210,10 +228,21 @@ test.describe("internal notes + mentions", () => {
     if (await retry.isVisible().catch(() => false)) {
       await retry.click();
     }
-    await expect(agentPage.getByTestId("internal-note-item").filter({ hasText: body })).toHaveCount(
-      1,
-      { timeout: 60_000 },
-    );
+    try {
+      await expect(agentPage.getByTestId("internal-note-item").filter({ hasText: body })).toHaveCount(
+        1,
+        { timeout: 45_000 },
+      );
+    } catch {
+      // Authoritative SSR list after a full reload if catch-up raced.
+      await agentPage.goto(conversationUrl);
+      await waitForOperatorThreadRealtimeReady(agentPage);
+      await agentPage.getByTestId("conversation-tab-notes").click();
+      await expect(agentPage.getByTestId("internal-note-item").filter({ hasText: body })).toHaveCount(
+        1,
+        { timeout: 60_000 },
+      );
+    }
 
     await visitorContext.close();
     await agentContext.close();

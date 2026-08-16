@@ -130,13 +130,25 @@ test.describe("canned responses", () => {
     });
 
     // Soft delete: two-step confirm, then the row leaves every filter.
+    // Removal is optimistic — wait until the Server Action settles before reload
+    // so a mid-flight abort cannot resurrect the row from SSR.
     await ownerPage.getByTestId("canned-tab-all").click();
     const deletable = ownerPage.getByTestId("canned-item").filter({ hasText: title });
     await deletable.getByTestId("canned-delete").click();
-    await deletable.getByTestId("canned-delete-confirm").click();
+    await Promise.all([
+      ownerPage.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          response.url().includes(`/app/acme-support/settings/canned-responses`) &&
+          response.status() === 200,
+        { timeout: 30_000 },
+      ),
+      deletable.getByTestId("canned-delete-confirm").click(),
+    ]);
     await expect(ownerPage.getByTestId("canned-item").filter({ hasText: title })).toHaveCount(0, {
       timeout: 30_000,
     });
+    await expect(ownerPage.getByTestId("canned-action-error")).toHaveCount(0);
 
     await ownerPage.reload();
     await expect(ownerPage.getByTestId("canned-responses-page")).toBeVisible({
