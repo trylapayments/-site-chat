@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWorkspaceSwitchDestination,
+  SETTINGS_SECTION_CANNED_RESPONSES,
   workspaceBasePath,
   workspaceNavPath,
+  workspaceSettingsPath,
 } from "@/lib/dashboard/routes";
 
 describe("workspaceNavPath", () => {
@@ -11,6 +13,15 @@ describe("workspaceNavPath", () => {
     expect(workspaceBasePath("acme")).toBe("/app/acme");
     expect(workspaceNavPath("acme", "")).toBe("/app/acme");
     expect(workspaceNavPath("acme", "inbox")).toBe("/app/acme/inbox");
+  });
+});
+
+describe("workspaceSettingsPath", () => {
+  it("builds the settings hub and section paths", () => {
+    expect(workspaceSettingsPath("acme")).toBe("/app/acme/settings");
+    expect(
+      workspaceSettingsPath("acme", SETTINGS_SECTION_CANNED_RESPONSES),
+    ).toBe("/app/acme/settings/canned-responses");
   });
 });
 

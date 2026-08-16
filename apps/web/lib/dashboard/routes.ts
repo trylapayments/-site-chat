@@ -62,6 +62,18 @@ export function workspaceNavPath(slug: string, segment: string): string {
   return `${workspaceBasePath(slug)}/${segment}`;
 }
 
+export const SETTINGS_SECTION_CANNED_RESPONSES = "canned-responses";
+
+export function workspaceSettingsPath(slug: string, section?: string): string {
+  const settings = workspaceNavPath(slug, "settings");
+
+  if (!section || section.length === 0) {
+    return settings;
+  }
+
+  return `${settings}/${section}`;
+}
+
 export function buildWorkspaceSwitchDestination(
   currentPath: string,
   fromSlug: string,
