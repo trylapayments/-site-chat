@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(99);
+SELECT plan(105);
 
 TRUNCATE tests.fixtures;
 
@@ -1223,7 +1223,7 @@ SELECT lives_ok(
       tests.fixture('workspace_a')::uuid,
       tests.fixture('conversation_a')::uuid,
       'watermark-cursor-note',
-      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
       NULL
     );
   $$,
@@ -1235,7 +1235,7 @@ SELECT tests.clear_auth();
 INSERT INTO tests.fixtures (key, value)
 SELECT 'note_wm_cursor', id::text
 FROM public.internal_notes
-WHERE client_note_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
+WHERE client_note_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid
 LIMIT 1;
 
 INSERT INTO tests.fixtures (key, value)
