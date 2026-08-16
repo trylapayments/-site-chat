@@ -215,8 +215,10 @@ CREATE INDEX idx_canned_responses_search_vector
   ON public.canned_responses USING gin (search_vector)
   WHERE deleted_at IS NULL;
 
--- Fuzzy composer search. The expression must match list_canned_responses
--- exactly for the index to be used.
+-- Fuzzy composer search, driven by the word_similarity operator (<%): whole
+-- string similarity() collapses once a body is a few sentences long, while
+-- word_similarity compares the query against the closest run of words. The
+-- expression must match list_canned_responses exactly for the index to be used.
 CREATE INDEX idx_canned_responses_trgm
   ON public.canned_responses
   USING gin (
@@ -771,9 +773,9 @@ BEGIN
               WHEN r.shortcut LIKE v_shortcut_like || '%' THEN 0.5
               ELSE 0.0
             END)
-            + 0.6 * extensions.similarity(
-                r.title || ' ' || coalesce(r.shortcut, '') || ' ' || r.body,
-                v_q
+            + 0.6 * extensions.word_similarity(
+                v_q,
+                r.title || ' ' || coalesce(r.shortcut, '') || ' ' || r.body
               )
             + 0.4 * ts_rank(r.search_vector, plainto_tsquery('english', v_q))
             + (CASE WHEN fav.id IS NOT NULL THEN 0.15 ELSE 0.0 END)
@@ -813,8 +815,8 @@ BEGIN
             AND r.shortcut IS NOT NULL
             AND r.shortcut LIKE v_shortcut_like || '%'
           )
-          OR (r.title || ' ' || coalesce(r.shortcut, '') || ' ' || r.body)
-             OPERATOR(extensions.%) v_q
+          OR v_q OPERATOR(extensions.<%)
+             (r.title || ' ' || coalesce(r.shortcut, '') || ' ' || r.body)
           OR r.search_vector @@ plainto_tsquery('english', v_q)
         )
     ) s

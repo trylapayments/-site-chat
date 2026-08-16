@@ -165,10 +165,12 @@ A search matches when any of these hold:
 
 1. `title`, `shortcut` or `body` contains the query (`ILIKE`, with `%`, `_` and `\` escaped so a literal `%` cannot match everything)
 2. The slash-stripped query is a **prefix** of a shortcut — this is what makes `/gre` autocomplete work
-3. Trigram similarity over `title || ' ' || shortcut || ' ' || body` (`pg_trgm` `%` operator, GIN expression index)
+3. Trigram **word** similarity over `title || ' ' || shortcut || ' ' || body` (`pg_trgm` `<%` operator, GIN expression index)
 4. `search_vector @@ plainto_tsquery('english', q)`
 
-Ranking, highest first: exact shortcut match (`1.0`), shortcut prefix (`0.5`), `0.6 × similarity`, `0.4 × ts_rank`, and `+0.15` when the caller has favorited the snippet. Without `q`, results are favorites first, then title ascending.
+Word similarity (`<%`) is used rather than whole-string similarity (`%`) deliberately. `similarity()` normalizes over the union of both strings' trigrams, so a one-word typo against a three-sentence body scores around `0.08` and never clears the default `0.3` threshold. `word_similarity()` compares the query against the closest run of words in the document instead, so the same typo scores around `0.64` and clears the default `0.6` word threshold regardless of body length.
+
+Ranking, highest first: exact shortcut match (`1.0`), shortcut prefix (`0.5`), `0.6 × word_similarity`, `0.4 × ts_rank`, and `+0.15` when the caller has favorited the snippet. Without `q`, results are favorites first, then title ascending.
 
 The trigram index expression must stay byte-identical to the expression in `list_canned_responses`, or the planner will fall back to a sequential scan.
 
