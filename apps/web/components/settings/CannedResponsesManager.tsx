@@ -940,15 +940,15 @@ function FolderSidebar({
     }
     setIsPending(true);
     onError(null);
-    onFolderDeleted(folder.id);
     const result = await softDeleteCannedResponseFolderAction(workspaceSlug, {
       folderId: folder.id,
     });
     setIsPending(false);
     if (!result.success) {
-      onFolderSaved(folder);
       onError(result.message);
+      return;
     }
+    onFolderDeleted(folder.id);
   }
 
   function filterButtonClass(active: boolean): string {
