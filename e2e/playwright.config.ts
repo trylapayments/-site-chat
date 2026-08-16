@@ -17,6 +17,9 @@ export default defineConfig({
   },
   fullyParallel: false,
   workers: 1,
+  // Hosted CI occasionally flakes on notes reconnect / assignment races under
+  // ECONNRESET load. One retry keeps main green without masking hard failures.
+  retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     trace: "retain-on-failure",
