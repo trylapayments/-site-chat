@@ -307,6 +307,8 @@ Current assignee is stored on `conversations` (`assigned_to`, `assigned_at`, `as
 
 Operator-only notes live in `internal_notes` (not `messages`). Soft delete, `@mentions`, durable mention `notifications`, timeline events (`internal_note_created` / `updated` / `deleted`, `mention_created`), and CDC on `internal_notes` with list catch-up merge. Visitors/viewers never receive notes. See `docs/INTERNAL-NOTES.md` and ADR-006.
 
+Canned responses live in `canned_responses` (with `canned_response_folders` and per-member `canned_response_favorites`). Workspace-shared and personal scopes share one table; mutations are Server Actions over SECURITY DEFINER RPCs (RLS is SELECT-only for realtime). Composer `/shortcut` insertion interpolates `{{visitor.*}}` / `{{operator.name}}` / `{{workspace.name}}` / `{{conversation.id}}` at insert time. See `docs/CANNED-RESPONSES.md` and ADR-007.
+
 ### 6.2.1 Read receipts and unread counters
 
 Message lifecycle is **sent → delivered → seen**, derived from conversation-level cursors (no per-message writes):
