@@ -282,7 +282,7 @@ Because visibility is immutable, update and delete read the stored row's visibil
 
 Role behaviour: a viewer gets a read-only list, an agent can manage only their own personal snippets and folders while shared rows stay read-only apart from favoriting, and owners/admins manage everything.
 
-In the reply composer (`LiveConversationThread`), typing `/` at a word boundary opens `CannedSlashMenu`, using the same keyboard model as `@mention` autocomplete (Arrow keys, Enter/Tab to insert, Escape to dismiss). A slash inside a URL or mid-word does not trigger it. Selecting an entry replaces the `/query` with the interpolated body, then calls `recordCannedResponseUsageAction` fire-and-forget. The menu appears only for roles that may both send messages and use snippets.
+In the reply composer (`LiveConversationThread`), typing `/` at a word boundary opens `CannedSlashMenu`, using the same keyboard model as `@mention` autocomplete (Arrow keys, Enter/Tab to insert, Escape to dismiss). A slash inside a URL or mid-word does not trigger it. Selecting an entry replaces the `/query` with the interpolated body, then calls `recordCannedResponseUsageAction` fire-and-forget. The menu appears only for roles that may both send messages and use snippets. The composer uses the conversation-page SSR prefetch (up to 200 snippets) and does **not** open a live canned CDC channel — live library sync stays on the settings page so conversation realtime (messages, notes, receipts) is not contended.
 
 ---
 
@@ -311,5 +311,6 @@ Soft-deleted snippets and folders are retained indefinitely until the workspace 
 - No usage analytics beyond the raw counter, and no "most used" ordering in the list RPC yet
 - Snippets are not surfaced in inbox search (`list_conversations` `q`)
 - The settings library and the composer both load at most 200 snippets per page; beyond that, search reaches the RPC rather than paginating
+- Composer slash menu uses the conversation SSR prefetch; library edits made in another tab appear in the composer after a conversation navigation/reload (settings page stays live)
 - Snippet bodies are plain text: no rich text, attachments or per-snippet locales
 - Folder ordering is stored (`sort_order`) but the UI has no drag-and-drop reorder yet

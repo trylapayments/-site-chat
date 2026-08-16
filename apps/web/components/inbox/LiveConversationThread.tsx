@@ -46,7 +46,6 @@ import {
   subscribeOperatorConversationEphemeral,
   type OperatorEphemeralController,
 } from "@/lib/realtime/operator-ephemeral";
-import { useLiveCannedResponses } from "@/lib/realtime/use-canned-responses";
 import { useLiveConversationThread } from "@/lib/realtime/use-operator-inbox";
 
 const cannedMessages = cannedResponsesMessagesEn;
@@ -137,16 +136,12 @@ export function LiveConversationThread({
     },
   });
 
-  // Keeps the slash menu current when an admin edits the shared library while
-  // the conversation stays open.
+  // Composer uses the SSR-prefetched library only. Live canned CDC lives on the
+  // settings page — keeping a workspace-wide canned channel open under every
+  // conversation (the messages panel stays mounted while Notes is selected)
+  // contended with notes/message realtime on the local Supabase stack.
   const cannedEnabled = canUseCannedResponses && canSend && Boolean(memberId);
-  const { responses: cannedResponses } = useLiveCannedResponses({
-    workspaceId,
-    workspaceSlug,
-    memberId,
-    initialResponses: initialCannedResponses,
-    enabled: cannedEnabled,
-  });
+  const cannedResponses = initialCannedResponses;
 
   const initialDelivered = initialVisitorReceipts.lastDeliveredSequence;
   const initialRead = initialVisitorReceipts.lastReadSequence;
