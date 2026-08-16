@@ -505,25 +505,38 @@ Pending uploads (before durable message creation) live in `attachment_uploads`.
 
 ### 8.1 canned_responses
 
-Pre-written reply templates.
+Pre-written reply templates in two scopes: shared (workspace) and personal. See `docs/CANNED-RESPONSES.md` and ADR-007.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
-| created_by | UUID | NOT NULL, FK → workspace_members | |
-| title | TEXT | NOT NULL | Display name |
-| body | TEXT | NOT NULL | Template with variables |
-| shortcut | TEXT | NULL | e.g., `/greeting` |
-| category | TEXT | NULL | Optional grouping |
-| usage_count | INTEGER | NOT NULL DEFAULT 0 | |
+| visibility | app_canned_visibility | NOT NULL | `workspace` (shared) or `personal` |
+| owner_member_id | UUID | NULL iff shared, NOT NULL iff personal | Composite FK `ON DELETE CASCADE` — personal data leaves with the member |
+| folder_id | UUID | NULL | Composite FK → `canned_response_folders (id, workspace_id)`, `ON DELETE SET NULL (folder_id)`; must match the snippet's visibility/owner |
+| title | TEXT | NOT NULL, 1–200 | Display name |
+| body | TEXT | NOT NULL, 1–4000 | Template with `{{variable}}` placeholders |
+| shortcut | TEXT | NULL, `^[a-z0-9][a-z0-9_-]{0,63}$` | Stored **without** the leading slash, lowercase |
+| usage_count | INTEGER | NOT NULL DEFAULT 0, `>= 0` | Bumped by `record_canned_response_usage`; does not touch `updated_at` |
+| search_vector | TSVECTOR | GENERATED | title + shortcut + body; GIN-indexed |
+| created_by / updated_by | UUID | NULL, FK → workspace_members | Composite FKs with column-scoped `ON DELETE SET NULL` so shared history survives |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | deleted_at | TIMESTAMPTZ | NULL | Soft delete |
 
 **Indexes:**
-- `idx_canned_responses_workspace` ON `(workspace_id)` WHERE `deleted_at IS NULL`
-- UNIQUE `(workspace_id, shortcut)` WHERE `shortcut IS NOT NULL AND deleted_at IS NULL`
+- UNIQUE `(workspace_id, shortcut)` WHERE `deleted_at IS NULL AND visibility = 'workspace' AND shortcut IS NOT NULL`
+- UNIQUE `(workspace_id, owner_member_id, shortcut)` WHERE `deleted_at IS NULL AND visibility = 'personal' AND shortcut IS NOT NULL` — a member may shadow a shared shortcut
+- `idx_canned_responses_workspace_active` ON `(workspace_id, visibility, title, id)` WHERE `deleted_at IS NULL`
+- `idx_canned_responses_owner_active`, `idx_canned_responses_folder`, `idx_canned_responses_owner_member`
+- GIN on `search_vector` and a `pg_trgm` GIN expression index over `title || ' ' || coalesce(shortcut,'') || ' ' || body`, both WHERE `deleted_at IS NULL`
+- **Tombstones** `(workspace_id, updated_at DESC, id DESC)` WHERE `deleted_at IS NOT NULL`
+
+**Related:** `canned_response_folders` (same visibility/owner rules, `name` 1–100, `sort_order`, soft delete) and `canned_response_favorites` (unique `(member_id, canned_response_id)`, per-member pins).
+
+**RPCs:** `list_canned_responses` (fuzzy `q`, folder/visibility/favorites filters, `authoritative` + `catch_up_since` tombstones, `server_watermark`), `get_canned_response`, `create_canned_response`, `update_canned_response`, `soft_delete_canned_response`, `list_canned_response_folders`, `create_canned_response_folder`, `update_canned_response_folder`, `soft_delete_canned_response_folder` (unfiles active snippets first), `set_canned_response_favorite`, `record_canned_response_usage`.
+
+**RLS:** SELECT only. Shared rows are readable by every active member; personal rows only by `owner_member_id`; favorites only by their member. All writes go through the RPCs — owner/admin manage shared snippets, non-viewers manage their own personal ones, and viewers cannot use, favorite, or record usage.
 
 ### 8.2 agent_invitations
 
