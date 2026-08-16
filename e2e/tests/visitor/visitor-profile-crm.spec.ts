@@ -50,25 +50,32 @@ test.describe("visitor profile / CRM-lite", () => {
       timeout: 30_000,
     });
 
-    // Tag add (seeded VIP) then remove
-    const tagSelect = panel.locator("#assign-tag");
-    if (await tagSelect.count()) {
-      await tagSelect.selectOption({ label: SEEDED_TAG_NAME });
-      await panel.getByRole("button", { name: "Add tag" }).click();
-      await expect(panel.getByText(SEEDED_TAG_NAME).first()).toBeVisible({
-        timeout: 30_000,
-      });
-      await panel.getByRole("button", { name: `Remove ${SEEDED_TAG_NAME}` }).click();
+    // Tag add/remove (seeded VIP) — tolerate prior-run assignment
+    const assignedVip = panel.getByRole("button", {
+      name: `Remove ${SEEDED_TAG_NAME}`,
+    });
+    if (await assignedVip.count()) {
+      await assignedVip.click();
       await expect(panel.getByText("No tags yet.")).toBeVisible({
         timeout: 30_000,
       });
-      // Re-add for company/custom-field flow stability and timeline coverage
-      await tagSelect.selectOption({ label: SEEDED_TAG_NAME });
-      await panel.getByRole("button", { name: "Add tag" }).click();
-      await expect(panel.getByText(SEEDED_TAG_NAME).first()).toBeVisible({
-        timeout: 30_000,
-      });
     }
+    const tagSelect = panel.locator("#assign-tag");
+    await expect(tagSelect).toBeVisible({ timeout: 30_000 });
+    await tagSelect.selectOption({ label: SEEDED_TAG_NAME });
+    await panel.getByRole("button", { name: "Add tag" }).click();
+    await expect(panel.getByText(SEEDED_TAG_NAME).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await panel.getByRole("button", { name: `Remove ${SEEDED_TAG_NAME}` }).click();
+    await expect(panel.getByText("No tags yet.")).toBeVisible({
+      timeout: 30_000,
+    });
+    await tagSelect.selectOption({ label: SEEDED_TAG_NAME });
+    await panel.getByRole("button", { name: "Add tag" }).click();
+    await expect(panel.getByText(SEEDED_TAG_NAME).first()).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Company link / unlink using seeded company
     const companySelect = panel.locator("#link-company");
