@@ -191,7 +191,10 @@ export function CannedResponsesManager({
     });
 
     const query = search.trim();
-    if (query.length === 0) {
+    // Remote results are already ranked by the RPC, which is typo-tolerant in
+    // ways the client scorer is not — re-ranking them here would discard the
+    // trigram and full-text matches that made the round trip worthwhile.
+    if (query.length === 0 || remoteMatches) {
       return scoped;
     }
     return rankCannedResponses(scoped, query);
