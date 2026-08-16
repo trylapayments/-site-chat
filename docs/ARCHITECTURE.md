@@ -627,5 +627,6 @@ Detailed security controls are documented in [SECURITY.md](./SECURITY.md). Archi
 | 2026-07-30 | iframe widget over script-only | Stronger isolation from host site CSS/JS | Shadow DOM-only embed |
 | 2026-07-30 | Monorepo with separate widget package | Independent bundle size optimization | Single package |
 | 2026-08-10 | Contacts as visitor identity + opaque `public_id` | Durable identity without CRM rename/fingerprint | See ADR-003 |
+| 2026-08-16 | CRM-lite companies + typed custom fields (EAV) | Operator CRM without host JSONB merge or domain auto-merge | See ADR-008 |
 
 Decisions are append-only. Superseded decisions are marked but not deleted.
