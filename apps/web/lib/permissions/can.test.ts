@@ -44,4 +44,25 @@ describe("can", () => {
     expect(can("agent", "update_visitor_profile")).toBe(true);
     expect(can("viewer", "update_visitor_profile")).toBe(false);
   });
+
+  it("allows all roles to view canned responses", () => {
+    expect(can("owner", "view_canned_responses")).toBe(true);
+    expect(can("admin", "view_canned_responses")).toBe(true);
+    expect(can("agent", "view_canned_responses")).toBe(true);
+    expect(can("viewer", "view_canned_responses")).toBe(true);
+  });
+
+  it("restricts use_canned_responses to owner, admin, and agent", () => {
+    expect(can("owner", "use_canned_responses")).toBe(true);
+    expect(can("admin", "use_canned_responses")).toBe(true);
+    expect(can("agent", "use_canned_responses")).toBe(true);
+    expect(can("viewer", "use_canned_responses")).toBe(false);
+  });
+
+  it("restricts manage_workspace_canned_responses to owner and admin", () => {
+    expect(can("owner", "manage_workspace_canned_responses")).toBe(true);
+    expect(can("admin", "manage_workspace_canned_responses")).toBe(true);
+    expect(can("agent", "manage_workspace_canned_responses")).toBe(false);
+    expect(can("viewer", "manage_workspace_canned_responses")).toBe(false);
+  });
 });
