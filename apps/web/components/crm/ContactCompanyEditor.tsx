@@ -205,7 +205,7 @@ export function ContactCompanyEditor({
             });
           }}
         >
-          {messages.link}
+          {messages.companyLink}
         </Button>
         <Button
           type="button"

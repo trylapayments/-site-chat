@@ -90,11 +90,12 @@ test.describe("visitor profile / CRM-lite", () => {
       })
       .toBeGreaterThan(0);
     await companySelect.selectOption({ label: BULK_COMPANY_NAME });
-    await panel.getByRole("button", { name: "Link" }).click();
+    // Exact name avoids matching "Unlink company" (substring "Link").
+    await panel.getByRole("button", { name: "Link company", exact: true }).click();
     await expect(panel.getByText(BULK_COMPANY_NAME).first()).toBeVisible({
       timeout: 30_000,
     });
-    await panel.getByRole("button", { name: "Unlink company" }).click();
+    await panel.getByRole("button", { name: "Unlink company", exact: true }).click();
     await expect(panel.getByText("No company linked.")).toBeVisible({
       timeout: 30_000,
     });
@@ -106,7 +107,7 @@ test.describe("visitor profile / CRM-lite", () => {
       })
       .toBeGreaterThan(0);
     await companySelect.selectOption({ label: SEEDED_COMPANY_NAME });
-    await panel.getByRole("button", { name: "Link" }).click();
+    await panel.getByRole("button", { name: "Link company", exact: true }).click();
     await expect(panel.getByText(SEEDED_COMPANY_NAME).first()).toBeVisible({
       timeout: 30_000,
     });
