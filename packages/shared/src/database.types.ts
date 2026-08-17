@@ -521,6 +521,20 @@ export type Database = {
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_companies_created_by_workspace"
+            columns: ["created_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_companies_updated_by_workspace"
+            columns: ["updated_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
         ]
       }
       contact_tag_assignments: {
@@ -555,6 +569,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_contact_tag_assignments_assigned_by_workspace"
+            columns: ["assigned_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_contact_tag_assignments_contact_workspace"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_contact_tag_assignments_tag_workspace"
+            columns: ["tag_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contact_tags"
+            referencedColumns: ["id", "workspace_id"]
           },
         ]
       }
@@ -599,6 +634,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_contact_tags_created_by_workspace"
+            columns: ["created_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_contact_tags_updated_by_workspace"
+            columns: ["updated_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
           },
         ]
       }
@@ -674,111 +723,12 @@ export type Database = {
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      custom_field_definitions: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          deleted_at: string | null
-          field_type: Database["public"]["Enums"]["app_custom_field_type"]
-          id: string
-          is_required: boolean
-          key: string
-          label: string
-          options_json: Json
-          sort_order: number
-          updated_at: string
-          updated_by: string | null
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          deleted_at?: string | null
-          field_type: Database["public"]["Enums"]["app_custom_field_type"]
-          id?: string
-          is_required?: boolean
-          key: string
-          label: string
-          options_json?: Json
-          sort_order?: number
-          updated_at?: string
-          updated_by?: string | null
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          deleted_at?: string | null
-          field_type?: Database["public"]["Enums"]["app_custom_field_type"]
-          id?: string
-          is_required?: boolean
-          key?: string
-          label?: string
-          options_json?: Json
-          sort_order?: number
-          updated_at?: string
-          updated_by?: string | null
-          workspace_id?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "custom_field_definitions_workspace_id_fkey"
-            columns: ["workspace_id"]
+            foreignKeyName: "fk_contacts_company_workspace"
+            columns: ["company_id", "workspace_id"]
             isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      custom_field_values: {
-        Row: {
-          contact_id: string
-          created_at: string
-          field_id: string
-          id: string
-          updated_at: string
-          value_boolean: boolean | null
-          value_date: string | null
-          value_number: number | null
-          value_select: string | null
-          value_text: string | null
-          workspace_id: string
-        }
-        Insert: {
-          contact_id: string
-          created_at?: string
-          field_id: string
-          id?: string
-          updated_at?: string
-          value_boolean?: boolean | null
-          value_date?: string | null
-          value_number?: number | null
-          value_select?: string | null
-          value_text?: string | null
-          workspace_id: string
-        }
-        Update: {
-          contact_id?: string
-          created_at?: string
-          field_id?: string
-          id?: string
-          updated_at?: string
-          value_boolean?: boolean | null
-          value_date?: string | null
-          value_number?: number | null
-          value_select?: string | null
-          value_text?: string | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "custom_field_values_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id", "workspace_id"]
           },
         ]
       }
@@ -1024,6 +974,140 @@ export type Database = {
             columns: ["visitor_session_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "visitor_sessions"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
+      custom_field_definitions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          field_type: Database["public"]["Enums"]["app_custom_field_type"]
+          id: string
+          is_required: boolean
+          key: string
+          label: string
+          options_json: Json
+          sort_order: number
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          field_type: Database["public"]["Enums"]["app_custom_field_type"]
+          id?: string
+          is_required?: boolean
+          key: string
+          label: string
+          options_json?: Json
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          field_type?: Database["public"]["Enums"]["app_custom_field_type"]
+          id?: string
+          is_required?: boolean
+          key?: string
+          label?: string
+          options_json?: Json
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_field_definitions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_custom_field_definitions_created_by_workspace"
+            columns: ["created_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_custom_field_definitions_updated_by_workspace"
+            columns: ["updated_by", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
+      custom_field_values: {
+        Row: {
+          contact_id: string
+          created_at: string
+          field_id: string
+          id: string
+          updated_at: string
+          value_boolean: boolean | null
+          value_date: string | null
+          value_number: number | null
+          value_select: string | null
+          value_text: string | null
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          field_id: string
+          id?: string
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_date?: string | null
+          value_number?: number | null
+          value_select?: string | null
+          value_text?: string | null
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          field_id?: string
+          id?: string
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_date?: string | null
+          value_number?: number | null
+          value_select?: string | null
+          value_text?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_field_values_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_custom_field_values_contact_workspace"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_custom_field_values_field_workspace"
+            columns: ["field_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "custom_field_definitions"
             referencedColumns: ["id", "workspace_id"]
           },
         ]
@@ -1814,11 +1898,7 @@ export type Database = {
         Returns: boolean
       }
       assign_contact_tag: {
-        Args: {
-          p_contact_id: string
-          p_tag_id: string
-          p_workspace_id: string
-        }
+        Args: { p_contact_id: string; p_tag_id: string; p_workspace_id: string }
         Returns: Json
       }
       assign_conversation: {
@@ -2142,11 +2222,7 @@ export type Database = {
         Returns: Json
       }
       unassign_contact_tag: {
-        Args: {
-          p_contact_id: string
-          p_tag_id: string
-          p_workspace_id: string
-        }
+        Args: { p_contact_id: string; p_tag_id: string; p_workspace_id: string }
         Returns: Json
       }
       unassign_conversation: {
@@ -2182,19 +2258,11 @@ export type Database = {
         Returns: Json
       }
       update_company: {
-        Args: {
-          p_company_id: string
-          p_patch?: Json
-          p_workspace_id: string
-        }
+        Args: { p_company_id: string; p_patch?: Json; p_workspace_id: string }
         Returns: Json
       }
       update_contact_profile: {
-        Args: {
-          p_contact_id: string
-          p_patch?: Json
-          p_workspace_id: string
-        }
+        Args: { p_contact_id: string; p_patch?: Json; p_workspace_id: string }
         Returns: Json
       }
       update_contact_tag: {
@@ -2215,11 +2283,7 @@ export type Database = {
         Returns: Json
       }
       update_custom_field_definition: {
-        Args: {
-          p_field_id: string
-          p_patch?: Json
-          p_workspace_id: string
-        }
+        Args: { p_field_id: string; p_patch?: Json; p_workspace_id: string }
         Returns: Json
       }
       update_internal_note: {
