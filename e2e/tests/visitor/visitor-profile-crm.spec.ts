@@ -150,7 +150,7 @@ test.describe("visitor profile / CRM-lite", () => {
     await expect(panel.getByLabel("Job title")).toHaveCount(0);
     await expect(panel.getByRole("button", { name: "Save" })).toHaveCount(0);
     await expect(panel.getByRole("button", { name: "Add tag" })).toHaveCount(0);
-    await expect(panel.getByRole("button", { name: "Link" })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Link company" })).toHaveCount(0);
   });
 
   test("second operator sees profile update via contact page refresh path", async ({ browser }) => {
