@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
   AGENT_EMAIL,
@@ -20,9 +20,8 @@ const SEEDED_CUSTOM_FIELD_LABEL = "Plan tier";
 const BULK_COMPANY_NAME = "Bulk Co 101";
 
 async function openSeededContactProfile(page: Page) {
-  // Search isolates Jane even when earlier e2e visitors / pagination seeds
-  // push her off the default first page (ordered by last_seen_at).
-  await page.goto(`${CONTACTS_URL}?q=${encodeURIComponent("jane@example.com")}`);
+  // Search by name (stable). Email may change during concurrent-edit coverage.
+  await page.goto(`${CONTACTS_URL}?q=${encodeURIComponent(SEEDED_CONTACT_NAME)}`);
   await expect(page.getByTestId("contacts-page")).toBeVisible({
     timeout: 60_000,
   });
@@ -33,6 +32,20 @@ async function openSeededContactProfile(page: Page) {
   await expect(page.getByTestId("contact-profile-panel")).toBeVisible({
     timeout: 60_000,
   });
+}
+
+async function saveContactIdentity(page: Page, panel: Locator) {
+  const save = panel.getByTestId("contact-identity-save");
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /\/contacts\//.test(response.url()) &&
+      response.status() < 500,
+    { timeout: 45_000 },
+  );
+  await save.click();
+  await responsePromise;
+  await expect(save).not.toHaveText("Saving…", { timeout: 15_000 });
 }
 
 test.describe("visitor profile / CRM-lite", () => {
@@ -207,10 +220,7 @@ test.describe("visitor profile / CRM-lite", () => {
     await ownerPanel.getByLabel("Email").fill(email);
     await agentPanel.getByLabel("Job title").fill(jobTitle);
 
-    await ownerPanel.getByTestId("contact-identity-save").click();
-    await expect(ownerPanel.getByTestId("contact-identity-save")).toBeEnabled({
-      timeout: 30_000,
-    });
+    await saveContactIdentity(owner, ownerPanel);
     await expect(ownerPanel.getByLabel("Email")).toHaveValue(email, {
       timeout: 30_000,
     });
@@ -220,10 +230,7 @@ test.describe("visitor profile / CRM-lite", () => {
       timeout: 30_000,
     });
 
-    await agentPanel.getByTestId("contact-identity-save").click();
-    await expect(agentPanel.getByTestId("contact-identity-save")).toBeEnabled({
-      timeout: 30_000,
-    });
+    await saveContactIdentity(agent, agentPanel);
     await expect(agentPanel.getByLabel("Job title")).toHaveValue(jobTitle, {
       timeout: 30_000,
     });
