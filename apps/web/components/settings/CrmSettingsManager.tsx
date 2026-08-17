@@ -210,7 +210,6 @@ export function CrmSettingsManager({
                   <p className="text-sm font-medium">{field.label}</p>
                   <p className="text-muted-foreground text-xs">
                     {field.key} · {field.field_type}
-                    {field.is_required ? " · required" : ""}
                   </p>
                 </div>
                 {canManageDefinitions ? (

@@ -2,6 +2,7 @@
 
 import {
   crmMessagesEn,
+  parseCustomFieldValueForType,
   type ContactCustomFieldEntry,
   type ContactProfile,
 } from "@site-chat/shared";
@@ -119,20 +120,27 @@ function FieldEditor({
           onClick={() => {
             setError(null);
             startTransition(async () => {
-              let value: string | number | boolean | null = draft;
+              let raw: string | number | boolean | null = draft;
               if (draft.trim() === "") {
-                value = null;
+                raw = null;
               } else if (entry.field_type === "number") {
-                value = Number(draft);
+                raw = Number(draft);
               } else if (entry.field_type === "boolean") {
-                value = draft === "true";
+                raw = draft === "true";
               }
+
+              const typed = parseCustomFieldValueForType(entry.field_type, raw);
+              if (!typed.success) {
+                setError(typed.message);
+                return;
+              }
+
               const result = await setContactCustomFieldValueAction(
                 workspaceSlug,
                 {
                   contactId,
                   fieldId: entry.field_id,
-                  value,
+                  value: typed.value,
                 },
               );
               if (result.success) {

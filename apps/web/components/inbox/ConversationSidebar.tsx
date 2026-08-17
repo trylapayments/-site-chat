@@ -3,13 +3,18 @@
 import {
   conversationStatusSchema,
   crmMessagesEn,
+  buildVisitorIdentityPatch,
+  reconcileVisitorIdentityDraft,
+  visitorIdentityPatchHasChanges,
   type ContactTagSummary,
   type ConversationDetail,
+  type VisitorIdentityDraft,
+  type VisitorIdentityValues,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { VisitorSidebarLiveRefresh } from "@/components/inbox/VisitorSidebarLiveRefresh";
@@ -94,20 +99,54 @@ export function ConversationSidebar({
   const activity = conversation.visitor_activity;
 
   const publicId = visitor?.public_id ?? contact?.public_id ?? null;
-  const initialName = visitor?.name ?? contact?.name ?? "";
-  const initialEmail = visitor?.email ?? contact?.email ?? "";
-  const initialPhone = visitor?.phone ?? contact?.phone ?? "";
+  const serverIdentity: VisitorIdentityValues = {
+    name: visitor?.name ?? contact?.name ?? null,
+    email: visitor?.email ?? contact?.email ?? null,
+    phone: visitor?.phone ?? contact?.phone ?? null,
+  };
 
-  const [name, setName] = useState(initialName);
-  const [email, setEmail] = useState(initialEmail);
-  const [phone, setPhone] = useState(initialPhone);
+  const [identity, setIdentity] = useState<{
+    baseline: VisitorIdentityValues;
+    draft: VisitorIdentityDraft;
+  }>(() => ({
+    baseline: serverIdentity,
+    draft: {
+      name: serverIdentity.name ?? "",
+      email: serverIdentity.email ?? "",
+      phone: serverIdentity.phone ?? "",
+    },
+  }));
+  const conversationIdRef = useRef(conversationId);
 
   useEffect(() => {
-    setName(initialName);
-    setEmail(initialEmail);
-    setPhone(initialPhone);
-    setProfileError(null);
-  }, [conversationId, initialName, initialEmail, initialPhone]);
+    if (conversationIdRef.current !== conversationId) {
+      conversationIdRef.current = conversationId;
+      setIdentity({
+        baseline: serverIdentity,
+        draft: {
+          name: serverIdentity.name ?? "",
+          email: serverIdentity.email ?? "",
+          phone: serverIdentity.phone ?? "",
+        },
+      });
+      setProfileError(null);
+      return;
+    }
+
+    setIdentity((current) =>
+      reconcileVisitorIdentityDraft({
+        baseline: current.baseline,
+        draft: current.draft,
+        server: serverIdentity,
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- draft-preserving reconcile on field values
+  }, [
+    conversationId,
+    serverIdentity.name,
+    serverIdentity.email,
+    serverIdentity.phone,
+  ]);
 
   const contactLabel = formatConversationContactLabel(
     contact ?? (visitor ? { name: visitor.name, email: visitor.email } : null),
@@ -137,14 +176,38 @@ export function ConversationSidebar({
             onSubmit={(event) => {
               event.preventDefault();
               setProfileError(null);
+              const patch = buildVisitorIdentityPatch({
+                baseline: identity.baseline,
+                draft: identity.draft,
+              });
+              if (!visitorIdentityPatchHasChanges(patch)) {
+                return;
+              }
+              const submittedBaseline = identity.baseline;
+              const submittedDraft = identity.draft;
               startTransition(async () => {
                 const result = await updateVisitorProfileAction(workspaceSlug, {
                   conversationId,
-                  name: name.trim() === "" ? null : name,
-                  email: email.trim() === "" ? null : email,
-                  phone: phone.trim() === "" ? null : phone,
+                  ...patch,
                 });
                 if (result.success) {
+                  setIdentity({
+                    baseline: {
+                      name:
+                        patch.name !== undefined
+                          ? (patch.name ?? null)
+                          : submittedBaseline.name,
+                      email:
+                        patch.email !== undefined
+                          ? (patch.email ?? null)
+                          : submittedBaseline.email,
+                      phone:
+                        patch.phone !== undefined
+                          ? (patch.phone ?? null)
+                          : submittedBaseline.phone,
+                    },
+                    draft: submittedDraft,
+                  });
                   router.refresh();
                 } else {
                   setProfileError(result.message);
@@ -156,10 +219,13 @@ export function ConversationSidebar({
               <Label htmlFor="visitor-name">Name</Label>
               <Input
                 id="visitor-name"
-                value={name}
+                value={identity.draft.name}
                 disabled={isPending}
                 onChange={(event) => {
-                  setName(event.target.value);
+                  setIdentity((current) => ({
+                    ...current,
+                    draft: { ...current.draft, name: event.target.value },
+                  }));
                 }}
                 maxLength={120}
                 autoComplete="off"
@@ -170,10 +236,13 @@ export function ConversationSidebar({
               <Input
                 id="visitor-email"
                 type="email"
-                value={email}
+                value={identity.draft.email}
                 disabled={isPending}
                 onChange={(event) => {
-                  setEmail(event.target.value);
+                  setIdentity((current) => ({
+                    ...current,
+                    draft: { ...current.draft, email: event.target.value },
+                  }));
                 }}
                 maxLength={254}
                 autoComplete="off"
@@ -184,10 +253,13 @@ export function ConversationSidebar({
               <Input
                 id="visitor-phone"
                 type="tel"
-                value={phone}
+                value={identity.draft.phone}
                 disabled={isPending}
                 onChange={(event) => {
-                  setPhone(event.target.value);
+                  setIdentity((current) => ({
+                    ...current,
+                    draft: { ...current.draft, phone: event.target.value },
+                  }));
                 }}
                 maxLength={64}
                 autoComplete="off"
@@ -202,11 +274,15 @@ export function ConversationSidebar({
           </form>
         ) : (
           <div className="space-y-2">
-            {initialEmail ? (
-              <p className="text-muted-foreground text-sm">{initialEmail}</p>
+            {serverIdentity.email ? (
+              <p className="text-muted-foreground text-sm">
+                {serverIdentity.email}
+              </p>
             ) : null}
-            {initialPhone ? (
-              <p className="text-muted-foreground text-sm">{initialPhone}</p>
+            {serverIdentity.phone ? (
+              <p className="text-muted-foreground text-sm">
+                {serverIdentity.phone}
+              </p>
             ) : null}
           </div>
         )}

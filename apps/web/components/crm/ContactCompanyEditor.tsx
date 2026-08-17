@@ -6,7 +6,7 @@ import {
   type ContactProfile,
 } from "@site-chat/shared";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,15 +14,17 @@ import { Label } from "@/components/ui/label";
 import {
   createCompanyAction,
   linkContactCompanyAction,
+  listCompaniesAction,
   unlinkContactCompanyAction,
 } from "@/lib/crm/actions";
 
 const messages = crmMessagesEn;
+const SEARCH_DEBOUNCE_MS = 250;
 
 export function ContactCompanyEditor({
   workspaceSlug,
   profile,
-  companies,
+  companies: initialCompanies,
   canEdit,
 }: {
   workspaceSlug: string;
@@ -38,8 +40,68 @@ export function ContactCompanyEditor({
   );
   const [newName, setNewName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [companies, setCompanies] = useState(initialCompanies);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchRequestRef = useRef(0);
+  const initialCompaniesRef = useRef(initialCompanies);
+  initialCompaniesRef.current = initialCompanies;
 
-  const companyOptions = useMemo(() => companies, [companies]);
+  useEffect(() => {
+    setSelectedCompanyId(profile.company?.id ?? "");
+  }, [profile.id, profile.company?.id]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setCompanies(initialCompanies);
+    }
+  }, [initialCompanies, searchQuery]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setCompanies(initialCompaniesRef.current);
+      setIsSearching(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const requestId = ++searchRequestRef.current;
+      setIsSearching(true);
+      void (async () => {
+        const result = await listCompaniesAction(workspaceSlug, {
+          q: query,
+          limit: 100,
+        });
+        if (requestId !== searchRequestRef.current) {
+          return;
+        }
+        if (result.success) {
+          setCompanies(result.data.items);
+          setError(null);
+        } else {
+          setError(result.message);
+        }
+        setIsSearching(false);
+      })();
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchQuery, workspaceSlug]);
+
+  const companyOptions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return companies;
+    }
+    // Client-side filter as a fast path while/after RPC results arrive.
+    return companies.filter((company) => {
+      const haystack = `${company.name} ${company.domain ?? ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [companies, searchQuery]);
 
   if (!canEdit) {
     return (
@@ -97,6 +159,22 @@ export function ContactCompanyEditor({
         <p className="text-muted-foreground text-sm">{messages.noCompany}</p>
       )}
 
+      <div className="space-y-1.5">
+        <Label htmlFor="company-search">
+          {messages.companySearchPlaceholder}
+        </Label>
+        <Input
+          id="company-search"
+          value={searchQuery}
+          disabled={isPending}
+          placeholder={messages.companySearchPlaceholder}
+          onChange={(event) => {
+            setSearchQuery(event.target.value);
+          }}
+          autoComplete="off"
+        />
+      </div>
+
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1.5">
           <Label htmlFor="link-company">{messages.companyLink}</Label>
@@ -104,12 +182,14 @@ export function ContactCompanyEditor({
             id="link-company"
             className="border-input bg-background h-9 min-w-[12rem] rounded-md border px-2 text-sm"
             value={selectedCompanyId}
-            disabled={isPending}
+            disabled={isPending || isSearching}
             onChange={(event) => {
               setSelectedCompanyId(event.target.value);
             }}
           >
-            <option value="">Select company…</option>
+            <option value="">
+              {isSearching ? "Searching…" : "Select company…"}
+            </option>
             {companyOptions.map((company) => (
               <option key={company.id} value={company.id}>
                 {company.name}

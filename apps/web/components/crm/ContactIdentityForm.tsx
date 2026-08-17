@@ -2,15 +2,23 @@
 
 import {
   CONTACT_EMAIL_MAX_LENGTH,
+  CONTACT_IDENTITY_KEYS,
   CONTACT_JOB_TITLE_MAX_LENGTH,
   CONTACT_LOCALE_MAX_LENGTH,
   CONTACT_NAME_MAX_LENGTH,
   CONTACT_PHONE_MAX_LENGTH,
+  buildContactIdentityPatch,
+  contactIdentityPatchHasChanges,
   crmMessagesEn,
+  identityValuesFromProfile,
+  identityValuesToDraft,
+  reconcileContactIdentityDraft,
+  type ContactIdentityDraft,
+  type ContactIdentityValues,
   type ContactProfile,
 } from "@site-chat/shared";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,34 +27,71 @@ import { updateContactProfileAction } from "@/lib/crm/actions";
 
 const messages = crmMessagesEn;
 
+function profileToBaseline(profile: ContactProfile): ContactIdentityValues {
+  return identityValuesFromProfile(profile);
+}
+
+function profileToDraft(profile: ContactProfile): ContactIdentityDraft {
+  return identityValuesToDraft(
+    CONTACT_IDENTITY_KEYS,
+    profileToBaseline(profile),
+  );
+}
+
+type IdentityState = {
+  baseline: ContactIdentityValues;
+  draft: ContactIdentityDraft;
+};
+
 export function ContactIdentityForm({
   workspaceSlug,
   profile,
   canEdit,
 }: {
   workspaceSlug: string;
+  /** Authoritative server profile; form owns drafts and reconciles. */
   profile: ContactProfile;
   canEdit: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState(profile.name ?? "");
-  const [email, setEmail] = useState(profile.email ?? "");
-  const [phone, setPhone] = useState(profile.phone ?? "");
-  const [jobTitle, setJobTitle] = useState(profile.job_title ?? "");
-  const [locale, setLocale] = useState(profile.locale ?? "");
-  const [countryCode, setCountryCode] = useState(profile.country_code ?? "");
+  const [identity, setIdentity] = useState<IdentityState>(() => ({
+    baseline: profileToBaseline(profile),
+    draft: profileToDraft(profile),
+  }));
+  const contactIdRef = useRef(profile.id);
 
   useEffect(() => {
-    setName(profile.name ?? "");
-    setEmail(profile.email ?? "");
-    setPhone(profile.phone ?? "");
-    setJobTitle(profile.job_title ?? "");
-    setLocale(profile.locale ?? "");
-    setCountryCode(profile.country_code ?? "");
-    setError(null);
-  }, [profile]);
+    if (contactIdRef.current !== profile.id) {
+      contactIdRef.current = profile.id;
+      setIdentity({
+        baseline: profileToBaseline(profile),
+        draft: profileToDraft(profile),
+      });
+      setError(null);
+      return;
+    }
+
+    setIdentity((current) =>
+      reconcileContactIdentityDraft({
+        baseline: current.baseline,
+        draft: current.draft,
+        server: profileToBaseline(profile),
+      }),
+    );
+    // Field-level deps: avoid wiping drafts on unrelated profile object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- draft-preserving reconcile
+  }, [
+    profile.id,
+    profile.name,
+    profile.email,
+    profile.phone,
+    profile.job_title,
+    profile.locale,
+    profile.country_code,
+    profile.updated_at,
+  ]);
 
   if (!canEdit) {
     return (
@@ -85,23 +130,36 @@ export function ContactIdentityForm({
     );
   }
 
+  const { draft, baseline } = identity;
+
+  const updateField = (key: keyof ContactIdentityDraft, value: string) => {
+    setIdentity((current) => ({
+      ...current,
+      draft: { ...current.draft, [key]: value },
+    }));
+  };
+
   return (
     <form
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);
+        const patch = buildContactIdentityPatch({
+          contactId: profile.id,
+          baseline,
+          draft,
+        });
+        if (!contactIdentityPatchHasChanges(patch)) {
+          return;
+        }
         startTransition(async () => {
-          const result = await updateContactProfileAction(workspaceSlug, {
-            contactId: profile.id,
-            name: name.trim() === "" ? null : name,
-            email: email.trim() === "" ? null : email,
-            phone: phone.trim() === "" ? null : phone,
-            job_title: jobTitle.trim() === "" ? null : jobTitle,
-            locale: locale.trim() === "" ? null : locale,
-            country_code: countryCode.trim() === "" ? null : countryCode,
-          });
+          const result = await updateContactProfileAction(workspaceSlug, patch);
           if (result.success) {
+            setIdentity({
+              baseline: profileToBaseline(result.data),
+              draft: profileToDraft(result.data),
+            });
             router.refresh();
           } else {
             setError(result.message);
@@ -114,11 +172,11 @@ export function ContactIdentityForm({
           <Label htmlFor="contact-name">{messages.fieldName}</Label>
           <Input
             id="contact-name"
-            value={name}
+            value={draft.name}
             disabled={isPending}
             maxLength={CONTACT_NAME_MAX_LENGTH}
             onChange={(event) => {
-              setName(event.target.value);
+              updateField("name", event.target.value);
             }}
           />
         </div>
@@ -127,11 +185,11 @@ export function ContactIdentityForm({
           <Input
             id="contact-email"
             type="email"
-            value={email}
+            value={draft.email}
             disabled={isPending}
             maxLength={CONTACT_EMAIL_MAX_LENGTH}
             onChange={(event) => {
-              setEmail(event.target.value);
+              updateField("email", event.target.value);
             }}
           />
         </div>
@@ -140,11 +198,11 @@ export function ContactIdentityForm({
           <Input
             id="contact-phone"
             type="tel"
-            value={phone}
+            value={draft.phone}
             disabled={isPending}
             maxLength={CONTACT_PHONE_MAX_LENGTH}
             onChange={(event) => {
-              setPhone(event.target.value);
+              updateField("phone", event.target.value);
             }}
           />
         </div>
@@ -152,11 +210,11 @@ export function ContactIdentityForm({
           <Label htmlFor="contact-job-title">{messages.fieldJobTitle}</Label>
           <Input
             id="contact-job-title"
-            value={jobTitle}
+            value={draft.job_title}
             disabled={isPending}
             maxLength={CONTACT_JOB_TITLE_MAX_LENGTH}
             onChange={(event) => {
-              setJobTitle(event.target.value);
+              updateField("job_title", event.target.value);
             }}
           />
         </div>
@@ -164,11 +222,11 @@ export function ContactIdentityForm({
           <Label htmlFor="contact-locale">{messages.fieldLocale}</Label>
           <Input
             id="contact-locale"
-            value={locale}
+            value={draft.locale}
             disabled={isPending}
             maxLength={CONTACT_LOCALE_MAX_LENGTH}
             onChange={(event) => {
-              setLocale(event.target.value);
+              updateField("locale", event.target.value);
             }}
           />
         </div>
@@ -176,11 +234,11 @@ export function ContactIdentityForm({
           <Label htmlFor="contact-country">{messages.fieldCountryCode}</Label>
           <Input
             id="contact-country"
-            value={countryCode}
+            value={draft.country_code}
             disabled={isPending}
             maxLength={2}
             onChange={(event) => {
-              setCountryCode(event.target.value.toUpperCase());
+              updateField("country_code", event.target.value.toUpperCase());
             }}
           />
         </div>

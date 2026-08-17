@@ -59,13 +59,13 @@ export function ContactProfilePanel({
   companies: Company[];
   canEdit: boolean;
 }) {
-  const { profile: liveProfile } = useContactProfileLiveRefresh({
+  const { serverProfile } = useContactProfileLiveRefresh({
     workspaceId,
     workspaceSlug,
     contactId: initialProfile.id,
     initialProfile,
   });
-  const profile = liveProfile ?? initialProfile;
+  const profile = serverProfile ?? initialProfile;
 
   const deviceLabel = profile.device_summary
     ? [

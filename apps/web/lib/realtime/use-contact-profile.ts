@@ -11,24 +11,32 @@ const CDC_REFRESH_DELAY_MS = 250;
 
 /**
  * Keeps a contact profile fresh via CDC + reconnect catch-up.
- * Prefer router.refresh for server-rendered pages; optional onProfile for
- * client-held profile state.
+ *
+ * Subscribe effect deps are stable (ids + enabled only) so parent re-renders
+ * and `initialProfile` object identity never tear down the channel.
+ * Forms should own local drafts and reconcile from the returned `serverProfile`.
  */
 export function useContactProfileLiveRefresh(input: {
   workspaceId: string;
   workspaceSlug: string;
   contactId: string;
   enabled?: boolean;
-  /** When set, refetch RPC into local state instead of only router.refresh. */
+  /** Seed / server-rendered profile for this contactId. */
   initialProfile?: ContactProfile;
 }): {
+  /** Authoritative server snapshot (RPC or SSR). Forms reconcile drafts from this. */
+  serverProfile: ContactProfile | null;
+  /** @deprecated Prefer `serverProfile`. */
   profile: ContactProfile | null;
   connectionState: ConnectionState;
   error: string | null;
 } {
   const enabled = input.enabled ?? true;
   const router = useRouter();
-  const [profile, setProfile] = useState<ContactProfile | null>(
+  const routerRef = useRef(router);
+  routerRef.current = router;
+
+  const [serverProfile, setServerProfile] = useState<ContactProfile | null>(
     input.initialProfile ?? null,
   );
   const [connectionState, setConnectionState] =
@@ -36,17 +44,56 @@ export function useContactProfileLiveRefresh(input: {
   const [error, setError] = useState<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef(0);
+  const contactIdRef = useRef(input.contactId);
+  contactIdRef.current = input.contactId;
 
+  // Reset on contact switch. Do not depend on initialProfile object identity.
   useEffect(() => {
-    setProfile(input.initialProfile ?? null);
-  }, [input.initialProfile]);
+    setServerProfile(input.initialProfile ?? null);
+    setError(null);
+    setConnectionState("connecting");
+    requestRef.current += 1;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- contact switch only
+  }, [input.contactId]);
+
+  // Adopt newer SSR/router.refresh snapshots for the same contact without resubscribing.
+  const initialUpdatedAt = input.initialProfile?.updated_at;
+  const initialProfileId = input.initialProfile?.id;
+  useEffect(() => {
+    const next = input.initialProfile;
+    if (!next) {
+      return;
+    }
+    if (next.id !== input.contactId) {
+      return;
+    }
+    setServerProfile((current) => {
+      if (!current) {
+        return next;
+      }
+      if (next.updated_at >= current.updated_at) {
+        return next;
+      }
+      return current;
+    });
+    // Intentionally keyed by contact + updated_at, not object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable live-refresh contract
+  }, [input.contactId, initialProfileId, initialUpdatedAt]);
 
   useEffect(() => {
     if (!enabled || !input.contactId) {
+      setConnectionState("disconnected");
       return;
     }
 
-    const scheduleRefresh = () => {
+    const clearRefreshTimer = () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+
+    const catchUp = (options?: { refreshRouter?: boolean }) => {
       if (refreshTimerRef.current) {
         return;
       }
@@ -54,22 +101,26 @@ export function useContactProfileLiveRefresh(input: {
         refreshTimerRef.current = null;
         void (async () => {
           const requestId = ++requestRef.current;
-          if (input.initialProfile !== undefined) {
-            const result = await getContactProfileAction(
-              input.workspaceSlug,
-              input.contactId,
-            );
-            if (requestId !== requestRef.current) {
-              return;
-            }
-            if (result.success) {
-              setProfile(result.data);
-              setError(null);
-            } else {
-              setError(result.message);
-            }
+          const contactId = contactIdRef.current;
+          const result = await getContactProfileAction(
+            input.workspaceSlug,
+            contactId,
+          );
+          if (
+            requestId !== requestRef.current ||
+            contactId !== contactIdRef.current
+          ) {
+            return;
           }
-          router.refresh();
+          if (result.success) {
+            setServerProfile(result.data);
+            setError(null);
+          } else {
+            setError(result.message);
+          }
+          if (options?.refreshRouter !== false) {
+            routerRef.current.refresh();
+          }
         })();
       }, CDC_REFRESH_DELAY_MS);
     };
@@ -78,12 +129,13 @@ export function useContactProfileLiveRefresh(input: {
       workspaceId: input.workspaceId,
       contactId: input.contactId,
       onChange: () => {
-        scheduleRefresh();
+        catchUp({ refreshRouter: true });
       },
       onConnectionChange: (status) => {
         setConnectionState(status);
         if (status === "connected") {
-          scheduleRefresh();
+          // Catch-up refetch only — do not tear down the channel.
+          catchUp({ refreshRouter: true });
         }
       },
     });
@@ -91,19 +143,14 @@ export function useContactProfileLiveRefresh(input: {
     return () => {
       unsubscribe();
       requestRef.current += 1;
-      if (refreshTimerRef.current) {
-        clearTimeout(refreshTimerRef.current);
-        refreshTimerRef.current = null;
-      }
+      clearRefreshTimer();
     };
-  }, [
-    enabled,
-    input.contactId,
-    input.workspaceId,
-    input.workspaceSlug,
-    input.initialProfile,
-    router,
-  ]);
+  }, [enabled, input.contactId, input.workspaceId, input.workspaceSlug]);
 
-  return { profile, connectionState, error };
+  return {
+    serverProfile,
+    profile: serverProfile,
+    connectionState,
+    error,
+  };
 }
