@@ -10,6 +10,8 @@ export const crmMessagesEn = {
   contactsEmpty: "No contacts yet.",
   contactsSearchEmpty: "No contacts match your search.",
   contactsLoading: "Loading contacts…",
+  contactsLoadingMore: "Loading more…",
+  contactsLoadMore: "Load more",
   contactsError: "Unable to load contacts.",
   contactsRetry: "Retry",
   viewProfile: "View full profile",

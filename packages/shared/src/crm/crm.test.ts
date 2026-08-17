@@ -4,10 +4,14 @@ import { CONTACT_TAG_COLOR_DEFAULT, COMPANY_SIZES, CUSTOM_FIELD_TYPES } from "./
 import { CrmError, parseCrmErrorMessage } from "./errors.js";
 import {
   contactProfileSchema,
+  createCompanySchema,
   createContactTagSchema,
   createCustomFieldDefinitionSchema,
+  customFieldDateValueSchema,
+  isHttpOrHttpsUrl,
   listContactsQuerySchema,
   listContactsResultSchema,
+  parseCustomFieldValueForType,
   updateContactProfileSchema,
 } from "../schemas/crm.js";
 
@@ -123,5 +127,28 @@ describe("CRM schemas", () => {
       options: [],
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it("accepts strict YYYY-MM-DD date values", () => {
+    expect(customFieldDateValueSchema.safeParse("2024-02-29").success).toBe(true);
+    expect(customFieldDateValueSchema.safeParse("today").success).toBe(false);
+    expect(customFieldDateValueSchema.safeParse("2024-2-9").success).toBe(false);
+    expect(parseCustomFieldValueForType("date", "2026-08-17")).toEqual({
+      success: true,
+      value: "2026-08-17",
+    });
+    expect(parseCustomFieldValueForType("date", "tomorrow").success).toBe(false);
+  });
+
+  it("requires http(s) company websites", () => {
+    expect(isHttpOrHttpsUrl("https://acme.example")).toBe(true);
+    expect(isHttpOrHttpsUrl("ftp://acme.example")).toBe(false);
+    expect(
+      createCompanySchema.safeParse({ name: "Acme", website: "https://acme.example" }).success,
+    ).toBe(true);
+    expect(createCompanySchema.safeParse({ name: "Acme", website: "not-a-url" }).success).toBe(
+      false,
+    );
+    expect(createCompanySchema.safeParse({ name: "Acme", website: "" }).success).toBe(true);
   });
 });

@@ -309,6 +309,39 @@ export type ListCustomFieldDefinitionsResult = z.infer<
 
 const nullableTrimmed = (max: number) => z.union([z.string().trim().max(max), z.null()]);
 
+/** Strict calendar date for custom field values (YYYY-MM-DD). */
+export const customFieldDateValueSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD");
+
+export type CustomFieldDateValue = z.infer<typeof customFieldDateValueSchema>;
+
+/** True when `value` parses as an absolute http(s) URL. */
+export function isHttpOrHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export const companyWebsiteValueSchema = z
+  .string()
+  .trim()
+  .max(COMPANY_WEBSITE_MAX_LENGTH)
+  .refine(isHttpOrHttpsUrl, { message: "Website must be an http(s) URL" });
+
+const nullableCompanyWebsite = z.union([
+  z
+    .string()
+    .trim()
+    .max(COMPANY_WEBSITE_MAX_LENGTH)
+    .transform((value) => (value === "" ? null : value))
+    .pipe(z.union([z.null(), companyWebsiteValueSchema])),
+  z.null(),
+]);
+
 /** Operator patch for `update_contact_profile`. */
 export const updateContactProfileSchema = z
   .object({
@@ -396,7 +429,7 @@ export const createCompanySchema = z
   .object({
     name: z.string().trim().min(1).max(COMPANY_NAME_MAX_LENGTH),
     domain: nullableTrimmed(COMPANY_DOMAIN_MAX_LENGTH).optional(),
-    website: nullableTrimmed(COMPANY_WEBSITE_MAX_LENGTH).optional(),
+    website: nullableCompanyWebsite.optional(),
     industry: nullableTrimmed(COMPANY_INDUSTRY_MAX_LENGTH).optional(),
     size: z.union([companySizeSchema, z.null()]).optional(),
   })
@@ -409,7 +442,7 @@ export const updateCompanySchema = z
     companyId: z.string().uuid(),
     name: z.string().trim().min(1).max(COMPANY_NAME_MAX_LENGTH).optional(),
     domain: nullableTrimmed(COMPANY_DOMAIN_MAX_LENGTH).optional(),
-    website: nullableTrimmed(COMPANY_WEBSITE_MAX_LENGTH).optional(),
+    website: nullableCompanyWebsite.optional(),
     industry: nullableTrimmed(COMPANY_INDUSTRY_MAX_LENGTH).optional(),
     size: z.union([companySizeSchema, z.null()]).optional(),
   })
@@ -545,6 +578,60 @@ export const setContactCustomFieldValueSchema = z
   .strict();
 
 export type SetContactCustomFieldValueInput = z.infer<typeof setContactCustomFieldValueSchema>;
+
+/**
+ * Validate a custom-field value when the definition type is known (e.g. date → YYYY-MM-DD).
+ */
+export function parseCustomFieldValueForType(
+  fieldType: CustomFieldType,
+  value: unknown,
+):
+  { success: true; value: string | number | boolean | null } | { success: false; message: string } {
+  if (value === null) {
+    return { success: true, value: null };
+  }
+
+  switch (fieldType) {
+    case "date": {
+      if (typeof value !== "string") {
+        return { success: false, message: "Date value must be YYYY-MM-DD." };
+      }
+      const parsed = customFieldDateValueSchema.safeParse(value);
+      if (!parsed.success) {
+        return {
+          success: false,
+          message: parsed.error.issues[0]?.message ?? "Date value must be YYYY-MM-DD.",
+        };
+      }
+      return { success: true, value: parsed.data };
+    }
+    case "number": {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return { success: false, message: "Number value must be a finite number." };
+      }
+      return { success: true, value };
+    }
+    case "boolean": {
+      if (typeof value !== "boolean") {
+        return { success: false, message: "Boolean value must be true or false." };
+      }
+      return { success: true, value };
+    }
+    case "text":
+    case "select": {
+      if (typeof value !== "string") {
+        return { success: false, message: "Value must be a string." };
+      }
+      if (value.length > CUSTOM_FIELD_TEXT_VALUE_MAX_LENGTH) {
+        return { success: false, message: "Value is too long." };
+      }
+      return { success: true, value };
+    }
+    default: {
+      return { success: false, message: "Unsupported field type." };
+    }
+  }
+}
 
 export const clearContactCustomFieldValueSchema = z
   .object({
