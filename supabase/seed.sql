@@ -556,9 +556,10 @@ BEGIN
     RETURNING id INTO v_field_id;
   END IF;
 
-  -- Ensure Jane's search_vector is populated for list search smoke.
+  -- Keep Jane near the top of unfiltered contact lists and searchable by email.
   UPDATE public.contacts
   SET name = COALESCE(name, 'Jane Cooper'),
+      last_seen_at = greatest(coalesce(last_seen_at, '-infinity'::timestamptz), now()),
       updated_at = now()
   WHERE id = v_contact_id
     AND workspace_id = v_workspace_id;

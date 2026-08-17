@@ -20,14 +20,16 @@ const SEEDED_CUSTOM_FIELD_LABEL = "Plan tier";
 const BULK_COMPANY_NAME = "Bulk Co 101";
 
 async function openSeededContactProfile(page: Page) {
-  await page.goto(CONTACTS_URL);
+  // Search isolates Jane even when earlier e2e visitors / pagination seeds
+  // push her off the default first page (ordered by last_seen_at).
+  await page.goto(`${CONTACTS_URL}?q=${encodeURIComponent("jane@example.com")}`);
   await expect(page.getByTestId("contacts-page")).toBeVisible({
     timeout: 60_000,
   });
-  await Promise.all([
-    page.waitForURL(/\/contacts\/[0-9a-f-]+/, { timeout: 60_000 }),
-    page.getByRole("link", { name: SEEDED_CONTACT_NAME }).first().click(),
-  ]);
+  const link = page.getByRole("link", { name: SEEDED_CONTACT_NAME }).first();
+  await expect(link).toBeVisible({ timeout: 60_000 });
+  await link.click();
+  await expect(page).toHaveURL(/\/contacts\/[0-9a-f-]+/, { timeout: 60_000 });
   await expect(page.getByTestId("contact-profile-panel")).toBeVisible({
     timeout: 60_000,
   });
@@ -262,15 +264,19 @@ test.describe("visitor profile / CRM-lite", () => {
 
   test("inbox sidebar links to full contact profile", async ({ page }) => {
     await loginOperator(page);
-    await page.goto(`${APP_URL}/app/acme-support/inbox`);
+    // Search keeps the seeded open thread visible after earlier e2e traffic
+    // ages it off the default inbox first page.
+    await page.goto(
+      `${APP_URL}/app/acme-support/inbox?q=${encodeURIComponent(SEEDED_OPEN_CONVERSATION_PREVIEW)}`,
+    );
     await waitForOperatorInboxRealtimeReady(page);
     await openOperatorConversation(page, SEEDED_OPEN_CONVERSATION_PREVIEW);
     await waitForOperatorThreadRealtimeReady(page);
 
-    await Promise.all([
-      page.waitForURL(/\/contacts\/[0-9a-f-]+/, { timeout: 60_000 }),
-      page.getByRole("link", { name: "View full profile" }).click(),
-    ]);
+    const profileLink = page.getByRole("link", { name: "View full profile" });
+    await expect(profileLink).toBeVisible({ timeout: 60_000 });
+    await profileLink.click();
+    await expect(page).toHaveURL(/\/contacts\/[0-9a-f-]+/, { timeout: 60_000 });
     await expect(page.getByTestId("contact-profile-panel")).toBeVisible({
       timeout: 60_000,
     });
