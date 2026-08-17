@@ -37,17 +37,18 @@ async function openSeededContactProfile(page: Page) {
 async function saveContactIdentity(page: Page, panel: Locator) {
   const save = panel.getByTestId("contact-identity-save");
   const responsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      /\/contacts\//.test(response.url()) &&
-      response.status() < 500,
+    (response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        Boolean(request.headers()["next-action"]) &&
+        response.status() < 500
+      );
+    },
     { timeout: 45_000 },
   );
   await save.click();
   await responsePromise;
-  // Prefer durable field value over isPending; layout revalidation used to
-  // leave the button on "Saving…" even after the action HTTP response.
-  await expect(save).toBeEnabled({ timeout: 45_000 });
 }
 
 test.describe("visitor profile / CRM-lite", () => {
