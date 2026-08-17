@@ -113,14 +113,11 @@ test.describe("visitor profile / CRM-lite", () => {
     });
 
     // Custom field value (seeded Plan tier select)
-    const fieldControl = panel.getByLabel(SEEDED_CUSTOM_FIELD_LABEL);
+    const fieldRow = panel.getByTestId("custom-field-plan_tier");
+    const fieldControl = fieldRow.getByLabel(SEEDED_CUSTOM_FIELD_LABEL);
     await expect(fieldControl).toBeVisible({ timeout: 30_000 });
     await fieldControl.selectOption(customValue);
-    await panel
-      .locator("div.space-y-1\\.5")
-      .filter({ has: fieldControl })
-      .getByRole("button", { name: "Save" })
-      .click();
+    await fieldRow.getByRole("button", { name: "Save" }).click();
     await expect(fieldControl).toHaveValue(customValue, { timeout: 30_000 });
 
     const timeline = panel.getByTestId("customer-timeline");
@@ -209,7 +206,12 @@ test.describe("visitor profile / CRM-lite", () => {
     await ownerPanel.getByLabel("Email").fill(email);
     await agentPanel.getByLabel("Job title").fill(jobTitle);
 
-    await ownerPanel.getByRole("button", { name: "Save" }).first().click();
+    const ownerIdentitySave = ownerPanel
+      .locator("form")
+      .filter({ has: ownerPanel.getByLabel("Email") })
+      .getByRole("button", { name: "Save" });
+    await ownerIdentitySave.click();
+    await expect(ownerIdentitySave).toHaveText("Save", { timeout: 30_000 });
     await expect(ownerPanel.getByLabel("Email")).toHaveValue(email, {
       timeout: 30_000,
     });
@@ -219,7 +221,12 @@ test.describe("visitor profile / CRM-lite", () => {
       timeout: 30_000,
     });
 
-    await agentPanel.getByRole("button", { name: "Save" }).first().click();
+    const agentIdentitySave = agentPanel
+      .locator("form")
+      .filter({ has: agentPanel.getByLabel("Job title") })
+      .getByRole("button", { name: "Save" });
+    await agentIdentitySave.click();
+    await expect(agentIdentitySave).toHaveText("Save", { timeout: 30_000 });
     await expect(agentPanel.getByLabel("Job title")).toHaveValue(jobTitle, {
       timeout: 30_000,
     });

@@ -44,15 +44,21 @@ function FieldEditor({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState(valueToInput(entry));
+  const [dirty, setDirty] = useState(false);
+  const serverValue = valueToInput(entry);
 
   useEffect(() => {
-    setDraft(valueToInput(entry));
-    setError(null);
-  }, [entry]);
+    // Live profile refresh creates new entry object identities; only reset
+    // pristine drafts so in-progress edits survive CDC / router.refresh.
+    if (!dirty) {
+      setDraft(serverValue);
+      setError(null);
+    }
+  }, [dirty, serverValue, entry.field_id]);
 
   if (!canEdit) {
     return (
-      <div className="space-y-0.5">
+      <div className="space-y-0.5" data-testid={`custom-field-${entry.key}`}>
         <p className="text-muted-foreground text-xs">{entry.label}</p>
         <p className="text-sm">
           {entry.value === null ? "—" : String(entry.value)}
@@ -62,7 +68,7 @@ function FieldEditor({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" data-testid={`custom-field-${entry.key}`}>
       <Label htmlFor={`cf-${entry.field_id}`}>{entry.label}</Label>
       {entry.field_type === "boolean" ? (
         <select
@@ -71,6 +77,7 @@ function FieldEditor({
           value={draft}
           disabled={isPending}
           onChange={(event) => {
+            setDirty(true);
             setDraft(event.target.value);
           }}
         >
@@ -85,6 +92,7 @@ function FieldEditor({
           value={draft}
           disabled={isPending}
           onChange={(event) => {
+            setDirty(true);
             setDraft(event.target.value);
           }}
         >
@@ -108,6 +116,7 @@ function FieldEditor({
           value={draft}
           disabled={isPending}
           onChange={(event) => {
+            setDirty(true);
             setDraft(event.target.value);
           }}
         />
@@ -144,6 +153,7 @@ function FieldEditor({
                 },
               );
               if (result.success) {
+                setDirty(false);
                 router.refresh();
               } else {
                 setError(result.message);
@@ -169,6 +179,8 @@ function FieldEditor({
                 },
               );
               if (result.success) {
+                setDirty(false);
+                setDraft("");
                 router.refresh();
               } else {
                 setError(result.message);
