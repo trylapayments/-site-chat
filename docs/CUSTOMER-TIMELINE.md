@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Status:** Implemented (v1)  
-**Last updated:** 2026-08-11
+**Last updated:** 2026-08-17
 
 Related: [ARCHITECTURE.md](./ARCHITECTURE.md), [DATABASE.md](./DATABASE.md), [SECURITY.md](./SECURITY.md), [PRIVACY.md](./PRIVACY.md), [DATA-RETENTION.md](./DATA-RETENTION.md), [adr/ADR-004-customer-timeline-events.md](./adr/ADR-004-customer-timeline-events.md)
 
@@ -66,7 +66,12 @@ Canonical shared constants live in `@site-chat/shared` (`CUSTOMER_TIMELINE_EVENT
 | `company_unlinked` | Contact unlinked from a company (explicit unlink / profile clear) | `previous_company_id` |
 | `custom_field_updated` | Custom field value set or cleared with a real change | `field_id`, `key`, `from`, `to` |
 
-Assignment mutations use `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS. No-ops emit nothing. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005. Internal notes use dedicated RPCs; see `docs/INTERNAL-NOTES.md` and ADR-006. CRM-lite profile/tag/company/custom-field events: see `docs/VISITOR-PROFILE.md` and ADR-008. **Company soft-delete** clears `company_id` on linked contacts without emitting per-contact `company_unlinked` (bulk unlink; avoids timeline spam).
+Assignment mutations use `take_conversation` / `assign_conversation` / `unassign_conversation` with row-lock + version CAS. No-ops emit nothing. See `docs/CONVERSATION-ASSIGNMENT.md` and ADR-005. Internal notes use dedicated RPCs; see `docs/INTERNAL-NOTES.md` and ADR-006. CRM-lite profile/tag/company/custom-field events: see `docs/VISITOR-PROFILE.md` and ADR-008.
+
+**Bulk soft-delete (no per-contact spam):**
+
+- **Company soft-delete** clears `company_id` on linked contacts without emitting per-contact `company_unlinked`.
+- **Custom field definition soft-delete** hard-deletes all values for that field and refreshes `search_vector`, but does **not** emit per-contact `custom_field_updated` events. Explicit single-contact set/clear still emits when data changes.
 
 ---
 

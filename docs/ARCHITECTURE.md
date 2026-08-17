@@ -2,7 +2,7 @@
 
 **Version:** 1.2  
 **Status:** Foundation  
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-17
 
 ---
 
@@ -311,7 +311,7 @@ Operator-only notes live in `internal_notes` (not `messages`). Soft delete, `@me
 
 Canned responses live in `canned_responses` (with `canned_response_folders` and per-member `canned_response_favorites`). Workspace-shared and personal scopes share one table; mutations are Server Actions over SECURITY DEFINER RPCs (RLS is SELECT-only for realtime). Composer `/shortcut` insertion interpolates `{{visitor.*}}` / `{{operator.name}}` / `{{workspace.name}}` / `{{conversation.id}}` at insert time. See `docs/CANNED-RESPONSES.md` and ADR-007.
 
-CRM-lite extends `contacts` with optional `company_id`, profile fields, workspace `contact_tags` / `companies` / typed `custom_field_*` tables. Mutations are Server Actions over SECURITY DEFINER RPCs (RLS SELECT-only). Host `custom_attributes_json` stays separate from operator custom fields. Contact `search_vector` prepares PR #32 global search. See `docs/VISITOR-PROFILE.md` and ADR-008.
+CRM-lite extends `contacts` with optional `company_id`, profile fields, workspace `contact_tags` / `companies` / typed `custom_field_*` tables. Mutations are Server Actions over SECURITY DEFINER RPCs (RLS SELECT-only). Host `custom_attributes_json` stays separate from operator custom fields. Contact `search_vector` prepares PR #32 global search. Identity forms use **dirty-only patches** (submit changed fields only); live CDC refresh reconciles pristine fields while preserving dirty local drafts — no full-snapshot overwrite across tabs. See `docs/VISITOR-PROFILE.md` and ADR-008.
 
 ### 6.2.1 Read receipts and unread counters
 

@@ -1,7 +1,7 @@
 # Visitor Profile / CRM-lite
 
 **Status:** Implemented (v1) — schema, RPCs, shared schemas, Server Actions, contact UI, CRM settings  
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-17
 
 Related: [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md), [CUSTOMER-TIMELINE.md](./CUSTOMER-TIMELINE.md), [DATABASE.md](./DATABASE.md), [SECURITY.md](./SECURITY.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [adr/ADR-008-crm-companies-custom-fields.md](./adr/ADR-008-crm-companies-custom-fields.md), [adr/ADR-003-visitor-identity-model.md](./adr/ADR-003-visitor-identity-model.md)
 
@@ -17,9 +17,9 @@ v1 delivers:
 - Workspace **tags** with assign/unassign and soft delete
 - First-class **companies** (no auto-merge by email domain)
 - **Typed custom fields** (EAV with typed columns; definitions owner/admin only)
-- Contacts list with `q` search (FTS + ILIKE) — **search readiness for PR #32**
-- Timeline events for profile/tag/company/custom-field mutations
-- Operator realtime SELECT on CRM tables; profile live refresh on the contact page
+- Contacts list with `q` search (FTS + ILIKE) and keyset **Load more** — **search readiness for PR #32**
+- Timeline events for profile/tag/company/custom-field **value** mutations (bulk soft-deletes skip per-contact spam)
+- Operator realtime SELECT on CRM tables; profile live refresh on the contact page (no polling)
 - RBAC via capabilities + SECURITY DEFINER RPCs
 
 Key files:
@@ -29,7 +29,7 @@ Key files:
 | Migration | `supabase/migrations/20260816200000_visitor_profile_crm.sql` |
 | Database tests | `supabase/tests/database/018_visitor_profile_crm.test.sql` |
 | Shared schemas | `packages/shared/src/schemas/crm.ts` |
-| Shared helpers | `packages/shared/src/crm/` |
+| Shared helpers | `packages/shared/src/crm/` (incl. dirty-only identity patches) |
 | Queries/actions | `apps/web/lib/crm/` |
 | Realtime | `apps/web/lib/realtime/use-contact-profile.ts` |
 | Contact UI | `apps/web/components/crm/`, `apps/web/app/app/[workspaceSlug]/contacts/` |
@@ -48,11 +48,13 @@ Key files:
 | `job_title` | ≤ 120 chars |
 | `locale` | ≤ 35 chars (profile preference, not session language) |
 | `country_code` | ISO 3166-1 alpha-2 (`^[A-Z]{2}$`); profile field, distinct from `visitor_sessions.country_code` |
-| `search_vector` | Trigger-maintained `tsvector` (name/email/phone/job_title + company name/domain + tag names + custom text/select values) — prep for PR #32 |
+| `search_vector` | Trigger-maintained `tsvector` — name, email, phone, job_title, company **name and domain**, tag names, custom field text/select/number/date values (+ definition labels/keys) |
 
 Host-supplied `custom_attributes_json` (widget identify) is **unchanged** and separate from CRM custom fields (see ADR-008).
 
 `update_visitor_profile` (conversation sidebar) and `update_contact_profile` (contact page) both accept CRM keys. Neither bumps `last_seen_at`. No-op patches emit **no** timeline events.
+
+**Dirty-only identity patches:** Forms submit only fields that differ from the last known server baseline (`buildContactIdentityPatch` / `buildVisitorIdentityPatch`). Live CDC refresh reconciles pristine fields from the server snapshot; dirty local drafts are preserved. Tabs do not overwrite each other with a full snapshot.
 
 ---
 
@@ -64,7 +66,7 @@ Host-supplied `custom_attributes_json` (widget identify) is **unchanged** and se
 | `contact_tag_assignments` | `(contact_id, tag_id)` join; unique per pair |
 
 - Tag names are unique per workspace among active rows (case-insensitive).
-- Assign/unassign are idempotent: re-assigning an existing tag emits **no** timeline event.
+- Assign is concurrent-safe and idempotent: `INSERT … ON CONFLICT DO NOTHING`. Re-assigning an existing tag emits **no** timeline event.
 - Soft-deleting a tag removes assignments and emits `tag_removed` per contact that had the tag.
 - Soft-deleted tags cannot be assigned.
 
@@ -78,6 +80,8 @@ Host-supplied `custom_attributes_json` (widget identify) is **unchanged** and se
 - Contacts link via `company_id` (at most one company per contact in v1).
 - Explicit `link_contact_company` / `unlink_contact_company` emit `company_linked` / `company_unlinked`.
 - **Soft-delete clears `company_id` on linked contacts without per-contact timeline events** (avoids bulk timeline spam). Operators who need an audit trail should unlink contacts individually first.
+- **Website:** http(s) only; validated in shared Zod and normalized in the DB (`normalize_company_website` / `sanitize_page_url`).
+- **Company picker:** searchable via `list_companies` `q` (ILIKE + trigram on name/domain) — not limited to the first page of results.
 
 See [ADR-008](./adr/ADR-008-crm-companies-custom-fields.md).
 
@@ -95,7 +99,10 @@ Field types (`app_custom_field_type`): `text`, `number`, `boolean`, `date`, `sel
 - Definitions: **owner/admin only** (`manage_crm_definitions`).
 - Values: any messaging role (`update_visitor_profile` capability / `require_crm_write_access`).
 - Wrong-type writes are rejected with prefixed errors (`INVALID_FIELD_VALUE`, etc.).
-- Soft-deleting a definition clears values; emits `custom_field_updated` when a value actually changes.
+- **Date values:** strict `YYYY-MM-DD` only. Relative strings (`today`, `tomorrow`) are rejected. Shared Zod and the DB both enforce.
+- **`is_required`:** Column exists and can be stored on definitions, but v1 does **not** enforce required values on set/clear. Settings UI does not expose it as a product feature — reserved for a future release.
+- **Soft-deleting a definition** hard-deletes all values for that field and refreshes `search_vector` for affected contacts. It does **not** emit per-contact `custom_field_updated` timeline events (bulk cleanup; avoids spam). Explicit `set`/`clear` value RPCs still emit when data actually changes.
+- **Select option shrink:** When options are removed from a select definition, the RPC captures affected `contact_id`s **before** deleting orphan values, then refreshes `search_vector` (no stale option text left in the index).
 
 Host `custom_attributes_json` remains the identify-side bag; CRM fields are operator-curated and typed.
 
@@ -131,7 +138,14 @@ CRM tables are in `supabase_realtime` with `REPLICA IDENTITY FULL`:
 - `custom_field_definitions`
 - `custom_field_values`
 
-RLS is SELECT-only for `authenticated` via `workspace_is_accessible`. Mutations go through SECURITY DEFINER RPCs. The contact profile page uses live refresh when related rows change.
+RLS is SELECT-only for `authenticated` via `workspace_is_accessible`. Mutations go through SECURITY DEFINER RPCs.
+
+Contact profile live refresh (`useContactProfileLiveRefresh`):
+
+- No polling
+- Stable subscribe effect deps (ids + enabled only) — parent re-renders / profile object identity do not tear down the channel or cause a refresh storm
+- Reconnect/`connected` triggers a bounded catch-up refetch
+- Forms reconcile from `serverProfile`; dirty local drafts are preserved
 
 ---
 
@@ -140,11 +154,12 @@ RLS is SELECT-only for `authenticated` via `workspace_is_accessible`. Mutations 
 | Piece | Status |
 | ----- | ------ |
 | `contacts.search_vector` + GIN | Shipped |
-| Company/tag/custom text folded into vector | Shipped (refresh triggers) |
+| Company name/domain, tags, custom text/select/number/date (+ labels/keys) folded into vector | Shipped (refresh helpers) |
 | `list_contacts` `q` filter (FTS + ILIKE fallback) | Shipped |
+| Contacts UI keyset pagination (`next_before` / `has_more`, **Load more**) | Shipped — not OFFSET |
 | Global cross-entity search UI | Deferred to PR #32 |
 
-`list_contacts` supports keyset pagination, optional `company_id` / `tag_id` filters, and `q`. This is the contact-side index operators will reuse when global search lands.
+`list_contacts` supports keyset pagination, optional `company_id` / `tag_ids` filters, and `q`. This is the contact-side index operators will reuse when global search lands.
 
 ---
 
@@ -155,7 +170,7 @@ RLS is SELECT-only for `authenticated` via `workspace_is_accessible`. Mutations 
 | `visitor_profile_updated` | Real identity/profile field diffs (sidebar or contact page) |
 | `tag_added` / `tag_removed` | Assign / unassign (and tag soft-delete per contact) |
 | `company_linked` / `company_unlinked` | Explicit link/unlink or profile `company_id` change — **not** company soft-delete bulk unlink |
-| `custom_field_updated` | Value set/clear that actually changes stored data |
+| `custom_field_updated` | Value set/clear that actually changes stored data — **not** definition soft-delete bulk value cleanup |
 
 No-ops emit nothing. Metadata is compact and secret-free. See [CUSTOMER-TIMELINE.md](./CUSTOMER-TIMELINE.md).
 
@@ -179,8 +194,9 @@ Details: [SECURITY.md](./SECURITY.md).
 - Partial unique indexes on active tag names and company domains
 - Trigram GIN on company names; GIN on `contacts.search_vector`
 - Assignment and value lookups keyed by `(workspace_id, contact_id)` / `(workspace_id, field_id)`
-- Soft-delete company refreshes search vectors for unlinked contacts without emitting N timeline rows
-- `list_contacts` uses keyset cursors (no OFFSET)
+- Soft-delete company / custom-field definition refreshes search vectors for affected contacts without emitting N timeline rows
+- `list_contacts` and contacts UI use keyset cursors (`next_before` / `has_more`) — no OFFSET
+- `list_companies` supports `q` so pickers are not capped at the first page
 
 ---
 
@@ -207,6 +223,7 @@ Details: [SECURITY.md](./SECURITY.md).
 - Automatic company merge / enrichment by domain
 - Marketing automation
 - Visitor-facing CRM definitions or values
+- Enforcing `is_required` on custom field values (column reserved; not productized in v1)
 - Verified identify / cross-customer merge (still ADR-003 future work)
 
 ---
@@ -216,3 +233,4 @@ Details: [SECURITY.md](./SECURITY.md).
 | Date | Change |
 |------|--------|
 | 2026-08-16 | Initial CRM-lite documentation |
+| 2026-08-17 | Align with PR #33 hardening (soft-delete timeline, dates, search_vector, pagination, dirty-only patches) |

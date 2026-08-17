@@ -4,6 +4,10 @@ All notable changes to Site Chat are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- CRM-lite hardening (PR #33): concurrent tag assign idempotent (`ON CONFLICT DO NOTHING`); custom field dates strict `YYYY-MM-DD` (reject `today`/`tomorrow`) in shared Zod + DB; select option shrink captures contact ids before orphan delete then refreshes `search_vector`; soft-delete custom field definition hard-deletes values and refreshes search without per-contact `custom_field_updated` spam; company website http(s) only; company picker searchable via `list_companies` `q`; contacts UI keyset **Load more** (`next_before` / `has_more`); dirty-only identity patches with live draft-preserving reconcile; contact profile realtime uses stable subscribe deps + reconnect catch-up (no polling / refresh storm). Docs aligned (`docs/VISITOR-PROFILE.md` and related).
+
 ### Added
 
 - Visitor Profile / CRM-lite (v1): workspace `companies`, `contact_tags` / assignments, typed `custom_field_definitions` / `custom_field_values` (EAV with typed columns); contact profile columns (`company_id`, `job_title`, `locale`, `country_code`) and trigger-maintained `search_vector` (PR #32 search readiness); SECURITY DEFINER RPCs for profile/tag/company/custom-field CRUD; timeline events `tag_added` / `tag_removed` / `company_linked` / `company_unlinked` / `custom_field_updated`; capabilities `view_contact_profile` / `manage_crm_definitions`; contact list + profile UI, CRM settings, lean sidebar link; docs `docs/VISITOR-PROFILE.md`, ADR-008; pgTAP `018_visitor_profile_crm.test.sql`; Playwright `e2e/tests/visitor/visitor-profile-crm.spec.ts`.
