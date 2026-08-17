@@ -564,3 +564,93 @@ BEGIN
     AND workspace_id = v_workspace_id;
 END;
 $$;
+
+-- Bulk contacts for keyset pagination e2e (Load more past default page size).
+DO $$
+DECLARE
+  v_workspace_id uuid;
+  i integer;
+BEGIN
+  SELECT id INTO v_workspace_id FROM public.workspaces WHERE slug = 'acme-support';
+  IF v_workspace_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  IF (
+    SELECT count(*)::int
+    FROM public.contacts
+    WHERE workspace_id = v_workspace_id
+      AND email LIKE 'pagination-contact-%@example.com'
+  ) >= 55 THEN
+    RETURN;
+  END IF;
+
+  FOR i IN 1..55 LOOP
+    INSERT INTO public.contacts (
+      workspace_id,
+      public_id,
+      email,
+      name,
+      last_seen_at,
+      first_seen_at,
+      visit_count
+    )
+    VALUES (
+      v_workspace_id,
+      'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
+      format('pagination-contact-%s@example.com', lpad(i::text, 3, '0')),
+      format('Pagination Contact %s', lpad(i::text, 3, '0')),
+      timestamptz '2026-01-01 00:00:00+00' - (i || ' minutes')::interval,
+      timestamptz '2025-12-01 00:00:00+00' - (i || ' minutes')::interval,
+      1
+    );
+  END LOOP;
+END;
+$$;
+
+-- Bulk companies so searchable picker can find past the first page of 100.
+DO $$
+DECLARE
+  v_workspace_id uuid;
+  v_owner_member_id uuid;
+  i integer;
+BEGIN
+  SELECT id INTO v_workspace_id FROM public.workspaces WHERE slug = 'acme-support';
+  IF v_workspace_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT wm.id INTO v_owner_member_id
+  FROM public.workspace_members wm
+  INNER JOIN auth.users u ON u.id = wm.user_id
+  WHERE wm.workspace_id = v_workspace_id
+    AND u.email = 'owner@local.test'
+    AND wm.status = 'active'
+  LIMIT 1;
+
+  IF (
+    SELECT count(*)::int
+    FROM public.companies
+    WHERE workspace_id = v_workspace_id
+      AND domain LIKE 'bulk-co-%.example'
+      AND deleted_at IS NULL
+  ) >= 101 THEN
+    RETURN;
+  END IF;
+
+  FOR i IN 1..101 LOOP
+    INSERT INTO public.companies (
+      workspace_id, name, domain, website, industry, size, created_by, updated_by
+    ) VALUES (
+      v_workspace_id,
+      format('Bulk Co %s', lpad(i::text, 3, '0')),
+      format('bulk-co-%s.example', lpad(i::text, 3, '0')),
+      format('https://bulk-co-%s.example', lpad(i::text, 3, '0')),
+      'Software',
+      '1-10',
+      v_owner_member_id,
+      v_owner_member_id
+    );
+  END LOOP;
+END;
+$$;

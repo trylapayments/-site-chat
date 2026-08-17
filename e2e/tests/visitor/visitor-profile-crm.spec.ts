@@ -17,6 +17,7 @@ const SEEDED_CONTACT_NAME = "Jane Cooper";
 const SEEDED_TAG_NAME = "VIP";
 const SEEDED_COMPANY_NAME = "Acme Example";
 const SEEDED_CUSTOM_FIELD_LABEL = "Plan tier";
+const BULK_COMPANY_NAME = "Bulk Co 101";
 
 async function openSeededContactProfile(page: Page) {
   await page.goto(CONTACTS_URL);
@@ -77,18 +78,31 @@ test.describe("visitor profile / CRM-lite", () => {
       timeout: 30_000,
     });
 
-    // Company link / unlink using seeded company
+    // Company link / unlink — search finds companies past the first page
+    await panel.getByLabel("Search companies…").fill(BULK_COMPANY_NAME);
     const companySelect = panel.locator("#link-company");
     await expect(companySelect).toBeVisible({ timeout: 30_000 });
-    await companySelect.selectOption({ label: SEEDED_COMPANY_NAME });
+    await expect
+      .poll(async () => companySelect.locator("option").count(), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(1);
+    await companySelect.selectOption({ label: BULK_COMPANY_NAME });
     await panel.getByRole("button", { name: "Link" }).click();
-    await expect(panel.getByText(SEEDED_COMPANY_NAME).first()).toBeVisible({
+    await expect(panel.getByText(BULK_COMPANY_NAME).first()).toBeVisible({
       timeout: 30_000,
     });
     await panel.getByRole("button", { name: "Unlink company" }).click();
     await expect(panel.getByText("No company linked.")).toBeVisible({
       timeout: 30_000,
     });
+
+    await panel.getByLabel("Search companies…").fill(SEEDED_COMPANY_NAME);
+    await expect
+      .poll(async () => companySelect.locator(`option:text-is("${SEEDED_COMPANY_NAME}")`).count(), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
     await companySelect.selectOption({ label: SEEDED_COMPANY_NAME });
     await panel.getByRole("button", { name: "Link" }).click();
     await expect(panel.getByText(SEEDED_COMPANY_NAME).first()).toBeVisible({
@@ -169,6 +183,81 @@ test.describe("visitor profile / CRM-lite", () => {
 
     await ownerContext.close();
     await agentContext.close();
+  });
+
+  test("disjoint concurrent edits keep dirty drafts and dirty-only saves", async ({ browser }) => {
+    const ownerContext = await browser.newContext();
+    const agentContext = await browser.newContext();
+    const owner = await ownerContext.newPage();
+    const agent = await agentContext.newPage();
+
+    const email = `crm-concurrent-${Date.now()}@example.com`;
+    const jobTitle = `Concurrent Title ${Date.now()}`;
+
+    await loginOperator(owner);
+    await openSeededContactProfile(owner);
+    await loginAs(agent, AGENT_EMAIL);
+    await openSeededContactProfile(agent);
+
+    const ownerPanel = owner.getByTestId("contact-profile-panel");
+    const agentPanel = agent.getByTestId("contact-profile-panel");
+
+    // Owner edits email only; agent edits job title only (disjoint fields).
+    await ownerPanel.getByLabel("Email").fill(email);
+    await agentPanel.getByLabel("Job title").fill(jobTitle);
+
+    await ownerPanel.getByRole("button", { name: "Save" }).first().click();
+    await expect(ownerPanel.getByLabel("Email")).toHaveValue(email, {
+      timeout: 30_000,
+    });
+
+    // Agent's dirty job title must survive owner save / live refresh.
+    await expect(agentPanel.getByLabel("Job title")).toHaveValue(jobTitle, {
+      timeout: 30_000,
+    });
+
+    await agentPanel.getByRole("button", { name: "Save" }).first().click();
+    await expect(agentPanel.getByLabel("Job title")).toHaveValue(jobTitle, {
+      timeout: 30_000,
+    });
+
+    // After both saves, each field is present without wiping the other.
+    await owner.reload();
+    await expect(owner.getByTestId("contact-profile-panel")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(owner.getByTestId("contact-profile-panel").getByLabel("Email")).toHaveValue(
+      email,
+      { timeout: 30_000 },
+    );
+    await expect(owner.getByTestId("contact-profile-panel").getByLabel("Job title")).toHaveValue(
+      jobTitle,
+      { timeout: 30_000 },
+    );
+
+    await ownerContext.close();
+    await agentContext.close();
+  });
+
+  test("contacts list Load more paginates past 50", async ({ page }) => {
+    await loginOperator(page);
+    await page.goto(CONTACTS_URL);
+    await expect(page.getByTestId("contacts-page")).toBeVisible({
+      timeout: 60_000,
+    });
+
+    const list = page.getByTestId("contacts-list");
+    await expect(list).toBeVisible({ timeout: 30_000 });
+    const initialCount = await list.locator("li").count();
+    expect(initialCount).toBeLessThanOrEqual(50);
+    expect(initialCount).toBeGreaterThan(0);
+
+    const loadMore = page.getByTestId("contacts-load-more");
+    await expect(loadMore).toBeVisible({ timeout: 30_000 });
+    await loadMore.click();
+    await expect
+      .poll(async () => list.locator("li").count(), { timeout: 30_000 })
+      .toBeGreaterThan(initialCount);
   });
 
   test("inbox sidebar links to full contact profile", async ({ page }) => {
