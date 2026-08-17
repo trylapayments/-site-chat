@@ -824,7 +824,7 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT co.name
+  SELECT concat_ws(' ', co.name, co.domain)
   INTO v_company_name
   FROM public.companies co
   WHERE co.id = v_contact.company_id
@@ -2003,7 +2003,6 @@ DECLARE
   v_member_id uuid;
   v_contact public.contacts;
   v_tag public.contact_tags;
-  v_existing uuid;
 BEGIN
   PERFORM app_private.require_crm_write_access(p_workspace_id);
   v_member_id := app_private.get_caller_member_id(p_workspace_id);
@@ -2030,22 +2029,19 @@ BEGIN
     RAISE EXCEPTION 'TAG_NOT_FOUND: Tag not found.';
   END IF;
 
-  SELECT a.id
-  INTO v_existing
-  FROM public.contact_tag_assignments a
-  WHERE a.workspace_id = p_workspace_id
-    AND a.contact_id = p_contact_id
-    AND a.tag_id = p_tag_id;
-
-  IF FOUND THEN
-    RETURN app_private.build_contact_profile(p_workspace_id, p_contact_id);
-  END IF;
-
+  -- Idempotent under concurrency: ON CONFLICT DO NOTHING avoids unique-violation
+  -- races when two operators assign the same tag simultaneously.
   INSERT INTO public.contact_tag_assignments (
     workspace_id, contact_id, tag_id, assigned_by
   ) VALUES (
     p_workspace_id, p_contact_id, p_tag_id, v_member_id
-  );
+  )
+  ON CONFLICT (workspace_id, contact_id, tag_id) DO NOTHING;
+
+  IF NOT FOUND THEN
+    -- Already assigned (this session or a concurrent writer). No timeline spam.
+    RETURN app_private.build_contact_profile(p_workspace_id, p_contact_id);
+  END IF;
 
   PERFORM app_private.emit_customer_timeline_event(
     p_workspace_id,
@@ -2937,8 +2933,12 @@ BEGIN
   RETURNING * INTO v_def;
 
   -- Drop select values that are no longer in options.
+  -- Capture affected contacts BEFORE delete so search_vector refresh includes
+  -- contacts whose orphaned values were removed (otherwise stale option text remains).
   IF v_def.field_type = 'select' AND (p_patch ? 'options' OR p_patch ? 'options_json') THEN
-    DELETE FROM public.custom_field_values v
+    SELECT array_agg(DISTINCT v.contact_id)
+    INTO v_contact_ids
+    FROM public.custom_field_values v
     WHERE v.workspace_id = p_workspace_id
       AND v.field_id = p_field_id
       AND NOT EXISTS (
@@ -2947,11 +2947,14 @@ BEGIN
         WHERE opt.val = v.value_select
       );
 
-    SELECT array_agg(DISTINCT v.contact_id)
-    INTO v_contact_ids
-    FROM public.custom_field_values v
+    DELETE FROM public.custom_field_values v
     WHERE v.workspace_id = p_workspace_id
-      AND v.field_id = p_field_id;
+      AND v.field_id = p_field_id
+      AND NOT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(v_def.options_json) opt(val)
+        WHERE opt.val = v.value_select
+      );
 
     IF v_contact_ids IS NOT NULL THEN
       PERFORM app_private.refresh_contact_search_vector(cid)
@@ -3016,6 +3019,8 @@ BEGIN
   WHERE v.workspace_id = p_workspace_id
     AND v.field_id = p_field_id;
 
+  -- Soft-delete the definition. Values are hard-deleted above without per-contact
+  -- custom_field_updated timeline events (bulk cleanup; avoids event spam).
   UPDATE public.custom_field_definitions
   SET
     deleted_at = now(),
@@ -3160,15 +3165,24 @@ BEGIN
 
     WHEN 'date' THEN
       IF jsonb_typeof(p_value) <> 'string' THEN
-        RAISE EXCEPTION 'INVALID_FIELD_VALUE: date value must be an ISO date string.';
+        RAISE EXCEPTION 'INVALID_FIELD_VALUE: date value must be an ISO date string (YYYY-MM-DD).';
+      END IF;
+      -- Strict calendar date only — reject Postgres relative tokens (today/tomorrow)
+      -- and other non-ISO forms even when ::date would accept them.
+      IF (p_value #>> '{}') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN
+        RAISE EXCEPTION 'INVALID_FIELD_VALUE: date value must be YYYY-MM-DD.';
       END IF;
       BEGIN
         v_value_date := (p_value #>> '{}')::date;
       EXCEPTION
         WHEN others THEN
-          RAISE EXCEPTION 'INVALID_FIELD_VALUE: date value must be a valid date.';
+          RAISE EXCEPTION 'INVALID_FIELD_VALUE: date value must be a valid calendar date (YYYY-MM-DD).';
       END;
-      v_to := to_jsonb(v_value_date);
+      -- Round-trip check: reject impossible dates like 2024-02-31 that coerce.
+      IF to_char(v_value_date, 'YYYY-MM-DD') IS DISTINCT FROM (p_value #>> '{}') THEN
+        RAISE EXCEPTION 'INVALID_FIELD_VALUE: date value must be a valid calendar date (YYYY-MM-DD).';
+      END IF;
+      v_to := to_jsonb(to_char(v_value_date, 'YYYY-MM-DD'));
 
     WHEN 'select' THEN
       IF jsonb_typeof(p_value) <> 'string' THEN
