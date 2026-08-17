@@ -179,7 +179,9 @@ export async function updateContactProfileAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
+    // Return the authoritative profile to the client; avoid revalidatePath here.
+    // Layout/page revalidation during multi-tab edits can stall the Server Action
+    // flight and leave the UI stuck on "Saving…". Live CDC + router.refresh cover UI.
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to update contact profile.");
