@@ -4,11 +4,11 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
--- Schema(18) + privileges(28) + profile RBAC(6) + cross-workspace(4)
--- + tags(12) + companies(10) + custom fields(12) + noop/timeline(8)
--- + soft-delete/removed-member(9) + search(6) + realtime(4)
--- = 111
-SELECT plan(111);
+-- Schema(18) + privileges(28) + profile RBAC(6) + cross-workspace profile(4)
+-- + workspace B seed lives_ok(4) + tags(16) + companies(12) + custom fields(28)
+-- + soft-delete field + noop/timeline(8) + company/tag soft-delete + removed-member
+-- + search(6) + realtime(4) = 150
+SELECT plan(150);
 
 TRUNCATE tests.fixtures;
 
@@ -341,7 +341,7 @@ SELECT throws_like(
 );
 
 -- ---------------------------------------------------------------------------
--- Cross-workspace denial
+-- Cross-workspace denial (profile)
 -- ---------------------------------------------------------------------------
 
 SELECT lives_ok(
@@ -385,6 +385,77 @@ SELECT throws_like(
 );
 
 -- ---------------------------------------------------------------------------
+-- Workspace B CRM entities (for cross-workspace entity rejection later)
+-- ---------------------------------------------------------------------------
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('owner_b')::uuid, 'crm-owner-b@test.local'); $$,
+  'authenticate owner B for foreign CRM entities'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_contact_tag(
+      tests.fixture('workspace_b')::uuid, 'WorkspaceBTag', '#111111'
+    );
+  $$,
+  'owner B creates tag in workspace B'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_company(
+      tests.fixture('workspace_b')::uuid,
+      'Beta Co',
+      'beta.example',
+      NULL, NULL, NULL
+    );
+  $$,
+  'owner B creates company in workspace B'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_custom_field_definition(
+      tests.fixture('workspace_b')::uuid,
+      'b_plan',
+      'B Plan',
+      'select',
+      '["basic"]'::jsonb,
+      0,
+      false
+    );
+  $$,
+  'owner B creates custom field in workspace B'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'tag_b', id::text
+FROM public.contact_tags
+WHERE workspace_id = tests.fixture('workspace_b')::uuid
+  AND lower(name) = 'workspacebtag'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'company_b', id::text
+FROM public.companies
+WHERE workspace_id = tests.fixture('workspace_b')::uuid
+  AND lower(name) = 'beta co'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'field_b', id::text
+FROM public.custom_field_definitions
+WHERE workspace_id = tests.fixture('workspace_b')::uuid
+  AND key = 'b_plan'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+-- ---------------------------------------------------------------------------
 -- Tags: create, dedupe, assign, no-op assign, unassign
 -- ---------------------------------------------------------------------------
 
@@ -395,22 +466,42 @@ SELECT lives_ok(
 
 SELECT lives_ok(
   $$
-    INSERT INTO tests.fixtures (key, value)
-    VALUES (
-      'tag_vip',
-      (public.create_contact_tag(
-        tests.fixture('workspace_a')::uuid, '  VIP  ', '#FF0000'
-      ) ->> 'id')
-    )
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    SELECT public.create_contact_tag(
+      tests.fixture('workspace_a')::uuid, '  VIP  ', '#FF0000'
+    );
   $$,
   'agent creates VIP tag'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'tag_vip', id::text
+FROM public.contact_tags
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND lower(name) = 'vip'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM public.contact_tags
+    WHERE id = tests.fixture('tag_vip')::uuid
+      AND workspace_id = tests.fixture('workspace_a')::uuid
+      AND deleted_at IS NULL
+  ),
+  'tag fixture persisted after create'
 );
 
 SELECT is(
   (SELECT name FROM public.contact_tags WHERE id = tests.fixture('tag_vip')::uuid),
   'VIP',
   'tag name is trimmed/normalized'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  're-authenticate agent after tag fixture'
 );
 
 SELECT throws_like(
@@ -422,40 +513,48 @@ SELECT throws_like(
   'duplicate tag name is rejected (case-insensitive)'
 );
 
-DO $$
-DECLARE
-  v_before integer;
-  v_after integer;
-  v_ws uuid := tests.fixture('workspace_a')::uuid;
-  v_contact uuid := tests.fixture('contact_a')::uuid;
-  v_tag uuid := tests.fixture('tag_vip')::uuid;
-BEGIN
-  SELECT count(*)::integer INTO v_before
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws AND contact_id = v_contact AND event_type = 'tag_added';
+SELECT tests.clear_auth();
 
-  PERFORM public.assign_contact_tag(v_ws, v_contact, v_tag);
+INSERT INTO tests.fixtures (key, value)
+SELECT 'tag_added_before', count(*)::text
+FROM public.customer_timeline_events
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND contact_id = tests.fixture('contact_a')::uuid
+  AND event_type = 'tag_added'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
-  SELECT count(*)::integer INTO v_after
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws AND contact_id = v_contact AND event_type = 'tag_added';
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local');
+    SELECT public.assign_contact_tag(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('tag_vip')::uuid
+    );
+  $$,
+  'assign VIP tag'
+);
 
-  INSERT INTO tests.fixtures (key, value) VALUES
-    ('tag_added_before', v_before::text),
-    ('tag_added_after', v_after::text)
-  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+SELECT lives_ok(
+  $$
+    SELECT public.assign_contact_tag(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('tag_vip')::uuid
+    );
+  $$,
+  're-assign VIP tag is idempotent (no error)'
+);
 
-  PERFORM public.assign_contact_tag(v_ws, v_contact, v_tag);
+SELECT tests.clear_auth();
 
-  SELECT count(*)::integer INTO v_after
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws AND contact_id = v_contact AND event_type = 'tag_added';
-
-  INSERT INTO tests.fixtures (key, value) VALUES
-    ('tag_added_noop', v_after::text)
-  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-END;
-$$;
+INSERT INTO tests.fixtures (key, value)
+SELECT 'tag_added_after', count(*)::text
+FROM public.customer_timeline_events
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND contact_id = tests.fixture('contact_a')::uuid
+  AND event_type = 'tag_added'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 SELECT is(
   tests.fixture('tag_added_after')::int,
@@ -464,9 +563,18 @@ SELECT is(
 );
 
 SELECT is(
-  tests.fixture('tag_added_noop')::int,
-  tests.fixture('tag_added_after')::int,
-  'no-op re-assign emits no additional tag_added'
+  (SELECT count(*)::int
+   FROM public.contact_tag_assignments
+   WHERE workspace_id = tests.fixture('workspace_a')::uuid
+     AND contact_id = tests.fixture('contact_a')::uuid
+     AND tag_id = tests.fixture('tag_vip')::uuid),
+  1,
+  'assign twice yields a single assignment row'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent for profile/tag reads'
 );
 
 SELECT is(
@@ -510,33 +618,65 @@ SELECT lives_ok(
   're-assign VIP for later soft-delete coverage'
 );
 
+SELECT throws_like(
+  $$
+    SELECT public.assign_contact_tag(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('tag_b')::uuid
+    );
+  $$,
+  '%TAG_NOT_FOUND%',
+  'cannot assign workspace B tag to workspace A contact'
+);
+
 -- ---------------------------------------------------------------------------
 -- Companies: create, domain uniqueness (no auto-merge), link/unlink
 -- ---------------------------------------------------------------------------
 
 SELECT lives_ok(
   $$
-    INSERT INTO tests.fixtures (key, value)
-    VALUES (
-      'company_acme',
-      (public.create_company(
-        tests.fixture('workspace_a')::uuid,
-        'Acme Corp',
-        'Acme.com',
-        NULL,
-        'Software',
-        '11-50'
-      ) ->> 'id')
-    )
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    SELECT public.create_company(
+      tests.fixture('workspace_a')::uuid,
+      'Acme Corp',
+      'Acme.com',
+      NULL,
+      'Software',
+      '11-50'
+    );
   $$,
   'agent creates Acme company'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'company_acme', id::text
+FROM public.companies
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND lower(name) = 'acme corp'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM public.companies
+    WHERE id = tests.fixture('company_acme')::uuid
+      AND workspace_id = tests.fixture('workspace_a')::uuid
+      AND deleted_at IS NULL
+  ),
+  'company fixture persisted after create'
 );
 
 SELECT is(
   (SELECT domain FROM public.companies WHERE id = tests.fixture('company_acme')::uuid),
   'acme.com',
   'company domain is lowercased'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  're-authenticate agent for company ops'
 );
 
 SELECT throws_like(
@@ -613,6 +753,18 @@ SELECT lives_ok(
   're-link company for soft-delete coverage'
 );
 
+SELECT throws_like(
+  $$
+    SELECT public.link_contact_company(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('company_b')::uuid
+    );
+  $$,
+  '%COMPANY_NOT_FOUND%',
+  'cannot link workspace B company to workspace A contact'
+);
+
 -- ---------------------------------------------------------------------------
 -- Custom fields: owner/admin defs; agent values; typed validation
 -- ---------------------------------------------------------------------------
@@ -645,42 +797,106 @@ SELECT lives_ok(
 
 SELECT lives_ok(
   $$
-    INSERT INTO tests.fixtures (key, value)
-    VALUES (
-      'field_plan',
-      (public.create_custom_field_definition(
-        tests.fixture('workspace_a')::uuid,
-        'plan',
-        'Plan',
-        'select',
-        '["free","pro"]'::jsonb,
-        0,
-        false
-      ) ->> 'id')
-    )
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    SELECT public.create_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      'plan',
+      'Plan',
+      'select',
+      '["free","pro"]'::jsonb,
+      0,
+      false
+    );
   $$,
   'owner creates select custom field'
 );
 
 SELECT lives_ok(
   $$
-    INSERT INTO tests.fixtures (key, value)
-    VALUES (
-      'field_seats',
-      (public.create_custom_field_definition(
-        tests.fixture('workspace_a')::uuid,
-        'seat_count',
-        'Seat count',
-        'number',
-        '[]'::jsonb,
-        1,
-        false
-      ) ->> 'id')
-    )
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    SELECT public.create_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      'seat_count',
+      'Seat count',
+      'number',
+      '[]'::jsonb,
+      1,
+      false
+    );
   $$,
   'owner creates number custom field'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      'renewal_date',
+      'Renewal date',
+      'date',
+      '[]'::jsonb,
+      3,
+      false
+    );
+  $$,
+  'owner creates date custom field'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      'tier',
+      'Tier',
+      'select',
+      '["alpha","beta"]'::jsonb,
+      4,
+      false
+    );
+  $$,
+  'owner creates tier select field for option-shrink search'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'field_plan', id::text
+FROM public.custom_field_definitions
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND key = 'plan'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'field_seats', id::text
+FROM public.custom_field_definitions
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND key = 'seat_count'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'field_date', id::text
+FROM public.custom_field_definitions
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND key = 'renewal_date'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'field_tier', id::text
+FROM public.custom_field_definitions
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND key = 'tier'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM public.custom_field_definitions
+    WHERE id = tests.fixture('field_plan')::uuid
+      AND workspace_id = tests.fixture('workspace_a')::uuid
+      AND deleted_at IS NULL
+  ),
+  'custom field fixture persisted after create'
 );
 
 SELECT lives_ok(
@@ -690,23 +906,28 @@ SELECT lives_ok(
 
 SELECT lives_ok(
   $$
-    INSERT INTO tests.fixtures (key, value)
-    VALUES (
-      'field_notes',
-      (public.create_custom_field_definition(
-        tests.fixture('workspace_a')::uuid,
-        'account_note',
-        'Account note',
-        'text',
-        '[]'::jsonb,
-        2,
-        false
-      ) ->> 'id')
-    )
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    SELECT public.create_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      'account_note',
+      'Account note',
+      'text',
+      '[]'::jsonb,
+      2,
+      false
+    );
   $$,
   'admin can create custom field definitions'
 );
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'field_notes', id::text
+FROM public.custom_field_definitions
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND key = 'account_note'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 SELECT lives_ok(
   $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
@@ -751,6 +972,57 @@ SELECT throws_like(
   'select value outside options is rejected'
 );
 
+SELECT throws_like(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('field_b')::uuid,
+      '"basic"'::jsonb
+    );
+  $$,
+  '%FIELD_NOT_FOUND%',
+  'cannot set workspace B custom field on workspace A contact'
+);
+
+SELECT throws_like(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('field_date')::uuid,
+      '"today"'::jsonb
+    );
+  $$,
+  '%INVALID_FIELD_VALUE%',
+  'strict date rejects relative token today'
+);
+
+SELECT throws_like(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('field_date')::uuid,
+      '"2024-02-31"'::jsonb
+    );
+  $$,
+  '%INVALID_FIELD_VALUE%',
+  'strict date rejects impossible calendar date 2024-02-31'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('field_date')::uuid,
+      '"2024-03-15"'::jsonb
+    );
+  $$,
+  'strict date accepts YYYY-MM-DD 2024-03-15'
+);
+
 SELECT ok(
   EXISTS (
     SELECT 1 FROM public.customer_timeline_events
@@ -761,61 +1033,189 @@ SELECT ok(
   'set custom field emits custom_field_updated'
 );
 
+-- Field type immutability (owner/admin manage defs)
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('owner_a')::uuid, 'crm-owner-a@test.local'); $$,
+  'authenticate owner for field type immutability'
+);
+
+SELECT throws_like(
+  $$
+    SELECT public.update_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('field_plan')::uuid,
+      jsonb_build_object('field_type', 'text')
+    );
+  $$,
+  '%FIELD_TYPE_IMMUTABLE%',
+  'update field_type is rejected'
+);
+
+-- Option removal refreshes search_vector
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent for tier value'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('field_tier')::uuid,
+      '"alpha"'::jsonb
+    );
+  $$,
+  'assign select option alpha to contact'
+);
+
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'alpha')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'option alpha appears in contacts.search_vector'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('owner_a')::uuid, 'crm-owner-a@test.local'); $$,
+  'authenticate owner to shrink select options'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.update_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('field_tier')::uuid,
+      jsonb_build_object('options', '["beta"]'::jsonb)
+    );
+  $$,
+  'remove option alpha via update_custom_field_definition'
+);
+
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1 FROM public.custom_field_values
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+      AND contact_id = tests.fixture('contact_a')::uuid
+      AND field_id = tests.fixture('field_tier')::uuid
+  ),
+  'orphaned select value row is removed after option shrink'
+);
+
+SELECT ok(
+  NOT (
+    SELECT search_vector @@ plainto_tsquery('english', 'alpha')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'option alpha no longer appears in search_vector after shrink'
+);
+
+-- Soft-delete custom field definition clears values (no per-contact timeline required)
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent to set notes value before soft-delete'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('field_notes')::uuid,
+      '"keep me"'::jsonb
+    );
+  $$,
+  'set text value on field_notes before soft-delete'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('owner_a')::uuid, 'crm-owner-a@test.local'); $$,
+  'authenticate owner to soft-delete custom field'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.soft_delete_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('field_notes')::uuid
+    );
+  $$,
+  'soft-delete custom field definition'
+);
+
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1 FROM public.custom_field_values
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+      AND field_id = tests.fixture('field_notes')::uuid
+  ),
+  'soft-delete custom field definition clears values'
+);
+
 -- ---------------------------------------------------------------------------
 -- No-op profile update emits no timeline; real update does
 -- ---------------------------------------------------------------------------
 
-DO $$
-DECLARE
-  v_before integer;
-  v_after integer;
-  v_ws uuid := tests.fixture('workspace_a')::uuid;
-  v_contact uuid := tests.fixture('contact_a')::uuid;
-BEGIN
-  SELECT count(*)::integer INTO v_before
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws
-    AND contact_id = v_contact
-    AND event_type = 'visitor_profile_updated';
+SELECT tests.clear_auth();
 
-  PERFORM public.update_contact_profile(
-    v_ws,
-    v_contact,
-    jsonb_build_object(
-      'job_title', 'Support Lead',
-      'locale', 'en-US',
-      'country_code', 'US'
-    )
-  );
+INSERT INTO tests.fixtures (key, value)
+SELECT 'profile_noop_before', count(*)::text
+FROM public.customer_timeline_events
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND contact_id = tests.fixture('contact_a')::uuid
+  AND event_type = 'visitor_profile_updated'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
-  SELECT count(*)::integer INTO v_after
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws
-    AND contact_id = v_contact
-    AND event_type = 'visitor_profile_updated';
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local');
+    SELECT public.update_contact_profile(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      jsonb_build_object(
+        'job_title', 'Support Lead',
+        'locale', 'en-US',
+        'country_code', 'US'
+      )
+    );
+  $$,
+  'no-op profile update (same CRM fields)'
+);
 
-  INSERT INTO tests.fixtures (key, value) VALUES
-    ('profile_noop_before', v_before::text),
-    ('profile_noop_after', v_after::text)
-  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+SELECT tests.clear_auth();
 
-  PERFORM public.update_contact_profile(
-    v_ws,
-    v_contact,
-    jsonb_build_object('job_title', 'Principal Support')
-  );
+INSERT INTO tests.fixtures (key, value)
+SELECT 'profile_noop_after', count(*)::text
+FROM public.customer_timeline_events
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND contact_id = tests.fixture('contact_a')::uuid
+  AND event_type = 'visitor_profile_updated'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
-  SELECT count(*)::integer INTO v_after
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws
-    AND contact_id = v_contact
-    AND event_type = 'visitor_profile_updated';
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local');
+    SELECT public.update_contact_profile(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      jsonb_build_object('job_title', 'Principal Support')
+    );
+  $$,
+  'real profile update changes job_title'
+);
 
-  INSERT INTO tests.fixtures (key, value) VALUES
-    ('profile_real_after', v_after::text)
-  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-END;
-$$;
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'profile_real_after', count(*)::text
+FROM public.customer_timeline_events
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND contact_id = tests.fixture('contact_a')::uuid
+  AND event_type = 'visitor_profile_updated'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 SELECT is(
   tests.fixture('profile_noop_after')::int,
@@ -827,6 +1227,11 @@ SELECT is(
   tests.fixture('profile_real_after')::int,
   tests.fixture('profile_noop_before')::int + 1,
   'real profile update emits visitor_profile_updated'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent for company_id validation'
 );
 
 SELECT throws_like(
@@ -857,33 +1262,36 @@ SELECT throws_like(
 -- Soft-deleted tag + company soft-delete (no bulk company_unlinked)
 -- ---------------------------------------------------------------------------
 
-DO $$
-DECLARE
-  v_before integer;
-  v_after integer;
-  v_ws uuid := tests.fixture('workspace_a')::uuid;
-  v_contact uuid := tests.fixture('contact_a')::uuid;
-BEGIN
-  SELECT count(*)::integer INTO v_before
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws
-    AND contact_id = v_contact
-    AND event_type = 'company_unlinked';
+SELECT tests.clear_auth();
 
-  PERFORM public.soft_delete_company(v_ws, tests.fixture('company_acme')::uuid);
+INSERT INTO tests.fixtures (key, value)
+SELECT 'company_unlink_before_soft', count(*)::text
+FROM public.customer_timeline_events
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND contact_id = tests.fixture('contact_a')::uuid
+  AND event_type = 'company_unlinked'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
-  SELECT count(*)::integer INTO v_after
-  FROM public.customer_timeline_events
-  WHERE workspace_id = v_ws
-    AND contact_id = v_contact
-    AND event_type = 'company_unlinked';
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local');
+    SELECT public.soft_delete_company(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('company_acme')::uuid
+    );
+  $$,
+  'soft-delete Acme company'
+);
 
-  INSERT INTO tests.fixtures (key, value) VALUES
-    ('company_unlink_before_soft', v_before::text),
-    ('company_unlink_after_soft', v_after::text)
-  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-END;
-$$;
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'company_unlink_after_soft', count(*)::text
+FROM public.customer_timeline_events
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND contact_id = tests.fixture('contact_a')::uuid
+  AND event_type = 'company_unlinked'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 SELECT is(
   tests.fixture('company_unlink_after_soft')::int,
@@ -895,6 +1303,11 @@ SELECT is(
   (SELECT company_id FROM public.contacts WHERE id = tests.fixture('contact_a')::uuid),
   NULL,
   'company soft-delete clears contact.company_id'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent for tag soft-delete'
 );
 
 SELECT lives_ok(
@@ -933,17 +1346,22 @@ SELECT ok(
 -- Removed member: created_by SET NULL; tag still usable
 SELECT lives_ok(
   $$
-    INSERT INTO tests.fixtures (key, value)
-    VALUES (
-      'tag_orphan',
-      (public.create_contact_tag(
-        tests.fixture('workspace_a')::uuid, 'OrphanTag', '#112233'
-      ) ->> 'id')
-    )
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    SELECT public.create_contact_tag(
+      tests.fixture('workspace_a')::uuid, 'OrphanTag', '#112233'
+    );
   $$,
   'create tag owned by agent before member removal'
 );
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'tag_orphan', id::text
+FROM public.contact_tags
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND lower(name) = 'orphantag'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 SELECT lives_ok(
   $$
