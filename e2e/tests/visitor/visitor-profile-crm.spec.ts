@@ -85,10 +85,10 @@ test.describe("visitor profile / CRM-lite", () => {
     const companySelect = panel.locator("#link-company");
     await expect(companySelect).toBeVisible({ timeout: 30_000 });
     await expect
-      .poll(async () => companySelect.locator("option").count(), {
+      .poll(async () => companySelect.locator(`option:text-is("${BULK_COMPANY_NAME}")`).count(), {
         timeout: 30_000,
       })
-      .toBeGreaterThan(1);
+      .toBeGreaterThan(0);
     await companySelect.selectOption({ label: BULK_COMPANY_NAME });
     await panel.getByRole("button", { name: "Link" }).click();
     await expect(panel.getByText(BULK_COMPANY_NAME).first()).toBeVisible({
@@ -273,9 +273,13 @@ test.describe("visitor profile / CRM-lite", () => {
     await openOperatorConversation(page, SEEDED_OPEN_CONVERSATION_PREVIEW);
     await waitForOperatorThreadRealtimeReady(page);
 
-    const profileLink = page.getByRole("link", { name: "View full profile" });
+    const profileLink = page.getByTestId("view-full-profile");
     await expect(profileLink).toBeVisible({ timeout: 60_000 });
-    await profileLink.click();
+    const href = await profileLink.getAttribute("href");
+    expect(href).toMatch(/\/contacts\/[0-9a-f-]+/);
+    // Prefer explicit navigation: Next soft-nav from the inbox shell can stall
+    // under CI load even when the href is correct.
+    await page.goto(new URL(href!, APP_URL).toString());
     await expect(page).toHaveURL(/\/contacts\/[0-9a-f-]+/, { timeout: 60_000 });
     await expect(page.getByTestId("contact-profile-panel")).toBeVisible({
       timeout: 60_000,

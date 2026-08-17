@@ -2214,11 +2214,12 @@ BEGIN
     FROM public.companies co
     WHERE co.workspace_id = p_workspace_id
       AND co.deleted_at IS NULL
+      -- Substring ILIKE only (no trigram). Shared prefixes like "Bulk Co 101"
+      -- vs "Bulk Co 001" over-match under <% and bury the exact hit past limit.
       AND (
         v_q IS NULL
         OR co.name ILIKE '%' || replace(replace(replace(v_q, '\', '\\'), '%', '\%'), '_', '\_') || '%'
         OR coalesce(co.domain, '') ILIKE '%' || replace(replace(replace(v_q, '\', '\\'), '%', '\%'), '_', '\_') || '%'
-        OR v_q OPERATOR(extensions.<%) co.name
       )
       AND (
         v_before_name IS NULL

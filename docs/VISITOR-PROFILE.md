@@ -81,7 +81,7 @@ Host-supplied `custom_attributes_json` (widget identify) is **unchanged** and se
 - Explicit `link_contact_company` / `unlink_contact_company` emit `company_linked` / `company_unlinked`.
 - **Soft-delete clears `company_id` on linked contacts without per-contact timeline events** (avoids bulk timeline spam). Operators who need an audit trail should unlink contacts individually first.
 - **Website:** http(s) only; validated in shared Zod and normalized in the DB (`normalize_company_website` / `sanitize_page_url`).
-- **Company picker:** searchable via `list_companies` `q` (ILIKE + trigram on name/domain) — not limited to the first page of results.
+- **Company picker:** searchable via `list_companies` `q` (case-insensitive substring on name/domain) — not limited to the first page of results. Trigram fuzzy matching is intentionally not used here: shared prefixes (e.g. “Bulk Co 001” vs “Bulk Co 101”) over-match and can bury the typed company past the page limit.
 
 See [ADR-008](./adr/ADR-008-crm-companies-custom-fields.md).
 

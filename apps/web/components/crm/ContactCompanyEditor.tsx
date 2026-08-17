@@ -6,7 +6,7 @@ import {
   type ContactProfile,
 } from "@site-chat/shared";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,18 +90,6 @@ export function ContactCompanyEditor({
       clearTimeout(timer);
     };
   }, [searchQuery, workspaceSlug]);
-
-  const companyOptions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return companies;
-    }
-    // Client-side filter as a fast path while/after RPC results arrive.
-    return companies.filter((company) => {
-      const haystack = `${company.name} ${company.domain ?? ""}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [companies, searchQuery]);
 
   if (!canEdit) {
     return (
@@ -190,7 +178,7 @@ export function ContactCompanyEditor({
             <option value="">
               {isSearching ? "Searching…" : "Select company…"}
             </option>
-            {companyOptions.map((company) => (
+            {companies.map((company) => (
               <option key={company.id} value={company.id}>
                 {company.name}
               </option>

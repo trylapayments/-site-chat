@@ -299,6 +299,7 @@ export function ConversationSidebar({
           <Link
             href={toAppRoute(workspaceContactsPath(workspaceSlug, contact.id))}
             className="text-primary text-sm font-medium hover:underline"
+            data-testid="view-full-profile"
           >
             {crmMessages.viewProfile}
           </Link>

@@ -7,8 +7,8 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 -- Schema(18) + privileges(28) + profile RBAC(6) + cross-workspace profile(4)
 -- + workspace B seed lives_ok(4) + tags(16) + companies(12) + custom fields(28)
 -- + soft-delete field + noop/timeline(8) + company/tag soft-delete + removed-member
--- + search(6) + realtime(4) = 150
-SELECT plan(150);
+-- + company search(4) + search(6) + realtime(4) = 154
+SELECT plan(154);
 
 TRUNCATE tests.fixtures;
 
@@ -1303,6 +1303,76 @@ SELECT is(
   (SELECT company_id FROM public.contacts WHERE id = tests.fixture('contact_a')::uuid),
   NULL,
   'company soft-delete clears contact.company_id'
+);
+
+-- Company picker search must use substring match (not loose trigram) so
+-- similarly named companies do not bury the typed exact hit past the page limit.
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent for company search'
+);
+
+SELECT lives_ok(
+  $$
+    DO $body$
+    BEGIN
+      PERFORM public.create_company(
+        tests.fixture('workspace_a')::uuid,
+        'Bulk Co 001',
+        'bulk-search-001.test',
+        NULL,
+        NULL,
+        NULL
+      );
+      PERFORM public.create_company(
+        tests.fixture('workspace_a')::uuid,
+        'Bulk Co 050',
+        'bulk-search-050.test',
+        NULL,
+        NULL,
+        NULL
+      );
+      PERFORM public.create_company(
+        tests.fixture('workspace_a')::uuid,
+        'Bulk Co 101',
+        'bulk-search-101.test',
+        NULL,
+        NULL,
+        NULL
+      );
+    END
+    $body$;
+  $$,
+  'seed similarly named companies for picker search'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM jsonb_array_elements(
+      public.list_companies(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'Bulk Co 101', 'limit', 100)
+      ) -> 'items'
+    ) AS item(value)
+  ),
+  1,
+  'company search q=Bulk Co 101 returns only substring matches'
+);
+
+SELECT is(
+  (
+    SELECT value ->> 'name'
+    FROM jsonb_array_elements(
+      public.list_companies(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'Bulk Co 101', 'limit', 100)
+      ) -> 'items'
+    ) AS item(value)
+    LIMIT 1
+  ),
+  'Bulk Co 101',
+  'company search surfaces exact Bulk Co 101'
 );
 
 SELECT lives_ok(
