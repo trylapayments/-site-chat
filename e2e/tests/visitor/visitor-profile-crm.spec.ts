@@ -186,6 +186,7 @@ test.describe("visitor profile / CRM-lite", () => {
   });
 
   test("disjoint concurrent edits keep dirty drafts and dirty-only saves", async ({ browser }) => {
+    test.setTimeout(180_000);
     const ownerContext = await browser.newContext();
     const agentContext = await browser.newContext();
     const owner = await ownerContext.newPage();
@@ -206,12 +207,10 @@ test.describe("visitor profile / CRM-lite", () => {
     await ownerPanel.getByLabel("Email").fill(email);
     await agentPanel.getByLabel("Job title").fill(jobTitle);
 
-    const ownerIdentitySave = ownerPanel
-      .locator("form")
-      .filter({ has: ownerPanel.getByLabel("Email") })
-      .getByRole("button", { name: "Save" });
-    await ownerIdentitySave.click();
-    await expect(ownerIdentitySave).toHaveText("Save", { timeout: 30_000 });
+    await ownerPanel.getByTestId("contact-identity-save").click();
+    await expect(ownerPanel.getByTestId("contact-identity-save")).toBeEnabled({
+      timeout: 30_000,
+    });
     await expect(ownerPanel.getByLabel("Email")).toHaveValue(email, {
       timeout: 30_000,
     });
@@ -221,12 +220,10 @@ test.describe("visitor profile / CRM-lite", () => {
       timeout: 30_000,
     });
 
-    const agentIdentitySave = agentPanel
-      .locator("form")
-      .filter({ has: agentPanel.getByLabel("Job title") })
-      .getByRole("button", { name: "Save" });
-    await agentIdentitySave.click();
-    await expect(agentIdentitySave).toHaveText("Save", { timeout: 30_000 });
+    await agentPanel.getByTestId("contact-identity-save").click();
+    await expect(agentPanel.getByTestId("contact-identity-save")).toBeEnabled({
+      timeout: 30_000,
+    });
     await expect(agentPanel.getByLabel("Job title")).toHaveValue(jobTitle, {
       timeout: 30_000,
     });

@@ -142,6 +142,7 @@ export function ContactIdentityForm({
   return (
     <form
       className="space-y-3"
+      data-testid="contact-identity-form"
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);
@@ -244,7 +245,12 @@ export function ContactIdentityForm({
         </div>
       </div>
       {error ? <p className="text-destructive text-xs">{error}</p> : null}
-      <Button type="submit" size="sm" disabled={isPending}>
+      <Button
+        type="submit"
+        size="sm"
+        disabled={isPending}
+        data-testid="contact-identity-save"
+      >
         {isPending ? messages.saving : messages.save}
       </Button>
     </form>
