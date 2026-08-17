@@ -107,6 +107,14 @@ function revalidateCrmPaths(workspaceSlug: string, contactId?: string): void {
   }
 }
 
+/** Contact-scoped writes: avoid layout-wide revalidation that can stall Server Actions under multi-tab load. */
+function revalidateContactProfilePath(
+  workspaceSlug: string,
+  contactId: string,
+): void {
+  revalidatePath(workspaceContactsPath(workspaceSlug, contactId));
+}
+
 export async function listContactsAction(
   workspaceSlug: string,
   input: unknown = {},
@@ -171,7 +179,7 @@ export async function updateContactProfileAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateCrmPaths(workspaceSlug, parsed.data.contactId);
+    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to update contact profile.");
@@ -301,7 +309,7 @@ export async function assignContactTagAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateCrmPaths(workspaceSlug, parsed.data.contactId);
+    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to assign tag.");
@@ -326,7 +334,7 @@ export async function unassignContactTagAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateCrmPaths(workspaceSlug, parsed.data.contactId);
+    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to remove tag.");
@@ -456,7 +464,7 @@ export async function linkContactCompanyAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateCrmPaths(workspaceSlug, parsed.data.contactId);
+    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to link company.");
@@ -481,7 +489,7 @@ export async function unlinkContactCompanyAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateCrmPaths(workspaceSlug, parsed.data.contactId);
+    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to unlink company.");
@@ -608,7 +616,7 @@ export async function setContactCustomFieldValueAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateCrmPaths(workspaceSlug, parsed.data.contactId);
+    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to save custom field value.");
@@ -633,7 +641,7 @@ export async function clearContactCustomFieldValueAction(
       workspace.workspace_id,
       parsed.data,
     );
-    revalidateCrmPaths(workspaceSlug, parsed.data.contactId);
+    revalidateContactProfilePath(workspaceSlug, parsed.data.contactId);
     return { success: true, data };
   } catch (error) {
     return mapCrmActionError(error, "Unable to clear custom field value.");

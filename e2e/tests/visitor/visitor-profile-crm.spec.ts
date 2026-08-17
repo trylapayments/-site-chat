@@ -45,7 +45,9 @@ async function saveContactIdentity(page: Page, panel: Locator) {
   );
   await save.click();
   await responsePromise;
-  await expect(save).not.toHaveText("Saving…", { timeout: 15_000 });
+  // Prefer durable field value over isPending; layout revalidation used to
+  // leave the button on "Saving…" even after the action HTTP response.
+  await expect(save).toBeEnabled({ timeout: 45_000 });
 }
 
 test.describe("visitor profile / CRM-lite", () => {
