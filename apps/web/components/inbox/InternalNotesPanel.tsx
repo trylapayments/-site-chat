@@ -26,6 +26,7 @@ import { ConnectionBanner } from "@/components/inbox/ConnectionBanner";
 import { Button } from "@/components/ui/button";
 import {
   createInternalNoteAction,
+  getInternalNoteAction,
   softDeleteInternalNoteAction,
   updateInternalNoteAction,
 } from "@/lib/inbox/actions";
@@ -666,6 +667,12 @@ export function InternalNotesPanel({
     active,
   });
 
+  // Deep-link recovery: if SSR/list missed the focused note, fetch it once.
+  const focusFetchAttemptRef = useRef<string | null>(null);
+  useEffect(() => {
+    focusFetchAttemptRef.current = null;
+  }, [conversationId]);
+
   useEffect(() => {
     if (!focusNoteId || !active) {
       return;
@@ -677,6 +684,49 @@ export function InternalNotesPanel({
       node.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, [active, focusNoteId, notes]);
+
+  useEffect(() => {
+    if (!canManage || !active || !focusNoteId) {
+      return;
+    }
+    if (notes.some((note) => note.id === focusNoteId)) {
+      focusFetchAttemptRef.current = focusNoteId;
+      return;
+    }
+    if (focusFetchAttemptRef.current === focusNoteId) {
+      return;
+    }
+    focusFetchAttemptRef.current = focusNoteId;
+    const cancelledRef = { current: false };
+    void (async () => {
+      const result = await getInternalNoteAction(workspaceSlug, {
+        noteId: focusNoteId,
+        conversationId,
+      });
+      if (cancelledRef.current || !result.success) {
+        return;
+      }
+      setNotes((current) => {
+        if (current.some((note) => note.id === result.data.id)) {
+          return current;
+        }
+        return mergeInternalNotes(current, [result.data], {
+          includeDeleted: false,
+        });
+      });
+    })();
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [
+    active,
+    canManage,
+    conversationId,
+    focusNoteId,
+    notes,
+    setNotes,
+    workspaceSlug,
+  ]);
 
   if (!canManage) {
     return (

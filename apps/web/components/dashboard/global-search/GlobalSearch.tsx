@@ -15,7 +15,6 @@ import {
   type GlobalSearchResultType,
 } from "@site-chat/shared";
 import { Search } from "lucide-react";
-import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -83,7 +82,6 @@ export function GlobalSearch({
   workspaceSlug: string;
   canSearchNotes: boolean;
 }) {
-  const router = useRouter();
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -192,18 +190,14 @@ export function GlobalSearch({
     (hit: GlobalSearchHit) => {
       const href = toAppRoute(hrefForSearchHit(workspaceSlug, hit));
       close();
-      // Same-path deep-links (`?tab=notes`, `?message=`) must still update the
-      // URL when the operator is already on that conversation page.
-      const nextPath = href.split("?")[0] ?? href;
-      const currentPath =
-        typeof window !== "undefined" ? window.location.pathname : "";
-      if (currentPath === nextPath) {
-        router.replace(href);
-      } else {
-        router.push(href);
-      }
+      // Full document navigation avoids Next.js Router Cache serving a stale
+      // RSC payload when revisiting a conversation that was opened before the
+      // indexed entity existed (e.g. note created, then searched from inbox).
+      // Same-path soft navigations (`router.replace`) can leave empty
+      // `initialNotes` / wrong message windows under that cache.
+      window.location.assign(href);
     },
-    [close, router, workspaceSlug],
+    [close, workspaceSlug],
   );
 
   useEffect(() => {

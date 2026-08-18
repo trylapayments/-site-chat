@@ -7,6 +7,9 @@ const repoRoot = process.cwd();
 const webServerEnv: NodeJS.ProcessEnv = {
   ...process.env,
   NODE_ENV: "development",
+  // Hosted Playwright runs next dev for ~1h of realtime suites; the default
+  // heap OOMs / restarts mid-run (ECONNRESET, stuck realtime "connecting").
+  NODE_OPTIONS: [process.env.NODE_OPTIONS, "--max-old-space-size=8192"].filter(Boolean).join(" "),
 };
 
 export default defineConfig({

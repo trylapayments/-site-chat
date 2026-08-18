@@ -2,6 +2,7 @@ import {
   can,
   type CannedResponse,
   type ContactTagSummary,
+  type InternalNote,
 } from "@site-chat/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,11 +23,23 @@ import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   fetchAssignableMembers,
   fetchConversation,
+  fetchInternalNote,
   fetchInternalNotes,
   fetchMessages,
 } from "@/lib/inbox/queries";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
 import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseUuidParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  return typeof value === "string" && UUID_RE.test(value) ? value : undefined;
+}
 
 export default async function ConversationDetailPage({
   params,
@@ -37,14 +50,8 @@ export default async function ConversationDetailPage({
 }) {
   const { workspaceSlug, conversationId } = await params;
   const resolvedSearchParams = await searchParams;
-  const focusMessageRaw = resolvedSearchParams.message;
-  const focusMessageId =
-    typeof focusMessageRaw === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      focusMessageRaw,
-    )
-      ? focusMessageRaw
-      : undefined;
+  const focusMessageId = parseUuidParam(resolvedSearchParams.message);
+  const focusNoteId = parseUuidParam(resolvedSearchParams.note);
   const { workspace } = await requireInboxWorkspace(workspaceSlug);
   const supabase = await createClient();
   const { user } = await requireUser(supabase);
@@ -100,8 +107,7 @@ export default async function ConversationDetailPage({
       ? await fetchAssignableMembers(supabase, workspace.workspace_id)
       : [];
 
-  let initialNotes: Awaited<ReturnType<typeof fetchInternalNotes>>["items"] =
-    [];
+  let initialNotes: InternalNote[] = [];
   if (canManageNotes) {
     try {
       const notesResult = await fetchInternalNotes(
@@ -113,6 +119,23 @@ export default async function ConversationDetailPage({
       initialNotes = notesResult.items;
     } catch {
       initialNotes = [];
+    }
+
+    // Deep-link `?note=` must still surface the target even if the list page
+    // was empty/stale or the list RPC failed under load.
+    if (focusNoteId && !initialNotes.some((note) => note.id === focusNoteId)) {
+      try {
+        const focused = await fetchInternalNote(
+          supabase,
+          workspace.workspace_id,
+          focusNoteId,
+        );
+        if (focused.conversation_id === conversationId && !focused.deleted_at) {
+          initialNotes = [...initialNotes, focused];
+        }
+      } catch {
+        // Leave list as-is; client catch-up / panel may still recover.
+      }
     }
   }
 

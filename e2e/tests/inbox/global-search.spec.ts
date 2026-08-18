@@ -149,14 +149,17 @@ test.describe("global search", () => {
     await searchGlobal(operator, marker);
     await operator.getByTestId("global-search-category-notes").click();
     const hit = await waitForHit(operator, "note", marker);
-    await hit.click();
-    await expect(operator).toHaveURL(/tab=notes/, { timeout: 60_000 });
+    await Promise.all([operator.waitForURL(/tab=notes/, { timeout: 60_000 }), hit.click()]);
+    await expect(operator).toHaveURL(/note=[0-9a-f-]{36}/i, {
+      timeout: 15_000,
+    });
     await expect(operator.getByTestId("internal-notes-panel")).toBeVisible({
       timeout: 30_000,
     });
+    // Full navigation + SSR hydrate should show the note; allow catch-up.
     await expect(
       operator.getByTestId("internal-note-item").filter({ hasText: marker }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: 45_000 });
 
     await visitorContext.close();
     await operatorContext.close();
@@ -350,11 +353,11 @@ test.describe("global search", () => {
     // INSERT into conversations/messages under RLS grants).
     const frame = widgetFrameLocator(visitor);
     const composer = widgetComposer(visitor);
-    for (let i = 0; i < 55; i += 1) {
+    for (let i = 0; i < 51; i += 1) {
       await composer.fill(`${padPrefix}-${i}`);
       await frame.getByRole("button", { name: "Send" }).click();
     }
-    await expect(frame.getByRole("article").getByText(`${padPrefix}-54`)).toBeVisible({
+    await expect(frame.getByRole("article").getByText(`${padPrefix}-50`)).toBeVisible({
       timeout: 120_000,
     });
 

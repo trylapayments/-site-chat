@@ -20,7 +20,7 @@ v1 delivers:
 - Role-aware notes visibility (`can_search_notes`; viewers get empty notes groups)
 - Viewer denial of `messages.is_internal` rows (and attachments on those messages)
 - Dashboard palette UI with category tabs, keyboard navigation, and stale-request guards
-- Deep-link: message/attachment hits open `?message=` and SSR loads a centered `around_message_id` window
+- Deep-link: message/attachment hits open `?message=` and SSR loads a centered `around_message_id` window; note hits open `?tab=notes&note=` and SSR/list hydrate (plus `get_internal_note` fallback). Hit navigation uses full document load so revisiting a conversation cannot serve a stale empty notes RSC payload.
 
 ---
 
@@ -117,9 +117,11 @@ Constants: `GLOBAL_SEARCH_MIN_FUZZY_LENGTH = 3`, `GLOBAL_SEARCH_CANDIDATE_CAP_MA
 
 Navigation: contact → profile; conversation → inbox; message/attachment → `?message=`; note → `?tab=notes&note=`.
 
-### Deep-link (`list_messages`)
+### Deep-link (`list_messages` / notes)
 
 Optional `around_message_id` loads a bounded centered window (mutually exclusive with before/after sequence). Conversation page SSR uses it when `?message=` is present so hits older than the newest 50 still render and focus. Viewers cannot center on an internal message (`Message not found` → page falls back to newest window).
+
+Note hits open `?tab=notes&note=`. SSR loads the notes page and, if the focused id is missing from the list, fetches `get_internal_note` and merges it. The palette uses **full document navigation** (`location.assign`) so revisiting a conversation does not reuse a stale empty notes RSC payload from an earlier visit. The notes panel also has a one-shot client fetch for the focused id as a fallback.
 
 ---
 
