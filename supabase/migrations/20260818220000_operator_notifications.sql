@@ -475,8 +475,8 @@ BEGIN
 
   v_start := p_prefs.quiet_hours_start;
   v_end := p_prefs.quiet_hours_end;
-  IF v_start IS NULL OR v_end IS NULL THEN
-    -- DND without window = always quiet.
+  -- No window OR equal bounds → always quiet while DND is on.
+  IF v_start IS NULL OR v_end IS NULL OR v_start = v_end THEN
     RETURN true;
   END IF;
 
@@ -487,7 +487,7 @@ BEGIN
       v_local_time := (now() AT TIME ZONE 'UTC')::time;
   END;
 
-  IF v_start <= v_end THEN
+  IF v_start < v_end THEN
     RETURN v_local_time >= v_start AND v_local_time < v_end;
   END IF;
 
@@ -632,19 +632,12 @@ BEGIN
     p_recipient_id
   );
 
+  -- Quiet/DND suppresses email only here; durable in-app is independent.
+  -- (Client browser/sound also use shared quiet-hours evaluator.)
   v_quiet := app_private.notification_in_quiet_hours(v_prefs);
 
-  IF NOT p_force_in_app
-     AND (
-       NOT app_private.notification_in_app_enabled(v_prefs, p_type)
-       OR v_quiet
-     ) THEN
-    -- Still allow email queue below when not quiet? Quiet suppresses all channels.
-    IF v_quiet THEN
-      RETURN NULL;
-    END IF;
-    -- In-app disabled: may still enqueue email.
-  ELSE
+  IF p_force_in_app
+     OR app_private.notification_in_app_enabled(v_prefs, p_type) THEN
     INSERT INTO public.notifications (
       workspace_id,
       recipient_id,
@@ -673,6 +666,15 @@ BEGIN
     )
     ON CONFLICT (workspace_id, recipient_id, dedupe_key) DO NOTHING
     RETURNING id INTO v_notification_id;
+
+    IF v_notification_id IS NULL THEN
+      SELECT n.id
+      INTO v_notification_id
+      FROM public.notifications n
+      WHERE n.workspace_id = p_workspace_id
+        AND n.recipient_id = p_recipient_id
+        AND n.dedupe_key = left(p_dedupe_key, 200);
+    END IF;
   END IF;
 
   -- Email outbox (idempotent). Skip when quiet hours active.
@@ -1643,6 +1645,7 @@ AS $$
 DECLARE
   v_member_id uuid;
   v_updated integer := 0;
+  v_unread integer := 0;
 BEGIN
   IF NOT app_private.workspace_is_accessible(p_workspace_id) THEN
     RAISE EXCEPTION 'FORBIDDEN: Workspace not accessible';
@@ -1653,6 +1656,18 @@ BEGIN
     RAISE EXCEPTION 'FORBIDDEN: Not a workspace member';
   END IF;
 
+  INSERT INTO public.notification_unread_counts (
+    workspace_id, member_id, unread_count, updated_at
+  )
+  VALUES (p_workspace_id, v_member_id, 0, now())
+  ON CONFLICT (workspace_id, member_id) DO NOTHING;
+
+  PERFORM 1
+  FROM public.notification_unread_counts c
+  WHERE c.workspace_id = p_workspace_id
+    AND c.member_id = v_member_id
+  FOR UPDATE;
+
   UPDATE public.notifications n
   SET read_at = now()
   WHERE n.workspace_id = p_workspace_id
@@ -1661,16 +1676,23 @@ BEGIN
 
   GET DIAGNOSTICS v_updated = ROW_COUNT;
 
-  INSERT INTO public.notification_unread_counts (
-    workspace_id, member_id, unread_count, updated_at
-  )
-  VALUES (p_workspace_id, v_member_id, 0, now())
-  ON CONFLICT (workspace_id, member_id) DO UPDATE
-  SET unread_count = 0, updated_at = now();
+  UPDATE public.notification_unread_counts c
+  SET
+    unread_count = (
+      SELECT COUNT(*)::integer
+      FROM public.notifications n
+      WHERE n.workspace_id = p_workspace_id
+        AND n.recipient_id = v_member_id
+        AND n.read_at IS NULL
+    ),
+    updated_at = now()
+  WHERE c.workspace_id = p_workspace_id
+    AND c.member_id = v_member_id
+  RETURNING c.unread_count INTO v_unread;
 
   RETURN jsonb_build_object(
     'updated_count', v_updated,
-    'unread_count', 0
+    'unread_count', COALESCE(v_unread, 0)
   );
 END;
 $$;
@@ -1915,13 +1937,24 @@ GRANT EXECUTE ON FUNCTION public.get_notification_preferences(uuid) TO authentic
 REVOKE ALL ON FUNCTION public.update_notification_preferences(uuid, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.update_notification_preferences(uuid, jsonb) TO authenticated;
 
+-- Blanket app_private EXECUTE lockdown (repository policy). Hardening migration
+-- re-asserts this after adding claim helpers.
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM anon;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private FROM authenticated;
+
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_ids() TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.user_workspace_role(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.workspace_is_accessible(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app_private.get_caller_member_id(uuid) TO authenticated;
+
 -- Keep notifications SELECT-only for authenticated (writes via SECURITY DEFINER).
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.notifications FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.notification_preferences FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.notification_unread_counts FROM authenticated;
 
 COMMENT ON TABLE public.notifications IS
-  'Durable in-app notifications. Recipient-only RLS. Writes via emit helpers.';
+  'Durable in-app notifications. Recipient-only RLS. Writes via emit helpers. DND does not omit rows.';
 COMMENT ON TABLE public.notification_preferences IS
   'Per-member preferences. No workspace-level overwrite of personal choices.';
 COMMENT ON TABLE public.notification_email_outbox IS

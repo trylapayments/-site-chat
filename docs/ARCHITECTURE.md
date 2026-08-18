@@ -311,7 +311,7 @@ Operator-only notes live in `internal_notes` (not `messages`). Soft delete, `@me
 
 ### 6.3 Operator notification center
 
-Durable `notifications` with per-recipient `dedupe_key`, O(1) `notification_unread_counts`, keyset `list_notifications`, mark-read RPCs, per-member preferences, optional browser/sound (leader-tab election), and an idempotent email outbox. Emit hooks cover visitor messages, assignment/transfer/unassign, and mentions. See `docs/NOTIFICATIONS.md`.
+Durable `notifications` with per-recipient `dedupe_key`, O(1) `notification_unread_counts`, keyset `list_notifications`, mark-read RPCs (mark-all locks + reconciles counter), per-member preferences, optional browser/sound (post-write-verified leader election; quiet-hours gated), and an email outbox with claim-before-send (`pending→sending→sent|failed|skipped`). DND suppresses side effects only — durable in-app history still persists. Emit hooks cover visitor messages, assignment/transfer/unassign, and mentions. See `docs/NOTIFICATIONS.md`.
 
 Canned responses live in `canned_responses` (with `canned_response_folders` and per-member `canned_response_favorites`). Workspace-shared and personal scopes share one table; mutations are Server Actions over SECURITY DEFINER RPCs (RLS is SELECT-only for realtime). Composer `/shortcut` insertion interpolates `{{visitor.*}}` / `{{operator.name}}` / `{{workspace.name}}` / `{{conversation.id}}` at insert time. See `docs/CANNED-RESPONSES.md` and ADR-007.
 

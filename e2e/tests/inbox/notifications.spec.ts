@@ -258,4 +258,56 @@ test.describe("operator notifications", () => {
     await ownerContext.close();
     await agentContext.close();
   });
+
+  test("DND still shows durable in-app notification; mark all clears badge", async ({
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+    const marker = `notif-dnd-${Date.now()}`;
+
+    const agentContext = await browser.newContext();
+    const agent = await agentContext.newPage();
+    await prepareInbox(agent, AGENT_EMAIL);
+    await waitForBellReady(agent);
+
+    await agent.goto(`${APP_URL}/app/acme-support/settings/notifications`);
+    await expect(agent.getByTestId("notification-preferences-form")).toBeVisible({
+      timeout: 30_000,
+    });
+    const dnd = agent.locator("#pref-dnd_enabled");
+    if (await dnd.isVisible().catch(() => false)) {
+      const checked = await dnd.isChecked();
+      if (!checked) {
+        await dnd.click();
+      }
+    }
+
+    await agent.goto(`${APP_URL}/app/acme-support/inbox`);
+    await waitForOperatorInboxRealtimeReady(agent);
+
+    const visitorContext = await browser.newContext();
+    const visitorPage = await visitorContext.newPage();
+    await openWidget(visitorPage);
+    await sendWidgetMessage(visitorPage, marker);
+    await waitForWidgetRealtimeReady(visitorPage);
+
+    await openNotificationPanel(agent);
+    await expect(
+      agent
+        .getByTestId("notification-item")
+        .filter({ hasText: /conversation|visitor|message/i })
+        .first(),
+    ).toBeVisible({ timeout: 45_000 });
+
+    const markAll = agent.getByTestId("notification-mark-all-read");
+    if (await markAll.isVisible().catch(() => false)) {
+      await markAll.click();
+      await expect(agent.getByTestId("notification-unread-badge")).toHaveCount(0, {
+        timeout: 15_000,
+      });
+    }
+
+    await visitorContext.close();
+    await agentContext.close();
+  });
 });

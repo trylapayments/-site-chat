@@ -15,6 +15,7 @@ import {
   notificationShouldPlaySound,
   notificationShouldShowBrowser,
 } from "./navigation.js";
+import { isQuietHoursActive } from "./quiet-hours.js";
 import { createNotificationTabElection } from "./tab-election.js";
 import {
   notificationItemSchema,
@@ -192,34 +193,142 @@ describe("multi-tab side-effect election", () => {
       },
     };
 
-    const original = globalThis.localStorage;
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      value: memoryStorage,
+    let clock = 1_000_000;
+    const a = createNotificationTabElection("ws", {
+      tabId: "a",
+      nowFn: () => clock,
+      storage: memoryStorage,
+    });
+    const b = createNotificationTabElection("ws", {
+      tabId: "b",
+      nowFn: () => clock,
+      storage: memoryStorage,
     });
 
-    try {
-      const clock = 1_000_000;
-      const a = createNotificationTabElection("ws", {
-        tabId: "a",
-        nowFn: () => clock,
-      });
-      const b = createNotificationTabElection("ws", {
-        tabId: "b",
-        nowFn: () => clock,
-      });
+    // Post-write verification: exactly one leader after raced claims.
+    expect(a.isLeader() || b.isLeader()).toBe(true);
+    expect(a.isLeader() && b.isLeader()).toBe(false);
 
-      // First claimer wins until heartbeat/stale.
-      expect(a.isLeader() || b.isLeader()).toBe(true);
-      expect(a.isLeader() && b.isLeader()).toBe(false);
+    const leader = a.isLeader() ? a : b;
+    const loser = a.isLeader() ? b : a;
+    expect(leader.isLeader()).toBe(true);
+    expect(loser.isLeader()).toBe(false);
 
-      a.dispose();
-      b.dispose();
-    } finally {
-      Object.defineProperty(globalThis, "localStorage", {
-        configurable: true,
-        value: original,
-      });
-    }
+    // Stale lease → other tab takes over.
+    clock += 6_000;
+    const takeover = createNotificationTabElection("ws", {
+      tabId: "c",
+      nowFn: () => clock,
+      storage: memoryStorage,
+    });
+    expect(takeover.isLeader()).toBe(true);
+
+    a.dispose();
+    b.dispose();
+    takeover.dispose();
+  });
+});
+
+describe("quiet hours / DND evaluator", () => {
+  it("dnd_enabled false → not quiet", () => {
+    expect(
+      isQuietHoursActive({
+        dnd_enabled: false,
+        quiet_hours_start: "22:00:00",
+        quiet_hours_end: "07:00:00",
+        timezone: "UTC",
+      }),
+    ).toBe(false);
+  });
+
+  it("dnd with null window → always quiet", () => {
+    expect(
+      isQuietHoursActive({
+        dnd_enabled: true,
+        quiet_hours_start: null,
+        quiet_hours_end: null,
+        timezone: "UTC",
+      }),
+    ).toBe(true);
+  });
+
+  it("equal start/end → always quiet", () => {
+    expect(
+      isQuietHoursActive({
+        dnd_enabled: true,
+        quiet_hours_start: "12:00:00",
+        quiet_hours_end: "12:00:00",
+        timezone: "UTC",
+      }),
+    ).toBe(true);
+  });
+
+  it("daytime window inside/outside", () => {
+    const inside = new Date("2026-08-18T15:30:00.000Z");
+    const outside = new Date("2026-08-18T10:00:00.000Z");
+    expect(
+      isQuietHoursActive(
+        {
+          dnd_enabled: true,
+          quiet_hours_start: "14:00:00",
+          quiet_hours_end: "16:00:00",
+          timezone: "UTC",
+        },
+        inside,
+      ),
+    ).toBe(true);
+    expect(
+      isQuietHoursActive(
+        {
+          dnd_enabled: true,
+          quiet_hours_start: "14:00:00",
+          quiet_hours_end: "16:00:00",
+          timezone: "UTC",
+        },
+        outside,
+      ),
+    ).toBe(false);
+  });
+
+  it("overnight window 22:00→07:00", () => {
+    const late = new Date("2026-08-18T23:00:00.000Z");
+    const early = new Date("2026-08-18T05:00:00.000Z");
+    const midday = new Date("2026-08-18T12:00:00.000Z");
+    const prefs = {
+      dnd_enabled: true,
+      quiet_hours_start: "22:00:00",
+      quiet_hours_end: "07:00:00",
+      timezone: "UTC",
+    };
+    expect(isQuietHoursActive(prefs, late)).toBe(true);
+    expect(isQuietHoursActive(prefs, early)).toBe(true);
+    expect(isQuietHoursActive(prefs, midday)).toBe(false);
+  });
+
+  it("timezone conversion America/New_York", () => {
+    // 15:00 UTC = 11:00 EDT (UTC-4 in August)
+    const utcAfternoon = new Date("2026-08-18T15:00:00.000Z");
+    expect(
+      isQuietHoursActive(
+        {
+          dnd_enabled: true,
+          quiet_hours_start: "10:00:00",
+          quiet_hours_end: "12:00:00",
+          timezone: "America/New_York",
+        },
+        utcAfternoon,
+      ),
+    ).toBe(true);
+    expect(
+      isQuietHoursActive(
+        {
+          dnd_enabled: true,
+          quiet_hours_start: "10:00:00",
+          quiet_hours_end: "12:00:00",
+          timezone: "UTC",
+        },
+        utcAfternoon,
+      ),
+    ).toBe(false);
   });
 });

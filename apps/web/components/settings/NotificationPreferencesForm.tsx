@@ -299,7 +299,7 @@ export function NotificationPreferencesForm({
         <PrefToggle
           id="pref-dnd_enabled"
           label="Do not disturb"
-          description="Suppresses sound and browser notifications. In-app notifications still appear."
+          description="Suppresses sound, browser, and email delivery. In-app notification history still appears. With quiet hours set, only that window is quiet; with no window, side effects stay suppressed all day."
           checked={prefs.dnd_enabled}
           disabled={isPending}
           onChange={(next) => {

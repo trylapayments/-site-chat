@@ -638,15 +638,15 @@ In-app notifications for workspace members. Extended in PR #35 (center UI, dedup
 
 ### 9.1b notification_unread_counts
 
-Per-member O(1) unread badge. PK `(workspace_id, member_id)`. Maintained by triggers on `notifications`.
+Per-member O(1) unread badge. PK `(workspace_id, member_id)`. Maintained by triggers on `notifications`. Invariant: `unread_count = COUNT(*)` of durable rows with `read_at IS NULL` for that member. `mark_all_notifications_read` locks the counter row and reconciles to that COUNT in the same transaction.
 
 ### 9.2 notification_preferences
 
-Per-member channel preferences (no workspace overwrite). Columns cover in-app / browser / sound / email categories, DND quiet hours, timezone, and `browser_permission_denied_at`. Writes via `update_notification_preferences` only.
+Per-member channel preferences (no workspace overwrite). Columns cover in-app / browser / sound / email categories, DND quiet hours, timezone, and `browser_permission_denied_at`. Writes via `update_notification_preferences` only. DND/quiet hours gate side effects only — not durable in-app inserts.
 
 ### 9.2b notification_email_outbox
 
-Idempotent email delivery queue (`dedupe_key` unique per workspace). Statuses: `pending` / `sent` / `skipped` / `failed`. No authenticated access.
+Email delivery queue (`dedupe_key` unique per workspace). State machine: `pending` → `sending` (atomic claim) → `sent` / `skipped` / `failed`. Columns include `attempts`, `claimed_at`, `next_attempt_at`, `provider_message_id`, `last_error`. No authenticated access; claim/finalize are service_role RPCs. Stale `sending` rows recover after 15 minutes.
 
 ### 9.3 audit_logs
 

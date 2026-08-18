@@ -5,22 +5,26 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
- * Minimal notification email outbox processor.
+ * Notification email outbox processor.
  *
- * Intended for cron / background jobs using the Supabase service role
- * (RLS denies authenticated access to notification_email_outbox).
+ * State machine: pending|failed → (claim) sending → sent|skipped|failed
+ *
+ * Never calls the provider before atomic claim ownership is established.
+ * Concurrent workers cannot send the same outbox row.
  *
  * Never logs API keys or note bodies. Outbox rows only carry subject + to_email.
  */
 
-const outboxRowSchema = z.object({
+const claimedRowSchema = z.object({
   id: z.string().uuid(),
   workspace_id: z.string().uuid(),
   to_email: z.string().email(),
   subject: z.string().min(1),
-  status: z.literal("pending"),
-  attempts: z.number().int().min(0),
+  status: z.literal("sending"),
+  attempts: z.number().int().min(1),
 });
+
+export type ClaimedOutboxRow = z.infer<typeof claimedRowSchema>;
 
 export type ProcessNotificationEmailResult = {
   processed: number;
@@ -29,85 +33,84 @@ export type ProcessNotificationEmailResult = {
   failed: number;
 };
 
-type OutboxTableClient = {
-  from: (table: "notification_email_outbox") => {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        order: (
-          column: string,
-          options: { ascending: boolean },
-        ) => {
-          limit: (count: number) => Promise<{
-            data: unknown[] | null;
-            error: { message?: string } | null;
-          }>;
-        };
-      };
-    };
-    update: (values: Record<string, unknown>) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => {
-          select: (columns: string) => {
-            maybeSingle: () => Promise<{
-              data: { id: string } | null;
-              error: { message?: string } | null;
-            }>;
-          };
-        };
-      };
-    };
-  };
+export type NotificationEmailSendResult =
+  | { ok: true; providerMessageId?: string | null }
+  | { ok: false; error: string };
+
+export type NotificationEmailProcessorDeps = {
+  claim: (limit: number) => Promise<ClaimedOutboxRow[]>;
+  finalize: (input: {
+    id: string;
+    status: "sent" | "skipped" | "failed";
+    lastError?: string | null;
+    providerMessageId?: string | null;
+  }) => Promise<boolean>;
+  send: (input: {
+    apiKey: string;
+    to: string;
+    subject: string;
+    from: string;
+    appUrl: string;
+  }) => Promise<NotificationEmailSendResult>;
 };
 
-function outboxClient(
-  supabase: ReturnType<typeof createServiceClient>,
-): OutboxTableClient {
-  // Table exists in migrations; generated Database types may lag until regenerated.
-  return supabase as unknown as OutboxTableClient;
-}
+type ServiceClient = ReturnType<typeof createServiceClient>;
 
-async function claimAndFinalize(
-  client: OutboxTableClient,
-  id: string,
-  patch: {
-    status: "sent" | "skipped" | "failed";
-    attempts: number;
-    last_error?: string | null;
-    sent_at?: string | null;
-  },
-): Promise<boolean> {
-  const { data, error } = await client
-    .from("notification_email_outbox")
-    .update({
-      status: patch.status,
-      attempts: patch.attempts,
-      last_error: patch.last_error ?? null,
-      sent_at: patch.sent_at ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("status", "pending")
-    .select("id")
-    .maybeSingle();
+async function claimViaRpc(
+  supabase: ServiceClient,
+  limit: number,
+): Promise<ClaimedOutboxRow[]> {
+  const { data, error } = await supabase.rpc(
+    "claim_notification_email_outbox" as never,
+    { p_limit: limit } as never,
+  );
 
   if (error) {
-    console.error("notification email outbox update failed", {
-      id,
+    console.error("notification email outbox claim failed", {
+      message: error.message,
+    });
+    return [];
+  }
+
+  const rows: ClaimedOutboxRow[] = [];
+  const candidates = Array.isArray(data) ? data : [];
+  for (const raw of candidates) {
+    const parsed = claimedRowSchema.safeParse(raw);
+    if (parsed.success) {
+      rows.push(parsed.data);
+    }
+  }
+  return rows;
+}
+
+async function finalizeViaRpc(
+  supabase: ServiceClient,
+  input: {
+    id: string;
+    status: "sent" | "skipped" | "failed";
+    lastError?: string | null;
+    providerMessageId?: string | null;
+  },
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc(
+    "finalize_notification_email_outbox" as never,
+    {
+      p_id: input.id,
+      p_status: input.status,
+      p_last_error: input.lastError ?? null,
+      p_provider_message_id: input.providerMessageId ?? null,
+    } as never,
+  );
+
+  if (error) {
+    console.error("notification email outbox finalize failed", {
+      id: input.id,
       message: error.message,
     });
     return false;
   }
 
-  return Boolean(data?.id);
+  return data === true;
 }
 
 async function sendViaResend(input: {
@@ -116,7 +119,7 @@ async function sendViaResend(input: {
   subject: string;
   from: string;
   appUrl: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<NotificationEmailSendResult> {
   const body = [
     input.subject,
     "",
@@ -142,34 +145,57 @@ async function sendViaResend(input: {
     });
 
     if (!response.ok) {
-      // Do not log response bodies (may echo addresses); keep status only.
       return {
         ok: false,
         error: `Resend HTTP ${String(response.status)}`,
       };
     }
 
-    return { ok: true };
+    let providerMessageId: string | null = null;
+    try {
+      const json = (await response.json()) as { id?: unknown };
+      if (typeof json.id === "string") {
+        providerMessageId = json.id;
+      }
+    } catch {
+      providerMessageId = null;
+    }
+
+    return { ok: true, providerMessageId };
   } catch {
     return { ok: false, error: "Resend request failed" };
   }
 }
 
+function defaultDeps(supabase: ServiceClient): NotificationEmailProcessorDeps {
+  return {
+    claim: (limit) => claimViaRpc(supabase, limit),
+    finalize: (input) => finalizeViaRpc(supabase, input),
+    send: sendViaResend,
+  };
+}
+
 /**
- * Process pending notification email outbox rows.
- * Idempotent: only rows still in `pending` transition to sent/skipped/failed.
+ * Process claimable notification email outbox rows.
+ * Claim happens before any provider call. Missing Resend config → skipped (not sent).
  */
 export async function processNotificationEmailOutbox(options?: {
   limit?: number;
-  /** Override for tests; defaults to service-role client. */
-  supabase?: ReturnType<typeof createServiceClient>;
+  supabase?: ServiceClient;
   resendApiKey?: string | null;
   fromEmail?: string;
   appUrl?: string;
+  deps?: Partial<NotificationEmailProcessorDeps>;
 }): Promise<ProcessNotificationEmailResult> {
   const limit = Math.min(Math.max(options?.limit ?? 25, 1), 100);
   const supabase = options?.supabase ?? createServiceClient();
-  const client = outboxClient(supabase);
+  const defaults = defaultDeps(supabase);
+  const deps: NotificationEmailProcessorDeps = {
+    claim: options?.deps?.claim ?? defaults.claim,
+    finalize: options?.deps?.finalize ?? defaults.finalize,
+    send: options?.deps?.send ?? defaults.send,
+  };
+
   const apiKey =
     options?.resendApiKey !== undefined
       ? options.resendApiKey
@@ -183,20 +209,7 @@ export async function processNotificationEmailOutbox(options?: {
     process.env.NEXT_PUBLIC_APP_URL ??
     "http://localhost:3000";
 
-  const { data, error } = await client
-    .from("notification_email_outbox")
-    .select("id, workspace_id, to_email, subject, status, attempts")
-    .eq("status", "pending")
-    .order("created_at", { ascending: true })
-    .limit(limit);
-
-  if (error) {
-    console.error("notification email outbox list failed", {
-      message: error.message,
-    });
-    return { processed: 0, sent: 0, skipped: 0, failed: 0 };
-  }
-
+  const claimed = await deps.claim(limit);
   const result: ProcessNotificationEmailResult = {
     processed: 0,
     sent: 0,
@@ -204,28 +217,22 @@ export async function processNotificationEmailOutbox(options?: {
     failed: 0,
   };
 
-  for (const raw of data ?? []) {
-    const parsed = outboxRowSchema.safeParse(raw);
-    if (!parsed.success) {
-      continue;
-    }
-    const row = parsed.data;
+  for (const row of claimed) {
     result.processed += 1;
-    const nextAttempts = row.attempts + 1;
 
     if (!apiKey) {
-      const claimed = await claimAndFinalize(client, row.id, {
+      const ok = await deps.finalize({
+        id: row.id,
         status: "skipped",
-        attempts: nextAttempts,
-        last_error: "RESEND_API_KEY missing",
+        lastError: "RESEND_API_KEY missing",
       });
-      if (claimed) {
+      if (ok) {
         result.skipped += 1;
       }
       continue;
     }
 
-    const sendResult = await sendViaResend({
+    const sendResult = await deps.send({
       apiKey,
       to: row.to_email,
       subject: row.subject,
@@ -234,24 +241,23 @@ export async function processNotificationEmailOutbox(options?: {
     });
 
     if (sendResult.ok) {
-      const claimed = await claimAndFinalize(client, row.id, {
+      const ok = await deps.finalize({
+        id: row.id,
         status: "sent",
-        attempts: nextAttempts,
-        sent_at: new Date().toISOString(),
-        last_error: null,
+        providerMessageId: sendResult.providerMessageId ?? null,
       });
-      if (claimed) {
+      if (ok) {
         result.sent += 1;
       }
       continue;
     }
 
-    const claimed = await claimAndFinalize(client, row.id, {
+    const ok = await deps.finalize({
+      id: row.id,
       status: "failed",
-      attempts: nextAttempts,
-      last_error: sendResult.error.slice(0, 500),
+      lastError: sendResult.error.slice(0, 500),
     });
-    if (claimed) {
+    if (ok) {
       result.failed += 1;
     }
   }

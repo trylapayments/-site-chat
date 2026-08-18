@@ -19,7 +19,7 @@ v1 delivers:
 - Realtime INSERT/UPDATE (no polling) + reconnect catch-up
 - Optional **browser Notification API** and **sound** (muted by default; tab-elected side effects)
 - Per-member **preferences** (in-app / browser / sound / email / DND)
-- **Email outbox foundation** (`notification_email_outbox`) with idempotent keys; delivery skips when `RESEND_API_KEY` is unset
+- **Email outbox** with claim-before-send state machine; delivery skips when `RESEND_API_KEY` is unset
 
 ---
 
@@ -33,9 +33,16 @@ v1 delivers:
 | `conversation_transferred` | Transfer to another member | New assignee + previous assignee |
 | `conversation_unassigned` | Unassigned by someone else | Previous assignee |
 | `mention` | New `internal_note_mentions` row | Mentioned member (messaging roles only) |
-| `billing_payment_failed` / `trial_ending` | Reserved | Billing later |
+| `billing_payment_failed` / `trial_ending` | Reserved | Billing later — not emittable from generic client paths |
 
 Self-take does **not** notify the actor. Mentions never target Viewers.
+
+Emit path invariants (all types):
+
+- Recipient `workspace_members` row is active in the same workspace
+- Source entity (conversation / message / note) belongs to the same workspace
+- Stable `dedupe_key` → retries collapse; no duplicate fan-out
+- Viewer capability respected (`viewer_may_receive_notification`)
 
 ---
 
@@ -43,16 +50,33 @@ Self-take does **not** notify the actor. Mentions never target Viewers.
 
 | Channel | Mechanism | Notes |
 |--------|-----------|-------|
-| In-app | `notifications` + Realtime CDC | Preference + DND gated |
-| Browser | `Notification` API | Explicit permission; denial recorded; no nag loop |
-| Sound | Short Web Audio beep | Requires prior user gesture; leader tab only |
-| Email | `notification_email_outbox` | Idempotent; processor marks `sent` / `skipped` / `failed` |
+| In-app | `notifications` + Realtime CDC | Gated by `in_app_*` preference only — **not** by DND |
+| Browser | `Notification` API | Explicit permission; denial recorded; leader tab; suppressed during quiet hours |
+| Sound | Short Web Audio beep | Requires prior user gesture; leader tab; suppressed during quiet hours |
+| Email | `notification_email_outbox` | Claim-before-send; suppressed during quiet hours |
 
 There is **no workspace-level override** of personal preferences.
 
 ---
 
-## 4. Dedupe semantics
+## 4. DND / quiet hours
+
+Canonical evaluator: `app_private.notification_in_quiet_hours` (SQL) and `isQuietHoursActive` in `@site-chat/shared` (TypeScript). Keep them in parity.
+
+| Inputs | Result |
+|--------|--------|
+| `dnd_enabled = false` | Not quiet |
+| `dnd_enabled = true` + null/missing window | **Always quiet** (side effects off all day) |
+| `dnd_enabled = true` + equal start/end | **Always quiet** |
+| `dnd_enabled = true` + daytime window | Quiet only for local time in `[start, end)` |
+| Overnight (`start > end`, e.g. 22:00→07:00) | Quiet if local ≥ start **or** local < end |
+| Timezone | Member `timezone` string; invalid → UTC |
+
+**Product rule:** DND / quiet hours suppress **side effects only** (browser, sound, email). Durable in-app history and unread counters still update when the matching `in_app_*` preference is enabled. If `in_app_*` for that category is disabled, the durable row may be omitted.
+
+---
+
+## 5. Dedupe semantics
 
 Unique constraint: `(workspace_id, recipient_id, dedupe_key)`.
 
@@ -71,15 +95,25 @@ Retries, reconnect catch-up, and CDC replay do not create duplicates.
 
 ---
 
-## 5. Unread model
+## 6. Unread model
 
-- Trigger-maintained `notification_unread_counts(workspace_id, member_id, unread_count)`
-- Badge reads the counter (O(1)), not `COUNT(*)` over history
-- Mark-one / mark-all update `read_at` and decrement via triggers (mark-all also zeros the counter)
+Invariant (always):
+
+```
+notification_unread_counts.unread_count
+  = COUNT(*) FROM notifications
+    WHERE recipient_id = member
+      AND read_at IS NULL
+```
+
+- Trigger-maintained counter for O(1) badge reads
+- `mark_notification_read` is idempotent (repeat mark does not go negative)
+- `mark_all_notifications_read` locks the counter row (`FOR UPDATE`), marks unread rows, then sets `unread_count` to the authoritative remaining `COUNT(*)` in the same transaction so a concurrent insert cannot leave unread rows with a zeroed counter
+- Member delete cascades notifications + counter rows
 
 ---
 
-## 6. Privacy rules
+## 7. Privacy rules
 
 Notification `title` / `body` / `payload_json` may include:
 
@@ -87,51 +121,89 @@ Notification `title` / `body` / `payload_json` may include:
 
 Never include:
 
-- Internal note body
+- Internal note body / snippet
 - Auth / continuity tokens
 - Signed URLs / service-role secrets
 - Sensitive custom-field values
 
-Viewers never receive `mention` / assignment types. Note deep-links still enforce notes capability at the destination.
+Viewers never receive `mention` / assignment types. Note deep-links still enforce notes capability at the destination. Browser and email copy reuse the same safe title/body fields.
 
 ---
 
-## 7. Browser permission behavior
+## 8. Browser permission + leader election
 
 1. Default `browser_enabled = false`
 2. User enables browser notifications in Settings → explicit `Notification.requestPermission()`
 3. If denied, store `browser_permission_denied_at` and do not re-prompt until the user revisits settings and opts in again
 4. Only the elected leader tab shows desktop notifications / plays sound
 
+### Leader election
+
+Storage key `sitechat:notif-leader:{workspaceId}` holds `{ tabId, at }`.
+
+1. Read lease
+2. If free/stale → write own `{tabId, at}`
+3. Read back — **leader only if stored `tabId` matches**
+4. Heartbeat renews only while ownership still verified
+5. Ownership lost → `leader=false` immediately
+6. Stale after 5s → another tab may claim
+
+Reconnect / catch-up refreshes the list and badge but **does not** replay browser/sound for historical rows (session watermark + per-id side-effect set).
+
 ---
 
-## 8. Retention
+## 9. Email outbox state machine
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Claimable |
+| `sending` | Atomically claimed by a worker (`FOR UPDATE SKIP LOCKED`) |
+| `sent` | Provider accepted; `provider_message_id` stored when available |
+| `failed` | Retryable; `next_attempt_at` + `attempts` / `last_error` |
+| `skipped` | Intentionally not sent (e.g. missing `RESEND_API_KEY`) — **not** marked sent |
+
+Flow:
+
+1. `claim_notification_email_outbox` → `pending|failed` → `sending` (increments `attempts`, sets `claimed_at`)
+2. Provider call **only after** claim
+3. `finalize_notification_email_outbox` → `sent` / `skipped` / `failed`
+
+Stale recovery: rows stuck in `sending` longer than 15 minutes return to `pending` (documented residual risk: provider accepted but DB finalize never ran → possible duplicate email unless the provider supports idempotency keys).
+
+---
+
+## 10. Retention
 
 - Product target: **90 days** for in-app notification rows (PRD)
 - v1 documents the purge job; automated cron is not required to ship the center
-- Soft strategy: delete (or archive) rows with `created_at < now() - interval '90 days'` per workspace; counters recomputed or clamped
-- Email outbox rows older than 30 days may be purged after `sent` / `skipped`
+- Soft strategy: delete (or archive) **read / old** rows with `created_at < now() - interval '90 days'`; after purge, counters must be recomputed or clamped so unread deletes cannot silently desync the counter
+- Prefer purging **read** rows first; unread purge must adjust `notification_unread_counts`
+- Email outbox rows older than 30 days may be purged after terminal `sent` / `skipped` / exhausted `failed`
 
 See also [DATA-RETENTION.md](./DATA-RETENTION.md).
 
 ---
 
-## 9. API / RPC
+## 11. API / RPC
 
-| RPC | Purpose |
-|-----|---------|
-| `list_notifications` | Keyset page (`before_created_at` + `before_id`), unread_count |
-| `get_notification_unread_count` | Counter read |
-| `mark_notification_read` | Idempotent mark one |
-| `mark_all_notifications_read` | Bulk mark |
-| `get_notification_preferences` | Get-or-init prefs |
-| `update_notification_preferences` | Patch own prefs |
+| RPC | Purpose | Who |
+|-----|---------|-----|
+| `list_notifications` | Keyset page, unread_count | authenticated |
+| `get_notification_unread_count` | Counter read | authenticated |
+| `mark_notification_read` | Idempotent mark one | authenticated |
+| `mark_all_notifications_read` | Bulk mark + reconcile | authenticated |
+| `get_notification_preferences` | Get-or-init prefs | authenticated |
+| `update_notification_preferences` | Patch own prefs | authenticated |
+| `claim_notification_email_outbox` | Atomic claim | **service_role only** |
+| `finalize_notification_email_outbox` | Finalize claim | **service_role only** |
 
-Writes to `notifications` are SECURITY DEFINER only. Authenticated clients have SELECT (recipient) only.
+`app_private` helpers (`emit_notification`, fan-out, preference helpers, claim internals, etc.) are **not** executable by `authenticated` / `anon` / `PUBLIC`. After notification migrations, `REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA app_private` runs, then only intentional RLS helpers are re-granted (`user_workspace_ids`, `user_workspace_role`, `workspace_is_accessible`, `get_caller_member_id`).
+
+SECURITY DEFINER functions use `SET search_path = ''`.
 
 ---
 
-## 10. UI
+## 12. UI
 
 - Bell in `DashboardTopBar` with unread badge
 - Dropdown panel: latest ~20, Load more, Mark all as read
@@ -140,7 +212,7 @@ Writes to `notifications` are SECURITY DEFINER only. Authenticated clients have 
 
 ---
 
-## 11. Known v1 limitations
+## 13. Known v1 limitations
 
 - Email delivery is foundation-only: outbox + optional Resend send; no React Email templates yet
 - No mobile push / VAPID
@@ -148,3 +220,4 @@ Writes to `notifications` are SECURITY DEFINER only. Authenticated clients have 
 - Unassigned `visitor_message` fans out to messaging roles (can be noisy at scale — prefer assignment)
 - Concurrent preference edits are last-write-wins
 - Billing notification types are reserved, not emitted
+- Crash after provider accept but before DB `sent` may duplicate email without provider idempotency

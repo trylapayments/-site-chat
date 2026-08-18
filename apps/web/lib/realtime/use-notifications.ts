@@ -3,6 +3,7 @@
 import {
   createNotificationTabElection,
   isNotificationUnread,
+  isQuietHoursActive,
   notificationHref,
   notificationItemSchema,
   notificationShouldPlaySound,
@@ -100,8 +101,20 @@ function rowToNotification(
   return parsed.success ? parsed.data : null;
 }
 
-function isDndActive(prefs: NotificationPreferences | null): boolean {
-  return Boolean(prefs?.dnd_enabled);
+function shouldSuppressSideEffects(
+  prefs: NotificationPreferences | null,
+): boolean {
+  if (!prefs) {
+    return true;
+  }
+  // Shared evaluator — mirrors app_private.notification_in_quiet_hours.
+  // Durable in-app history is never gated by this.
+  return isQuietHoursActive({
+    dnd_enabled: prefs.dnd_enabled,
+    quiet_hours_start: prefs.quiet_hours_start ?? null,
+    quiet_hours_end: prefs.quiet_hours_end ?? null,
+    timezone: prefs.timezone,
+  });
 }
 
 export function useNotifications(input: {
@@ -137,6 +150,16 @@ export function useNotifications(input: {
   const electionRef = useRef<ReturnType<
     typeof createNotificationTabElection
   > | null>(null);
+  /** Prevents reconnect/CDC replay from replaying browser/sound side effects. */
+  const sideEffectedIdsRef = useRef<Set<string>>(new Set());
+  /**
+   * Only live arrivals at/after this watermark may emit side effects.
+   * Boot uses a small skew buffer; reconnect advances to "now" so catch-up is silent.
+   */
+  const liveCutoffIsoRef = useRef<string>(
+    new Date(Date.now() - 5_000).toISOString(),
+  );
+  const hasConnectedOnceRef = useRef(false);
 
   const invalidateInFlight = useCallback(() => {
     generationRef.current += 1;
@@ -283,13 +306,23 @@ export function useNotifications(input: {
 
   const maybeRunSideEffects = useCallback(
     (item: NotificationItem) => {
+      if (sideEffectedIdsRef.current.has(item.id)) {
+        return;
+      }
+      // Reconnect catch-up / historical rows must update UI only.
+      if (item.created_at < liveCutoffIsoRef.current) {
+        return;
+      }
+
       const prefs = preferencesRef.current;
-      if (!prefs || isDndActive(prefs)) {
+      if (!prefs || shouldSuppressSideEffects(prefs)) {
         return;
       }
       if (!electionRef.current?.isLeader()) {
         return;
       }
+
+      sideEffectedIdsRef.current.add(item.id);
 
       const href = notificationHref(input.workspaceSlug, item);
 
@@ -366,6 +399,12 @@ export function useNotifications(input: {
       onConnectionChange: (status) => {
         setConnectionState(status);
         if (status === "connected") {
+          if (hasConnectedOnceRef.current) {
+            // Reconnect catch-up must update UI without replaying sound/browser.
+            liveCutoffIsoRef.current = new Date().toISOString();
+          } else {
+            hasConnectedOnceRef.current = true;
+          }
           void refresh();
         }
       },

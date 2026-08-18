@@ -2,6 +2,12 @@
  * Multi-tab side-effect election for browser/sound notifications.
  * Exactly one tab should play sound / show desktop notifications to avoid storms.
  *
+ * Lease ownership uses post-write verification:
+ * 1. read current lease
+ * 2. if free/stale, write {tabId, at}
+ * 3. read back — leader ONLY if stored tabId === own tabId
+ * 4. heartbeat only while storage still says own tabId
+ *
  * Uses globalThis only (no DOM lib dependency) so this package builds in Node.
  */
 
@@ -15,7 +21,7 @@ export type TabElection = {
   dispose: () => void;
 };
 
-type StorageLike = {
+export type StorageLike = {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
   removeItem: (key: string) => void;
@@ -29,7 +35,7 @@ function now(): number {
   return Date.now();
 }
 
-function getLocalStorage(): StorageLike | null {
+function getDefaultLocalStorage(): StorageLike | null {
   try {
     const storage = (globalThis as { localStorage?: StorageLike }).localStorage;
     if (!storage) {
@@ -41,8 +47,10 @@ function getLocalStorage(): StorageLike | null {
   }
 }
 
-function readLeader(key: string): { tabId: string; at: number } | null {
-  const storage = getLocalStorage();
+function readLeader(
+  storage: StorageLike | null,
+  key: string,
+): { tabId: string; at: number } | null {
   if (!storage) {
     return null;
   }
@@ -61,13 +69,17 @@ function readLeader(key: string): { tabId: string; at: number } | null {
   }
 }
 
-function writeLeader(key: string, tabId: string): void {
-  const storage = getLocalStorage();
+function writeLeader(
+  storage: StorageLike | null,
+  key: string,
+  tabId: string,
+  clock: () => number,
+): void {
   if (!storage) {
     return;
   }
   try {
-    storage.setItem(key, JSON.stringify({ tabId, at: now() }));
+    storage.setItem(key, JSON.stringify({ tabId, at: clock() }));
   } catch {
     // Ignore quota / private mode.
   }
@@ -79,46 +91,80 @@ function writeLeader(key: string, tabId: string): void {
  */
 export function createNotificationTabElection(
   workspaceId: string,
-  options?: { tabId?: string; nowFn?: () => number },
+  options?: {
+    tabId?: string;
+    nowFn?: () => number;
+    /** Injectable storage for tests; defaults to localStorage. */
+    storage?: StorageLike | null;
+  },
 ): TabElection {
   const tabId =
     options?.tabId ?? `tab-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
   const key = `${LEADER_KEY_PREFIX}${workspaceId}`;
   const clock = options?.nowFn ?? now;
+  const resolvedStorage =
+    options && "storage" in options ? (options.storage ?? null) : getDefaultLocalStorage();
   let disposed = false;
   let leader = false;
 
-  const claimIfNeeded = (): void => {
+  const verifyOwnership = (): boolean => {
+    const current = readLeader(resolvedStorage, key);
+    return Boolean(current && current.tabId === tabId);
+  };
+
+  const tryClaim = (): void => {
     if (disposed) {
       return;
     }
-    const current = readLeader(key);
-    if (!current || current.tabId === tabId || clock() - current.at > STALE_MS) {
-      writeLeader(key, tabId);
+    if (!resolvedStorage) {
       leader = true;
       return;
     }
+
+    const current = readLeader(resolvedStorage, key);
+    const freeOrStale = !current || current.tabId === tabId || clock() - current.at > STALE_MS;
+
+    if (!freeOrStale) {
+      leader = false;
+      return;
+    }
+
+    writeLeader(resolvedStorage, key, tabId, clock);
+    // Post-write verification: last writer wins under race.
+    leader = verifyOwnership();
+  };
+
+  const heartbeat = (): void => {
+    if (disposed) {
+      return;
+    }
+    if (!resolvedStorage) {
+      leader = true;
+      return;
+    }
+
+    const current = readLeader(resolvedStorage, key);
+    if (current?.tabId === tabId) {
+      writeLeader(resolvedStorage, key, tabId, clock);
+      leader = verifyOwnership();
+      return;
+    }
+
+    if (!current || clock() - current.at > STALE_MS) {
+      writeLeader(resolvedStorage, key, tabId, clock);
+      leader = verifyOwnership();
+      return;
+    }
+
     leader = false;
   };
 
-  claimIfNeeded();
+  tryClaim();
 
   const interval =
     typeof setInterval === "function"
       ? setInterval(() => {
-          if (disposed) {
-            return;
-          }
-          const current = readLeader(key);
-          if (leader || !current || clock() - current.at > STALE_MS) {
-            writeLeader(key, tabId);
-            leader = true;
-          } else if (current.tabId === tabId) {
-            writeLeader(key, tabId);
-            leader = true;
-          } else {
-            leader = false;
-          }
+          heartbeat();
         }, HEARTBEAT_MS)
       : null;
 
@@ -126,8 +172,7 @@ export function createNotificationTabElection(
     if (event.key !== key || disposed) {
       return;
     }
-    const current = readLeader(key);
-    leader = Boolean(current && current.tabId === tabId);
+    leader = verifyOwnership();
   };
 
   const target = globalThis as {
@@ -146,7 +191,7 @@ export function createNotificationTabElection(
         return false;
       }
       // Storage unavailable → allow side effects (single-tab assumption).
-      if (!getLocalStorage()) {
+      if (!resolvedStorage) {
         return true;
       }
       return leader;
@@ -159,15 +204,15 @@ export function createNotificationTabElection(
       if (typeof target.removeEventListener === "function") {
         target.removeEventListener("storage", onStorage);
       }
-      const current = readLeader(key);
+      const current = readLeader(resolvedStorage, key);
       if (current?.tabId === tabId) {
-        const storage = getLocalStorage();
         try {
-          storage?.removeItem(key);
+          resolvedStorage?.removeItem(key);
         } catch {
           // ignore
         }
       }
+      leader = false;
     },
   };
 }

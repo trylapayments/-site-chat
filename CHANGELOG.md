@@ -6,7 +6,7 @@ All notable changes to Site Chat are documented in this file.
 
 ### Added
 
-- Operator Notifications (v1, PR #35): durable notification center with taxonomy (`conversation_new`, `visitor_message`, assignment/transfer/unassign, `mention`), `(workspace_id, recipient_id, dedupe_key)` idempotency, O(1) `notification_unread_counts`, keyset list/mark-read RPCs, per-member preferences (in-app/browser/sound/email/DND), optional browser Notification API + sound with multi-tab leader election, idempotent email outbox foundation; docs `docs/NOTIFICATIONS.md`; pgTAP `020_notifications.test.sql`; Playwright `e2e/tests/inbox/notifications.spec.ts`.
+- Operator Notifications (v1, PR #35): durable notification center with taxonomy (`conversation_new`, `visitor_message`, assignment/transfer/unassign, `mention`), `(workspace_id, recipient_id, dedupe_key)` idempotency, O(1) `notification_unread_counts` with mark-all lock+reconcile, keyset list/mark-read RPCs, per-member preferences (in-app/browser/sound/email/DND — DND suppresses side effects only), shared quiet-hours evaluator, optional browser Notification API + sound with post-write-verified multi-tab leader election, email outbox claim-before-send (`pending→sending→sent|failed|skipped`); docs `docs/NOTIFICATIONS.md`; pgTAP `020_notifications.test.sql`; Playwright `e2e/tests/inbox/notifications.spec.ts`.
 
 ### Fixed
 
