@@ -184,10 +184,9 @@ export async function takeConversationAction(
       parsed.data.expectedVersion,
     );
 
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // Client applies AssignmentMutationResult; inbox/list CDC updates peers.
+    // Avoid revalidatePath here — conversation RSC now includes CRM profile
+    // fetches and can stall the Server Action under multi-tab E2E load.
     return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
@@ -228,10 +227,7 @@ export async function assignConversationAction(
             parsed.data.expectedVersion,
           );
 
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // See takeConversationAction — skip RSC revalidation to avoid action stalls.
     return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
@@ -262,10 +258,7 @@ export async function unassignConversationAction(
       parsed.data.expectedVersion,
     );
 
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // See takeConversationAction — skip RSC revalidation to avoid action stalls.
     return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
@@ -786,9 +779,7 @@ export async function createInternalNoteAction(
       parsed.data,
     );
 
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // Optimistic client merge + notes CDC cover UI; skip RSC revalidation.
     return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
@@ -824,9 +815,7 @@ export async function updateInternalNoteAction(
       parsed.data,
     );
 
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${input.conversationId}`,
-    );
+    // Optimistic client merge + notes CDC cover UI; skip RSC revalidation.
     return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
@@ -858,9 +847,7 @@ export async function softDeleteInternalNoteAction(
       },
     );
 
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${input.conversationId}`,
-    );
+    // Optimistic client merge + notes CDC cover UI; skip RSC revalidation.
     return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
