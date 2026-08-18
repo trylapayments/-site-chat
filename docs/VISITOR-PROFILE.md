@@ -144,8 +144,9 @@ Contact profile live refresh (`useContactProfileLiveRefresh`):
 
 - No polling
 - Stable subscribe effect deps (ids + enabled only) — parent re-renders / profile object identity do not tear down the channel or cause a refresh storm
-- Reconnect/`connected` triggers a bounded catch-up refetch
-- Forms reconcile from `serverProfile`; dirty local drafts are preserved
+- Reconnect/`connected` triggers a bounded catch-up refetch via the **browser Supabase client** (`get_contact_profile` RPC) — not a Server Action — so CDC cannot queue behind / stall identity saves under multi-tab edits
+- No `router.refresh()` from the live-refresh hook (panel renders from `serverProfile`)
+- Forms reconcile from `serverProfile`; dirty local drafts are preserved; identity save does not call `router.refresh()` after success
 
 ---
 
