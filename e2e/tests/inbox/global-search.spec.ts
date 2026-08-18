@@ -147,6 +147,12 @@ test.describe("global search", () => {
     const hit = await waitForHit(operator, "note", marker);
     await hit.click();
     await expect(operator).toHaveURL(/tab=notes/, { timeout: 60_000 });
+    await expect(operator.getByTestId("internal-notes-panel")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(
+      operator.getByTestId("internal-note-item").filter({ hasText: marker }),
+    ).toBeVisible({ timeout: 30_000 });
 
     await visitorContext.close();
     await operatorContext.close();
@@ -325,7 +331,7 @@ test.describe("global search", () => {
   });
 
   test("deep-links message beyond the newest 50", async ({ browser }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(300_000);
     const stamp = Date.now();
     const targetBody = `gs-deep-target-${stamp}`;
     const padPrefix = `gs-deep-pad-${stamp}`;
@@ -336,58 +342,22 @@ test.describe("global search", () => {
     await sendWidgetMessage(visitor, targetBody);
     await waitForWidgetRealtimeReady(visitor);
 
+    // Pad beyond the newest-50 window via the widget (service_role cannot
+    // INSERT into conversations/messages under RLS grants).
+    const frame = widgetFrameLocator(visitor);
+    const composer = widgetComposer(visitor);
+    for (let i = 0; i < 55; i += 1) {
+      await composer.fill(`${padPrefix}-${i}`);
+      await frame.getByRole("button", { name: "Send" }).click();
+    }
+    await expect(frame.getByRole("article").getByText(`${padPrefix}-54`)).toBeVisible({
+      timeout: 120_000,
+    });
+
     const operatorContext = await browser.newContext();
     const operator = await operatorContext.newPage();
     await loginOperator(operator);
     await openInbox(operator);
-    await openOperatorConversation(operator, targetBody);
-    await waitForOperatorThreadRealtimeReady(operator);
-    const conversationMatch = operator.url().match(/\/inbox\/([0-9a-f-]{36})/i);
-    const conversationId = conversationMatch?.[1];
-    if (!conversationId) {
-      throw new Error(`Could not parse conversation id from ${operator.url()}`);
-    }
-
-    const { createClient } = await import("@supabase/supabase-js");
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
-      throw new Error("Missing Supabase service role env for deep-link seed");
-    }
-    const admin = createClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: conversation, error: convError } = await admin
-      .from("conversations")
-      .select("id, workspace_id, visitor_session_id, next_message_sequence")
-      .eq("id", conversationId)
-      .single();
-    if (convError || !conversation) {
-      throw convError ?? new Error("conversation not found for deep-link seed");
-    }
-
-    const startSeq = Number(conversation.next_message_sequence ?? 2);
-    const rows = Array.from({ length: 55 }, (_, index) => ({
-      workspace_id: conversation.workspace_id,
-      conversation_id: conversationId,
-      sequence_number: startSeq + index,
-      sender_type: "visitor",
-      visitor_session_id: conversation.visitor_session_id,
-      body: `${padPrefix}-${index}`,
-      is_internal: false,
-    }));
-    const { error: insertError } = await admin.from("messages").insert(rows);
-    if (insertError) {
-      throw insertError;
-    }
-    await admin
-      .from("conversations")
-      .update({
-        next_message_sequence: startSeq + rows.length,
-        last_message_preview: `${padPrefix}-54`,
-      })
-      .eq("id", conversationId);
-
     await openGlobalSearch(operator);
     await searchGlobal(operator, targetBody);
     await operator.getByTestId("global-search-category-messages").click();

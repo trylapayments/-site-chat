@@ -188,6 +188,24 @@ export function GlobalSearch({
     [canSearchNotes, workspaceSlug],
   );
 
+  const navigateToHit = useCallback(
+    (hit: GlobalSearchHit) => {
+      const href = toAppRoute(hrefForSearchHit(workspaceSlug, hit));
+      close();
+      // Same-path deep-links (`?tab=notes`, `?message=`) must still update the
+      // URL when the operator is already on that conversation page.
+      const nextPath = href.split("?")[0] ?? href;
+      const currentPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
+      if (currentPath === nextPath) {
+        router.replace(href);
+      } else {
+        router.push(href);
+      }
+    },
+    [close, router, workspaceSlug],
+  );
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const action = resolveSearchKeyboardAction({
@@ -228,8 +246,7 @@ export function GlobalSearch({
         event.preventDefault();
         const hit = flatHits[activeIndex];
         if (hit) {
-          close();
-          router.push(toAppRoute(hrefForSearchHit(workspaceSlug, hit)));
+          navigateToHit(hit);
         }
       }
     }
@@ -238,7 +255,7 @@ export function GlobalSearch({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeIndex, close, flatHits, open, openPalette, router, workspaceSlug]);
+  }, [activeIndex, close, flatHits, navigateToHit, open, openPalette]);
 
   useEffect(() => {
     if (!open) {
@@ -409,12 +426,7 @@ export function GlobalSearch({
                               setActiveIndex(flatIndex);
                             }}
                             onClick={() => {
-                              close();
-                              router.push(
-                                toAppRoute(
-                                  hrefForSearchHit(workspaceSlug, hit),
-                                ),
-                              );
+                              navigateToHit(hit);
                             }}
                           >
                             <div className="text-sm font-medium">
