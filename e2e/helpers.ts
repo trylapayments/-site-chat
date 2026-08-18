@@ -102,10 +102,18 @@ export function operatorReplyComposer(page: Page) {
 export async function openOperatorConversation(page: Page, previewText: string) {
   const row = page.getByRole("row").filter({ hasText: previewText });
   await expect(row).toBeVisible({ timeout: 60_000 });
-  await Promise.all([
-    page.waitForURL(/\/inbox\/[0-9a-f-]+/, { timeout: 60_000 }),
-    row.getByRole("link").first().click(),
-  ]);
+  const href = await row.getByRole("link").first().getAttribute("href");
+  if (!href) {
+    throw new Error(`Conversation link missing for preview: ${previewText}`);
+  }
+  // Full navigation is more reliable than soft-click under `next start` CI:
+  // Promise.all(waitForURL + click) can resolve while the inbox shell remains.
+  const target = href.startsWith("http") ? href : `${APP_URL}${href}`;
+  await page.goto(target);
+  await expect(page).toHaveURL(/\/inbox\/[0-9a-f-]{36}/i, { timeout: 60_000 });
+  await expect(page.getByTestId("conversation-main-tabs")).toBeVisible({
+    timeout: 60_000,
+  });
 }
 
 export async function sendWidgetMessage(page: Page, body: string) {

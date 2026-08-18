@@ -17,7 +17,7 @@ v1 delivers:
 - Workspace **tags** with assign/unassign and soft delete
 - First-class **companies** (no auto-merge by email domain)
 - **Typed custom fields** (EAV with typed columns; definitions owner/admin only)
-- Contacts list with `q` search (FTS + ILIKE) and keyset **Load more** — **search readiness for PR #32**
+- Contacts list with `q` search (FTS + ILIKE) and keyset **Load more** — `search_vector` reused by global search (PR #32 / eng PR #34)
 - Timeline events for profile/tag/company/custom-field **value** mutations (bulk soft-deletes skip per-contact spam)
 - Operator realtime SELECT on CRM tables; profile live refresh on the contact page (no polling)
 - RBAC via capabilities + SECURITY DEFINER RPCs
@@ -151,7 +151,7 @@ Contact profile live refresh (`useContactProfileLiveRefresh`):
 
 ---
 
-## 8. Search readiness (PR #32)
+## 8. Search readiness (PR #32 shipped)
 
 | Piece | Status |
 | ----- | ------ |
@@ -159,9 +159,9 @@ Contact profile live refresh (`useContactProfileLiveRefresh`):
 | Company name/domain, tags, custom text/select/number/date (+ labels/keys) folded into vector | Shipped (refresh helpers) |
 | `list_contacts` `q` filter (FTS + ILIKE fallback) | Shipped |
 | Contacts UI keyset pagination (`next_before` / `has_more`, **Load more**) | Shipped — not OFFSET |
-| Global cross-entity search UI | Deferred to PR #32 |
+| Global cross-entity search UI + `public.global_search` | **Shipped** (engineering PR #34 / product PR #32) — see [GLOBAL-SEARCH.md](./GLOBAL-SEARCH.md) |
 
-`list_contacts` supports keyset pagination, optional `company_id` / `tag_ids` filters, and `q`. This is the contact-side index operators will reuse when global search lands.
+`list_contacts` supports keyset pagination, optional `company_id` / `tag_ids` filters, and `q`. Global search reuses the same `contacts.search_vector` (company domain, tags, custom fields) alongside conversation/message/note/attachment indexes.
 
 ---
 

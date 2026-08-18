@@ -305,7 +305,7 @@ Persistent visitor identity records (anonymous or identified). Table name remain
 | locale | TEXT | NULL | Profile locale preference (≤ 35); not session language |
 | country_code | CHAR(2) | NULL | ISO 3166-1 alpha-2 profile field (`^[A-Z]{2}$`); distinct from `visitor_sessions.country_code` |
 | custom_attributes_json | JSONB | NOT NULL DEFAULT `'{}'` | Host attributes (bounded primitives); **not** CRM custom fields |
-| search_vector | TSVECTOR | NULL | Trigger-maintained FTS: name, email, phone, job_title, company **name and domain**, tag names, custom field text/select/number/date values (+ definition labels/keys); prep for PR #32 |
+| search_vector | TSVECTOR | NULL | Trigger-maintained FTS: name, email, phone, job_title, company **name and domain**, tag names, custom field text/select/number/date values (+ definition labels/keys); reused by `global_search` and `list_contacts` q |
 | visit_count | INTEGER | NOT NULL DEFAULT 1 | Increments only when a **new** session links to this contact via a valid `continuity_token` (≥ 1) |
 | first_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | Visitor activity only — `update_visitor_profile` / `update_contact_profile` do **not** bump this |
@@ -426,6 +426,7 @@ Message threads between visitors and agents.
 | message_count | INTEGER | NOT NULL DEFAULT 0 | Denormalized counter |
 | last_message_at | TIMESTAMPTZ | NULL | For inbox sorting |
 | last_message_preview | TEXT | NULL | First 200 chars of last message |
+| search_vector | TSVECTOR | NULL | Trigger-maintained FTS over conversation id, contact identity, subject, `sanitize_page_url(source_url)`, preview (**no assignee label**; secrets stripped on every refresh) |
 | resolved_at | TIMESTAMPTZ | NULL | |
 | resolved_by | UUID | NULL, FK → workspace_members | |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
@@ -438,8 +439,12 @@ Message threads between visitors and agents.
 - `idx_conversations_unassigned_queue` ON `(workspace_id, status, last_message_at DESC NULLS LAST)` WHERE `assigned_to IS NULL`
 - `idx_conversations_visitor_session` ON `(visitor_session_id)`
 - `idx_conversations_contact` ON `(contact_id)` WHERE `contact_id IS NOT NULL`
+- `idx_conversations_search_vector` GIN ON `(search_vector)`
+- `idx_conversations_source_url_trgm` / `idx_conversations_preview_trgm` GIN trigram (partial)
 
 **Assignment RPCs** (see `docs/CONVERSATION-ASSIGNMENT.md`): `take_conversation`, `assign_conversation`, `unassign_conversation`. Mutations use row lock + `assignment_version` CAS and never bump `last_message_at`.
+
+**Global search:** `conversations.search_vector` is refreshed on conversation metadata changes and when linked contact name/email/phone/`public_id` updates. See `docs/GLOBAL-SEARCH.md`.
 
 ### 7.2 messages
 
@@ -454,6 +459,7 @@ Individual messages within a conversation.
 | sender_type | app_message_sender_type | NOT NULL | |
 | sender_id | UUID | NULL | workspace_member.id or visitor_session.id |
 | body | TEXT | NOT NULL | Plain text content |
+| search_vector | TSVECTOR | GENERATED | `to_tsvector('english', body)` STORED; GIN for global search |
 | is_internal | BOOLEAN | NOT NULL DEFAULT false | Defense-in-depth flag; product internal notes live in `internal_notes` |
 | delivery_status | app_message_delivery_status | NOT NULL DEFAULT 'sent' | |
 | client_message_id | UUID | NULL | Client deduplication key |
@@ -465,6 +471,9 @@ Individual messages within a conversation.
 - UNIQUE `(conversation_id, sequence_number)`
 - UNIQUE `(conversation_id, client_message_id)` WHERE `client_message_id IS NOT NULL`
 - `idx_messages_conversation` ON `(conversation_id, sequence_number)`
+- `idx_messages_workspace_search_vector` GIN ON `(workspace_id, search_vector)` — workspace-scoped FTS for global search
+- `idx_messages_body_trgm` GIN trigram on `body`
+- `idx_messages_workspace_created` ON `(workspace_id, created_at DESC, id DESC)`
 
 **Triggers:**
 - `trg_messages_update_conversation` — on INSERT, increment `conversations.message_count`, update `last_message_at` and `last_message_preview`.
@@ -482,7 +491,7 @@ Operator-only private notes on conversations. See `docs/INTERNAL-NOTES.md` and A
 | author_member_id | UUID | NULL, FK → workspace_members | Composite FK `ON DELETE SET NULL (author_member_id)` so `workspace_id` stays intact |
 | body | TEXT | NOT NULL, 1–4000 | |
 | client_note_id | UUID | NULL | Create idempotency via atomic `INSERT … ON CONFLICT` |
-| search_vector | TSVECTOR | GENERATED | GIN-indexed for search / PR #32 |
+| search_vector | TSVECTOR | GENERATED | GIN-indexed for global search / inbox note `q` |
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL | |
 | deleted_at | TIMESTAMPTZ | NULL | Soft delete; catch-up returns watermarked tombstones |
 
@@ -494,7 +503,7 @@ Operator-only private notes on conversations. See `docs/INTERNAL-NOTES.md` and A
 
 **RLS:** SELECT for owner/admin/agent only. No direct writes. Visitors/viewers have no access. Note/mention timeline events are hidden from viewers (RLS + list RPC).
 
-**Search:** `list_conversations` `q` matches note bodies/FTS for messaging roles only (never viewers).
+**Search:** `list_conversations` `q` matches note bodies/FTS for messaging roles only (never viewers). `global_search` reuses the same vector and excludes soft-deleted notes; viewers get empty notes groups (`can_search_notes = false`).
 
 ### 7.3 message_attachments
 
@@ -526,8 +535,15 @@ File metadata linked to messages. See `docs/ATTACHMENTS.md` for upload flow and 
 - `idx_message_attachments_conversation` ON `(conversation_id)`
 - `idx_message_attachments_workspace` ON `(workspace_id)`
 - `idx_message_attachments_message_sort` ON `(message_id, sort_order)`
+- `idx_message_attachments_filename_trgm` GIN trigram on `filename` (global search)
+- `idx_message_attachments_workspace_filename` ON `(workspace_id, lower(filename))`
+- `idx_message_attachments_workspace_created` ON `(workspace_id, created_at DESC, id DESC)`
 
 Pending uploads (before durable message creation) live in `attachment_uploads`.
+
+### 7.4 Global search RPC
+
+`public.global_search(p_workspace_id uuid, p_query jsonb)` — workspace-isolated operator search across contacts, conversations, messages, notes, and attachments. `SECURITY DEFINER` with empty `search_path`; `GRANT EXECUTE` to `authenticated` only; `app_private.global_search` not executable by clients. Empty `q` returns empty groups. Short queries (`char_length < 3`) skip fuzzy message/note/attachment scans. Long queries stage candidates (`≤ 200`) before final rank — **`limit_per_type` bounds returned rows, not scan cost**. Conversation vectors re-sanitize `source_url` on refresh; assignee labels are not indexed. `list_messages` accepts optional `around_message_id` for deep-links. See `docs/GLOBAL-SEARCH.md`.
 
 ---
 

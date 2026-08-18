@@ -51,6 +51,7 @@ import {
   createInternalNote,
   fetchConversation,
   fetchCustomerTimeline,
+  fetchInternalNote,
   fetchInternalNotes,
   markConversationDelivered,
   markConversationRead,
@@ -751,6 +752,67 @@ export async function listInternalNotesAction(
       }
     }
     return { success: false, message: "Unable to load notes." };
+  }
+}
+
+export async function getInternalNoteAction(
+  workspaceSlug: string,
+  input: { noteId: string; conversationId?: string },
+): Promise<
+  | { success: true; data: InternalNote }
+  | { success: false; message: string; code?: string }
+> {
+  try {
+    const noteId = z.string().uuid().safeParse(input.noteId);
+    if (!noteId.success) {
+      return { success: false, message: "Invalid note." };
+    }
+
+    const { workspace, supabase } =
+      await requireInboxMutationContext(workspaceSlug);
+    requireCapability(workspace.role, "manage_internal_notes");
+
+    const data = await fetchInternalNote(
+      supabase,
+      workspace.workspace_id,
+      noteId.data,
+    );
+
+    if (
+      input.conversationId &&
+      z.string().uuid().safeParse(input.conversationId).success &&
+      data.conversation_id !== input.conversationId
+    ) {
+      return { success: false, message: "Note not found.", code: "NOT_FOUND" };
+    }
+
+    if (data.deleted_at) {
+      return {
+        success: false,
+        message: "Note was deleted.",
+        code: "NOTE_DELETED",
+      };
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    if (error instanceof CapabilityError) {
+      return { success: false, message: error.message, code: "FORBIDDEN" };
+    }
+    if (error instanceof NoteError) {
+      return { success: false, message: error.message, code: error.code };
+    }
+    if (error instanceof Error) {
+      const typedNote = parseNoteErrorMessage(error.message);
+      if (typedNote) {
+        return {
+          success: false,
+          message: typedNote.message,
+          code: typedNote.code,
+        };
+      }
+    }
+    return { success: false, message: "Unable to load note." };
   }
 }
 

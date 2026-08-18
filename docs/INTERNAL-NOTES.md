@@ -50,7 +50,7 @@ The inbox foundation already has `messages.is_internal` for visitor/widget isola
 | `author_member_id` | Set on create; composite FK `ON DELETE SET NULL (author_member_id)` so history survives member removal |
 | `body` | 1–4000 chars |
 | `client_note_id` | Optional create idempotency (partial unique per conversation) |
-| `search_vector` | Generated `tsvector` (GIN) for PR #32 global search |
+| `search_vector` | Generated `tsvector` (GIN) for global search |
 | `deleted_at` | Soft delete |
 
 ### `internal_note_mentions`
@@ -155,10 +155,10 @@ Metadata includes member ids/labels and `note_id` — **never note body** (emit 
 ## 9. Search
 
 - GIN on `search_vector` where `deleted_at IS NULL`
+- Body trigram GIN (`idx_internal_notes_body_trgm`) for partial matches
 - `list_conversations` `q` matches note bodies / FTS for owner/admin/agent only
 - Viewers never match note content through inbox search
-
-Preparation for PR #32 global search: durable indexed text already exists under RLS.
+- **Global search** (`public.global_search`) reuses the same vector; messaging roles search notes; viewers always receive an empty notes group with `can_search_notes = false` (see `docs/GLOBAL-SEARCH.md`)
 
 ---
 

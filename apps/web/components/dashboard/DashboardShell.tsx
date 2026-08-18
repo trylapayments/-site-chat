@@ -1,4 +1,5 @@
-import type { AccessibleWorkspace } from "@site-chat/shared";
+import type { AccessibleWorkspace, MemberRole } from "@site-chat/shared";
+import { can } from "@site-chat/shared";
 
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardTopBar } from "@/components/dashboard/DashboardTopBar";
@@ -10,6 +11,7 @@ export function DashboardShell({
   memberId,
   workspaces,
   email,
+  role,
   children,
 }: {
   slug: string;
@@ -18,8 +20,11 @@ export function DashboardShell({
   memberId: string;
   workspaces: AccessibleWorkspace[];
   email: string;
+  role: MemberRole;
   children: React.ReactNode;
 }) {
+  const canSearchNotes = can(role, "manage_internal_notes");
+
   return (
     <div className="bg-background flex min-h-screen">
       <DashboardSidebar
@@ -35,6 +40,7 @@ export function DashboardShell({
           currentWorkspaceId={workspaceId}
           memberId={memberId}
           email={email}
+          canSearchNotes={canSearchNotes}
         />
         <main id="main-content" className="flex-1 p-6">
           {children}

@@ -471,6 +471,24 @@ export async function fetchInternalNotes(
   );
 }
 
+export async function fetchInternalNote(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  noteId: string,
+): Promise<InternalNote> {
+  const id = z.string().uuid().parse(noteId);
+  const { data, error } = await callPublicRpc(supabase, "get_internal_note", {
+    p_workspace_id: workspaceId,
+    p_note_id: id,
+  });
+
+  if (error) {
+    throwNoteRpcError(error);
+  }
+
+  return parseRpcResult(internalNoteSchema, data, "get_internal_note");
+}
+
 export async function createInternalNote(
   supabase: AppSupabaseClient,
   workspaceId: string,
