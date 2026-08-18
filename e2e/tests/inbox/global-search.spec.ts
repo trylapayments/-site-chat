@@ -141,6 +141,10 @@ test.describe("global search", () => {
       operator.getByTestId("internal-note-item").filter({ hasText: marker }),
     ).toBeVisible({ timeout: 30_000 });
 
+    // Leave the thread so the note deep-link navigates onto a fresh page load.
+    await operator.goto(INBOX_URL);
+    await waitForOperatorInboxRealtimeReady(operator);
+
     await openGlobalSearch(operator);
     await searchGlobal(operator, marker);
     await operator.getByTestId("global-search-category-notes").click();
