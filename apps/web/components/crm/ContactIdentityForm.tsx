@@ -17,8 +17,7 @@ import {
   type ContactIdentityValues,
   type ContactProfile,
 } from "@site-chat/shared";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,8 +52,7 @@ export function ContactIdentityForm({
   profile: ContactProfile;
   canEdit: boolean;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [identity, setIdentity] = useState<IdentityState>(() => ({
     baseline: profileToBaseline(profile),
@@ -155,18 +153,30 @@ export function ContactIdentityForm({
         if (!contactIdentityPatchHasChanges(patch)) {
           return;
         }
-        startTransition(async () => {
-          const result = await updateContactProfileAction(workspaceSlug, patch);
-          if (result.success) {
-            setIdentity({
-              baseline: profileToBaseline(result.data),
-              draft: profileToDraft(result.data),
-            });
-            router.refresh();
-          } else {
-            setError(result.message);
+        if (isPending) {
+          return;
+        }
+        setIsPending(true);
+        void (async () => {
+          try {
+            const result = await updateContactProfileAction(
+              workspaceSlug,
+              patch,
+            );
+            if (result.success) {
+              setIdentity({
+                baseline: profileToBaseline(result.data),
+                draft: profileToDraft(result.data),
+              });
+              // Do not router.refresh() here — multi-tab RSC refresh can stall
+              // the Server Action flight. CDC catch-up + returned profile cover UI.
+            } else {
+              setError(result.message);
+            }
+          } finally {
+            setIsPending(false);
           }
-        });
+        })();
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">
