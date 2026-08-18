@@ -83,6 +83,7 @@ export function LiveConversationThread({
   canSend,
   canUseCannedResponses,
   aiSuggestedRepliesEnabled = false,
+  focusMessageId = null,
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -100,6 +101,8 @@ export function LiveConversationThread({
   canSend: boolean;
   canUseCannedResponses: boolean;
   aiSuggestedRepliesEnabled?: boolean;
+  /** From global search: scroll/focus a message when present. */
+  focusMessageId?: string | null;
 }) {
   // Stabilize mapped props so useLiveConversationThread's effect does not see a
   // fresh array reference on every parent re-render.
@@ -339,6 +342,7 @@ export function LiveConversationThread({
         messages={messages}
         visitorReceipts={visitorReceipts}
         bottomRef={observeBottom}
+        focusMessageId={focusMessageId}
       />
       {newMessagesBelow > 0 ? (
         <div className="flex justify-center">
@@ -399,12 +403,27 @@ function MessageList({
   messages,
   visitorReceipts,
   bottomRef,
+  focusMessageId,
 }: {
   workspaceId: string;
   messages: MessageView[];
   visitorReceipts: ReceiptCursors;
   bottomRef: (node: HTMLDivElement | null) => void;
+  focusMessageId?: string | null;
 }) {
+  useEffect(() => {
+    if (!focusMessageId) {
+      return;
+    }
+    const node = document.querySelector(
+      `[data-message-id="${CSS.escape(focusMessageId)}"]`,
+    );
+    if (node instanceof HTMLElement) {
+      node.scrollIntoView({ block: "center", behavior: "smooth" });
+      node.focus({ preventScroll: true });
+    }
+  }, [focusMessageId, messages]);
+
   if (messages.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
@@ -423,16 +442,19 @@ function MessageList({
                 peer: visitorReceipts,
               })
             : null;
+        const focused = focusMessageId === message.id;
 
         return (
           <article
             key={message.id}
             className={
               message.senderType === "agent"
-                ? "bg-primary/5 ml-8 rounded-lg border px-4 py-3"
-                : "bg-muted/40 mr-8 rounded-lg border px-4 py-3"
+                ? `bg-primary/5 ml-8 rounded-lg border px-4 py-3${focused ? " ring-2 ring-foreground/30" : ""}`
+                : `bg-muted/40 mr-8 rounded-lg border px-4 py-3${focused ? " ring-2 ring-foreground/30" : ""}`
             }
             data-sequence={message.sequenceNumber}
+            data-message-id={message.id}
+            tabIndex={focused ? -1 : undefined}
           >
             <header className="mb-1 flex items-center justify-between gap-2">
               <span className="text-sm font-medium">{message.senderLabel}</span>

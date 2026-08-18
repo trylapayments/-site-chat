@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 
 import type { AccessibleWorkspace } from "@site-chat/shared";
 
+import { GlobalSearch } from "@/components/dashboard/global-search/GlobalSearch";
 import { MobileNav } from "@/components/dashboard/MobileNav";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
@@ -14,12 +15,14 @@ export function DashboardTopBar({
   currentWorkspaceId,
   memberId,
   email,
+  canSearchNotes,
 }: {
   slug: string;
   workspaces: AccessibleWorkspace[];
   currentWorkspaceId: string;
   memberId: string;
   email: string;
+  canSearchNotes: boolean;
 }) {
   const pathname = usePathname();
 
@@ -32,6 +35,9 @@ export function DashboardTopBar({
         memberId={memberId}
         email={email}
       />
+      <div className="min-w-0 flex-1">
+        <GlobalSearch workspaceSlug={slug} canSearchNotes={canSearchNotes} />
+      </div>
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden lg:block">
           <WorkspaceSwitcher

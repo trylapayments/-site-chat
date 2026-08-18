@@ -635,6 +635,7 @@ export function InternalNotesPanel({
   initialNotes,
   canManage,
   active = true,
+  focusNoteId = null,
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -644,6 +645,7 @@ export function InternalNotesPanel({
   initialNotes: InternalNote[];
   canManage: boolean;
   active?: boolean;
+  focusNoteId?: string | null;
 }) {
   const {
     notes,
@@ -663,6 +665,18 @@ export function InternalNotesPanel({
     enabled: canManage,
     active,
   });
+
+  useEffect(() => {
+    if (!focusNoteId || !active) {
+      return;
+    }
+    const node = document.querySelector(
+      `[data-note-id="${CSS.escape(focusNoteId)}"]`,
+    );
+    if (node instanceof HTMLElement) {
+      node.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [active, focusNoteId, notes]);
 
   if (!canManage) {
     return (

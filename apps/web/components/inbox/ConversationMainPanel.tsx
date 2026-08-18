@@ -8,7 +8,8 @@ import {
   type ReceiptCursors,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { InternalNotesPanel } from "@/components/inbox/InternalNotesPanel";
 import { LiveConversationThread } from "@/components/inbox/LiveConversationThread";
@@ -56,7 +57,22 @@ export function ConversationMainPanel({
   canUseCannedResponses: boolean;
   aiSuggestedRepliesEnabled?: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>("messages");
+  const searchParams = useSearchParams();
+  const focusMessageId = searchParams.get("message");
+  const focusNoteId = searchParams.get("note");
+  const initialTab: Tab =
+    searchParams.get("tab") === "notes" && canManageNotes
+      ? "notes"
+      : "messages";
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "notes" && canManageNotes) {
+      setTab("notes");
+    } else if (focusMessageId) {
+      setTab("messages");
+    }
+  }, [canManageNotes, focusMessageId, searchParams]);
 
   return (
     <div className="flex min-h-[520px] flex-col gap-3">
@@ -121,6 +137,7 @@ export function ConversationMainPanel({
           canSend={canSend}
           canUseCannedResponses={canUseCannedResponses}
           aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
+          focusMessageId={focusMessageId}
         />
       </div>
 
@@ -138,6 +155,7 @@ export function ConversationMainPanel({
           initialNotes={initialNotes}
           canManage={canManageNotes}
           active={tab === "notes"}
+          focusNoteId={focusNoteId}
         />
       </div>
     </div>

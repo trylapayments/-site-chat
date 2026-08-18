@@ -54,6 +54,7 @@ export default async function WorkspaceLayout({
       memberId={memberRow?.id ?? ""}
       workspaces={membership.accessible_workspaces}
       email={user.email ?? "Signed in"}
+      role={guard.workspace.role}
     >
       {children}
     </DashboardShell>

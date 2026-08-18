@@ -5,6 +5,7 @@ import {
 } from "@site-chat/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { DashboardPage } from "@/components/dashboard/layout/DashboardPage";
 import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPageHeader";
@@ -158,30 +159,38 @@ export default async function ConversationDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <section className="rounded-lg border p-4">
-          <ConversationMainPanel
-            workspaceId={workspace.workspace_id}
-            workspaceSlug={workspaceSlug}
-            workspaceName={workspace.name}
-            conversationId={conversationId}
-            ephemeralTopic={conversation.visitor_ephemeral_topic}
-            memberId={memberId}
-            memberDisplayLabel={memberDisplayLabel}
-            initialMessages={messages.items}
-            initialVisitorReceipts={{
-              lastDeliveredSequence:
-                conversation.visitor_last_delivered_sequence,
-              lastReadSequence: conversation.visitor_last_read_sequence,
-            }}
-            initialNotes={initialNotes}
-            initialCannedResponses={initialCannedResponses}
-            visitorName={conversation.contact?.name ?? null}
-            visitorEmail={conversation.contact?.email ?? null}
-            members={members}
-            canSend={can(workspace.role, "send_messages")}
-            canManageNotes={canManageNotes}
-            canUseCannedResponses={canUseCannedResponses}
-            aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
-          />
+          <Suspense
+            fallback={
+              <p className="text-muted-foreground text-sm">
+                Loading conversation…
+              </p>
+            }
+          >
+            <ConversationMainPanel
+              workspaceId={workspace.workspace_id}
+              workspaceSlug={workspaceSlug}
+              workspaceName={workspace.name}
+              conversationId={conversationId}
+              ephemeralTopic={conversation.visitor_ephemeral_topic}
+              memberId={memberId}
+              memberDisplayLabel={memberDisplayLabel}
+              initialMessages={messages.items}
+              initialVisitorReceipts={{
+                lastDeliveredSequence:
+                  conversation.visitor_last_delivered_sequence,
+                lastReadSequence: conversation.visitor_last_read_sequence,
+              }}
+              initialNotes={initialNotes}
+              initialCannedResponses={initialCannedResponses}
+              visitorName={conversation.contact?.name ?? null}
+              visitorEmail={conversation.contact?.email ?? null}
+              members={members}
+              canSend={can(workspace.role, "send_messages")}
+              canManageNotes={canManageNotes}
+              canUseCannedResponses={canUseCannedResponses}
+              aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
+            />
+          </Suspense>
         </section>
 
         <ConversationSidebar
