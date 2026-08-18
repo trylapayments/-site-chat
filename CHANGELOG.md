@@ -6,6 +6,7 @@ All notable changes to Site Chat are documented in this file.
 
 ### Fixed
 
+- Global Search hardening (PR #34): CI-deterministic widget `app.js` bundle; workspace-scoped message GIN + staged candidate cap; short-query policy (`< 3` chars); conversation `search_vector` re-sanitizes `source_url` and drops assignee labels; safe LIKE escaping; Viewer internal-message/attachment denial regressions; palette stale-request guard; `list_messages.around_message_id` deep-links; docs/EXPLAIN assumptions corrected (`limit_per_type` does not bound scan cost).
 - CRM-lite hardening (PR #33): concurrent tag assign idempotent (`ON CONFLICT DO NOTHING`); custom field dates strict `YYYY-MM-DD` (reject `today`/`tomorrow`) in shared Zod + DB; select option shrink captures contact ids before orphan delete then refreshes `search_vector`; combined label+options definition patches refresh orphans ∪ keepers once (no stale labels on keepers); soft-delete custom field definition hard-deletes values and refreshes search without per-contact `custom_field_updated` spam; company website http(s) only; company picker searchable via `list_companies` `q`; contacts UI keyset **Load more** (`next_before` / `has_more`); dirty-only identity patches with live draft-preserving reconcile; contact profile realtime uses stable subscribe deps + browser-RPC catch-up (no Server Action / no `router.refresh` storm that can stall multi-tab saves); `update_company` refreshes linked contact `search_vector` on **name or domain** change. Docs aligned (`docs/VISITOR-PROFILE.md` and related).
 
 ### Added

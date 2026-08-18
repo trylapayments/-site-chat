@@ -315,7 +315,7 @@ CRM-lite extends `contacts` with optional `company_id`, profile fields, workspac
 
 ### 6.2.0b Global search
 
-Operator global search is a workspace-scoped SECURITY DEFINER RPC (`public.global_search`) backed by FTS + `pg_trgm` indexes across contacts, conversations, messages, internal notes, and attachment filenames. The dashboard palette (`⌘/Ctrl+K`) calls a Server Action that validates membership from the URL slug. Viewers receive `can_search_notes = false` and empty notes groups; anon/visitors cannot execute the RPC. See `docs/GLOBAL-SEARCH.md`.
+Operator global search is a workspace-scoped SECURITY DEFINER RPC (`public.global_search`) backed by FTS + `pg_trgm` indexes across contacts, conversations, messages, internal notes, and attachment filenames. Long queries stage a bounded candidate set (cap ≤ 200) before ranking; short queries (`< 3` chars) are exact/prefix identity only. The dashboard palette (`⌘/Ctrl+K`) calls a Server Action with a request-generation guard so stale responses and workspace switches cannot clobber results. Message deep-links use `list_messages.around_message_id` so hits outside the newest page still load. Viewers receive `can_search_notes = false`, empty notes groups, and no internal-message hits; anon/visitors cannot execute the RPC. See `docs/GLOBAL-SEARCH.md`.
 
 ### 6.2.1 Read receipts and unread counters
 

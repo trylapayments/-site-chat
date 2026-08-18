@@ -4,8 +4,10 @@ import { emptyGlobalSearchResult, type GlobalSearchHit } from "../schemas/global
 import {
   clampSearchIndex,
   compareSearchHits,
+  escapeLikePattern,
   filterHitsForPermissions,
   flattenSearchHits,
+  isFuzzySearchQuery,
   mapSearchHit,
   normalizeSearchQuery,
   parseSearchCategory,
@@ -23,6 +25,44 @@ describe("normalizeSearchQuery", () => {
 
   it("enforces max length", () => {
     expect(normalizeSearchQuery("a".repeat(250)).length).toBe(200);
+  });
+});
+
+describe("isFuzzySearchQuery / escapeLikePattern", () => {
+  it("requires at least 3 characters for fuzzy scans", () => {
+    expect(isFuzzySearchQuery("ab")).toBe(false);
+    expect(isFuzzySearchQuery("abc")).toBe(true);
+    expect(isFuzzySearchQuery("  a  ")).toBe(false);
+  });
+
+  it("escapes LIKE wildcards and backslash", () => {
+    expect(escapeLikePattern("100%_off\\now")).toBe("100\\%\\_off\\\\now");
+  });
+
+  it("leaves identity-like needles unchanged except wildcards", () => {
+    expect(escapeLikePattern("jane@example.com")).toBe("jane@example.com");
+    expect(escapeLikePattern("+44 7700 900123")).toBe("+44 7700 900123");
+    expect(escapeLikePattern("שלום")).toBe("שלום");
+    expect(escapeLikePattern("привет")).toBe("привет");
+    expect(escapeLikePattern("你好")).toBe("你好");
+  });
+});
+
+describe("scoreExactIdentityMatch specials", () => {
+  it("scores exact email, phone digits, and uuid-like public ids", () => {
+    expect(scoreExactIdentityMatch("jane@example.com", { email: "jane@example.com" })).toBe(100);
+    expect(scoreExactIdentityMatch("+44 7700 900123", { phone: "+44 7700 900123" })).toBe(100);
+    expect(
+      scoreExactIdentityMatch("vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", {
+        publicId: "vis_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      }),
+    ).toBe(100);
+  });
+
+  it("does not treat % or _ as wildcards in client scoring", () => {
+    expect(scoreExactIdentityMatch("%", { email: "jane@example.com" })).toBe(0);
+    expect(scoreExactIdentityMatch("_", { email: "jane@example.com" })).toBe(0);
+    expect(scoreExactIdentityMatch("\\", { email: "jane@example.com" })).toBe(0);
   });
 });
 

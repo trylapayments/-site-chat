@@ -4,6 +4,7 @@
  */
 import {
   GLOBAL_SEARCH_CATEGORIES,
+  GLOBAL_SEARCH_MIN_FUZZY_LENGTH,
   GLOBAL_SEARCH_QUERY_MAX_LENGTH,
   type GlobalSearchCategory,
   type GlobalSearchGroups,
@@ -14,6 +15,19 @@ import {
 
 export function normalizeSearchQuery(raw: string): string {
   return raw.split("\u0000").join("").trim().slice(0, GLOBAL_SEARCH_QUERY_MAX_LENGTH);
+}
+
+/** True when the server will run FTS / substring body/filename scans. */
+export function isFuzzySearchQuery(raw: string): boolean {
+  return normalizeSearchQuery(raw).length >= GLOBAL_SEARCH_MIN_FUZZY_LENGTH;
+}
+
+/**
+ * Escape `%`, `_`, and `\` for SQL LIKE/ILIKE with `ESCAPE '\'`.
+ * Mirrors `app_private.escape_like_pattern`.
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 export function isValidSearchCategory(value: string): value is GlobalSearchCategory {

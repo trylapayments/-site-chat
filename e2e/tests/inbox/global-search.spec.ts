@@ -307,4 +307,152 @@ test.describe("global search", () => {
       timeout: 45_000,
     });
   });
+
+  test("closing palette does not apply stale search results", async ({ page }) => {
+    await loginOperator(page);
+    await openInbox(page);
+    await openGlobalSearch(page);
+    await searchGlobal(page, SEEDED_CONTACT_NAME);
+    await waitForHit(page, "contact", SEEDED_CONTACT_NAME);
+
+    await page.getByTestId("global-search-close").click();
+    await expect(page.getByTestId("global-search-dialog")).toHaveCount(0);
+
+    await openGlobalSearch(page);
+    await expect(page.getByTestId("global-search-input")).toHaveValue("");
+    await expect(page.getByTestId("global-search-hit-contact")).toHaveCount(0);
+    await expect(page.getByText("Type to search this workspace")).toBeVisible();
+  });
+
+  test("deep-links message beyond the newest 50", async ({ browser }) => {
+    test.setTimeout(240_000);
+    const stamp = Date.now();
+    const targetBody = `gs-deep-target-${stamp}`;
+    const padPrefix = `gs-deep-pad-${stamp}`;
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    await openWidget(visitor);
+    await sendWidgetMessage(visitor, targetBody);
+    await waitForWidgetRealtimeReady(visitor);
+
+    const operatorContext = await browser.newContext();
+    const operator = await operatorContext.newPage();
+    await loginOperator(operator);
+    await openInbox(operator);
+    await openOperatorConversation(operator, targetBody);
+    await waitForOperatorThreadRealtimeReady(operator);
+    const conversationMatch = operator.url().match(/\/inbox\/([0-9a-f-]{36})/i);
+    const conversationId = conversationMatch?.[1];
+    if (!conversationId) {
+      throw new Error(`Could not parse conversation id from ${operator.url()}`);
+    }
+
+    const { createClient } = await import("@supabase/supabase-js");
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) {
+      throw new Error("Missing Supabase service role env for deep-link seed");
+    }
+    const admin = createClient(url, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: conversation, error: convError } = await admin
+      .from("conversations")
+      .select("id, workspace_id, visitor_session_id, next_message_sequence")
+      .eq("id", conversationId)
+      .single();
+    if (convError || !conversation) {
+      throw convError ?? new Error("conversation not found for deep-link seed");
+    }
+
+    const startSeq = Number(conversation.next_message_sequence ?? 2);
+    const rows = Array.from({ length: 55 }, (_, index) => ({
+      workspace_id: conversation.workspace_id,
+      conversation_id: conversationId,
+      sequence_number: startSeq + index,
+      sender_type: "visitor",
+      visitor_session_id: conversation.visitor_session_id,
+      body: `${padPrefix}-${index}`,
+      is_internal: false,
+    }));
+    const { error: insertError } = await admin.from("messages").insert(rows);
+    if (insertError) {
+      throw insertError;
+    }
+    await admin
+      .from("conversations")
+      .update({
+        next_message_sequence: startSeq + rows.length,
+        last_message_preview: `${padPrefix}-54`,
+      })
+      .eq("id", conversationId);
+
+    await openGlobalSearch(operator);
+    await searchGlobal(operator, targetBody);
+    await operator.getByTestId("global-search-category-messages").click();
+    const hit = await waitForHit(operator, "message", targetBody);
+    await hit.click();
+
+    await expect(operator).toHaveURL(/message=[0-9a-f-]{36}/i, {
+      timeout: 60_000,
+    });
+    await waitForOperatorThreadRealtimeReady(operator);
+    await expect(operator.getByText(targetBody).first()).toBeVisible({
+      timeout: 60_000,
+    });
+    const messageParam = new URL(operator.url()).searchParams.get("message");
+    expect(messageParam).toBeTruthy();
+    await expect(operator.locator(`[data-message-id="${messageParam}"]`)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await visitorContext.close();
+    await operatorContext.close();
+  });
+
+  test("viewer cannot find internal note body via message-like search", async ({ browser }) => {
+    // Notes remain the primary private channel; this guards the palette UX path.
+    test.setTimeout(180_000);
+    const marker = `gs-viewer-priv-${Date.now()}`;
+    const noteBody = `Private viewer deny ${marker}`;
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    await openWidget(visitor);
+    await sendWidgetMessage(visitor, `${marker}-seed`);
+    await waitForWidgetRealtimeReady(visitor);
+
+    const ownerContext = await browser.newContext();
+    const owner = await ownerContext.newPage();
+    await loginOperator(owner);
+    await openInbox(owner);
+    await openOperatorConversation(owner, marker);
+    await waitForOperatorThreadRealtimeReady(owner);
+    await owner.getByTestId("conversation-tab-notes").click();
+    await owner.getByTestId("internal-note-composer").fill(noteBody);
+    await owner.getByTestId("internal-note-send").click();
+    await expect(owner.getByTestId("internal-note-item").filter({ hasText: marker })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await openGlobalSearch(owner);
+    await searchGlobal(owner, marker);
+    await owner.getByTestId("global-search-category-notes").click();
+    await waitForHit(owner, "note", marker);
+
+    const viewerContext = await browser.newContext();
+    const viewer = await viewerContext.newPage();
+    await loginAs(viewer, VIEWER_EMAIL);
+    await openInbox(viewer);
+    await openGlobalSearch(viewer);
+    await searchGlobal(viewer, marker);
+    await expect(viewer.getByTestId("global-search-hit-note")).toHaveCount(0);
+    await expect(viewer.getByTestId("global-search-category-notes")).toHaveCount(0);
+    await expect(viewer.getByText(noteBody)).toHaveCount(0);
+
+    await visitorContext.close();
+    await ownerContext.close();
+    await viewerContext.close();
+  });
 });

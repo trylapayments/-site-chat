@@ -31,6 +31,7 @@ import { toAppRoute } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
 import { globalSearchAction } from "@/lib/search/actions";
 import { hrefForSearchHit } from "@/lib/search/href";
+import { createGlobalSearchRequestGuard } from "@/lib/search/request-guard";
 
 const CATEGORY_LABELS: Record<GlobalSearchCategory, string> = {
   all: "All",
@@ -95,7 +96,7 @@ export function GlobalSearch({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestSeq = useRef(0);
+  const requestGuardRef = useRef(createGlobalSearchRequestGuard());
 
   const categories = visibleSearchCategories(canSearchNotes);
   const flatHits = flattenSearchHits(result.groups).filter((hit) => {
@@ -107,15 +108,41 @@ export function GlobalSearch({
     return hit.type === "attachment";
   });
 
+  const clearDebounce = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+  }, []);
+
+  const resetPaletteState = useCallback(() => {
+    setQuery("");
+    setCategory("all");
+    setResult(emptyGlobalSearchResult({ can_search_notes: canSearchNotes }));
+    setActiveIndex(-1);
+    setError(null);
+  }, [canSearchNotes]);
+
   const close = useCallback(() => {
+    clearDebounce();
+    requestGuardRef.current.invalidate();
     setOpen(false);
     setActiveIndex(-1);
     setError(null);
-  }, []);
+    setResult(emptyGlobalSearchResult({ can_search_notes: canSearchNotes }));
+    setQuery("");
+  }, [canSearchNotes, clearDebounce]);
 
   const openPalette = useCallback(() => {
     setOpen(true);
   }, []);
+
+  useEffect(() => {
+    clearDebounce();
+    requestGuardRef.current.resetWorkspace(workspaceSlug);
+    resetPaletteState();
+    setOpen(false);
+  }, [workspaceSlug, clearDebounce, resetPaletteState]);
 
   useEffect(() => {
     if (!open) {
@@ -130,14 +157,14 @@ export function GlobalSearch({
   const runSearch = useCallback(
     (nextQuery: string, nextCategory: GlobalSearchCategory) => {
       const normalized = normalizeSearchQuery(nextQuery);
-      const seq = ++requestSeq.current;
+      const token = requestGuardRef.current.begin(workspaceSlug);
       startTransition(async () => {
         const response = await globalSearchAction(workspaceSlug, {
           q: normalized,
           category: nextCategory,
           limit_per_type: nextCategory === "all" ? 5 : 15,
         });
-        if (seq !== requestSeq.current) {
+        if (!requestGuardRef.current.isCurrent(token)) {
           return;
         }
         if (!response.success) {
@@ -146,6 +173,7 @@ export function GlobalSearch({
             emptyGlobalSearchResult({
               q: normalized,
               category: nextCategory,
+              can_search_notes: canSearchNotes,
             }),
           );
           setActiveIndex(-1);
@@ -157,7 +185,7 @@ export function GlobalSearch({
         setActiveIndex(hits.length > 0 ? 0 : -1);
       });
     },
-    [workspaceSlug],
+    [canSearchNotes, workspaceSlug],
   );
 
   useEffect(() => {

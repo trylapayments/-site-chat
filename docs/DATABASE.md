@@ -426,7 +426,7 @@ Message threads between visitors and agents.
 | message_count | INTEGER | NOT NULL DEFAULT 0 | Denormalized counter |
 | last_message_at | TIMESTAMPTZ | NULL | For inbox sorting |
 | last_message_preview | TEXT | NULL | First 200 chars of last message |
-| search_vector | TSVECTOR | NULL | Trigger-maintained FTS over conversation id, contact identity, subject, source_url, preview, assignee label (no secrets) |
+| search_vector | TSVECTOR | NULL | Trigger-maintained FTS over conversation id, contact identity, subject, `sanitize_page_url(source_url)`, preview (**no assignee label**; secrets stripped on every refresh) |
 | resolved_at | TIMESTAMPTZ | NULL | |
 | resolved_by | UUID | NULL, FK → workspace_members | |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
@@ -471,7 +471,7 @@ Individual messages within a conversation.
 - UNIQUE `(conversation_id, sequence_number)`
 - UNIQUE `(conversation_id, client_message_id)` WHERE `client_message_id IS NOT NULL`
 - `idx_messages_conversation` ON `(conversation_id, sequence_number)`
-- `idx_messages_search_vector` GIN ON `(search_vector)` — generated `to_tsvector('english', body)` for global search
+- `idx_messages_workspace_search_vector` GIN ON `(workspace_id, search_vector)` — workspace-scoped FTS for global search
 - `idx_messages_body_trgm` GIN trigram on `body`
 - `idx_messages_workspace_created` ON `(workspace_id, created_at DESC, id DESC)`
 
@@ -536,13 +536,14 @@ File metadata linked to messages. See `docs/ATTACHMENTS.md` for upload flow and 
 - `idx_message_attachments_workspace` ON `(workspace_id)`
 - `idx_message_attachments_message_sort` ON `(message_id, sort_order)`
 - `idx_message_attachments_filename_trgm` GIN trigram on `filename` (global search)
+- `idx_message_attachments_workspace_filename` ON `(workspace_id, lower(filename))`
 - `idx_message_attachments_workspace_created` ON `(workspace_id, created_at DESC, id DESC)`
 
 Pending uploads (before durable message creation) live in `attachment_uploads`.
 
 ### 7.4 Global search RPC
 
-`public.global_search(p_workspace_id uuid, p_query jsonb)` — workspace-isolated operator search across contacts, conversations, messages, notes, and attachments. `SECURITY DEFINER` with empty `search_path`; `GRANT EXECUTE` to `authenticated` only; `app_private.global_search` not executable by clients. Empty `q` returns empty groups. See `docs/GLOBAL-SEARCH.md`.
+`public.global_search(p_workspace_id uuid, p_query jsonb)` — workspace-isolated operator search across contacts, conversations, messages, notes, and attachments. `SECURITY DEFINER` with empty `search_path`; `GRANT EXECUTE` to `authenticated` only; `app_private.global_search` not executable by clients. Empty `q` returns empty groups. Short queries (`char_length < 3`) skip fuzzy message/note/attachment scans. Long queries stage candidates (`≤ 200`) before final rank — **`limit_per_type` bounds returned rows, not scan cost**. Conversation vectors re-sanitize `source_url` on refresh; assignee labels are not indexed. `list_messages` accepts optional `around_message_id` for deep-links. See `docs/GLOBAL-SEARCH.md`.
 
 ---
 

@@ -159,11 +159,23 @@ export const listMessagesQuerySchema = z
     limit: z.number().int().min(1).max(50).optional(),
     before_sequence: z.number().int().positive().optional(),
     after_sequence: z.number().int().nonnegative().optional(),
+    /** Centered window around a message id (deep-link from global search). */
+    around_message_id: z.string().uuid().optional(),
   })
   .strict()
   .refine((value) => !(value.before_sequence !== undefined && value.after_sequence !== undefined), {
     message: "Cannot use before_sequence and after_sequence together",
-  });
+  })
+  .refine(
+    (value) =>
+      !(
+        value.around_message_id !== undefined &&
+        (value.before_sequence !== undefined || value.after_sequence !== undefined)
+      ),
+    {
+      message: "Cannot use around_message_id with before_sequence or after_sequence",
+    },
+  );
 
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
 

@@ -4,6 +4,10 @@ export const GLOBAL_SEARCH_QUERY_MAX_LENGTH = 200;
 export const GLOBAL_SEARCH_DEFAULT_LIMIT_PER_TYPE = 5;
 export const GLOBAL_SEARCH_MAX_LIMIT_PER_TYPE = 25;
 export const GLOBAL_SEARCH_DEBOUNCE_MS = 200;
+/** Below this length: exact/prefix identity only (no FTS / fuzzy body scans). */
+export const GLOBAL_SEARCH_MIN_FUZZY_LENGTH = 3;
+/** Server candidate cap before final rank: least(greatest(limit*20, 50), 200). */
+export const GLOBAL_SEARCH_CANDIDATE_CAP_MAX = 200;
 
 export const GLOBAL_SEARCH_CATEGORIES = [
   "all",

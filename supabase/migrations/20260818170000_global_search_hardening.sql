@@ -463,9 +463,16 @@ BEGIN
               NULLIF(c.subject, ''),
               'Conversation'
             ),
-            COALESCE(NULLIF(c.source_url, ''), c.status::text),
+            COALESCE(
+              NULLIF(app_private.sanitize_page_url(c.source_url), ''),
+              c.status::text
+            ),
             app_private.safe_search_snippet(
-              COALESCE(c.last_message_preview, c.source_url, c.subject),
+              COALESCE(
+                c.last_message_preview,
+                app_private.sanitize_page_url(c.source_url),
+                c.subject
+              ),
               v_q,
               160
             ),
@@ -518,9 +525,16 @@ BEGIN
               NULLIF(c.subject, ''),
               'Conversation'
             ),
-            COALESCE(NULLIF(c.source_url, ''), c.status::text),
+            COALESCE(
+              NULLIF(app_private.sanitize_page_url(c.source_url), ''),
+              c.status::text
+            ),
             app_private.safe_search_snippet(
-              COALESCE(c.last_message_preview, c.source_url, c.subject),
+              COALESCE(
+                c.last_message_preview,
+                app_private.sanitize_page_url(c.source_url),
+                c.subject
+              ),
               v_q,
               160
             ),
@@ -560,7 +574,8 @@ BEGIN
             c.id::text = v_q
             OR position(v_q_lower IN lower(c.id::text)) = 1
             OR (v_tsquery IS NOT NULL AND c.search_vector @@ v_tsquery)
-            OR c.source_url ILIKE '%' || v_q_like || '%' ESCAPE '\'
+            OR app_private.sanitize_page_url(c.source_url)
+                 ILIKE '%' || v_q_like || '%' ESCAPE '\'
             OR c.last_message_preview ILIKE '%' || v_q_like || '%' ESCAPE '\'
             OR c.subject ILIKE '%' || v_q_like || '%' ESCAPE '\'
             OR ct.name ILIKE '%' || v_q_like || '%' ESCAPE '\'

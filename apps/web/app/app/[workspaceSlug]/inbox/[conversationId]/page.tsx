@@ -30,10 +30,21 @@ import { createClient } from "@/lib/supabase/server";
 
 export default async function ConversationDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceSlug: string; conversationId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { workspaceSlug, conversationId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const focusMessageRaw = resolvedSearchParams.message;
+  const focusMessageId =
+    typeof focusMessageRaw === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      focusMessageRaw,
+    )
+      ? focusMessageRaw
+      : undefined;
   const { workspace } = await requireInboxWorkspace(workspaceSlug);
   const supabase = await createClient();
   const { user } = await requireUser(supabase);
@@ -59,10 +70,26 @@ export default async function ConversationDetailPage({
       fetchConversation(supabase, workspace.workspace_id, conversationId),
       fetchMessages(supabase, workspace.workspace_id, conversationId, {
         limit: 50,
+        ...(focusMessageId ? { around_message_id: focusMessageId } : {}),
       }),
     ]);
   } catch {
-    notFound();
+    // Deep-link around_message_id can 404 if the message is missing / internal
+    // for viewers — fall back to the newest window so the thread still loads.
+    if (focusMessageId) {
+      try {
+        [conversation, messages] = await Promise.all([
+          fetchConversation(supabase, workspace.workspace_id, conversationId),
+          fetchMessages(supabase, workspace.workspace_id, conversationId, {
+            limit: 50,
+          }),
+        ]);
+      } catch {
+        notFound();
+      }
+    } else {
+      notFound();
+    }
   }
 
   const canManageNotes = can(workspace.role, "manage_internal_notes");
