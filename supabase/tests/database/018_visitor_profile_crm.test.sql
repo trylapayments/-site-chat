@@ -7,8 +7,9 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 -- Schema(18) + privileges(28) + profile RBAC(6) + cross-workspace profile(4)
 -- + workspace B seed lives_ok(4) + tags(16) + companies(12) + custom fields(28)
 -- + soft-delete field + noop/timeline(8) + company/tag soft-delete + removed-member
--- + domain search_vector refresh(11) + company search(4) + search(6) + realtime(4) = 165
-SELECT plan(165);
+-- + domain search_vector refresh(11) + combined label+options refresh(15)
+-- + company search(4) + search(6) + realtime(4) = 180
+SELECT plan(180);
 
 TRUNCATE tests.fixtures;
 
@@ -1113,6 +1114,188 @@ SELECT ok(
   'option alpha no longer appears in search_vector after shrink'
 );
 
+-- Combined label + options patch must refresh keepers AND orphans (A ∪ B).
+-- Vulnerable IF options / ELSIF label only refreshed orphans on combined patches.
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('owner_a')::uuid, 'crm-owner-a@test.local'); $$,
+  'authenticate owner for Priority field'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      'sev_level',
+      'Priority',
+      'select',
+      '["High","Low"]'::jsonb,
+      40,
+      false
+    );
+  $$,
+  'create Priority select field with High/Low'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'field_priority', id::text
+FROM public.custom_field_definitions
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND key = 'sev_level'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+-- Second workspace-A contact (contact_b fixture lives in workspace B).
+-- Name must not include Priority/Urgency/High/Low so FTS assertions are unambiguous.
+INSERT INTO public.contacts (workspace_id, public_id, email, name)
+SELECT
+  tests.fixture('workspace_a')::uuid,
+  'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
+  'crm-priority-keeper@test.local',
+  'CRM Keeper Contact'
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.contacts
+  WHERE workspace_id = tests.fixture('workspace_a')::uuid
+    AND email = 'crm-priority-keeper@test.local'
+);
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'contact_priority_keeper', id::text
+FROM public.contacts
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND email = 'crm-priority-keeper@test.local'
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM public.custom_field_definitions
+    WHERE id = tests.fixture('field_priority')::uuid
+      AND label = 'Priority'
+  ),
+  'Priority field fixture persisted'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM public.contacts
+    WHERE id = tests.fixture('contact_priority_keeper')::uuid
+      AND workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  'priority keeper contact fixture persisted'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent for Priority values'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('field_priority')::uuid,
+      '"High"'::jsonb
+    );
+  $$,
+  'contact_a gets Priority=High'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.set_contact_custom_field_value(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_priority_keeper')::uuid,
+      tests.fixture('field_priority')::uuid,
+      '"Low"'::jsonb
+    );
+  $$,
+  'priority keeper gets Priority=Low'
+);
+
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'Priority')
+       AND search_vector @@ plainto_tsquery('english', 'High')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'contact_a search_vector contains Priority and High'
+);
+
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'Priority')
+       AND search_vector @@ plainto_tsquery('english', 'Low')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_priority_keeper')::uuid
+  ),
+  'keeper search_vector contains Priority and Low'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('owner_a')::uuid, 'crm-owner-a@test.local'); $$,
+  'authenticate owner for combined label+options patch'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.update_custom_field_definition(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('field_priority')::uuid,
+      jsonb_build_object(
+        'label', 'Urgency',
+        'options', '["Low"]'::jsonb
+      )
+    );
+  $$,
+  'combined label+options update Priority→Urgency and drop High'
+);
+
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1 FROM public.custom_field_values
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+      AND contact_id = tests.fixture('contact_a')::uuid
+      AND field_id = tests.fixture('field_priority')::uuid
+  ),
+  'contact_a High value removed after option shrink'
+);
+
+SELECT ok(
+  NOT (
+    SELECT search_vector @@ plainto_tsquery('english', 'Priority')
+        OR search_vector @@ plainto_tsquery('english', 'Urgency')
+        OR search_vector @@ plainto_tsquery('english', 'High')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'contact_a search_vector has no Priority/Urgency/High after losing value'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM public.custom_field_values
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+      AND contact_id = tests.fixture('contact_priority_keeper')::uuid
+      AND field_id = tests.fixture('field_priority')::uuid
+      AND value_select = 'Low'
+  ),
+  'keeper still has Low after combined patch'
+);
+
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'Urgency')
+       AND search_vector @@ plainto_tsquery('english', 'Low')
+       AND NOT (search_vector @@ plainto_tsquery('english', 'Priority'))
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_priority_keeper')::uuid
+  ),
+  'keeper search_vector has Urgency+Low and no stale Priority label'
+);
+
 -- Soft-delete custom field definition clears values (no per-contact timeline required)
 SELECT lives_ok(
   $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
@@ -1619,13 +1802,13 @@ SELECT ok(
   'list_contacts q returns empty for non-matching query'
 );
 
-SELECT is(
-  (SELECT count(*)::int
-   FROM public.contacts
-   WHERE workspace_id = tests.fixture('workspace_a')::uuid
-     AND search_vector IS NOT NULL),
-  1,
-  'workspace A has searchable contact vector after name update'
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'Lovelace')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'contact_a search_vector indexes updated name after profile update'
 );
 
 SELECT ok(

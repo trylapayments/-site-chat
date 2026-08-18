@@ -2853,7 +2853,11 @@ DECLARE
   v_options jsonb;
   v_sort integer;
   v_required boolean;
-  v_contact_ids uuid[];
+  v_old_label text;
+  v_label_changed boolean := false;
+  v_orphan_ids uuid[];
+  v_label_ids uuid[];
+  v_refresh_ids uuid[];
 BEGIN
   PERFORM app_private.require_crm_definitions_manage(p_workspace_id);
   v_member_id := app_private.get_caller_member_id(p_workspace_id);
@@ -2881,6 +2885,8 @@ BEGIN
     RAISE EXCEPTION 'FIELD_NOT_FOUND: Custom field definition not found.';
   END IF;
 
+  v_old_label := v_def.label;
+
   IF p_patch ? 'label' THEN
     v_label := app_private.bounded_text(app_private.strip_html_plain(p_patch ->> 'label'), 120);
     IF v_label IS NULL THEN
@@ -2889,6 +2895,8 @@ BEGIN
   ELSE
     v_label := v_def.label;
   END IF;
+
+  v_label_changed := v_label IS DISTINCT FROM v_old_label;
 
   IF p_patch ? 'options' OR p_patch ? 'options_json' THEN
     IF v_def.field_type <> 'select' THEN
@@ -2937,12 +2945,14 @@ BEGIN
     AND workspace_id = p_workspace_id
   RETURNING * INTO v_def;
 
-  -- Drop select values that are no longer in options.
-  -- Capture affected contacts BEFORE delete so search_vector refresh includes
-  -- contacts whose orphaned values were removed (otherwise stale option text remains).
+  -- Build one affected contact set for search_vector refresh:
+  --   A = contacts losing values because of option removal (capture BEFORE delete)
+  --   B = contacts still holding values when the label changed (after orphan delete)
+  -- Refresh A ∪ B exactly once (no IF/ELSIF that drops label refresh on combined patches).
+  v_orphan_ids := NULL;
   IF v_def.field_type = 'select' AND (p_patch ? 'options' OR p_patch ? 'options_json') THEN
     SELECT array_agg(DISTINCT v.contact_id)
-    INTO v_contact_ids
+    INTO v_orphan_ids
     FROM public.custom_field_values v
     WHERE v.workspace_id = p_workspace_id
       AND v.field_id = p_field_id
@@ -2960,22 +2970,28 @@ BEGIN
         FROM jsonb_array_elements_text(v_def.options_json) opt(val)
         WHERE opt.val = v.value_select
       );
+  END IF;
 
-    IF v_contact_ids IS NOT NULL THEN
-      PERFORM app_private.refresh_contact_search_vector(cid)
-      FROM unnest(v_contact_ids) AS cid;
-    END IF;
-  ELSIF p_patch ? 'label' THEN
+  v_label_ids := NULL;
+  IF v_label_changed THEN
     SELECT array_agg(DISTINCT v.contact_id)
-    INTO v_contact_ids
+    INTO v_label_ids
     FROM public.custom_field_values v
     WHERE v.workspace_id = p_workspace_id
       AND v.field_id = p_field_id;
+  END IF;
 
-    IF v_contact_ids IS NOT NULL THEN
-      PERFORM app_private.refresh_contact_search_vector(cid)
-      FROM unnest(v_contact_ids) AS cid;
-    END IF;
+  SELECT array_agg(DISTINCT cid)
+  INTO v_refresh_ids
+  FROM (
+    SELECT unnest(COALESCE(v_orphan_ids, ARRAY[]::uuid[])) AS cid
+    UNION
+    SELECT unnest(COALESCE(v_label_ids, ARRAY[]::uuid[])) AS cid
+  ) AS affected(cid);
+
+  IF v_refresh_ids IS NOT NULL THEN
+    PERFORM app_private.refresh_contact_search_vector(cid)
+    FROM unnest(v_refresh_ids) AS cid;
   END IF;
 
   RETURN app_private.custom_field_definition_json(v_def);

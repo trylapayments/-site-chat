@@ -103,6 +103,7 @@ Field types (`app_custom_field_type`): `text`, `number`, `boolean`, `date`, `sel
 - **`is_required`:** Column exists and can be stored on definitions, but v1 does **not** enforce required values on set/clear. Settings UI does not expose it as a product feature — reserved for a future release.
 - **Soft-deleting a definition** hard-deletes all values for that field and refreshes `search_vector` for affected contacts. It does **not** emit per-contact `custom_field_updated` timeline events (bulk cleanup; avoids spam). Explicit `set`/`clear` value RPCs still emit when data actually changes.
 - **Select option shrink:** When options are removed from a select definition, the RPC captures affected `contact_id`s **before** deleting orphan values, then refreshes `search_vector` (no stale option text left in the index).
+- **Combined label + options patch:** `update_custom_field_definition` builds one affected set — contacts losing orphaned options **∪** contacts still holding values when the label changes — and refreshes each contact once (no IF/ELSIF that drops label refresh on combined patches).
 
 Host `custom_attributes_json` remains the identify-side bag; CRM fields are operator-curated and typed.
 
@@ -238,3 +239,4 @@ Details: [SECURITY.md](./SECURITY.md).
 | 2026-08-16 | Initial CRM-lite documentation |
 | 2026-08-17 | Align with PR #33 hardening (soft-delete timeline, dates, search_vector, pagination, dirty-only patches) |
 | 2026-08-18 | Domain-only company updates refresh linked `search_vector`; note unbounded tag/definition settings lists as MEDIUM follow-up |
+| 2026-08-18 | Combined custom-field label+options patch refreshes orphans ∪ keepers once |
