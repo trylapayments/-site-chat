@@ -7,6 +7,8 @@ export const DASHBOARD_CAPABILITIES = [
   "assign_conversations",
   "update_conversation_status",
   "update_visitor_profile",
+  "view_contact_profile",
+  "manage_crm_definitions",
   "view_canned_responses",
   "use_canned_responses",
   "manage_workspace_canned_responses",
@@ -20,7 +22,12 @@ const CAPABILITY_MATRIX: Record<DashboardCapability, readonly MemberRole[]> = {
   manage_internal_notes: ["owner", "admin", "agent"],
   assign_conversations: ["owner", "admin", "agent"],
   update_conversation_status: ["owner", "admin", "agent"],
+  // Profile/tags/companies/custom-field values — messaging roles (RPC write gate).
   update_visitor_profile: ["owner", "admin", "agent"],
+  // CRM-lite read: any workspace member (mirrors require_crm_read_access).
+  view_contact_profile: ["owner", "admin", "agent", "viewer"],
+  // Custom field definitions only — mirrors require_crm_definitions_manage.
+  manage_crm_definitions: ["owner", "admin"],
   // Reading a snippet is reference material; inserting one implies sending a
   // reply, which viewers cannot do. Mirrors the RPC gates in
   // supabase/migrations/20260816120000_canned_responses.sql.

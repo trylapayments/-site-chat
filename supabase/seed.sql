@@ -473,3 +473,185 @@ BEGIN
     (v_workspace_id, v_conv_unassigned, 1, 'visitor', v_session_unassigned, 'Hello, anyone there?');
 END;
 $$;
+
+-- Local/E2E CRM-lite fixtures (idempotent; safe when inbox seed already ran).
+DO $$
+DECLARE
+  v_workspace_id uuid;
+  v_owner_member_id uuid;
+  v_contact_id uuid;
+  v_tag_id uuid;
+  v_company_id uuid;
+  v_field_id uuid;
+BEGIN
+  SELECT id INTO v_workspace_id FROM public.workspaces WHERE slug = 'acme-support';
+  IF v_workspace_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT wm.id INTO v_owner_member_id
+  FROM public.workspace_members wm
+  INNER JOIN auth.users u ON u.id = wm.user_id
+  WHERE wm.workspace_id = v_workspace_id
+    AND u.email = 'owner@local.test'
+    AND wm.status = 'active'
+  LIMIT 1;
+
+  SELECT id INTO v_contact_id
+  FROM public.contacts
+  WHERE workspace_id = v_workspace_id
+    AND email = 'jane@example.com'
+  LIMIT 1;
+
+  IF v_contact_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT id INTO v_tag_id
+  FROM public.contact_tags
+  WHERE workspace_id = v_workspace_id
+    AND lower(name) = 'vip'
+    AND deleted_at IS NULL
+  LIMIT 1;
+
+  IF v_tag_id IS NULL THEN
+    INSERT INTO public.contact_tags (workspace_id, name, color, created_by, updated_by)
+    VALUES (v_workspace_id, 'VIP', '#64748B', v_owner_member_id, v_owner_member_id)
+    RETURNING id INTO v_tag_id;
+  END IF;
+
+  SELECT id INTO v_company_id
+  FROM public.companies
+  WHERE workspace_id = v_workspace_id
+    AND domain = 'acme.example'
+    AND deleted_at IS NULL
+  LIMIT 1;
+
+  IF v_company_id IS NULL THEN
+    INSERT INTO public.companies (
+      workspace_id, name, domain, website, industry, size, created_by, updated_by
+    ) VALUES (
+      v_workspace_id, 'Acme Example', 'acme.example', 'https://acme.example',
+      'Software', '11-50', v_owner_member_id, v_owner_member_id
+    )
+    RETURNING id INTO v_company_id;
+  END IF;
+
+  SELECT id INTO v_field_id
+  FROM public.custom_field_definitions
+  WHERE workspace_id = v_workspace_id
+    AND key = 'plan_tier'
+    AND deleted_at IS NULL
+  LIMIT 1;
+
+  IF v_field_id IS NULL THEN
+    INSERT INTO public.custom_field_definitions (
+      workspace_id, key, label, field_type, options_json, sort_order, is_required,
+      created_by, updated_by
+    ) VALUES (
+      v_workspace_id, 'plan_tier', 'Plan tier', 'select',
+      '["free","pro","enterprise"]'::jsonb, 0, false,
+      v_owner_member_id, v_owner_member_id
+    )
+    RETURNING id INTO v_field_id;
+  END IF;
+
+  -- Keep Jane near the top of unfiltered contact lists and searchable by email.
+  UPDATE public.contacts
+  SET name = COALESCE(name, 'Jane Cooper'),
+      last_seen_at = greatest(coalesce(last_seen_at, '-infinity'::timestamptz), now()),
+      updated_at = now()
+  WHERE id = v_contact_id
+    AND workspace_id = v_workspace_id;
+END;
+$$;
+
+-- Bulk contacts for keyset pagination e2e (Load more past default page size).
+DO $$
+DECLARE
+  v_workspace_id uuid;
+  i integer;
+BEGIN
+  SELECT id INTO v_workspace_id FROM public.workspaces WHERE slug = 'acme-support';
+  IF v_workspace_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  IF (
+    SELECT count(*)::int
+    FROM public.contacts
+    WHERE workspace_id = v_workspace_id
+      AND email LIKE 'pagination-contact-%@example.com'
+  ) >= 55 THEN
+    RETURN;
+  END IF;
+
+  FOR i IN 1..55 LOOP
+    INSERT INTO public.contacts (
+      workspace_id,
+      public_id,
+      email,
+      name,
+      last_seen_at,
+      first_seen_at,
+      visit_count
+    )
+    VALUES (
+      v_workspace_id,
+      'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
+      format('pagination-contact-%s@example.com', lpad(i::text, 3, '0')),
+      format('Pagination Contact %s', lpad(i::text, 3, '0')),
+      timestamptz '2026-01-01 00:00:00+00' - (i || ' minutes')::interval,
+      timestamptz '2025-12-01 00:00:00+00' - (i || ' minutes')::interval,
+      1
+    );
+  END LOOP;
+END;
+$$;
+
+-- Bulk companies so searchable picker can find past the first page of 100.
+DO $$
+DECLARE
+  v_workspace_id uuid;
+  v_owner_member_id uuid;
+  i integer;
+BEGIN
+  SELECT id INTO v_workspace_id FROM public.workspaces WHERE slug = 'acme-support';
+  IF v_workspace_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT wm.id INTO v_owner_member_id
+  FROM public.workspace_members wm
+  INNER JOIN auth.users u ON u.id = wm.user_id
+  WHERE wm.workspace_id = v_workspace_id
+    AND u.email = 'owner@local.test'
+    AND wm.status = 'active'
+  LIMIT 1;
+
+  IF (
+    SELECT count(*)::int
+    FROM public.companies
+    WHERE workspace_id = v_workspace_id
+      AND domain LIKE 'bulk-co-%.example'
+      AND deleted_at IS NULL
+  ) >= 101 THEN
+    RETURN;
+  END IF;
+
+  FOR i IN 1..101 LOOP
+    INSERT INTO public.companies (
+      workspace_id, name, domain, website, industry, size, created_by, updated_by
+    ) VALUES (
+      v_workspace_id,
+      format('Bulk Co %s', lpad(i::text, 3, '0')),
+      format('bulk-co-%s.example', lpad(i::text, 3, '0')),
+      format('https://bulk-co-%s.example', lpad(i::text, 3, '0')),
+      'Software',
+      '1-10',
+      v_owner_member_id,
+      v_owner_member_id
+    );
+  END LOOP;
+END;
+$$;

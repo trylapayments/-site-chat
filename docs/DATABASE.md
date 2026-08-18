@@ -2,7 +2,7 @@
 
 **Version:** 1.1  
 **Status:** Foundation  
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-17
 
 ---
 
@@ -300,10 +300,15 @@ Persistent visitor identity records (anonymous or identified). Table name remain
 | name | TEXT | NULL | |
 | phone | TEXT | NULL | Display phone |
 | phone_e164 | TEXT | NULL | Normalized `+digits` (≤ 20) |
-| custom_attributes_json | JSONB | NOT NULL DEFAULT `'{}'` | Host attributes (bounded primitives) |
+| company_id | UUID | NULL | Optional CRM company; composite FK → `companies (id, workspace_id)` `ON DELETE SET NULL`; cleared on company soft-delete |
+| job_title | TEXT | NULL | Operator CRM field (≤ 120) |
+| locale | TEXT | NULL | Profile locale preference (≤ 35); not session language |
+| country_code | CHAR(2) | NULL | ISO 3166-1 alpha-2 profile field (`^[A-Z]{2}$`); distinct from `visitor_sessions.country_code` |
+| custom_attributes_json | JSONB | NOT NULL DEFAULT `'{}'` | Host attributes (bounded primitives); **not** CRM custom fields |
+| search_vector | TSVECTOR | NULL | Trigger-maintained FTS: name, email, phone, job_title, company **name and domain**, tag names, custom field text/select/number/date values (+ definition labels/keys); prep for PR #32 |
 | visit_count | INTEGER | NOT NULL DEFAULT 1 | Increments only when a **new** session links to this contact via a valid `continuity_token` (≥ 1) |
 | first_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | Visitor activity only — `update_visitor_profile` (operator edit) does **not** bump this |
+| last_seen_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | Visitor activity only — `update_visitor_profile` / `update_contact_profile` do **not** bump this |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
@@ -312,6 +317,11 @@ Persistent visitor identity records (anonymous or identified). Table name remain
 - `uq_contacts_workspace_continuity_token_hash` UNIQUE ON `(workspace_id, continuity_token_hash)` WHERE `continuity_token_hash IS NOT NULL`
 - `idx_contacts_workspace_email` UNIQUE ON `(workspace_id, lower(email))` WHERE `email IS NOT NULL`
 - `idx_contacts_workspace_name` ON `(workspace_id, name)`
+- `idx_contacts_workspace_company` ON `(workspace_id, company_id)` WHERE `company_id IS NOT NULL`
+- `idx_contacts_job_title` ON `(workspace_id, job_title)` WHERE `job_title IS NOT NULL`
+- `idx_contacts_search_vector` GIN ON `(search_vector)`
+
+CRM-lite tables (`companies`, `contact_tags`, `contact_tag_assignments`, `custom_field_definitions`, `custom_field_values`) and RPCs: see [VISITOR-PROFILE.md](./VISITOR-PROFILE.md) and §6.5 below.
 
 ### 6.3 visitor_page_views
 
@@ -370,6 +380,26 @@ Durable customer/product history for operator Timeline and future CRM/AI/analyti
 **RPC:** `list_customer_timeline(p_workspace_id, p_query jsonb)` — membership via `workspace_is_accessible`; visitors/anon cannot execute.
 
 **Assignment event types (v1):** `conversation_assigned`, `conversation_transferred`, `conversation_unassigned` — see `docs/CONVERSATION-ASSIGNMENT.md`.
+
+**CRM-lite event types (v1):** `tag_added`, `tag_removed`, `company_linked`, `company_unlinked`, `custom_field_updated` (plus existing `visitor_profile_updated`) — see `docs/VISITOR-PROFILE.md`. Company soft-delete unlinks contacts without per-contact `company_unlinked` events. Soft-deleting a custom field definition hard-deletes values and refreshes `search_vector` without per-contact `custom_field_updated` events.
+
+### 6.5 CRM-lite (companies, tags, custom fields)
+
+See [VISITOR-PROFILE.md](./VISITOR-PROFILE.md) and [ADR-008](./adr/ADR-008-crm-companies-custom-fields.md). Migration: `20260816200000_visitor_profile_crm.sql`.
+
+| Table | Purpose | Soft delete | Notable indexes |
+|-------|---------|-------------|-----------------|
+| `companies` | Workspace accounts | `deleted_at` | active name; unique `(workspace_id, domain)` WHERE active + domain set; name trigram |
+| `contact_tags` | Tag definitions | `deleted_at` | unique lower(name) among active |
+| `contact_tag_assignments` | Contact ↔ tag | hard delete on unassign | unique `(workspace_id, contact_id, tag_id)` |
+| `custom_field_definitions` | Typed field defs (`app_custom_field_type`); `is_required` stored but not enforced in v1 | `deleted_at` | unique `(workspace_id, key)` among active |
+| `custom_field_values` | Typed EAV values; date = strict `YYYY-MM-DD` (no `today`/`tomorrow`) | hard delete on clear / definition soft-delete | `(workspace_id, contact_id)`, `(workspace_id, field_id)` |
+
+**RPCs / pagination:** `list_contacts` and `list_companies` use keyset cursors (`before` → `next_before` / `has_more`); contacts UI ships **Load more** (no OFFSET). `list_companies` accepts `q` for picker search (ILIKE substring on name/domain; no trigram). Company `website` is http(s) only (shared Zod + DB normalize). Tag assign is idempotent (`ON CONFLICT DO NOTHING`). Select option shrink captures affected contact ids before deleting orphan values, then refreshes `search_vector`. Combined label+options definition updates refresh orphans ∪ keepers once. `update_company` refreshes linked contacts when **name or domain** changes (both indexed into `search_vector`). Settings tag / custom-field definition lists remain single-page (MEDIUM follow-up for pagination/search at scale).
+
+**RLS:** All five tables `ENABLE` + `FORCE ROW LEVEL SECURITY`; `SELECT` for `authenticated` when `workspace_is_accessible(workspace_id)`; no direct writes. Mutations via SECURITY DEFINER RPCs (`get_contact_profile`, `list_contacts`, `update_contact_profile`, tag/company/custom-field CRUD, `update_visitor_profile` with CRM keys).
+
+**Realtime:** All five tables in `supabase_realtime` with `REPLICA IDENTITY FULL`.
 
 ---
 

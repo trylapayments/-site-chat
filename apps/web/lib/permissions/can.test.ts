@@ -45,6 +45,20 @@ describe("can", () => {
     expect(can("viewer", "update_visitor_profile")).toBe(false);
   });
 
+  it("allows all roles to view contact profiles", () => {
+    expect(can("owner", "view_contact_profile")).toBe(true);
+    expect(can("admin", "view_contact_profile")).toBe(true);
+    expect(can("agent", "view_contact_profile")).toBe(true);
+    expect(can("viewer", "view_contact_profile")).toBe(true);
+  });
+
+  it("restricts manage_crm_definitions to owner and admin", () => {
+    expect(can("owner", "manage_crm_definitions")).toBe(true);
+    expect(can("admin", "manage_crm_definitions")).toBe(true);
+    expect(can("agent", "manage_crm_definitions")).toBe(false);
+    expect(can("viewer", "manage_crm_definitions")).toBe(false);
+  });
+
   it("allows all roles to view canned responses", () => {
     expect(can("owner", "view_canned_responses")).toBe(true);
     expect(can("admin", "view_canned_responses")).toBe(true);

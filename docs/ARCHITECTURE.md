@@ -2,7 +2,7 @@
 
 **Version:** 1.2  
 **Status:** Foundation  
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-17
 
 ---
 
@@ -79,6 +79,8 @@ Site Chat is a multi-tenant SaaS platform composed of four primary runtime surfa
 AI subsystem details: `docs/AI-ARCHITECTURE.md`, `docs/AI-SECURITY.md`, `docs/AI-ROADMAP.md`, `docs/adr/ADR-002-ai-provider-foundation.md`.
 
 Visitor identity + context: `docs/VISITOR-IDENTITY.md`, `docs/PRIVACY.md`, `docs/DATA-RETENTION.md`, `docs/adr/ADR-003-visitor-identity-model.md`.
+
+Visitor Profile / CRM-lite (companies, tags, typed custom fields, contact list + profile): `docs/VISITOR-PROFILE.md`, `docs/adr/ADR-008-crm-companies-custom-fields.md`.
 
 ---
 
@@ -308,6 +310,8 @@ Current assignee is stored on `conversations` (`assigned_to`, `assigned_at`, `as
 Operator-only notes live in `internal_notes` (not `messages`). Soft delete, `@mentions`, durable mention `notifications`, timeline events (`internal_note_created` / `updated` / `deleted`, `mention_created`), and CDC on `internal_notes` with list catch-up merge. Visitors/viewers never receive notes. See `docs/INTERNAL-NOTES.md` and ADR-006.
 
 Canned responses live in `canned_responses` (with `canned_response_folders` and per-member `canned_response_favorites`). Workspace-shared and personal scopes share one table; mutations are Server Actions over SECURITY DEFINER RPCs (RLS is SELECT-only for realtime). Composer `/shortcut` insertion interpolates `{{visitor.*}}` / `{{operator.name}}` / `{{workspace.name}}` / `{{conversation.id}}` at insert time. See `docs/CANNED-RESPONSES.md` and ADR-007.
+
+CRM-lite extends `contacts` with optional `company_id`, profile fields, workspace `contact_tags` / `companies` / typed `custom_field_*` tables. Mutations are Server Actions over SECURITY DEFINER RPCs (RLS SELECT-only). Host `custom_attributes_json` stays separate from operator custom fields. Contact `search_vector` prepares PR #32 global search. Identity forms use **dirty-only patches** (submit changed fields only); live CDC refresh reconciles pristine fields while preserving dirty local drafts — no full-snapshot overwrite across tabs. See `docs/VISITOR-PROFILE.md` and ADR-008.
 
 ### 6.2.1 Read receipts and unread counters
 
@@ -623,5 +627,6 @@ Detailed security controls are documented in [SECURITY.md](./SECURITY.md). Archi
 | 2026-07-30 | iframe widget over script-only | Stronger isolation from host site CSS/JS | Shadow DOM-only embed |
 | 2026-07-30 | Monorepo with separate widget package | Independent bundle size optimization | Single package |
 | 2026-08-10 | Contacts as visitor identity + opaque `public_id` | Durable identity without CRM rename/fingerprint | See ADR-003 |
+| 2026-08-16 | CRM-lite companies + typed custom fields (EAV) | Operator CRM without host JSONB merge or domain auto-merge | See ADR-008 |
 
 Decisions are append-only. Superseded decisions are marked but not deleted.

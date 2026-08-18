@@ -34,12 +34,24 @@ export const customerTimelineMessagesEn = {
     internal_note_updated: "Internal note updated",
     internal_note_deleted: "Internal note deleted",
     mention_created: "Mentioned {{name}}",
+    tag_added: "Tag added: {{name}}",
+    tag_removed: "Tag removed: {{name}}",
+    company_linked: "Company linked",
+    company_unlinked: "Company unlinked",
+    custom_field_updated: "Custom field updated: {{key}}",
+    custom_field_cleared: "Custom field cleared: {{key}}",
     field_name: "Name changed to {{value}}",
     field_email: "Email changed to {{value}}",
     field_phone: "Phone changed to {{value}}",
+    field_job_title: "Job title changed to {{value}}",
+    field_locale: "Locale changed to {{value}}",
+    field_country_code: "Country changed to {{value}}",
     field_name_cleared: "Name cleared",
     field_email_cleared: "Email cleared",
     field_phone_cleared: "Phone cleared",
+    field_job_title_cleared: "Job title cleared",
+    field_locale_cleared: "Locale cleared",
+    field_country_code_cleared: "Country cleared",
     identified_as: "Identified as {{value}}",
   },
 } as const;
@@ -140,12 +152,49 @@ export function formatTimelineEventDescription(
               ? interpolate(messages.event.field_phone, { value: to })
               : messages.event.field_phone_cleared,
           );
+        } else if (field === "job_title") {
+          parts.push(
+            to
+              ? interpolate(messages.event.field_job_title, { value: to })
+              : messages.event.field_job_title_cleared,
+          );
+        } else if (field === "locale") {
+          parts.push(
+            to
+              ? interpolate(messages.event.field_locale, { value: to })
+              : messages.event.field_locale_cleared,
+          );
+        } else if (field === "country_code") {
+          parts.push(
+            to
+              ? interpolate(messages.event.field_country_code, { value: to })
+              : messages.event.field_country_code_cleared,
+          );
         }
       }
       if (parts.length > 0) {
         return parts.join(" · ");
       }
       return messages.event.visitor_profile_updated;
+    }
+    case "tag_added": {
+      const name = typeof meta.tag_name === "string" ? meta.tag_name : "tag";
+      return interpolate(messages.event.tag_added, { name });
+    }
+    case "tag_removed": {
+      const name = typeof meta.tag_name === "string" ? meta.tag_name : "tag";
+      return interpolate(messages.event.tag_removed, { name });
+    }
+    case "company_linked":
+      return messages.event.company_linked;
+    case "company_unlinked":
+      return messages.event.company_unlinked;
+    case "custom_field_updated": {
+      const key = typeof meta.key === "string" ? meta.key : "field";
+      if (meta.to === null || meta.to === undefined) {
+        return interpolate(messages.event.custom_field_cleared, { key });
+      }
+      return interpolate(messages.event.custom_field_updated, { key });
     }
     case "conversation_status_changed": {
       const to = typeof meta.to_status === "string" ? meta.to_status : "updated";

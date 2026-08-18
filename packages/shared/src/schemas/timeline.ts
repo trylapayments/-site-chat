@@ -64,7 +64,7 @@ export const attachmentUploadedMetadataSchema = timelineMetaBase
 
 export const identityChangeSchema = z
   .object({
-    field: z.enum(["name", "email", "phone"]),
+    field: z.enum(["name", "email", "phone", "job_title", "locale", "country_code"]),
     from: z.union([z.string().max(254), z.null()]).optional(),
     to: z.union([z.string().max(254), z.null()]).optional(),
   })
@@ -83,6 +83,52 @@ export const visitorProfileUpdatedMetadataSchema = timelineMetaBase
   .extend({
     changes: z.array(identityChangeSchema).min(1).max(8),
     source: z.enum(["operator", "host", "visitor"]).optional(),
+  })
+  .strict();
+
+export const tagAddedMetadataSchema = timelineMetaBase
+  .extend({
+    tag_id: z.string().uuid(),
+    tag_name: z.string().max(64),
+    tag_color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional(),
+  })
+  .strict();
+
+export const tagRemovedMetadataSchema = timelineMetaBase
+  .extend({
+    tag_id: z.string().uuid(),
+    tag_name: z.string().max(64),
+    tag_color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional(),
+    source: z.enum(["unassign", "tag_deleted"]).optional(),
+  })
+  .strict();
+
+export const companyLinkedMetadataSchema = timelineMetaBase
+  .extend({
+    company_id: z.string().uuid(),
+    previous_company_id: z.string().uuid().nullable().optional(),
+  })
+  .strict();
+
+export const companyUnlinkedMetadataSchema = timelineMetaBase
+  .extend({
+    previous_company_id: z.string().uuid().nullable().optional(),
+  })
+  .strict();
+
+export const customFieldUpdatedMetadataSchema = timelineMetaBase
+  .extend({
+    field_id: z.string().uuid(),
+    key: z.string().max(64),
+    field_type: z.enum(["text", "number", "boolean", "date", "select"]),
+    from: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+    to: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
   })
   .strict();
 

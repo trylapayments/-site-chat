@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorkspaceSwitchDestination,
   SETTINGS_SECTION_CANNED_RESPONSES,
+  SETTINGS_SECTION_CRM,
   workspaceBasePath,
+  workspaceContactsPath,
   workspaceNavPath,
   workspaceSettingsPath,
 } from "@/lib/dashboard/routes";
@@ -22,6 +24,18 @@ describe("workspaceSettingsPath", () => {
     expect(
       workspaceSettingsPath("acme", SETTINGS_SECTION_CANNED_RESPONSES),
     ).toBe("/app/acme/settings/canned-responses");
+    expect(workspaceSettingsPath("acme", SETTINGS_SECTION_CRM)).toBe(
+      "/app/acme/settings/crm",
+    );
+  });
+});
+
+describe("workspaceContactsPath", () => {
+  it("builds contacts list and profile paths", () => {
+    expect(workspaceContactsPath("acme")).toBe("/app/acme/contacts");
+    expect(
+      workspaceContactsPath("acme", "11111111-1111-4111-8111-111111111111"),
+    ).toBe("/app/acme/contacts/11111111-1111-4111-8111-111111111111");
   });
 });
 

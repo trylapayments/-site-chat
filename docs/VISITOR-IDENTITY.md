@@ -323,21 +323,21 @@ See [PRIVACY.md](./PRIVACY.md) and [DATA-RETENTION.md](./DATA-RETENTION.md).
 
 ## 14. Non-goals (this foundation)
 
-Out of scope for the identity + context foundation:
+Out of scope for the identity + context foundation itself:
 
 - Full CRM (deals, pipelines, lifecycle stages)
-- Tags, companies / accounts, assignment notes as CRM objects
 - Marketing automation or drip campaigns
-- Custom-field admin UI (attributes are host/API-driven JSONB with bounds)
 - Precise geolocation or IP-based geo
 - Verified identify (§7.2) — designed, not implemented
+
+**Shipped separately as CRM-lite** (see [VISITOR-PROFILE.md](./VISITOR-PROFILE.md), [ADR-008](./adr/ADR-008-crm-companies-custom-fields.md)): tags, companies/accounts, typed custom fields with admin UI, and contact profile expansion. Host `custom_attributes_json` remains the identify-side bag and is not replaced by CRM fields.
 
 ---
 
 ## 15. Future work
 
 - Verified identify (HMAC/JWT-signed assertion) enabling cross-session/cross-customer merge — see §7.2 and ADR-003
-- CRM / company / custom-field expansion with admin UI
+- Full CRM beyond CRM-lite (deals, pipelines, multi-company membership)
 - Configurable retention via `settings_json.privacy.visitorDataRetentionDays` + purge jobs
 - Visitor export / delete workflows aligned with GDPR
 - Optional trusted `country_code` from platform edge headers (still no raw IP storage unless explicitly redesigned)

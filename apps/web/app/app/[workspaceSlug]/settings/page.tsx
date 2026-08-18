@@ -1,15 +1,17 @@
-import { cannedResponsesMessagesEn } from "@site-chat/shared";
-import { MessageSquareQuote } from "lucide-react";
+import { cannedResponsesMessagesEn, crmMessagesEn } from "@site-chat/shared";
+import { MessageSquareQuote, Tags } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { toAppRoute } from "@/lib/auth/redirect";
 import {
   SETTINGS_SECTION_CANNED_RESPONSES,
+  SETTINGS_SECTION_CRM,
   workspaceSettingsPath,
 } from "@/lib/dashboard/routes";
 
-const messages = cannedResponsesMessagesEn;
+const cannedMessages = cannedResponsesMessagesEn;
+const crmMessages = crmMessagesEn;
 
 export default async function SettingsPage({
   params,
@@ -45,10 +47,34 @@ export default async function SettingsPage({
             </span>
             <span className="space-y-1">
               <span className="block text-sm font-medium">
-                {messages.settingsLinkLabel}
+                {cannedMessages.settingsLinkLabel}
               </span>
               <span className="text-muted-foreground block text-sm">
-                {messages.settingsLinkDescription}
+                {cannedMessages.settingsLinkDescription}
+              </span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={toAppRoute(
+              workspaceSettingsPath(workspaceSlug, SETTINGS_SECTION_CRM),
+            )}
+            className="border-border/60 hover:border-border hover:bg-muted/40 focus-visible:ring-ring flex h-full items-start gap-3 rounded-lg border p-4 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            data-testid="settings-link-crm"
+          >
+            <span
+              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-md"
+              aria-hidden="true"
+            >
+              <Tags className="size-5" />
+            </span>
+            <span className="space-y-1">
+              <span className="block text-sm font-medium">
+                {crmMessages.settingsLinkLabel}
+              </span>
+              <span className="text-muted-foreground block text-sm">
+                {crmMessages.settingsLinkDescription}
               </span>
             </span>
           </Link>
