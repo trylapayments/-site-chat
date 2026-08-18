@@ -166,6 +166,8 @@ Internal note RPCs follow the same SECURITY DEFINER pattern (`REVOKE ALL FROM PU
 
 Global search (`public.global_search`) follows the same SECURITY DEFINER pattern with empty `search_path`. Authorization is membership via `require_workspace_access`; notes inclusion is gated by role (`viewer` → empty notes group + `can_search_notes = false`, no error-based existence leak). Viewers also cannot retrieve internal messages or attachments belonging to them via search. Attachment hits expose filename/mime only (never `storage_key`). Conversation hit paths match and display `sanitize_page_url(source_url)` only — dirty legacy URLs with `token`/`code`/`access_token`/fragments cannot become searchable. Cross-workspace probes return no foreign hits. LIKE/ILIKE ranking escapes `%`/`_`/`\`. See `docs/GLOBAL-SEARCH.md`.
 
+Operator notification RPCs (`list_notifications`, mark-read, preferences) are SECURITY DEFINER with locked `search_path`. RLS on `notifications` / `notification_unread_counts` / `notification_preferences` is recipient-only SELECT; `notification_email_outbox` has no authenticated access. Emit helpers refuse Viewer recipients for mention/assignment types. Payloads never include note bodies, tokens, or signed URLs. Browser permission is explicit and denial is sticky via `browser_permission_denied_at`. See `docs/NOTIFICATIONS.md`.
+
 ---
 
 ## 4. Multi-Tenant Isolation

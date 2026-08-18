@@ -4,6 +4,7 @@ import {
   buildWorkspaceSwitchDestination,
   SETTINGS_SECTION_CANNED_RESPONSES,
   SETTINGS_SECTION_CRM,
+  SETTINGS_SECTION_NOTIFICATIONS,
   workspaceBasePath,
   workspaceContactsPath,
   workspaceNavPath,
@@ -26,6 +27,9 @@ describe("workspaceSettingsPath", () => {
     ).toBe("/app/acme/settings/canned-responses");
     expect(workspaceSettingsPath("acme", SETTINGS_SECTION_CRM)).toBe(
       "/app/acme/settings/crm",
+    );
+    expect(workspaceSettingsPath("acme", SETTINGS_SECTION_NOTIFICATIONS)).toBe(
+      "/app/acme/settings/notifications",
     );
   });
 });

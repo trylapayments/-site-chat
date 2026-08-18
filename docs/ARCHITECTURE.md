@@ -299,7 +299,7 @@ Message inserts trigger Realtime events filtered by `conversation_id`. Both widg
 | `workspace:{id}:inbox` | Message/conversation CDC + `conversation_member_reads` CDC for multi-tab unread | Online operators in workspace |
 | `conversation:{id}` | Open-thread conversation CDC (assignee/status) + messages | Agents viewing the thread |
 | `conversation-notes:{id}` | Internal note INSERT/UPDATE CDC | Messaging-role operators on Notes tab |
-| `notifications:{memberId}` | Mention (and future) notification INSERT | Recipient member only |
+| `notifications:{memberId}` | Notification INSERT/UPDATE + unread counter | Recipient member only |
 
 ### 6.2.0 Conversation assignment
 
@@ -308,6 +308,10 @@ Current assignee is stored on `conversations` (`assigned_to`, `assigned_at`, `as
 ### 6.2.0a Internal notes
 
 Operator-only notes live in `internal_notes` (not `messages`). Soft delete, `@mentions`, durable mention `notifications`, timeline events (`internal_note_created` / `updated` / `deleted`, `mention_created`), and CDC on `internal_notes` with list catch-up merge. Visitors/viewers never receive notes. See `docs/INTERNAL-NOTES.md` and ADR-006.
+
+### 6.3 Operator notification center
+
+Durable `notifications` with per-recipient `dedupe_key`, O(1) `notification_unread_counts`, keyset `list_notifications`, mark-read RPCs, per-member preferences, optional browser/sound (leader-tab election), and an idempotent email outbox. Emit hooks cover visitor messages, assignment/transfer/unassign, and mentions. See `docs/NOTIFICATIONS.md`.
 
 Canned responses live in `canned_responses` (with `canned_response_folders` and per-member `canned_response_favorites`). Workspace-shared and personal scopes share one table; mutations are Server Actions over SECURITY DEFINER RPCs (RLS is SELECT-only for realtime). Composer `/shortcut` insertion interpolates `{{visitor.*}}` / `{{operator.name}}` / `{{workspace.name}}` / `{{conversation.id}}` at insert time. See `docs/CANNED-RESPONSES.md` and ADR-007.
 

@@ -146,11 +146,11 @@ The MVP is complete when:
 - [x] File attachment upload (widget + dashboard)
 - [x] Attachment display (inline images, download links)
 - [ ] Storage quota enforcement
-- [ ] Notification center (in-app, unread count) — durable `notifications` table + mention type shipped with internal notes; center UI remaining
-- [ ] Email notifications via Resend (configurable per agent)
-- [ ] Notification preferences UI
+- [x] Notification center (in-app, unread count, realtime bell) — see `docs/NOTIFICATIONS.md` (PR #35)
+- [x] Email notification foundation (idempotent outbox + preferences; Resend optional)
+- [x] Notification preferences UI (per-member in-app / browser / sound / email / DND)
 
-**Notes:** This phase’s identity + context foundation (docs + schema/RPCs) delivers durable visitor contacts, host `SiteChat.identify`, page-view trail, and privacy defaults (no raw IP / no fingerprinting). Customer Timeline adds a durable event store for operator history and future CRM/AI/analytics (`docs/CUSTOMER-TIMELINE.md`). Canned responses ship end to end — migration, RPCs, shared schemas, Server Actions, settings library and composer insertion (`docs/CANNED-RESPONSES.md`). Visitor Profile / CRM-lite ships companies, tags, typed custom fields, contact list/profile UI, and search-ready `contacts.search_vector` (`docs/VISITOR-PROFILE.md`, ADR-008); PR #33 hardens concurrent tag assign, date validation, search refresh, dirty-only identity patches, and keyset Load more. Global search (PR #34 / product PR #32) ships the operator palette and `global_search` RPC reusing CRM + notes indexes (`docs/GLOBAL-SEARCH.md`). Remaining work: widget prompt UX, and retention purge jobs (`docs/DATA-RETENTION.md`).
+**Notes:** This phase’s identity + context foundation (docs + schema/RPCs) delivers durable visitor contacts, host `SiteChat.identify`, page-view trail, and privacy defaults (no raw IP / no fingerprinting). Customer Timeline adds a durable event store for operator history and future CRM/AI/analytics (`docs/CUSTOMER-TIMELINE.md`). Canned responses ship end to end — migration, RPCs, shared schemas, Server Actions, settings library and composer insertion (`docs/CANNED-RESPONSES.md`). Visitor Profile / CRM-lite ships companies, tags, typed custom fields, contact list/profile UI, and search-ready `contacts.search_vector` (`docs/VISITOR-PROFILE.md`, ADR-008); PR #33 hardens concurrent tag assign, date validation, search refresh, dirty-only identity patches, and keyset Load more. Global search (PR #34 / product PR #32) ships the operator palette and `global_search` RPC reusing CRM + notes indexes (`docs/GLOBAL-SEARCH.md`). Operator notifications (PR #35) ship durable center + preferences + email outbox foundation (`docs/NOTIFICATIONS.md`). Remaining work: widget prompt UX, and retention purge jobs (`docs/DATA-RETENTION.md`).
 
 **Exit criteria:** Agent uses canned response with visitor name variable; visitor uploads image visible in dashboard; contact created automatically when visitor provides email; agent receives email notification for new conversation.
 

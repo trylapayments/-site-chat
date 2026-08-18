@@ -121,27 +121,10 @@ export const softDeleteInternalNoteSchema = z
 
 export type SoftDeleteInternalNoteInput = z.infer<typeof softDeleteInternalNoteSchema>;
 
-export const notificationTypeSchema = z.enum([
-  "conversation_new",
-  "conversation_assigned",
-  "mention",
-  "billing_payment_failed",
-  "trial_ending",
-]);
-
-export const notificationItemSchema = z
-  .object({
-    id: z.string().uuid(),
-    workspace_id: z.string().uuid(),
-    recipient_id: z.string().uuid(),
-    type: notificationTypeSchema,
-    title: z.string().min(1).max(200),
-    body: z.string().max(1000).nullable().optional(),
-    resource_type: z.string().max(64).nullable().optional(),
-    resource_id: z.string().uuid().nullable().optional(),
-    read_at: z.string().nullable().optional(),
-    created_at: z.string().min(1),
-  })
-  .strict();
-
-export type NotificationItem = z.infer<typeof notificationItemSchema>;
+// Notification schemas live in ./notifications.ts (PR #35).
+// Re-export for backward compatibility with notes-era imports.
+export {
+  notificationTypeSchema,
+  notificationItemSchema,
+  type NotificationItem,
+} from "./notifications.js";
