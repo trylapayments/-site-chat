@@ -1363,7 +1363,7 @@ SELECT lives_ok(
 
 SELECT ok(
   (
-    SELECT search_vector @@ plainto_tsquery('english', 'oldcrmdomain')
+    SELECT search_vector @@ plainto_tsquery('english', 'oldcrmdomain.test')
     FROM public.contacts
     WHERE id = tests.fixture('contact_a')::uuid
   ),
@@ -1383,7 +1383,7 @@ SELECT lives_ok(
 
 SELECT ok(
   NOT (
-    SELECT search_vector @@ plainto_tsquery('english', 'oldcrmdomain')
+    SELECT search_vector @@ plainto_tsquery('english', 'oldcrmdomain.test')
     FROM public.contacts
     WHERE id = tests.fixture('contact_a')::uuid
   ),
@@ -1392,7 +1392,7 @@ SELECT ok(
 
 SELECT ok(
   (
-    SELECT search_vector @@ plainto_tsquery('english', 'newcrmdomain')
+    SELECT search_vector @@ plainto_tsquery('english', 'newcrmdomain.test')
     FROM public.contacts
     WHERE id = tests.fixture('contact_a')::uuid
   ),
@@ -1404,7 +1404,7 @@ SELECT ok(
     SELECT 1
     FROM public.contacts c
     WHERE c.id = tests.fixture('contact_b')::uuid
-      AND c.search_vector @@ plainto_tsquery('english', 'newcrmdomain')
+      AND c.search_vector @@ plainto_tsquery('english', 'newcrmdomain.test')
   ),
   'unlinked contact_b search_vector unaffected by company domain update'
 );
