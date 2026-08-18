@@ -190,14 +190,6 @@ test.describe("internal notes + mentions", () => {
   });
 
   test("reconnect catch-up merges notes without duplicates", async ({ browser }) => {
-    // Hosted CI under ECONNRESET often returns an empty notes panel after a
-    // successful create + navigation (SSR catch swallowed, catch-up races).
-    // Keep the scenario for local runs; CI coverage remains in pgTAP 016 + the
-    // non-reconnect notes E2Es above.
-    test.skip(
-      Boolean(process.env.CI),
-      "CI ECONNRESET empties notes after reconnect; covered by pgTAP + local e2e",
-    );
     test.setTimeout(180_000);
     const marker = `notes-reconnect-${Date.now()}`;
 
