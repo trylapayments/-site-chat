@@ -872,6 +872,7 @@ export type Database = {
           referrer: string | null
           resolved_at: string | null
           resolved_by: string | null
+          search_vector: unknown
           source_url: string | null
           status: Database["public"]["Enums"]["app_conversation_status"]
           subject: string | null
@@ -898,6 +899,7 @@ export type Database = {
           referrer?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          search_vector?: unknown
           source_url?: string | null
           status?: Database["public"]["Enums"]["app_conversation_status"]
           subject?: string | null
@@ -924,6 +926,7 @@ export type Database = {
           referrer?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          search_vector?: unknown
           source_url?: string | null
           status?: Database["public"]["Enums"]["app_conversation_status"]
           subject?: string | null
@@ -1396,6 +1399,7 @@ export type Database = {
           id: string
           is_internal: boolean
           metadata_json: Json
+          search_vector: unknown
           sender_type: Database["public"]["Enums"]["app_message_sender_type"]
           sequence_number: number
           updated_at: string
@@ -1412,6 +1416,7 @@ export type Database = {
           id?: string
           is_internal?: boolean
           metadata_json?: Json
+          search_vector?: unknown
           sender_type: Database["public"]["Enums"]["app_message_sender_type"]
           sequence_number: number
           updated_at?: string
@@ -1428,6 +1433,7 @@ export type Database = {
           id?: string
           is_internal?: boolean
           metadata_json?: Json
+          search_vector?: unknown
           sender_type?: Database["public"]["Enums"]["app_message_sender_type"]
           sequence_number?: number
           updated_at?: string
@@ -2056,6 +2062,10 @@ export type Database = {
       }
       get_internal_note: {
         Args: { p_note_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      global_search: {
+        Args: { p_query?: Json; p_workspace_id: string }
         Returns: Json
       }
       link_contact_company: {
