@@ -59,7 +59,7 @@ Unique `(note_id, mentioned_member_id)`. Mention targets must be active owner/ad
 
 ### `notifications`
 
-Durable notification store. Mention rows use `type = 'mention'`, `resource_type = 'internal_note'`, `resource_id = note_id`, and `dedupe_key = mention:{mention_row_id}`. Re-adding a mention after removal inserts a new mention row → new dedupe key → notifies again. Notification `body` is a short label (who mentioned you), never the note body. Full center UI, preferences, and additional types: `docs/NOTIFICATIONS.md`.
+Durable notification store. Mention rows use `type = 'mention'`, `resource_type = 'internal_note'`, `resource_id = note_id`, and `dedupe_key = mention:{mention_row_id}`. Re-adding a mention after removal inserts a new mention row → new dedupe key → notifies again. Notification `body` is a short label (who mentioned you), never the note body. Full center UI, preferences, DND side-effect suppression (durable history still persists), and additional types: `docs/NOTIFICATIONS.md`.
 
 ---
 

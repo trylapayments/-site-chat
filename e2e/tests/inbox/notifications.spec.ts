@@ -27,10 +27,31 @@ async function waitForBellReady(page: Page) {
 }
 
 async function openNotificationPanel(page: Page) {
-  await page.getByTestId("notification-bell").click();
-  await expect(page.getByTestId("notification-panel")).toBeVisible({
-    timeout: 15_000,
-  });
+  const panel = page.getByTestId("notification-panel");
+  if (await panel.isVisible().catch(() => false)) {
+    return;
+  }
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.getByTestId("notification-bell").click();
+    try {
+      await expect(panel).toBeVisible({ timeout: 5_000 });
+      return;
+    } catch {
+      // Dropdown may have toggled closed if it was mid-transition; retry.
+    }
+  }
+
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+}
+
+async function closeNotificationPanel(page: Page) {
+  const panel = page.getByTestId("notification-panel");
+  if (!(await panel.isVisible().catch(() => false))) {
+    return;
+  }
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden({ timeout: 5_000 });
 }
 
 async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
@@ -79,7 +100,7 @@ test.describe("operator notifications", () => {
             .getByTestId("notification-item")
             .filter({ hasText: /New conversation|New visitor message/i })
             .count();
-          await owner.keyboard.press("Escape");
+          await closeNotificationPanel(owner);
           return count;
         },
         { timeout: 90_000 },
@@ -107,7 +128,7 @@ test.describe("operator notifications", () => {
           await openNotificationPanel(agent);
           const items = agent.getByTestId("notification-item");
           const count = await items.count();
-          await agent.keyboard.press("Escape");
+          await closeNotificationPanel(agent);
           return count;
         },
         { timeout: 90_000 },
@@ -167,7 +188,7 @@ test.describe("operator notifications", () => {
         async () => {
           await openNotificationPanel(tabA);
           const n = await tabA.getByTestId("notification-item").count();
-          await tabA.keyboard.press("Escape");
+          await closeNotificationPanel(tabA);
           return n;
         },
         { timeout: 90_000 },
