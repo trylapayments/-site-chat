@@ -4,13 +4,17 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
--- Schema(17) + privileges/search_path(8) + empty query(4) + exact email(2)
+-- Schema(18) + privileges/search_path(8) + empty query(4) + exact email(2)
 -- + company domain(6) + tag/custom field(8) + message body(3)
 -- + notes agent+viewer(6) + soft-deleted notes(5) + attachment(4)
 -- + contact name refresh(6) + viewer restrictions(4)
 -- + workspace isolation(3) + foreign probe(2)
--- = 78
-SELECT plan(78);
+-- + viewer internal msg privacy(5) + viewer internal attach(5)
+-- + source_url secrets(6) + special LIKE/identity/unicode(22)
+-- + short query(3) + around_message_id(4) + deleted content(1)
+-- + assignee excluded(3)
+-- = 128
+SELECT plan(128);
 
 TRUNCATE tests.fixtures;
 
@@ -30,6 +34,12 @@ DECLARE
   v_conversation_a uuid;
   v_conversation_b uuid;
   v_message_a uuid;
+  v_message_internal_a uuid;
+  v_message_public_b uuid;
+  v_message_he uuid;
+  v_message_ru uuid;
+  v_message_zh uuid;
+  v_attachment_internal_a uuid;
 BEGIN
   v_owner_a := tests.create_auth_user('gs-owner-a@test.local');
   v_agent_a := tests.create_auth_user('gs-agent-a@test.local');
@@ -58,12 +68,13 @@ BEGIN
   SELECT id INTO v_agent_member_a FROM public.workspace_members
   WHERE workspace_id = v_workspace_a AND user_id = v_agent_a;
 
-  INSERT INTO public.contacts (workspace_id, public_id, email, name)
+  INSERT INTO public.contacts (workspace_id, public_id, email, name, phone)
   VALUES (
     v_workspace_a,
     'vis_' || encode(extensions.gen_random_bytes(16), 'hex'),
     'gs-contact-a@test.local',
-    'GS Contact Alpha'
+    'GS Contact Alpha',
+    '+44 7700 900123'
   )
   RETURNING id INTO v_contact_a;
 
@@ -124,6 +135,124 @@ BEGIN
   )
   RETURNING id INTO v_message_a;
 
+  INSERT INTO public.messages (
+    workspace_id,
+    conversation_id,
+    sequence_number,
+    sender_type,
+    agent_member_id,
+    body,
+    is_internal
+  )
+  VALUES (
+    v_workspace_a,
+    v_conversation_a,
+    2,
+    'agent',
+    v_agent_member_a,
+    'GsInternalMsgSecretZebra99',
+    true
+  )
+  RETURNING id INTO v_message_internal_a;
+
+  INSERT INTO public.messages (
+    workspace_id,
+    conversation_id,
+    sequence_number,
+    sender_type,
+    visitor_session_id,
+    body
+  )
+  VALUES (
+    v_workspace_a,
+    v_conversation_a,
+    3,
+    'visitor',
+    v_session_a,
+    'GsPublicMsgForLikeTestsAlpha'
+  )
+  RETURNING id INTO v_message_public_b;
+
+  INSERT INTO public.messages (
+    workspace_id,
+    conversation_id,
+    sequence_number,
+    sender_type,
+    visitor_session_id,
+    body
+  )
+  VALUES
+    (
+      v_workspace_a,
+      v_conversation_a,
+      4,
+      'visitor',
+      v_session_a,
+      'שלום'
+    ),
+    (
+      v_workspace_a,
+      v_conversation_a,
+      5,
+      'visitor',
+      v_session_a,
+      'привет'
+    ),
+    (
+      v_workspace_a,
+      v_conversation_a,
+      6,
+      'visitor',
+      v_session_a,
+      '你好世界'
+    );
+
+  SELECT id INTO v_message_he
+  FROM public.messages
+  WHERE conversation_id = v_conversation_a AND sequence_number = 4;
+
+  SELECT id INTO v_message_ru
+  FROM public.messages
+  WHERE conversation_id = v_conversation_a AND sequence_number = 5;
+
+  SELECT id INTO v_message_zh
+  FROM public.messages
+  WHERE conversation_id = v_conversation_a AND sequence_number = 6;
+
+  UPDATE public.conversations
+  SET next_message_sequence = 7
+  WHERE id = v_conversation_a;
+
+  INSERT INTO public.message_attachments (
+    workspace_id,
+    message_id,
+    conversation_id,
+    storage_key,
+    mime_type,
+    filename,
+    size_bytes,
+    kind
+  )
+  VALUES (
+    v_workspace_a,
+    v_message_internal_a,
+    v_conversation_a,
+    v_workspace_a::text || '/' || v_conversation_a::text
+      || '/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/GsInternalAttachSecretZebra99.pdf',
+    'application/pdf',
+    'GsInternalAttachSecretZebra99.pdf',
+    1024,
+    'document'
+  )
+  RETURNING id INTO v_attachment_internal_a;
+
+  UPDATE public.conversations
+  SET source_url =
+    'https://example.com/pricing?token=supersecret&utm_source=newsletter#frag'
+  WHERE id = v_conversation_a;
+
+  PERFORM app_private.refresh_conversation_search_vector(v_conversation_a);
+
   INSERT INTO tests.fixtures (key, value) VALUES
     ('workspace_a', v_workspace_a::text),
     ('workspace_b', v_workspace_b::text),
@@ -136,7 +265,13 @@ BEGIN
     ('contact_b', v_contact_b::text),
     ('conversation_a', v_conversation_a::text),
     ('conversation_b', v_conversation_b::text),
-    ('message_a', v_message_a::text);
+    ('message_a', v_message_a::text),
+    ('message_internal_a', v_message_internal_a::text),
+    ('message_public_b', v_message_public_b::text),
+    ('message_he', v_message_he::text),
+    ('message_ru', v_message_ru::text),
+    ('message_zh', v_message_zh::text),
+    ('attachment_internal_a', v_attachment_internal_a::text);
 END;
 $$;
 
@@ -149,8 +284,8 @@ SELECT has_column('public', 'messages', 'search_vector',
 SELECT has_column('public', 'conversations', 'search_vector',
   'conversations.search_vector column exists');
 
-SELECT has_index('public', 'messages', 'idx_messages_search_vector',
-  'messages search_vector GIN exists');
+SELECT has_index('public', 'messages', 'idx_messages_workspace_search_vector',
+  'messages workspace search_vector GIN exists');
 SELECT has_index('public', 'messages', 'idx_messages_body_trgm',
   'messages body trigram GIN exists');
 SELECT has_index('public', 'messages', 'idx_messages_workspace_created',
@@ -165,6 +300,8 @@ SELECT has_index('public', 'conversations', 'idx_conversations_preview_trgm',
 
 SELECT has_index('public', 'message_attachments', 'idx_message_attachments_filename_trgm',
   'attachments filename trigram GIN exists');
+SELECT has_index('public', 'message_attachments', 'idx_message_attachments_workspace_filename',
+  'attachments workspace filename btree exists');
 SELECT has_index('public', 'message_attachments', 'idx_message_attachments_workspace_created',
   'attachments workspace created index exists');
 
@@ -1069,6 +1206,845 @@ SELECT is(
   ),
   0,
   'foreign email probe returns empty contacts group in workspace A'
+);
+
+-- ---------------------------------------------------------------------------
+-- A. Viewer internal message privacy
+-- ---------------------------------------------------------------------------
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'gs-agent-a@test.local'
+    );
+  $$,
+  'authenticate agent for internal message search'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'q',
+          'GsInternalMsgSecretZebra99',
+          'category',
+          'messages'
+        )
+      ) -> 'groups' -> 'messages'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('message_internal_a')
+  ),
+  'agent can search internal message body'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('viewer_a')::uuid,
+      'gs-viewer-a@test.local'
+    );
+  $$,
+  'authenticate viewer for internal message denial'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'q',
+          'GsInternalMsgSecretZebra99',
+          'category',
+          'messages'
+        )
+      ) -> 'groups' -> 'messages'
+    )
+  ),
+  0,
+  'viewer messages group empty for internal body'
+);
+
+SELECT ok(
+  (
+    SELECT
+      NOT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(
+          public.global_search(
+            tests.fixture('workspace_a')::uuid,
+            jsonb_build_object(
+              'q',
+              'GsInternalMsgSecretZebra99',
+              'category',
+              'messages'
+            )
+          ) -> 'groups' -> 'messages'
+        ) AS hit(value)
+        WHERE hit.value ->> 'id' = tests.fixture('message_internal_a')
+      )
+      AND (
+        public.global_search(
+          tests.fixture('workspace_a')::uuid,
+          jsonb_build_object(
+            'q',
+            'GsInternalMsgSecretZebra99',
+            'category',
+            'messages'
+          )
+        ) -> 'groups' -> 'messages'
+      )::text NOT LIKE '%GsInternalMsgSecretZebra99%'
+  ),
+  'viewer messages JSON never leaks internal message id or body'
+);
+
+-- ---------------------------------------------------------------------------
+-- B. Viewer attachment-on-internal-message denied
+-- ---------------------------------------------------------------------------
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'gs-agent-a@test.local'
+    );
+  $$,
+  'authenticate agent for internal attachment search'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'q',
+          'GsInternalAttachSecretZebra99',
+          'category',
+          'attachments'
+        )
+      ) -> 'groups' -> 'attachments'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('attachment_internal_a')
+  ),
+  'agent can search attachment on internal message'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('viewer_a')::uuid,
+      'gs-viewer-a@test.local'
+    );
+  $$,
+  'authenticate viewer for internal attachment denial'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'q',
+          'GsInternalAttachSecretZebra99',
+          'category',
+          'attachments'
+        )
+      ) -> 'groups' -> 'attachments'
+    )
+  ),
+  0,
+  'viewer attachments group empty for internal-message filename'
+);
+
+SELECT ok(
+  (
+    SELECT
+      (
+        public.global_search(
+          tests.fixture('workspace_a')::uuid,
+          jsonb_build_object(
+            'q',
+            'GsInternalAttachSecretZebra99',
+            'category',
+            'attachments'
+          )
+        ) -> 'groups' -> 'attachments'
+      )::text NOT LIKE '%GsInternalAttachSecretZebra99%'
+      AND (
+        public.global_search(
+          tests.fixture('workspace_a')::uuid,
+          jsonb_build_object(
+            'q',
+            'GsInternalAttachSecretZebra99',
+            'category',
+            'attachments'
+          )
+        ) -> 'groups' -> 'attachments'
+      )::text NOT LIKE '%' || tests.fixture('attachment_internal_a') || '%'
+  ),
+  'viewer attachments JSON never leaks internal filename or attachment id'
+);
+
+-- ---------------------------------------------------------------------------
+-- C. source_url secret not searchable
+-- ---------------------------------------------------------------------------
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'gs-agent-a@test.local'
+    );
+  $$,
+  'authenticate agent for source_url secret search'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'supersecret', 'category', 'conversations')
+      ) -> 'groups' -> 'conversations'
+    )
+  ),
+  0,
+  'supersecret query param is not searchable on conversations'
+);
+
+SELECT ok(
+  NOT (
+    SELECT search_vector @@ plainto_tsquery('english', 'supersecret')
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_a')::uuid
+  ),
+  'conversation search_vector does not index source_url secret'
+);
+
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'pricing')
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_a')::uuid
+  )
+  OR (
+    SELECT search_vector @@ plainto_tsquery('english', 'example.com')
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_a')::uuid
+  ),
+  'sanitized source_url host/path remains in conversation search_vector'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'pricing', 'category', 'conversations')
+      ) -> 'groups' -> 'conversations'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('conversation_a')
+  ),
+  'agent can find conversation by sanitized source_url path token'
+);
+
+SELECT ok(
+  (
+    SELECT bool_and(
+      COALESCE(hit.value ->> 'subtitle', '') NOT LIKE '%supersecret%'
+      AND COALESCE(hit.value ->> 'subtitle', '') NOT LIKE '%token=%'
+      AND COALESCE(hit.value ->> 'snippet', '') NOT LIKE '%supersecret%'
+      AND COALESCE(hit.value ->> 'snippet', '') NOT LIKE '%token=%'
+      AND COALESCE(hit.value ->> 'title', '') NOT LIKE '%supersecret%'
+      AND COALESCE(hit.value ->> 'title', '') NOT LIKE '%token=%'
+    )
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'pricing', 'category', 'conversations')
+      ) -> 'groups' -> 'conversations'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('conversation_a')
+  ),
+  'conversation hit snippets never expose source_url secrets'
+);
+
+-- ---------------------------------------------------------------------------
+-- D. Special LIKE characters / identity / unicode (no SQL errors, no wildcards)
+-- ---------------------------------------------------------------------------
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', '%')
+    );
+  $$,
+  'global_search lives with query %'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '%')
+      ) -> 'groups' -> 'contacts'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '%')
+      ) -> 'groups' -> 'conversations'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '%')
+      ) -> 'groups' -> 'messages'
+    )
+  ),
+  0,
+  '% query does not match everything'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', '_')
+    );
+  $$,
+  'global_search lives with query _'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '_')
+      ) -> 'groups' -> 'contacts'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '_')
+      ) -> 'groups' -> 'conversations'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '_')
+      ) -> 'groups' -> 'messages'
+    )
+  ),
+  0,
+  '_ query does not match everything'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', E'\\')
+    );
+  $$,
+  'global_search lives with query backslash'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', E'\\')
+      ) -> 'groups' -> 'contacts'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', E'\\')
+      ) -> 'groups' -> 'conversations'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', E'\\')
+      ) -> 'groups' -> 'messages'
+    )
+  ),
+  0,
+  'backslash query does not match everything'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', '''')
+    );
+  $$,
+  'global_search lives with single-quote query'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '''')
+      ) -> 'groups' -> 'contacts'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '''')
+      ) -> 'groups' -> 'conversations'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '''')
+      ) -> 'groups' -> 'messages'
+    )
+  ),
+  0,
+  'single-quote query does not match everything'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', '"')
+    );
+  $$,
+  'global_search lives with double-quote query'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '"')
+      ) -> 'groups' -> 'contacts'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '"')
+      ) -> 'groups' -> 'conversations'
+    )
+  ) + (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '"')
+      ) -> 'groups' -> 'messages'
+    )
+  ),
+  0,
+  'double-quote query does not match everything'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', '+44 7700 900123', 'category', 'contacts')
+    );
+  $$,
+  'global_search lives with phone query'
+);
+
+SELECT ok(
+  (
+    SELECT (hit.value ->> 'rank')::numeric >= 100
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '+44 7700 900123', 'category', 'contacts')
+      ) -> 'groups' -> 'contacts'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('contact_a')
+    LIMIT 1
+  ),
+  'exact phone match ranks at identity boost'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', 'gs-contact-a@test.local', 'category', 'contacts')
+    );
+  $$,
+  'global_search lives with exact email query'
+);
+
+SELECT ok(
+  (
+    SELECT (hit.value ->> 'rank')::numeric >= 100
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'gs-contact-a@test.local', 'category', 'contacts')
+      ) -> 'groups' -> 'contacts'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('contact_a')
+    LIMIT 1
+  ),
+  'exact email identity rank remains 100'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object(
+        'q',
+        tests.fixture('conversation_a'),
+        'category',
+        'conversations'
+      )
+    );
+  $$,
+  'global_search lives with conversation UUID query'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'q',
+          tests.fixture('conversation_a'),
+          'category',
+          'conversations'
+        )
+      ) -> 'groups' -> 'conversations'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('conversation_a')
+      AND (hit.value ->> 'rank')::numeric >= 100
+  ),
+  'exact conversation UUID match ranks at identity boost'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', 'שלום', 'category', 'messages')
+    );
+  $$,
+  'global_search lives with Hebrew query'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'שלום', 'category', 'messages')
+      ) -> 'groups' -> 'messages'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('message_he')
+  ),
+  'Hebrew message body is searchable'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', 'привет', 'category', 'messages')
+    );
+  $$,
+  'global_search lives with Russian query'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'привет', 'category', 'messages')
+      ) -> 'groups' -> 'messages'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('message_ru')
+  ),
+  'Russian message body is searchable'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', '你好', 'category', 'messages')
+    );
+  $$,
+  'global_search lives with short Chinese query'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.global_search(
+      tests.fixture('workspace_a')::uuid,
+      jsonb_build_object('q', '你好世界', 'category', 'messages')
+    );
+  $$,
+  'global_search lives with longer Chinese query'
+);
+
+-- ---------------------------------------------------------------------------
+-- E. Short query behavior
+-- ---------------------------------------------------------------------------
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'ab', 'category', 'messages')
+      ) -> 'groups' -> 'messages'
+    )
+  ),
+  0,
+  '2-char query skips fuzzy message search'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', 'gs', 'category', 'contacts')
+      ) -> 'groups' -> 'contacts'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('contact_a')
+  ),
+  '2-char email prefix can still match contacts'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object('q', '你好世界', 'category', 'messages')
+      ) -> 'groups' -> 'messages'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('message_zh')
+  ),
+  'Chinese message body searchable when query length >= 3'
+);
+
+-- ---------------------------------------------------------------------------
+-- F. around_message_id on list_messages
+-- ---------------------------------------------------------------------------
+
+SELECT tests.clear_auth();
+
+DO $$
+DECLARE
+  v_workspace uuid := tests.fixture('workspace_a')::uuid;
+  v_conversation uuid := tests.fixture('conversation_a')::uuid;
+  v_session uuid;
+  v_mid uuid;
+  i int;
+BEGIN
+  SELECT visitor_session_id INTO v_session
+  FROM public.conversations
+  WHERE id = v_conversation;
+
+  FOR i IN 7..11 LOOP
+    INSERT INTO public.messages (
+      workspace_id,
+      conversation_id,
+      sequence_number,
+      sender_type,
+      visitor_session_id,
+      body
+    )
+    VALUES (
+      v_workspace,
+      v_conversation,
+      i,
+      'visitor',
+      v_session,
+      'GsAroundMsgSeq' || i::text
+    )
+    RETURNING id INTO v_mid;
+
+    IF i = 9 THEN
+      INSERT INTO tests.fixtures (key, value)
+      VALUES ('message_around_mid', v_mid::text)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    END IF;
+  END LOOP;
+
+  UPDATE public.conversations
+  SET next_message_sequence = 12
+  WHERE id = v_conversation;
+END;
+$$;
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'gs-agent-a@test.local'
+    );
+  $$,
+  'authenticate agent for around_message_id'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      public.list_messages(
+        tests.fixture('workspace_a')::uuid,
+        tests.fixture('conversation_a')::uuid,
+        jsonb_build_object(
+          'around_message_id',
+          tests.fixture('message_around_mid'),
+          'limit',
+          5
+        )
+      ) -> 'items'
+    ) AS item(value)
+    WHERE item.value ->> 'id' = tests.fixture('message_around_mid')
+  ),
+  'list_messages around_message_id includes the centered message'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('viewer_a')::uuid,
+      'gs-viewer-a@test.local'
+    );
+  $$,
+  'authenticate viewer for around_message_id denial'
+);
+
+SELECT throws_like(
+  $$
+    SELECT public.list_messages(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('conversation_a')::uuid,
+      jsonb_build_object(
+        'around_message_id',
+        tests.fixture('message_internal_a'),
+        'limit',
+        5
+      )
+    );
+  $$,
+  '%Message not found%',
+  'viewer around_message_id on internal message raises Message not found'
+);
+
+-- ---------------------------------------------------------------------------
+-- G. Deleted content (soft-deleted notes already covered above)
+-- ---------------------------------------------------------------------------
+
+SELECT pass(
+  'soft-deleted notes already excluded; message_attachments have no soft-delete status'
+);
+
+-- ---------------------------------------------------------------------------
+-- H. Assignee NOT in search_vector
+-- ---------------------------------------------------------------------------
+
+SELECT tests.clear_auth();
+
+UPDATE public.conversations
+SET assigned_to = tests.fixture('agent_member_a')::uuid
+WHERE id = tests.fixture('conversation_a')::uuid;
+
+SELECT lives_ok(
+  $$
+    SELECT tests.authenticate_as(
+      tests.fixture('agent_a')::uuid,
+      'gs-agent-a@test.local'
+    );
+  $$,
+  'authenticate agent for assignee exclusion search'
+);
+
+SELECT ok(
+  NOT (
+    SELECT search_vector @@ plainto_tsquery('english', 'gs-agent-a@test.local')
+    FROM public.conversations
+    WHERE id = tests.fixture('conversation_a')::uuid
+  ),
+  'assignee member email is not in conversation search_vector'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::int
+    FROM jsonb_array_elements(
+      public.global_search(
+        tests.fixture('workspace_a')::uuid,
+        jsonb_build_object(
+          'q',
+          'gs-agent-a@test.local',
+          'category',
+          'conversations'
+        )
+      ) -> 'groups' -> 'conversations'
+    ) AS hit(value)
+    WHERE hit.value ->> 'id' = tests.fixture('conversation_a')
+  ),
+  0,
+  'search by assignee email does not find conversation via search_vector'
 );
 
 SELECT * FROM finish();
