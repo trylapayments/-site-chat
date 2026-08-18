@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(54);
+SELECT plan(55);
 
 TRUNCATE tests.fixtures;
 
@@ -883,9 +883,8 @@ DECLARE
   v_result jsonb;
   v_remaining integer;
 BEGIN
-  PERFORM tests.authenticate_as(v_user, 'notif-agent-a@test.local');
-
-  -- Ensure at least one unread
+  -- Emit as postgres (private helpers are not client-executable).
+  PERFORM tests.clear_auth();
   PERFORM app_private.emit_notification(
     v_workspace,
     v_member,
@@ -919,7 +918,7 @@ BEGIN
   WHERE c.workspace_id = v_workspace AND c.member_id = v_member
   FOR UPDATE;
 
-  -- Concurrent-style insert while counter locked
+  -- Concurrent-style insert while counter locked (still as postgres).
   PERFORM app_private.emit_notification(
     v_workspace,
     v_member,
@@ -966,7 +965,8 @@ BEGIN
     RAISE EXCEPTION 'insert during mark-all must remain unread';
   END IF;
 
-  -- Real RPC mark-all twice (idempotent)
+  -- Real RPC mark-all twice (idempotent) as the member.
+  PERFORM tests.authenticate_as(v_user, 'notif-agent-a@test.local');
   v_result := public.mark_all_notifications_read(v_workspace);
   IF (v_result->>'unread_count')::integer <> 0 THEN
     RAISE EXCEPTION 'mark-all must zero unread';

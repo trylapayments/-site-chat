@@ -1474,12 +1474,15 @@ export type Database = {
       notification_email_outbox: {
         Row: {
           attempts: number
+          claimed_at: string | null
           created_at: string
           dedupe_key: string
           email_category: string
           id: string
           last_error: string | null
+          next_attempt_at: string
           notification_id: string | null
+          provider_message_id: string | null
           recipient_member_id: string
           sent_at: string | null
           status: string
@@ -1490,12 +1493,15 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           dedupe_key: string
           email_category: string
           id?: string
           last_error?: string | null
+          next_attempt_at?: string
           notification_id?: string | null
+          provider_message_id?: string | null
           recipient_member_id: string
           sent_at?: string | null
           status?: string
@@ -1506,12 +1512,15 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           dedupe_key?: string
           email_category?: string
           id?: string
           last_error?: string | null
+          next_attempt_at?: string
           notification_id?: string | null
+          provider_message_id?: string | null
           recipient_member_id?: string
           sent_at?: string | null
           status?: string
@@ -2166,6 +2175,34 @@ export type Database = {
         }
         Returns: number
       }
+      claim_notification_email_outbox: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          dedupe_key: string
+          email_category: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          notification_id: string | null
+          provider_message_id: string | null
+          recipient_member_id: string
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+          updated_at: string
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_email_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       clear_contact_custom_field_value: {
         Args: {
           p_contact_id: string
@@ -2253,6 +2290,15 @@ export type Database = {
           p_new_role: Database["public"]["Enums"]["app_member_role"]
         }
         Returns: undefined
+      }
+      finalize_notification_email_outbox: {
+        Args: {
+          p_id: string
+          p_last_error?: string
+          p_provider_message_id?: string
+          p_status: string
+        }
+        Returns: boolean
       }
       finalize_operator_attachment_message: {
         Args: {
