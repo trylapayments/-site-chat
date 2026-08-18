@@ -80,6 +80,8 @@ Message ordering preserved via `sequence_number`. Idempotent via `client_message
 | Risk | Mitigation |
 |------|------------|
 | XSS via filename | Sanitize; render as text; Content-Disposition attachment |
+
+**Global search:** operators can find attachments by sanitized `filename` (and optionally `mime_type`) via `public.global_search`; hits never include `storage_key` or signed URLs (see `docs/GLOBAL-SEARCH.md`).
 | HTML / SVG script | Reject `image/svg+xml`, `text/html`, executables |
 | MIME spoofing | Magic-byte verification on complete |
 | Public bucket leakage | Bucket `public=false`; no anon upload policies |
