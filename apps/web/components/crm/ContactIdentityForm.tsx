@@ -143,6 +143,7 @@ export function ContactIdentityForm({
     <form
       className="space-y-3"
       data-testid="contact-identity-form"
+      data-pending={isPending ? "true" : "false"}
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);

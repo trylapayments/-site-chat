@@ -7,8 +7,8 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 -- Schema(18) + privileges(28) + profile RBAC(6) + cross-workspace profile(4)
 -- + workspace B seed lives_ok(4) + tags(16) + companies(12) + custom fields(28)
 -- + soft-delete field + noop/timeline(8) + company/tag soft-delete + removed-member
--- + company search(4) + search(6) + realtime(4) = 154
-SELECT plan(154);
+-- + domain search_vector refresh(11) + company search(4) + search(6) + realtime(4) = 165
+SELECT plan(165);
 
 TRUNCATE tests.fixtures;
 
@@ -1303,6 +1303,120 @@ SELECT is(
   (SELECT company_id FROM public.contacts WHERE id = tests.fixture('contact_a')::uuid),
   NULL,
   'company soft-delete clears contact.company_id'
+);
+
+-- Domain-only company updates must refresh linked contacts.search_vector
+-- (name and domain are both indexed; website/industry/size are not).
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  'authenticate agent for domain search_vector refresh'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.create_company(
+      tests.fixture('workspace_a')::uuid,
+      'Domain Vector Co',
+      'oldcrmdomain.test',
+      NULL,
+      NULL,
+      NULL
+    );
+  $$,
+  'create company with oldcrmdomain.test'
+);
+
+SELECT tests.clear_auth();
+
+INSERT INTO tests.fixtures (key, value)
+SELECT 'company_domain_vector', id::text
+FROM public.companies
+WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  AND lower(name) = 'domain vector co'
+  AND deleted_at IS NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM public.companies
+    WHERE id = tests.fixture('company_domain_vector')::uuid
+      AND domain = 'oldcrmdomain.test'
+  ),
+  'domain vector company fixture persisted'
+);
+
+SELECT lives_ok(
+  $$ SELECT tests.authenticate_as(tests.fixture('agent_a')::uuid, 'crm-agent-a@test.local'); $$,
+  're-authenticate agent for domain vector link'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.link_contact_company(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid,
+      tests.fixture('company_domain_vector')::uuid
+    );
+  $$,
+  'link contact_a to domain vector company'
+);
+
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'oldcrmdomain')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'linked contact search_vector contains old company domain'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.update_company(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('company_domain_vector')::uuid,
+      jsonb_build_object('domain', 'newcrmdomain.test')
+    );
+  $$,
+  'domain-only company update'
+);
+
+SELECT ok(
+  NOT (
+    SELECT search_vector @@ plainto_tsquery('english', 'oldcrmdomain')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'old company domain no longer in search_vector after domain-only update'
+);
+
+SELECT ok(
+  (
+    SELECT search_vector @@ plainto_tsquery('english', 'newcrmdomain')
+    FROM public.contacts
+    WHERE id = tests.fixture('contact_a')::uuid
+  ),
+  'new company domain appears in search_vector after domain-only update'
+);
+
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1
+    FROM public.contacts c
+    WHERE c.id = tests.fixture('contact_b')::uuid
+      AND c.search_vector @@ plainto_tsquery('english', 'newcrmdomain')
+  ),
+  'unlinked contact_b search_vector unaffected by company domain update'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.unlink_contact_company(
+      tests.fixture('workspace_a')::uuid,
+      tests.fixture('contact_a')::uuid
+    );
+  $$,
+  'unlink domain vector company after search_vector assertions'
 );
 
 -- Company picker search must use substring match (not loose trigram) so

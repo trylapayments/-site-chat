@@ -2372,6 +2372,7 @@ DECLARE
   v_industry text;
   v_size text;
   v_name_changed boolean := false;
+  v_domain_changed boolean := false;
   v_contact_ids uuid[];
   v_contact_count integer;
 BEGIN
@@ -2409,6 +2410,7 @@ BEGIN
     ELSE
       v_domain := app_private.normalize_company_domain(p_patch ->> 'domain');
     END IF;
+    v_domain_changed := v_domain IS DISTINCT FROM v_company.domain;
   ELSE
     v_domain := v_company.domain;
   END IF;
@@ -2478,7 +2480,9 @@ BEGIN
       RAISE EXCEPTION 'COMPANY_DOMAIN_TAKEN: A company with this domain already exists.';
   END;
 
-  IF v_name_changed THEN
+  -- Name and domain are indexed into contacts.search_vector; refresh linked
+  -- contacts when either changes (once per update). Other company fields do not.
+  IF v_name_changed OR v_domain_changed THEN
     SELECT array_agg(c.id)
     INTO v_contact_ids
     FROM public.contacts c

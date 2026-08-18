@@ -35,20 +35,21 @@ async function openSeededContactProfile(page: Page) {
 }
 
 async function saveContactIdentity(page: Page, panel: Locator) {
+  const form = panel.getByTestId("contact-identity-form");
   const save = panel.getByTestId("contact-identity-save");
-  const responsePromise = page.waitForResponse(
-    (response) => {
-      const request = response.request();
-      return (
-        request.method() === "POST" &&
-        Boolean(request.headers()["next-action"]) &&
-        response.status() < 500
-      );
-    },
-    { timeout: 45_000 },
-  );
+
+  // Do not wait for arbitrary next-action POSTs: live CDC catch-up also
+  // calls getContactProfileAction and can resolve a racey waitForResponse.
+  // Wait for this form's pending cycle (updateContactProfileAction only).
+  await expect(form).toHaveAttribute("data-pending", "false");
   await save.click();
-  await responsePromise;
+  await expect(form).toHaveAttribute("data-pending", "true", {
+    timeout: 5_000,
+  });
+  await expect(form).toHaveAttribute("data-pending", "false", {
+    timeout: 45_000,
+  });
+  await expect(save).toBeEnabled({ timeout: 5_000 });
 }
 
 test.describe("visitor profile / CRM-lite", () => {

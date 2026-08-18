@@ -195,8 +195,10 @@ Details: [SECURITY.md](./SECURITY.md).
 - Trigram GIN on company names; GIN on `contacts.search_vector`
 - Assignment and value lookups keyed by `(workspace_id, contact_id)` / `(workspace_id, field_id)`
 - Soft-delete company / custom-field definition refreshes search vectors for affected contacts without emitting N timeline rows
+- `update_company` refreshes linked contacts’ `search_vector` when **name or domain** changes (both are indexed); website/industry/size updates do not
 - `list_contacts` and contacts UI use keyset cursors (`next_before` / `has_more`) — no OFFSET
 - `list_companies` supports `q` so pickers are not capped at the first page
+- **Follow-up (MEDIUM):** settings tag list and custom-field definition list are still bounded single-page fetches without keyset/search UI — fine for typical workspace sizes; add pagination/search before they become functional cliffs
 
 ---
 
@@ -234,3 +236,4 @@ Details: [SECURITY.md](./SECURITY.md).
 |------|--------|
 | 2026-08-16 | Initial CRM-lite documentation |
 | 2026-08-17 | Align with PR #33 hardening (soft-delete timeline, dates, search_vector, pagination, dirty-only patches) |
+| 2026-08-18 | Domain-only company updates refresh linked `search_vector`; note unbounded tag/definition settings lists as MEDIUM follow-up |
