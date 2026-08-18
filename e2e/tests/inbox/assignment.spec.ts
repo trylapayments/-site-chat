@@ -37,6 +37,9 @@ async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
   const panel = page.getByTestId("assignment-panel");
   // Prefer the pending cycle (authoritative mutation completion). Live region
   // text can lag or retain a prior announcement under suite load.
+  await expect(panel)
+    .toHaveAttribute("data-pending", "true", { timeout: 5_000 })
+    .catch(() => undefined);
   await expect(panel).toHaveAttribute("data-pending", "false", {
     timeout: 30_000,
   });
