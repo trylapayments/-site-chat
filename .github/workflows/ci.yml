@@ -212,6 +212,7 @@ jobs:
         run: pnpm test:e2e
         env:
           NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
 
       - name: Upload Playwright artifacts
         if: always()

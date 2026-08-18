@@ -11,6 +11,8 @@ const webServerEnv: NodeJS.ProcessEnv = {
   // with `next start` avoids next-dev memory restarts mid-suite (ECONNRESET,
   // realtime stuck at "connecting", assignment/notes flakes).
   NODE_ENV: isCI ? "production" : "development",
+  // Seeded workspaces use MockProvider; production blocks mock unless allowed.
+  ...(isCI ? { AI_ALLOW_MOCK_PROVIDER: "true" } : {}),
   NODE_OPTIONS: [process.env.NODE_OPTIONS, "--max-old-space-size=8192"].filter(Boolean).join(" "),
 };
 
