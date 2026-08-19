@@ -244,6 +244,29 @@ test.describe.serial("Widget Studio", () => {
     await expect(page.getByTestId("widget-studio-preview")).not.toContainText(customWelcome);
   });
 
+  test("discards draft changes back to the published config", async ({ page }) => {
+    await openOwnerStudio(page);
+    await setPrimaryColor(page, SAVED_DRAFT_COLOR);
+    await page.getByTestId("widget-studio-save-draft").click();
+    await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
+    await page.getByTestId("widget-studio-discard").click();
+    await expect(page.getByText("Draft discarded.", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+  });
+
+  test("marks business hours as foundation-only", async ({ page }) => {
+    await openOwnerStudio(page);
+    await expect(page.getByTestId("widget-studio-business-hours-foundation")).toBeVisible();
+    await expect(page.getByText("Business hours (foundation)", { exact: true })).toBeVisible();
+  });
+
   test("keeps viewers and agents read-only", async ({ browser }) => {
     for (const email of [VIEWER_EMAIL, AGENT_EMAIL]) {
       const context = await browser.newContext();

@@ -883,8 +883,7 @@ VALUES (
   ARRAY[
     'image/png',
     'image/jpeg',
-    'image/webp',
-    'image/svg+xml'
+    'image/webp'
   ]
 )
 ON CONFLICT (id) DO UPDATE
@@ -919,34 +918,15 @@ CREATE POLICY widget_assets_select_authenticated
   TO authenticated
   USING (app_private.workspace_is_accessible(workspace_id));
 
-CREATE POLICY widget_assets_insert_manage
-  ON public.widget_assets
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    app_private.workspace_is_accessible(workspace_id)
-    AND app_private.user_workspace_role(workspace_id) IN ('owner', 'admin')
-  );
-
-CREATE POLICY widget_assets_update_manage
-  ON public.widget_assets
-  FOR UPDATE
-  TO authenticated
-  USING (
-    app_private.workspace_is_accessible(workspace_id)
-    AND app_private.user_workspace_role(workspace_id) IN ('owner', 'admin')
-  )
-  WITH CHECK (
-    app_private.workspace_is_accessible(workspace_id)
-    AND app_private.user_workspace_role(workspace_id) IN ('owner', 'admin')
-  );
+-- Mutations are service-role only (signed upload finalize). Authenticated
+-- clients never INSERT/UPDATE verification-sensitive fields directly.
 
 REVOKE ALL ON TABLE public.widget_configs FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON TABLE public.widget_configs TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.widget_configs TO service_role;
 
 REVOKE ALL ON TABLE public.widget_assets FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.widget_assets TO authenticated;
+GRANT SELECT ON TABLE public.widget_assets TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.widget_assets TO service_role;
 
 -- ---------------------------------------------------------------------------
