@@ -19,7 +19,8 @@
     "local:restart": "node scripts/local-restart.mjs",
     "demo:prepare": "node scripts/prepare-local-demo.mjs",
     "demo:media": "node scripts/seed-demo-media.mjs",
-    "demo:host": "node demo/host-server.mjs"
+    "demo:host": "node demo/host-server.mjs",
+    "demo:check": "node scripts/demo-check.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",

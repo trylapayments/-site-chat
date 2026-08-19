@@ -11,6 +11,8 @@
         --line: #e2e8f0;
         --bg: #f8fafc;
         --brand: #0066ff;
+        --danger: #b91c1c;
+        --danger-bg: #fef2f2;
       }
       * {
         box-sizing: border-box;
@@ -94,6 +96,21 @@
         padding: 0.1em 0.35em;
         border-radius: 4px;
       }
+      #demo-status {
+        display: none;
+        margin-top: 1.25rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid #fecaca;
+        border-radius: 12px;
+        background: var(--danger-bg);
+        color: var(--danger);
+        font-size: 0.95rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+      #demo-status[data-visible="true"] {
+        display: block;
+      }
     </style>
   </head>
   <body>
@@ -115,11 +132,74 @@
       <div class="hint">
         <strong>Demo tip</strong>
         After you publish Widget Studio changes, reload this page to see the published appearance.
+        Look for the blue chat launcher in the bottom-right corner.
       </div>
+      <div id="demo-status" role="alert"></div>
     </main>
+    <!--
+      Same-origin loader URL: demo/host-server.mjs proxies /widget/* and
+      /api/v1/widget/* to the Next app. Hardcoding http://localhost:3000 breaks
+      when only :3001 is open/forwarded.
+    -->
     <script
-      src="http://localhost:3000/widget/loader.js"
-      data-widget-key="wk_e2e00000000000000000000000000001"
+      src="/widget/loader.js"
+      data-widget-key="__DEMO_WIDGET_KEY__"
+      data-demo-app-origin="__DEMO_APP_ORIGIN__"
     ></script>
+    <script>
+      (function () {
+        var statusEl = document.getElementById("demo-status");
+        var script = document.querySelector("script[data-widget-key]");
+        var appOrigin =
+          (script && script.getAttribute("data-demo-app-origin")) || "http://localhost:3000";
+        var key = (script && script.getAttribute("data-widget-key")) || "";
+
+        function show(message) {
+          if (!statusEl) return;
+          statusEl.textContent = message;
+          statusEl.setAttribute("data-visible", "true");
+        }
+
+        function launcherPresent() {
+          return Boolean(document.querySelector('iframe[title="Site Chat"]'));
+        }
+
+        // If the loader script itself 404/502s, currentScript never mounts the widget.
+        fetch("/demo-health", { cache: "no-store" })
+          .then(function (response) {
+            return response.json().then(function (body) {
+              return { ok: response.ok, body: body };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok) {
+              show(
+                "Next app is not reachable at " +
+                  appOrigin +
+                  ".\n\nStart it in another terminal:\n  pnpm demo:prepare\n  pnpm local:refresh\n  pnpm dev\n\nThen hard-reload this page.",
+              );
+            }
+          })
+          .catch(function () {
+            show("Could not reach demo health check. Is pnpm demo:host still running?");
+          });
+
+        window.setTimeout(function () {
+          if (launcherPresent()) return;
+          show(
+            "Chat launcher did not appear.\n\nChecklist:\n" +
+              "1) pnpm dev is running (Next on " +
+              appOrigin +
+              ")\n" +
+              "2) supabase is up + db reset (seeded key " +
+              key +
+              ")\n" +
+              "3) pnpm demo:prepare wrote .env.local\n" +
+              "4) Open DevTools → Network: /widget/loader.js and /api/v1/widget/bootstrap must be 200\n\n" +
+              "Then hard-reload this page.",
+          );
+        }, 4000);
+      })();
+    </script>
   </body>
 </html>

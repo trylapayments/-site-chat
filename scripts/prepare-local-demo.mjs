@@ -104,10 +104,11 @@ function main() {
   run("node", ["scripts/seed-demo-media.mjs"], { stdio: "inherit" });
 
   console.log("\nLocal demo prep complete.");
-  console.log("Next:");
-  console.log("  pnpm local:refresh");
-  console.log("  pnpm dev");
-  console.log("  pnpm demo:host");
+  console.log("Next (two terminals):");
+  console.log("  1) pnpm local:refresh && pnpm dev");
+  console.log("  2) pnpm demo:host");
+  console.log("Then open http://localhost:3001 and confirm the launcher (bottom-right).");
+  console.log("Optional: pnpm demo:check");
 }
 
 try {
