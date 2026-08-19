@@ -127,6 +127,7 @@ export function WidgetStudioPreview({
                 type="button"
                 size="sm"
                 variant={viewport === entry.id ? "secondary" : "ghost"}
+                data-testid={`widget-studio-viewport-${entry.id}`}
                 aria-pressed={viewport === entry.id}
                 onClick={() => {
                   setViewport(entry.id);
@@ -155,7 +156,10 @@ export function WidgetStudioPreview({
           className={`${VIEWPORT_CLASS[viewport]} bg-background relative mx-auto min-h-[600px] overflow-hidden rounded-md border transition-[max-width]`}
           style={variables}
           dir={rtl ? "rtl" : "ltr"}
+          data-testid="widget-studio-preview-panel"
           data-viewport={viewport}
+          data-primary-color={config.primaryColor}
+          data-position={config.launcherPosition}
         >
           <div className="text-muted-foreground p-4 text-xs">
             {rtl ? "תצוגה מקדימה של האתר" : "Example website preview"}
@@ -289,6 +293,7 @@ export function WidgetStudioPreview({
               } flex items-center justify-center text-white shadow-lg`}
               style={{ backgroundColor: "var(--studio-launcher)" }}
               aria-label="Widget launcher preview"
+              data-testid="widget-studio-preview-launcher"
             >
               {config.launcherIcon === "help" ? (
                 <span className="text-xl font-bold">?</span>

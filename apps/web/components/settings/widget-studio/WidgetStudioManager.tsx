@@ -73,6 +73,7 @@ function SelectControl({
   label,
   value,
   options,
+  testId,
   disabled,
   onChange,
 }: {
@@ -80,6 +81,7 @@ function SelectControl({
   label: string;
   value: string;
   options: readonly string[];
+  testId?: string;
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
@@ -88,6 +90,7 @@ function SelectControl({
       <Label htmlFor={id}>{label}</Label>
       <select
         id={id}
+        data-testid={testId}
         className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
         value={value}
         disabled={disabled}
@@ -189,12 +192,14 @@ function ColorControl({
   id,
   label,
   value,
+  testId,
   disabled,
   onChange,
 }: {
   id: string;
   label: string;
   value: string;
+  testId?: string;
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
@@ -204,6 +209,7 @@ function ColorControl({
       <div className="flex items-center gap-2">
         <Input
           id={id}
+          data-testid={testId}
           type="color"
           className="w-14 p-1"
           value={value}
@@ -502,7 +508,10 @@ export function WidgetStudioManager({
   return (
     <div className="space-y-5" data-testid="widget-studio-manager">
       {!canManage ? (
-        <p className="text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm">
+        <p
+          className="text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm"
+          data-testid="widget-studio-readonly-banner"
+        >
           Read-only preview. Only workspace owners and admins can publish
           customization changes.
         </p>
@@ -513,7 +522,11 @@ export function WidgetStudioManager({
           <p className="text-sm font-medium">
             {messages.versionLabel}: {studioState.publishedVersion}
           </p>
-          <p className="text-muted-foreground text-xs">
+          <p
+            className="text-muted-foreground text-xs"
+            data-testid="widget-studio-dirty-badge"
+            data-dirty={dirty}
+          >
             {dirty ? messages.dirtyBadge : messages.cleanBadge}
           </p>
         </div>
@@ -522,6 +535,7 @@ export function WidgetStudioManager({
             type="button"
             size="sm"
             variant="outline"
+            data-testid="widget-studio-save-draft"
             disabled={disabled || !dirty || !validation.success}
             onClick={runSave}
           >
@@ -530,6 +544,7 @@ export function WidgetStudioManager({
           <Button
             type="button"
             size="sm"
+            data-testid="widget-studio-publish"
             disabled={disabled || !validation.success}
             onClick={runPublish}
           >
@@ -539,6 +554,7 @@ export function WidgetStudioManager({
             type="button"
             size="sm"
             variant="outline"
+            data-testid="widget-studio-discard"
             disabled={disabled || !dirty}
             onClick={runDiscard}
           >
@@ -548,6 +564,7 @@ export function WidgetStudioManager({
             type="button"
             size="sm"
             variant="ghost"
+            data-testid="widget-studio-reset"
             disabled={disabled}
             onClick={runReset}
           >
@@ -666,6 +683,7 @@ export function WidgetStudioManager({
               label="Position"
               value={draft.launcherPosition}
               options={WIDGET_POSITIONS}
+              testId="widget-studio-position"
               disabled={disabled}
               onChange={(launcherPosition) => {
                 updateDraft({
@@ -878,6 +896,7 @@ export function WidgetStudioManager({
               id="studio-primary"
               label="Primary"
               value={draft.primaryColor}
+              testId="widget-studio-primary-color"
               disabled={disabled}
               onChange={(primaryColor) => {
                 updateDraft({ primaryColor });
