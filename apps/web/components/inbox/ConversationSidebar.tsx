@@ -60,8 +60,8 @@ function ContextRow({
   }
   return (
     <div className="space-y-0.5">
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="break-all text-sm">{value}</p>
+      <p className="text-inbox-muted text-xs">{label}</p>
+      <p className="break-all text-sm text-neutral-800">{value}</p>
     </div>
   );
 }
@@ -153,16 +153,33 @@ export function ConversationSidebar({
   );
 
   return (
-    <aside className="space-y-6 rounded-lg border p-4">
+    <aside
+      className="bg-inbox-panel flex h-full min-h-0 w-full flex-col overflow-y-auto"
+      data-testid="customer-inspector"
+    >
       <VisitorSidebarLiveRefresh
         workspaceId={workspaceId}
         visitorSessionId={conversation.visitor_session_id}
         contactId={conversation.contact?.id ?? null}
       />
 
+      <div className="border-inbox-border flex shrink-0 gap-1 border-b px-4">
+        <span className="text-brand relative px-2 py-2.5 text-[12px] font-semibold">
+          Details
+          <span
+            className="bg-brand absolute inset-x-1 bottom-0 h-0.5 rounded-full"
+            aria-hidden="true"
+          />
+        </span>
+        <span className="text-inbox-muted px-2 py-2.5 text-[12px] font-medium">
+          Activity
+        </span>
+      </div>
+
+      <div className="space-y-6 px-4 py-4">
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Visitor</h2>
-        <p className="text-sm font-medium">{contactLabel}</p>
+        <h2 className="text-[13px] font-semibold text-neutral-900">Visitor</h2>
+        <p className="text-sm font-medium text-neutral-800">{contactLabel}</p>
         {publicId ? (
           <div className="space-y-0.5">
             <p className="text-muted-foreground text-xs">Public ID</p>
@@ -298,7 +315,7 @@ export function ConversationSidebar({
         {contact?.id ? (
           <Link
             href={toAppRoute(workspaceContactsPath(workspaceSlug, contact.id))}
-            className="text-primary text-sm font-medium hover:underline"
+            className="text-brand text-sm font-medium hover:underline"
             data-testid="view-full-profile"
           >
             {crmMessages.viewProfile}
@@ -307,7 +324,9 @@ export function ConversationSidebar({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Current context</h2>
+        <h2 className="text-[13px] font-semibold text-neutral-900">
+          Current context
+        </h2>
         <ContextRow label="Page" value={context?.current_title ?? null} />
         <ContextRow
           label="URL"
@@ -344,12 +363,12 @@ export function ConversationSidebar({
           }
         />
         {!context && !conversation.source_url ? (
-          <p className="text-muted-foreground text-sm">No page context yet.</p>
+          <p className="text-inbox-muted text-sm">No page context yet.</p>
         ) : null}
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Activity</h2>
+        <h2 className="text-[13px] font-semibold text-neutral-900">Activity</h2>
         <ContextRow
           label="First seen"
           value={formatDateTime(
@@ -373,7 +392,7 @@ export function ConversationSidebar({
         {activity?.recent_page_views &&
         activity.recent_page_views.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-muted-foreground text-xs">Recent pages</p>
+            <p className="text-inbox-muted text-xs">Recent pages</p>
             <ul className="space-y-2">
               {activity.recent_page_views.map((view) => (
                 <li key={view.id} className="space-y-0.5">
@@ -391,7 +410,7 @@ export function ConversationSidebar({
             </ul>
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm">No recent page views.</p>
+          <p className="text-inbox-muted text-sm">No recent page views.</p>
         )}
       </section>
 
@@ -415,7 +434,7 @@ export function ConversationSidebar({
       />
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold">Status</h2>
+        <h2 className="text-[13px] font-semibold text-neutral-900">Status</h2>
         {canUpdateStatus ? (
           <div className="flex flex-wrap gap-2">
             {conversationStatusSchema.options.map((status) => (
@@ -424,6 +443,11 @@ export function ConversationSidebar({
                 type="button"
                 size="sm"
                 variant={conversation.status === status ? "default" : "outline"}
+                className={
+                  conversation.status === status
+                    ? "bg-brand text-brand-foreground hover:bg-brand/90"
+                    : undefined
+                }
                 disabled={isPending || conversation.status === status}
                 onClick={() => {
                   startTransition(async () => {
@@ -445,11 +469,12 @@ export function ConversationSidebar({
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm capitalize">
+          <p className="text-inbox-muted text-sm capitalize">
             {conversation.status}
           </p>
         )}
       </section>
+      </div>
     </aside>
   );
 }
