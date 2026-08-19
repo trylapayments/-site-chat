@@ -67,6 +67,25 @@ export type WidgetStudioActionResult<T> =
   | { success: true; data: T }
   | { success: false; message: string; code?: string };
 
+function actionErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (error && typeof error === "object") {
+    const record = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+    return [record.message, record.details, record.hint]
+      .filter(
+        (part): part is string => typeof part === "string" && part.length > 0,
+      )
+      .join(" ");
+  }
+  return typeof error === "string" ? error : "";
+}
+
 function actionError<T>(
   error: unknown,
   fallback: string,
@@ -76,6 +95,15 @@ function actionError<T>(
   }
   if (error instanceof WidgetAssetValidationError) {
     return { success: false, message: error.message, code: error.code };
+  }
+  const text = actionErrorText(error);
+  if (text.includes("PUBLISH_CONFLICT")) {
+    return {
+      success: false,
+      message:
+        "Publish conflict: another admin published while you were editing. Reload Widget Studio, review the latest version, and try again.",
+      code: "PUBLISH_CONFLICT",
+    };
   }
   return { success: false, message: fallback };
 }
@@ -182,15 +210,6 @@ export async function publishWidgetStudioAction(
     revalidateStudio(workspaceSlug);
     return { success: true, data: state };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message.includes("PUBLISH_CONFLICT")) {
-      return {
-        success: false,
-        message:
-          "Another admin published while you were editing. Reload Studio and try again.",
-        code: "PUBLISH_CONFLICT",
-      };
-    }
     return actionError(error, "Unable to publish the widget.");
   }
 }
