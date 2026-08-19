@@ -66,6 +66,8 @@ Five presets (`clean`, `minimal`, `modern`, `dark`, and `rounded`) apply allowli
 
 Contrast checks warn about common low-contrast combinations. They do not silently rewrite customer-selected colors.
 
+For `colorMode: light` and `colorMode: dark`, the widget uses the configured background and text colors unchanged; the dark preset supplies suitable dark values. For `colorMode: system`, configured colors are treated as the light theme. The widget starts with that light theme, listens to `prefers-color-scheme`, and switches background/text to neutral slate/light defaults in dark mode while retaining configured primary, accent, and launcher branding. Preference changes are applied live.
+
 ### 3.1 No arbitrary CSS or JavaScript
 
 Arbitrary CSS and JavaScript are deliberately excluded:
@@ -94,13 +96,13 @@ The lifecycle is:
 
 1. **Initialize:** migration backfill, or the idempotent lazy initializer, converts allowlisted legacy `settings_json.widget` fields into both draft and published state at version 1.
 2. **Edit/preview:** form edits update the local live preview. `Save draft` validates and persists the complete draft. Applying a preset also saves the resulting draft.
-3. **Publish:** the UI first saves the current form, then `publish_widget_studio` atomically copies draft to published, increments `published_version`, and records publisher/time.
+3. **Publish:** the UI first saves the current form, then submits the version it displayed as `p_expected_published_version`. `publish_widget_studio` copies draft to published, increments `published_version`, and records publisher/time only when that expected version still matches.
 4. **Discard:** copies the published config back into the draft.
 5. **Reset:** replaces only the draft with canonical defaults; a separate publish is still required.
 
 Saving or resetting a draft has no visitor-visible effect. A visitor sees the old published state until publish succeeds. Publishing currently increments the version on every successful publish call, including a publish whose content is unchanged.
 
-The current model keeps the latest draft and published snapshot, not a historical revision log. Concurrent draft saves are last-write-wins; the publish transition itself is atomic.
+The current model keeps the latest draft and published snapshot, not a historical revision log. Concurrent draft saves are last-write-wins. Publish uses compare-and-swap (CAS): if another admin published first, the stale publish fails with `PUBLISH_CONFLICT` instead of overwriting the newer publication.
 
 ---
 
@@ -125,7 +127,7 @@ It never includes:
 - storage object keys or raw asset metadata rows
 - arbitrary unknown JSON keys
 
-The SQL mapper constructs the allowlist explicitly, and the application validates it with `widgetPublicAppearanceSchema`. Asset enrichment reads published asset IDs separately; it does not trust URLs from stored appearance JSON.
+The SQL mapper constructs the allowlist explicitly, and the application validates it with `widgetPublicAppearanceSchema`. Entitlement remapping is then applied on every visitor delivery path, including payloads that already match the public schema. Asset enrichment reads published asset IDs separately; it does not trust URLs from stored appearance JSON.
 
 Both `GET /api/v1/widget/bootstrap` and `GET /api/v1/widget/config` resolve the widget public key server-side and require an allowed request origin. Bootstrap also returns an embed token and is `no-store`; the config endpoint returns appearance only and never includes an embed token.
 
@@ -143,7 +145,7 @@ Upload rules are:
 
 | Rule | Value |
 |------|-------|
-| MIME allowlist | PNG, JPEG, WebP, SVG |
+| MIME allowlist | PNG, JPEG, WebP (raster only; SVG is not accepted) |
 | Maximum bytes | 512 KiB |
 | Dimensions | 16–1024 px for both width and height |
 | Filename | sanitized, maximum 128 characters, extension must match declared MIME |
@@ -151,9 +153,11 @@ Upload rules are:
 | Public download URL lifetime | 1 hour |
 | Storage | private `widget-assets` bucket under a workspace-prefixed object key |
 
-Upload initiation records an unconfirmed metadata row and returns a signed upload URL. Completion downloads the object server-side, verifies byte length, detects format from content, determines dimensions, and only then marks dimensions on the row. SVG validation rejects scripts, event handlers, styles, external references, embedded objects, and other active content.
+Upload initiation creates a `pending` metadata row with `verified_at = NULL` and returns a signed upload URL. The `storage_key` is generated server-side, must remain under `workspaces/{workspace_id}/widget-assets/`, and is immutable. Completion downloads the object server-side, verifies exact byte length, detects PNG/JPEG/WebP from content, determines dimensions, and atomically moves the row to `verified` with `verified_at`; invalid objects become `rejected` and are deleted best-effort.
 
-Public enrichment signs only an active, confirmed asset in the same workspace whose kind matches the referenced field. Missing, deleted, mismatched, unconfirmed, or inaccessible assets are omitted rather than breaking widget bootstrap.
+Public enrichment signs only an active `verified` asset with `verified_at` and dimensions in the same workspace whose kind matches the referenced field. Missing, deleted, mismatched, pending, rejected, invalid-path, or inaccessible assets are omitted rather than breaking widget bootstrap.
+
+Authenticated users have SELECT-only table access to `widget_assets`; INSERT/UPDATE/DELETE are closed. Asset Server Actions first enforce `manage_widget_studio`, then use the server-only service role for the narrow lifecycle mutations. The private bucket has no anonymous or authenticated object policy.
 
 Appearance config accepts only asset UUIDs. Arbitrary remote asset URLs are not supported, and legacy `branding.logoUrl` is intentionally ignored during migration. This avoids an SSRF/proxy boundary, persistent third-party tracking URLs, and unreviewed remote content in the widget.
 
@@ -194,13 +198,13 @@ See [WIDGET-I18N.md](./WIDGET-I18N.md) for locale resolution, dictionary provena
 
 `GET /api/v1/widget/config?key=<widget-public-key>`:
 
-- returns `Cache-Control: public, max-age=60, stale-while-revalidate=300`
-- returns `ETag: "widget-config-<public-key>-<published_version>"`
+- returns `Cache-Control: public, max-age=60, stale-while-revalidate=60`
+- returns an ETag containing the public key, published version, and a 15-minute signing bucket
 - returns `304 Not Modified` when `If-None-Match` equals the current ETag
 - is rate-limited through the widget bootstrap bucket
 - returns the standard widget API success/error envelope
 
-Draft saves do not change `published_version` or the ETag. Publish changes both the response version and ETag. Signed asset URLs are generated during public-config resolution and are short-lived; clients should obtain them through bootstrap/config rather than persist them as canonical asset locations.
+Draft saves do not change `published_version`. Publish changes both the response version and ETag. The signing bucket changes the ETag before the one-hour signed download URLs can expire, preventing a long-lived `304` from pinning dead URLs. Clients should obtain signed URLs through bootstrap/config rather than persist them as canonical asset locations.
 
 The bootstrap endpoint includes the same ETag for correlation but remains `no-store` because it also returns an embed token.
 
@@ -226,7 +230,8 @@ The Settings → Widget Studio page provides:
 - published version and unpublished-change status
 - `Save draft`, `Publish`, `Discard draft`, and `Reset to defaults`
 - five typed presets
-- controls for general/session values, launcher, window dimensions, header, typography, colors, messages, branding, behavior, mobile behavior, and weekly business hours
+- controls for general/session values, launcher, window dimensions, header, typography, colors, messages, branding, behavior, and mobile behavior
+- a disabled **Business hours (foundation)** section that clearly states scheduling is not enforced in the visitor widget
 - direct uploads for logo, launcher icon, and agent avatar
 - contrast warnings
 - sticky live preview with desktop, tablet, phone, and Hebrew RTL modes
@@ -257,7 +262,7 @@ The config can store:
 
 The shared `isWithinBusinessHours` helper evaluates an instant against those intervals, using UTC if the timezone is invalid. Disabled hours evaluate as online; enabled hours with no intervals evaluate as offline.
 
-This is a foundation only. The current Studio UI edits enabled/timezone/weekly intervals, and the public DTO carries the configuration, but Widget Studio v1 does not implement conversation routing, operator scheduling, presence changes, queue assignment, auto-replies, SLA timers, or SLA reporting. Those concerns require separate product and data models.
+This is a foundation only. The schema and public DTO retain the fields, but Studio presents them as read-only and clearly labels them as not enforced. Widget Studio v1 does not implement conversation routing, operator scheduling, presence changes, queue assignment, auto-replies, SLA timers, or SLA reporting. Those concerns require separate product and data models.
 
 ---
 
@@ -268,9 +273,9 @@ This is a foundation only. The current Studio UI edits enabled/timezone/weekly i
 - The service-role public-key resolver is server-only. Visitors and anonymous clients cannot execute it directly.
 - Draft state is never selected by the visitor mapper or application asset-enrichment path.
 - Public DTO construction is allowlist-based rather than “remove known secrets.”
-- Asset storage is private and has no anon/authenticated object policy; the server mints signed upload/download URLs after authorization.
-- Asset object paths and metadata queries are workspace-scoped; public signing also checks expected asset kind and confirmation state.
+- Asset storage is private and has no anon/authenticated object policy; authenticated table writes are closed, and authorized Server Actions use service role for lifecycle mutations.
+- Asset object paths are server-generated, workspace-prefixed, and immutable; public signing requires expected kind plus explicit `verified`/`verified_at` state.
 - The public config route validates the widget key, request origin/domain, schema, and rate limit before responding.
 - Stored copy and filenames remain untrusted text and must be escaped on render; no appearance field accepts executable HTML, CSS, or JavaScript.
 
-Relevant implementation tests cover strict schemas, forbidden public keys, English/non-English override isolation, physical launcher positioning, entitlement behavior, business-hours evaluation, public route ETag/304 behavior, asset format/size/dimension validation, and unsafe SVG rejection.
+Relevant implementation tests cover strict schemas, forbidden public keys, English/non-English override isolation, physical launcher positioning, entitlement behavior, business-hours evaluation, public route ETag/304 behavior, color-mode resolution, and raster asset format/size/dimension validation.

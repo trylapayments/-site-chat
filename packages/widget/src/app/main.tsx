@@ -76,6 +76,7 @@ import {
   mixHexColors,
   positionInsets,
   resolveLocalizedCopy,
+  resolveWidgetThemeColors,
   safeHexColor,
   widgetShadow,
 } from "./appearance";
@@ -295,6 +296,7 @@ function WidgetApp() {
   const [pendingFiles, setPendingFiles] = useState<SelectedLocalFile[]>([]);
   const [uploadBatch, setUploadBatch] = useState<UploadBatchState>(createEmptyUploadBatch());
   const [dragActive, setDragActive] = useState(false);
+  const [prefersDarkColorScheme, setPrefersDarkColorScheme] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
   const initRef = useRef<InitPayload | null>(null);
@@ -367,6 +369,23 @@ function WidgetApp() {
 
   const config: WidgetPublicConfig | null =
     state.status === "ready" ? state.init.config : (initRef.current?.config ?? null);
+
+  useEffect(() => {
+    if (config?.colorMode !== "system") {
+      setPrefersDarkColorScheme(false);
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncPreference = () => {
+      setPrefersDarkColorScheme(mediaQuery.matches);
+    };
+    syncPreference();
+    mediaQuery.addEventListener("change", syncPreference);
+    return () => {
+      mediaQuery.removeEventListener("change", syncPreference);
+    };
+  }, [config?.colorMode]);
 
   useEffect(() => {
     const delay = config?.autoOpenDelayMs;
@@ -1098,8 +1117,12 @@ function WidgetApp() {
     "#0066FF",
   );
   const accentColor = safeHexColor(config?.accentColor, "#0052CC");
-  const backgroundColor = safeHexColor(config?.backgroundColor, "#FFFFFF");
-  const textColor = safeHexColor(config?.textColor, "#111827");
+  const { backgroundColor, textColor } = resolveWidgetThemeColors({
+    colorMode: config?.colorMode,
+    backgroundColor: config?.backgroundColor,
+    textColor: config?.textColor,
+    prefersDark: prefersDarkColorScheme,
+  });
   const launcherColor = safeHexColor(config?.launcherColor, primaryColor);
   const surfaceColor = mixHexColors(backgroundColor, textColor, 0.04);
   const borderColor = mixHexColors(backgroundColor, textColor, 0.16);
@@ -1158,6 +1181,13 @@ function WidgetApp() {
         );
   const logoUrl = config ? (config.logoUrl ?? config.branding.logoUrl) : null;
   const panelLabel = headerTitle || messagesCopy.chatPanelLabel;
+  const configuredColorMode = config?.colorMode ?? "light";
+  const effectiveColorMode =
+    configuredColorMode === "system"
+      ? prefersDarkColorScheme
+        ? "dark"
+        : "light"
+      : configuredColorMode;
   const rootStyle: WidgetCssProperties = {
     "--widget-accent": accentColor,
     "--widget-background": backgroundColor,
@@ -1170,7 +1200,7 @@ function WidgetApp() {
     "--widget-surface": surfaceColor,
     "--widget-text": textColor,
     color: textColor,
-    colorScheme: config?.colorMode === "system" ? "light dark" : (config?.colorMode ?? "light"),
+    colorScheme: effectiveColorMode,
     fontFamily: "var(--widget-font-family)",
     fontSize: "var(--widget-font-size)",
   };
@@ -1181,6 +1211,8 @@ function WidgetApp() {
       dir={direction}
       lang={locale}
       data-config-version={config?.version}
+      data-color-mode={configuredColorMode}
+      data-effective-color-mode={effectiveColorMode}
       data-mobile-behavior={config?.mobileBehavior ?? "responsive"}
       data-widget-locale={locale}
       data-widget-dir={direction}

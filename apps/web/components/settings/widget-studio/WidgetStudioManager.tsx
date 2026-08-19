@@ -307,6 +307,7 @@ export function WidgetStudioManager({
 
   function runPublish(): void {
     if (!canManage) return;
+    const expectedPublishedVersion = studioState.publishedVersion;
     setError(null);
     setNotice(null);
     startTransition(async () => {
@@ -315,10 +316,17 @@ export function WidgetStudioManager({
         setError(saved.message);
         return;
       }
-      const published = await publishWidgetStudioAction(workspaceSlug);
+      const published = await publishWidgetStudioAction(
+        workspaceSlug,
+        expectedPublishedVersion,
+      );
       if (!published.success) {
         adoptState(saved.data);
-        setError(published.message);
+        setError(
+          published.code === "PUBLISH_CONFLICT"
+            ? "Publish conflict: another admin published while you were editing. Reload Widget Studio, review the latest version, and try again."
+            : published.message,
+        );
         return;
       }
       adoptState(published.data);
@@ -472,7 +480,7 @@ export function WidgetStudioManager({
           }}
         />
         <p className="text-muted-foreground text-xs">
-          PNG, JPEG, WebP, or SVG. Maximum 512 KB and 1024 × 1024.
+          PNG, JPEG, or WebP. Maximum 512 KB and 1024 × 1024.
         </p>
       </div>
     );
@@ -1096,12 +1104,19 @@ export function WidgetStudioManager({
             />
           </Section>
 
-          <Section title={messages.sections.businessHours}>
+          <Section title="Business hours (foundation)">
+            <p
+              className="bg-muted/50 text-muted-foreground rounded-md border px-3 py-2 text-sm sm:col-span-2"
+              data-testid="widget-studio-business-hours-foundation"
+            >
+              Scheduling is not live in the visitor widget yet. These foundation
+              settings are read-only and are not enforced for visitors.
+            </p>
             <ToggleControl
               id="studio-business-enabled"
-              label="Enable business-hours messaging"
+              label="Business-hours messaging (not active)"
               checked={draft.businessHours.enabled}
-              disabled={disabled}
+              disabled
               onChange={(enabled) => {
                 updateDraft({
                   businessHours: { ...draft.businessHours, enabled },
@@ -1114,7 +1129,7 @@ export function WidgetStudioManager({
                 id="studio-timezone"
                 value={draft.businessHours.timezone}
                 maxLength={64}
-                disabled={disabled}
+                disabled
                 onChange={(event) => {
                   updateDraft({
                     businessHours: {
@@ -1139,7 +1154,7 @@ export function WidgetStudioManager({
                       <input
                         type="checkbox"
                         checked={Boolean(row)}
-                        disabled={disabled}
+                        disabled
                         onChange={(event) => {
                           toggleBusinessDay(day, event.target.checked);
                         }}
@@ -1150,7 +1165,7 @@ export function WidgetStudioManager({
                       type="time"
                       aria-label={`${label} start`}
                       value={row?.start ?? "09:00"}
-                      disabled={disabled || !row}
+                      disabled
                       onChange={(event) => {
                         updateBusinessDay(day, "start", event.target.value);
                       }}
@@ -1159,7 +1174,7 @@ export function WidgetStudioManager({
                       type="time"
                       aria-label={`${label} end`}
                       value={row?.end ?? "17:00"}
-                      disabled={disabled || !row}
+                      disabled
                       onChange={(event) => {
                         updateBusinessDay(day, "end", event.target.value);
                       }}

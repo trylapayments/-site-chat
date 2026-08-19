@@ -8,6 +8,7 @@ import {
   mixHexColors,
   positionInsets,
   resolveLocalizedCopy,
+  resolveWidgetThemeColors,
 } from "./appearance";
 
 describe("widget appearance helpers", () => {
@@ -57,5 +58,48 @@ describe("widget appearance helpers", () => {
     expect(mixHexColors("#FFFFFF", "#000000", 0.1)).toBe("#E6E6E6");
     expect(contrastingTextColor("#FFFFFF")).toBe("#000000");
     expect(contrastingTextColor("#000000")).toBe("#FFFFFF");
+  });
+
+  it("resolves explicit and system color modes", () => {
+    const configured = {
+      backgroundColor: "#FFF7ED",
+      textColor: "#431407",
+    };
+
+    expect(
+      resolveWidgetThemeColors({
+        colorMode: "light",
+        ...configured,
+        prefersDark: true,
+      }),
+    ).toEqual(configured);
+    expect(
+      resolveWidgetThemeColors({
+        colorMode: "dark",
+        backgroundColor: "#111827",
+        textColor: "#F9FAFB",
+        prefersDark: false,
+      }),
+    ).toEqual({
+      backgroundColor: "#111827",
+      textColor: "#F9FAFB",
+    });
+    expect(
+      resolveWidgetThemeColors({
+        colorMode: "system",
+        ...configured,
+        prefersDark: false,
+      }),
+    ).toEqual(configured);
+    expect(
+      resolveWidgetThemeColors({
+        colorMode: "system",
+        ...configured,
+        prefersDark: true,
+      }),
+    ).toEqual({
+      backgroundColor: "#0F172A",
+      textColor: "#F8FAFC",
+    });
   });
 });

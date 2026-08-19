@@ -18,6 +18,13 @@ const SHADOWS: Record<WidgetPublicConfig["shadowLevel"], string> = {
 };
 
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+const SYSTEM_DARK_BACKGROUND = "#0F172A";
+const SYSTEM_DARK_TEXT = "#F8FAFC";
+
+export type WidgetThemeColors = {
+  backgroundColor: string;
+  textColor: string;
+};
 
 export function resolveLocalizedCopy(input: {
   copy: WidgetLocalizedCopy | undefined | null;
@@ -35,6 +42,30 @@ export function resolveLocalizedCopy(input: {
 
 export function safeHexColor(value: string | undefined, fallback: string): string {
   return value && HEX_COLOR.test(value) ? value : fallback;
+}
+
+/**
+ * Configured background/text colors are the light theme. Explicit dark mode
+ * keeps its configured preset colors, while system mode uses neutral dark
+ * defaults so primary, accent, and launcher branding remain unchanged.
+ */
+export function resolveWidgetThemeColors(input: {
+  colorMode: WidgetPublicConfig["colorMode"] | undefined;
+  backgroundColor: string | undefined;
+  textColor: string | undefined;
+  prefersDark: boolean;
+}): WidgetThemeColors {
+  if (input.colorMode === "system" && input.prefersDark) {
+    return {
+      backgroundColor: SYSTEM_DARK_BACKGROUND,
+      textColor: SYSTEM_DARK_TEXT,
+    };
+  }
+
+  return {
+    backgroundColor: safeHexColor(input.backgroundColor, "#FFFFFF"),
+    textColor: safeHexColor(input.textColor, "#111827"),
+  };
 }
 
 export function mixHexColors(background: string, foreground: string, weight: number): string {

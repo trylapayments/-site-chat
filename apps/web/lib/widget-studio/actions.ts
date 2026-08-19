@@ -149,16 +149,48 @@ export async function saveWidgetStudioDraftAction(
 
 export async function publishWidgetStudioAction(
   workspaceSlug: string,
+  expectedPublishedVersion?: unknown,
 ): Promise<WidgetStudioActionResult<WidgetStudioState>> {
+  const expected =
+    expectedPublishedVersion === undefined || expectedPublishedVersion === null
+      ? null
+      : z.number().int().positive().safeParse(expectedPublishedVersion);
+  if (
+    expectedPublishedVersion !== undefined &&
+    expectedPublishedVersion !== null &&
+    (expected === null || !expected.success)
+  ) {
+    return {
+      success: false,
+      message: "Invalid publish version.",
+      code: "VALIDATION_ERROR",
+    };
+  }
+
   try {
     const { workspace, supabase } = await requireWidgetStudioContext(
       workspaceSlug,
       true,
     );
-    const state = await publishWidgetStudio(supabase, workspace.workspace_id);
+    const state = await publishWidgetStudio(
+      supabase,
+      workspace.workspace_id,
+      expected && "success" in expected && expected.success
+        ? expected.data
+        : null,
+    );
     revalidateStudio(workspaceSlug);
     return { success: true, data: state };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("PUBLISH_CONFLICT")) {
+      return {
+        success: false,
+        message:
+          "Another admin published while you were editing. Reload Studio and try again.",
+        code: "PUBLISH_CONFLICT",
+      };
+    }
     return actionError(error, "Unable to publish the widget.");
   }
 }
@@ -259,7 +291,6 @@ export async function initiateWidgetStudioAssetUploadAction(
       ...parsed.data,
       workspaceId: workspace.workspace_id,
       createdBy: user.id,
-      supabase,
     });
     return { success: true, data: intent };
   } catch (error) {
@@ -281,14 +312,10 @@ export async function completeWidgetStudioAssetUploadAction(
   }
 
   try {
-    const { workspace, supabase } = await requireWidgetStudioContext(
-      workspaceSlug,
-      true,
-    );
+    const { workspace } = await requireWidgetStudioContext(workspaceSlug, true);
     const asset = await completeWidgetAssetUpload({
       workspaceId: workspace.workspace_id,
       assetId: parsed.data.assetId,
-      supabase,
     });
     return { success: true, data: asset };
   } catch (error) {

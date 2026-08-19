@@ -18,9 +18,10 @@ import {
   widgetOptionsResponse,
 } from "@/lib/widget/responses";
 import { consumeWidgetRateLimit } from "@/lib/widget/service";
-import { widgetPublicConfigEtag } from "@/lib/widget-studio/public-config";
-
-const CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300";
+import {
+  widgetPublicConfigCacheControl,
+  widgetPublicConfigEtag,
+} from "@/lib/widget-studio/public-config";
 
 export async function GET(request: Request) {
   const requestId = createRequestId();
@@ -109,7 +110,7 @@ export function OPTIONS(request: Request) {
 
 function cacheHeaders(origin: string | null, etag: string): Headers {
   const headers = corsHeaders(origin) ?? new Headers();
-  headers.set("Cache-Control", CACHE_CONTROL);
+  headers.set("Cache-Control", widgetPublicConfigCacheControl());
   headers.set("ETag", etag);
   return headers;
 }

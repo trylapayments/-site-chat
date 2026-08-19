@@ -40,13 +40,14 @@ describe("Widget Studio asset validation", () => {
     });
   });
 
-  it("rejects active content in SVG assets", () => {
-    const bytes = new TextEncoder().encode(
-      '<svg width="64" height="64"><script>alert(1)</script></svg>',
-    );
-
-    expect(() => validateWidgetAssetContents(bytes, "image/svg+xml")).toThrow(
-      "SVG files cannot contain scripts or external resources.",
-    );
+  it("rejects SVG before creating an upload intent", () => {
+    expect(() =>
+      validateWidgetAssetUpload({
+        kind: "logo",
+        filename: "brand.svg",
+        mimeType: "image/svg+xml",
+        sizeBytes: 100,
+      }),
+    ).toThrow("Use a PNG, JPEG, or WebP image.");
   });
 });

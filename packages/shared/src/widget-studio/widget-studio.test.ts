@@ -118,10 +118,19 @@ describe("public DTO mapping", () => {
     );
   });
 
-  it("never documents forbidden keys in public schema shape", () => {
-    const shape = widgetPublicAppearanceSchema.shape;
+  it("rejects every forbidden key at the public schema boundary", () => {
+    const publicConfig = mapAppearanceToPublicConfig({
+      config: applyWidgetPreset("clean"),
+      publishedVersion: 3,
+      publishedAt: "2026-08-19T00:00:00.000Z",
+    });
     for (const key of PUBLIC_APPEARANCE_FORBIDDEN_KEYS) {
-      expect(Object.prototype.hasOwnProperty.call(shape, key)).toBe(false);
+      expect(
+        widgetPublicAppearanceSchema.safeParse({
+          ...publicConfig,
+          [key]: "must be rejected",
+        }).success,
+      ).toBe(false);
     }
   });
 });

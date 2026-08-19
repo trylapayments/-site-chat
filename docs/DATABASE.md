@@ -254,7 +254,7 @@ One current Widget Studio draft and one current published snapshot per workspace
 | draft_updated_by | UUID | NULL, FK → auth.users, ON DELETE SET NULL | Last draft actor |
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL | Row lifecycle |
 
-`save_widget_studio_draft`, `publish_widget_studio`, `discard_widget_studio_draft`, and `reset_widget_studio_draft` are authenticated SECURITY DEFINER RPCs. Publish copies `draft_json` to `published_json` and increments `published_version` in one update. RLS is FORCE-enabled; authenticated members may SELECT their workspace row, but owners/admins alone pass mutation gates.
+`save_widget_studio_draft`, `publish_widget_studio`, `discard_widget_studio_draft`, and `reset_widget_studio_draft` are authenticated SECURITY DEFINER RPCs. Publish copies `draft_json` to `published_json` and increments `published_version` in one update whose predicate compares the caller's expected version; a mismatch raises `PUBLISH_CONFLICT`. RLS is FORCE-enabled; authenticated members may SELECT their workspace row, but owners/admins alone pass mutation gates.
 
 ### 5.6 widget_assets
 
@@ -265,16 +265,18 @@ Private metadata for uploaded Widget Studio brand images. Appearance JSON refere
 | id | UUID | PK | Asset identifier |
 | workspace_id | UUID | NOT NULL, FK → workspaces, ON DELETE CASCADE | Tenant scope |
 | kind | TEXT | CHECK `logo` / `launcher_icon` / `agent_avatar` | Expected use |
-| storage_key | TEXT | NOT NULL, UNIQUE per workspace | Private object path; not returned in public config |
+| storage_key | TEXT | NOT NULL, UNIQUE per workspace, CHECK workspace prefix | Server-generated immutable path under `workspaces/{workspace_id}/widget-assets/`; not returned in public config |
 | mime_type | TEXT | NOT NULL | Declared allowlisted image MIME; content is verified on completion |
 | byte_size | INTEGER | CHECK 1–524288 | Declared bytes; exact object length is verified on completion |
-| width / height | INTEGER | NULL until upload confirmation | Verified dimensions; public signing requires both |
+| width / height | INTEGER | NULL until verification | Server-derived dimensions; public signing requires both |
+| status | TEXT | NOT NULL, CHECK `pending` / `verified` / `rejected` | Explicit upload verification lifecycle |
+| verified_at | TIMESTAMPTZ | NULL | Set only when server inspection succeeds; required with `status = 'verified'` |
 | original_filename | TEXT | NOT NULL | Sanitized filename |
 | created_by | UUID | NULL, FK → auth.users, ON DELETE SET NULL | Upload actor |
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL | |
 | deleted_at | TIMESTAMPTZ | NULL | Soft-delete marker |
 
-**Indexes:** workspace, plus active `(workspace_id, kind)`. FORCE RLS scopes SELECT to workspace members and INSERT/UPDATE to owners/admins. Objects live in the private `widget-assets` bucket; no anon/authenticated `storage.objects` policy is added. Application-signed URLs are the only upload/download path.
+**Indexes:** workspace, active `(workspace_id, kind)`, and verified-active `(workspace_id, kind)`. FORCE RLS scopes SELECT to workspace members; direct authenticated INSERT/UPDATE/DELETE is revoked. Authorized Server Actions use service role for pending → verified/rejected lifecycle writes after application capability checks. Objects live in the private `widget-assets` bucket; no anon/authenticated `storage.objects` policy is added. Application-signed URLs are the only upload/download path, and only verified rows are eligible for signing.
 
 ---
 

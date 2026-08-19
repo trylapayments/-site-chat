@@ -4,6 +4,7 @@ import { widgetLocaleInputSchema } from "../schemas/widget";
 import {
   WIDGET_COLOR_MODES,
   WIDGET_DENSITIES,
+  WIDGET_DIMENSION_LIMITS,
   WIDGET_FONT_FAMILIES,
   WIDGET_FONT_SIZE_SCALES,
   WIDGET_HEADER_STYLES,
@@ -71,15 +72,39 @@ export const widgetPublicAppearanceSchema = z
     launcherShape: z.enum(WIDGET_LAUNCHER_SHAPES),
     launcherSize: z.enum(WIDGET_LAUNCHER_SIZES),
     position: z.enum(WIDGET_POSITIONS),
-    launcherOffsetX: z.number().int(),
-    launcherOffsetY: z.number().int(),
+    launcherOffsetX: z
+      .number()
+      .int()
+      .min(WIDGET_DIMENSION_LIMITS.offsetMin)
+      .max(WIDGET_DIMENSION_LIMITS.offsetMax),
+    launcherOffsetY: z
+      .number()
+      .int()
+      .min(WIDGET_DIMENSION_LIMITS.offsetMin)
+      .max(WIDGET_DIMENSION_LIMITS.offsetMax),
     launcherIconUrl: z.string().url().nullable(),
 
-    borderRadius: z.number().int(),
+    borderRadius: z
+      .number()
+      .int()
+      .min(WIDGET_DIMENSION_LIMITS.borderRadiusMin)
+      .max(WIDGET_DIMENSION_LIMITS.borderRadiusMax),
     shadowLevel: z.enum(WIDGET_SHADOW_LEVELS),
-    widgetWidth: z.number().int(),
-    widgetHeight: z.number().int(),
-    widgetMaxHeight: z.number().int(),
+    widgetWidth: z
+      .number()
+      .int()
+      .min(WIDGET_DIMENSION_LIMITS.widthMin)
+      .max(WIDGET_DIMENSION_LIMITS.widthMax),
+    widgetHeight: z
+      .number()
+      .int()
+      .min(WIDGET_DIMENSION_LIMITS.heightMin)
+      .max(WIDGET_DIMENSION_LIMITS.heightMax),
+    widgetMaxHeight: z
+      .number()
+      .int()
+      .min(WIDGET_DIMENSION_LIMITS.maxHeightMin)
+      .max(WIDGET_DIMENSION_LIMITS.maxHeightMax),
     density: z.enum(WIDGET_DENSITIES),
 
     headerStyle: z.enum(WIDGET_HEADER_STYLES),
@@ -96,7 +121,12 @@ export const widgetPublicAppearanceSchema = z
     fontSizeScale: z.enum(WIDGET_FONT_SIZE_SCALES),
     colorMode: z.enum(WIDGET_COLOR_MODES),
 
-    autoOpenDelayMs: z.number().int().nullable(),
+    autoOpenDelayMs: z
+      .number()
+      .int()
+      .min(0)
+      .max(WIDGET_DIMENSION_LIMITS.autoOpenDelayMaxMs)
+      .nullable(),
     hideLauncherWhenOpen: z.boolean(),
     showGreeting: z.boolean(),
     mobileBehavior: z.enum(WIDGET_MOBILE_BEHAVIORS),
@@ -117,9 +147,52 @@ export const widgetPublicAppearanceSchema = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .superRefine((config, ctx) => {
+    if (config.widgetMaxHeight < config.widgetHeight) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "widgetMaxHeight must be >= widgetHeight",
+        path: ["widgetMaxHeight"],
+      });
+    }
+  });
 
 export type WidgetPublicAppearance = z.infer<typeof widgetPublicAppearanceSchema>;
+
+/**
+ * Canonical entitlement remapping for every visitor delivery path.
+ * Always call this — never pass SQL DTOs through without it.
+ */
+export function applyPublicAppearanceEntitlements(
+  appearance: WidgetPublicAppearance,
+  entitlements: WidgetStudioEntitlements = defaultWidgetStudioEntitlements(),
+): WidgetPublicAppearance {
+  const showPoweredBy = resolveShowPoweredBy({
+    configured: appearance.showPoweredBy,
+    entitlements,
+  });
+  if (showPoweredBy === appearance.showPoweredBy) {
+    return appearance;
+  }
+  return widgetPublicAppearanceSchema.parse({
+    ...appearance,
+    showPoweredBy,
+    branding: {
+      ...appearance.branding,
+      showPoweredBy,
+    },
+  });
+}
+
+/** Signing-bucket used in ETag so expired signed URLs cannot stick via 304. */
+export function widgetConfigSigningBucket(
+  nowMs: number = Date.now(),
+  bucketSeconds: number = 15 * 60,
+): number {
+  const seconds = Math.floor(nowMs / 1000);
+  return Math.floor(seconds / Math.max(1, bucketSeconds));
+}
 
 function toPublicCopy(copy: WidgetLocalizedCopy): {
   useSystemDefaults: boolean;

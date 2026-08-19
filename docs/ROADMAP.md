@@ -105,7 +105,7 @@ The MVP is complete when:
 - [ ] Dashboard conversation detail page (message thread)
 - [ ] Agent message sending from dashboard
 - [ ] Conversation status management (open, pending, resolved)
-- [x] Basic widget customization / Widget Studio (typed appearance, presets, live preview, draft/publish, private brand assets, localization-safe copy model, public versioned config — see `docs/WIDGET-STUDIO.md`)
+- [x] Basic widget customization / Widget Studio (typed appearance, presets, live preview, draft/publish, private brand assets, localization-safe copy model, public versioned config; business-hours schema is foundation only and its UI remains disabled — see `docs/WIDGET-STUDIO.md`)
 
 **Exit criteria:** Widget embedded on a test site sends a message that appears in the dashboard inbox in realtime; agent reply appears in the widget in realtime.
 
@@ -228,7 +228,7 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 | Markdown message rendering (sanitized) | Richer agent replies | XSS-safe renderer |
 | Read receipts | Visitor engagement visibility | Message delivery tracking |
 | Conversation search enhancements (semantic / saved searches) | Agent productivity | Keyword global search shipped in Phase 3 (`docs/GLOBAL-SEARCH.md`); embeddings / saved searches remain post-MVP |
-| Business hours / offline mode | Professional appearance | Weekly config/evaluator foundation ships with Widget Studio; routing, presence, and automated offline behavior remain |
+| Business hours / offline mode | Professional appearance | Weekly config/evaluator foundation exists, but Studio controls and visitor enforcement remain future work; requires routing, presence, and automated offline behavior |
 | Proactive chat triggers (time on page) | Lead capture | Widget rule engine |
 | Browser push notifications | Faster agent response | Service worker, VAPID |
 | Multi-language operator UI | International customers | i18n framework |

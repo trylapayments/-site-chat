@@ -44,7 +44,7 @@ Site Chat handles business communications between companies and their website vi
 | Cross-tenant customer timeline read | Critical | `list_customer_timeline` requires `workspace_is_accessible`; RLS on `customer_timeline_events`; contact must belong to workspace |
 | Timeline metadata secret leakage | High | Emit helper strips forbidden keys; page URLs sanitized; no signed URLs/bodies/tokens persisted |
 | Unpublished Widget Studio draft exposed to visitors | High | Public resolver selects `published_json` explicitly; DTO allowlist excludes draft/settings/member/billing fields; route schema regression tests |
-| Cross-tenant or active-content brand asset | High | Workspace/kind/confirmation checks before signing; private bucket; content/dimension verification; restrictive SVG validation |
+| Cross-tenant or unverified brand asset | High | Workspace/kind/verified-state checks before signing; immutable workspace-prefixed keys; private bucket; raster magic-byte/dimension verification |
 | Arbitrary style/script injection through customization | High | Strict typed config, allowlisted fonts/assets, no CSS/JS/remote URL fields |
 
 ---
@@ -285,15 +285,15 @@ Implementation: Vercel Edge Middleware with Upstash Redis sliding window counter
 
 Widget Studio uses a deny-by-default publication boundary:
 
-- `widget_configs` / `widget_assets` have FORCE RLS and workspace-scoped policies.
+- `widget_configs` / `widget_assets` have FORCE RLS and workspace-scoped SELECT policies. Authenticated INSERT/UPDATE/DELETE on `widget_assets` is closed.
 - Dashboard context derives the workspace from authenticated membership and the URL slug. `view_widget_studio` allows read-only access; `manage_widget_studio` is owner/admin only.
 - Draft mutations use authenticated SECURITY DEFINER RPCs with locked `search_path`. `app_private` execute is revoked from `PUBLIC`, `anon`, and `authenticated` except intentional RLS helpers.
 - The service-role public-key resolver is server-only. Visitor endpoints cannot call the underlying database function directly.
 - Visitor mapping selects only `published_json` and explicitly constructs `widgetPublicAppearanceSchema`; it never serializes a table row or `settings_json`.
 - The public DTO allows appearance, behavior, localized copy, business-hours foundation, version/timestamp, compatibility branding aliases, and signed asset URLs. It excludes draft state, actors, storage keys, members/operator emails, billing/Stripe, CRM, AI, privacy settings, secrets, and credentials.
-- `GET /api/v1/widget/config` requires a valid public key and allowed origin, is rate-limited, and uses a published-version ETag. It returns no embed token.
+- `GET /api/v1/widget/config` requires a valid public key and allowed origin, is rate-limited, and uses a published-version plus signing-bucket ETag. It returns no embed token.
 
-Brand uploads accept PNG/JPEG/WebP/SVG up to 512 KiB and 16–1024 px. Initiation requires `manage_widget_studio` and returns a 10-minute signed upload URL. Completion re-downloads the object, verifies size, format bytes, and dimensions, and rejects unsafe SVG active/external content. Public delivery signs an active, confirmed asset for one hour only when its workspace and kind match the published UUID reference. The bucket is private and has no anon/authenticated object policy. Config cannot contain arbitrary remote asset URLs; legacy logo URLs are ignored.
+Brand uploads accept raster PNG/JPEG/WebP only, up to 512 KiB and 16–1024 px. Initiation requires `manage_widget_studio`; after that application check, a server-only service-role path creates a `pending` row and a 10-minute signed upload URL. Completion re-downloads the object, verifies exact size, magic bytes, and dimensions, then sets `status = 'verified'` and `verified_at`; failures become rejected. Public delivery signs for one hour only when a non-deleted asset is explicitly verified, its workspace/kind match the published UUID reference, and its immutable `storage_key` has the required workspace prefix. The bucket is private and has no anon/authenticated object policy. Config cannot contain arbitrary remote asset URLs; legacy logo URLs are ignored.
 
 See [WIDGET-STUDIO.md](./WIDGET-STUDIO.md) and [ADR-009](./adr/ADR-009-widget-studio-draft-publish.md).
 

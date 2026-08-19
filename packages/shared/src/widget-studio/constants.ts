@@ -72,12 +72,39 @@ export const WIDGET_ASSET_LIMITS = {
   maxHeight: 1024,
   minWidth: 16,
   minHeight: 16,
-  allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"] as const,
+  /** Raster-only for v1 — SVG omitted (no robust sanitizer). */
+  allowedMimeTypes: ["image/png", "image/jpeg", "image/webp"] as const,
   signedUploadTtlSeconds: 10 * 60,
-  /** Public config download URLs — long enough for a page session; refreshed on bootstrap. */
+  /**
+   * Public signed download TTL. Cache/ETag signing-bucket must stay shorter
+   * than this so clients cannot keep dead URLs via 304 forever.
+   */
   signedDownloadTtlSeconds: 60 * 60,
+  /** ETag signing bucket width (seconds). Must be < signedDownloadTtlSeconds. */
+  configSigningBucketSeconds: 15 * 60,
   maxFilenameLength: 128,
 } as const;
+
+export const WIDGET_ASSET_STATUSES = ["pending", "verified", "rejected"] as const;
+export type WidgetAssetStatus = (typeof WIDGET_ASSET_STATUSES)[number];
+
+/** Server-generated storage key prefix for a workspace. */
+export function widgetAssetStorageKeyPrefix(workspaceId: string): string {
+  return `workspaces/${workspaceId}/widget-assets/`;
+}
+
+export function isWidgetAssetStorageKeyForWorkspace(
+  storageKey: string,
+  workspaceId: string,
+): boolean {
+  if (typeof storageKey !== "string" || storageKey.includes("..")) {
+    return false;
+  }
+  const prefix = widgetAssetStorageKeyPrefix(workspaceId);
+  return (
+    storageKey.startsWith(prefix) && storageKey.length > prefix.length && storageKey.length <= 512
+  );
+}
 
 export const WIDGET_DIMENSION_LIMITS = {
   offsetMin: 0,

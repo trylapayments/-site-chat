@@ -1995,8 +1995,10 @@ export type Database = {
           kind: string
           mime_type: string
           original_filename: string
+          status: string
           storage_key: string
           updated_at: string
+          verified_at: string | null
           width: number | null
           workspace_id: string
         }
@@ -2010,8 +2012,10 @@ export type Database = {
           kind: string
           mime_type: string
           original_filename: string
+          status?: string
           storage_key: string
           updated_at?: string
+          verified_at?: string | null
           width?: number | null
           workspace_id: string
         }
@@ -2025,8 +2029,10 @@ export type Database = {
           kind?: string
           mime_type?: string
           original_filename?: string
+          status?: string
           storage_key?: string
           updated_at?: string
+          verified_at?: string | null
           width?: number | null
           workspace_id?: string
         }
@@ -2575,7 +2581,10 @@ export type Database = {
         Returns: undefined
       }
       publish_widget_studio: {
-        Args: { p_workspace_id: string }
+        Args: {
+          p_expected_published_version?: number
+          p_workspace_id: string
+        }
         Returns: Json
       }
       record_canned_response_usage: {

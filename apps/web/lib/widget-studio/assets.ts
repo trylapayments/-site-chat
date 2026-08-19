@@ -3,22 +3,23 @@ import "server-only";
 import {
   WIDGET_ASSETS_BUCKET,
   WIDGET_ASSET_LIMITS,
+  isWidgetAssetStorageKeyForWorkspace,
   widgetAssetKindSchema,
+  widgetAssetStorageKeyPrefix,
   type Database,
   type ObjectStorage,
   type WidgetAssetKind,
+  type WidgetAssetStatus,
 } from "@site-chat/shared";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
 import { createSupabaseObjectStorage } from "@/lib/storage/supabase-object-storage";
-import type { AppSupabaseClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 const MIME_EXTENSIONS: Record<string, readonly string[]> = {
   "image/png": ["png"],
   "image/jpeg": ["jpg", "jpeg"],
   "image/webp": ["webp"],
-  "image/svg+xml": ["svg"],
 };
 
 export type WidgetAssetUploadInput = {
@@ -48,6 +49,7 @@ export type WidgetAssetView = {
   sizeBytes: number;
   width: number | null;
   height: number | null;
+  status: WidgetAssetStatus;
   url: string;
   urlExpiresAt: string;
 };
@@ -58,17 +60,8 @@ type ImageDimensions = {
 };
 
 type WidgetAssetTable = Database["public"]["Tables"]["widget_assets"];
-type WidgetAssetRow = WidgetAssetTable["Row"];
 type WidgetAssetInsert = WidgetAssetTable["Insert"];
 type WidgetAssetUpdate = WidgetAssetTable["Update"];
-type WidgetAssetDatabase = {
-  public: {
-    Tables: { widget_assets: WidgetAssetTable };
-    Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
-  };
-};
-type WidgetAssetClient = SupabaseClient<WidgetAssetDatabase>;
 
 export class WidgetAssetValidationError extends Error {
   readonly code: string;
@@ -84,8 +77,24 @@ function storageForAssets(storage?: ObjectStorage): ObjectStorage {
   return storage ?? createSupabaseObjectStorage(WIDGET_ASSETS_BUCKET);
 }
 
-function widgetAssetClient(client: AppSupabaseClient): WidgetAssetClient {
-  return client as unknown as WidgetAssetClient;
+/** Service-role client only — authenticated JWT cannot mutate widget_assets. */
+function serviceAssetClient(): ReturnType<typeof createServiceClient> {
+  return createServiceClient();
+}
+
+export function buildWidgetAssetStorageKey(input: {
+  workspaceId: string;
+  assetId: string;
+  filename: string;
+}): string {
+  const key = `${widgetAssetStorageKeyPrefix(input.workspaceId)}${input.assetId}/${input.filename}`;
+  if (!isWidgetAssetStorageKeyForWorkspace(key, input.workspaceId)) {
+    throw new WidgetAssetValidationError(
+      "INVALID_STORAGE_KEY",
+      "Generated storage key failed workspace prefix validation.",
+    );
+  }
+  return key;
 }
 
 export function sanitizeWidgetAssetFilename(raw: string): string {
@@ -131,7 +140,7 @@ export function validateWidgetAssetUpload(
   ) {
     throw new WidgetAssetValidationError(
       "UNSUPPORTED_TYPE",
-      "Use a PNG, JPEG, WebP, or SVG image.",
+      "Use a PNG, JPEG, or WebP image.",
     );
   }
 
@@ -158,42 +167,37 @@ export function validateWidgetAssetUpload(
     );
   }
 
-  const hasWidth = input.width !== undefined && input.width !== null;
-  const hasHeight = input.height !== undefined && input.height !== null;
-  if (hasWidth !== hasHeight) {
-    throw new WidgetAssetValidationError(
-      "INVALID_DIMENSIONS",
-      "Image width and height must be supplied together.",
-    );
-  }
-  if (hasWidth && hasHeight) {
-    validateDimensions({
-      width: input.width as number,
-      height: input.height as number,
-    });
-  }
-
+  // Client-supplied dimensions are ignored for trust. Server verifies bytes.
   return {
-    ...input,
     kind,
     filename,
     mimeType,
+    sizeBytes: input.sizeBytes,
+    width: null,
+    height: null,
   };
 }
 
+/**
+ * Create a pending asset row + signed upload URL.
+ * Mutates only via service role after the caller has enforced manage_widget_studio.
+ */
 export async function initiateWidgetAssetUpload(
   input: WidgetAssetUploadInput & {
     workspaceId: string;
     createdBy: string;
-    supabase: AppSupabaseClient;
   },
   storage?: ObjectStorage,
 ): Promise<WidgetAssetUploadIntent> {
   const validated = validateWidgetAssetUpload(input);
   const assetId = randomUUID();
-  const storageKey = `workspaces/${input.workspaceId}/widget-assets/${assetId}/${validated.filename}`;
+  const storageKey = buildWidgetAssetStorageKey({
+    workspaceId: input.workspaceId,
+    assetId,
+    filename: validated.filename,
+  });
   const objectStorage = storageForAssets(storage);
-  const supabase = widgetAssetClient(input.supabase);
+  const supabase = serviceAssetClient();
 
   const signed = await objectStorage.createSignedUploadUrl({
     path: storageKey,
@@ -209,16 +213,14 @@ export async function initiateWidgetAssetUpload(
     storage_key: storageKey,
     mime_type: validated.mimeType,
     byte_size: validated.sizeBytes,
-    // Null dimensions mark an upload as unconfirmed. Public enrichment only
-    // signs assets whose dimensions were populated from verified object bytes.
     width: null,
     height: null,
+    status: "pending",
+    verified_at: null,
     original_filename: validated.filename,
     created_by: input.createdBy,
   };
-  const { error } = await supabase
-    .from("widget_assets")
-    .insert<WidgetAssetInsert>(row);
+  const { error } = await supabase.from("widget_assets").insert(row);
 
   if (error) {
     throw new Error("Unable to create the asset upload.");
@@ -239,18 +241,17 @@ export async function completeWidgetAssetUpload(
   input: {
     workspaceId: string;
     assetId: string;
-    supabase: AppSupabaseClient;
   },
   storage?: ObjectStorage,
 ): Promise<WidgetAssetView> {
   const objectStorage = storageForAssets(storage);
-  const supabase = widgetAssetClient(input.supabase);
+  const supabase = serviceAssetClient();
   const { data: row, error } = await supabase
     .from("widget_assets")
     .select("*")
     .eq("workspace_id", input.workspaceId)
     .eq("id", input.assetId)
-    .maybeSingle<WidgetAssetRow>();
+    .maybeSingle();
 
   if (error || !row || row.deleted_at) {
     throw new WidgetAssetValidationError(
@@ -259,16 +260,48 @@ export async function completeWidgetAssetUpload(
     );
   }
 
+  if (row.status === "verified" && row.verified_at) {
+    if (
+      !isWidgetAssetStorageKeyForWorkspace(row.storage_key, input.workspaceId)
+    ) {
+      throw new WidgetAssetValidationError(
+        "INVALID_STORAGE_KEY",
+        "Asset storage key is not scoped to this workspace.",
+      );
+    }
+    const signed = await objectStorage.createSignedDownloadUrl({
+      path: row.storage_key,
+      expiresInSeconds: WIDGET_ASSET_LIMITS.signedDownloadTtlSeconds,
+    });
+    return {
+      id: row.id,
+      kind: widgetAssetKindSchema.parse(row.kind),
+      filename: row.original_filename,
+      mimeType: row.mime_type,
+      sizeBytes: row.byte_size,
+      width: row.width,
+      height: row.height,
+      status: "verified",
+      url: signed.url,
+      urlExpiresAt: signed.expiresAt,
+    };
+  }
+
+  if (
+    !isWidgetAssetStorageKeyForWorkspace(row.storage_key, input.workspaceId)
+  ) {
+    await rejectUploadedAsset(row.id, row.storage_key, objectStorage);
+    throw new WidgetAssetValidationError(
+      "INVALID_STORAGE_KEY",
+      "Asset storage key is not scoped to this workspace.",
+    );
+  }
+
   const expiresAt =
     new Date(row.created_at).getTime() +
     WIDGET_ASSET_LIMITS.signedUploadTtlSeconds * 1000;
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) {
-    await rejectUploadedAsset(
-      input.supabase,
-      row.id,
-      row.storage_key,
-      objectStorage,
-    );
+    await rejectUploadedAsset(row.id, row.storage_key, objectStorage);
     throw new WidgetAssetValidationError(
       "UPLOAD_EXPIRED",
       "The asset upload expired. Choose the file again.",
@@ -298,15 +331,19 @@ export async function completeWidgetAssetUpload(
     }
 
     const dimensions = validateWidgetAssetContents(bytes, row.mime_type);
+    const nowIso = new Date().toISOString();
     const update: WidgetAssetUpdate = {
       width: dimensions.width,
       height: dimensions.height,
+      status: "verified",
+      verified_at: nowIso,
     };
     const { error: updateError } = await supabase
       .from("widget_assets")
-      .update<WidgetAssetUpdate>(update)
+      .update(update)
       .eq("workspace_id", input.workspaceId)
       .eq("id", row.id)
+      .eq("status", "pending")
       .is("deleted_at", null);
 
     if (updateError) {
@@ -326,34 +363,32 @@ export async function completeWidgetAssetUpload(
       sizeBytes: row.byte_size,
       width: dimensions.width,
       height: dimensions.height,
+      status: "verified",
       url: signed.url,
       urlExpiresAt: signed.expiresAt,
     };
   } catch (validationError) {
-    await rejectUploadedAsset(
-      input.supabase,
-      row.id,
-      row.storage_key,
-      objectStorage,
-    );
+    await rejectUploadedAsset(row.id, row.storage_key, objectStorage);
     throw validationError;
   }
 }
 
 async function rejectUploadedAsset(
-  supabase: AppSupabaseClient,
   assetId: string,
   storageKey: string,
   storage: ObjectStorage,
 ): Promise<void> {
-  const assets = widgetAssetClient(supabase);
-  const update: WidgetAssetUpdate = { deleted_at: new Date().toISOString() };
+  const assets = serviceAssetClient();
+  const update: WidgetAssetUpdate = {
+    deleted_at: new Date().toISOString(),
+    status: "rejected",
+    verified_at: null,
+    width: null,
+    height: null,
+  };
   await Promise.allSettled([
     storage.deleteObject(storageKey),
-    assets
-      .from("widget_assets")
-      .update<WidgetAssetUpdate>(update)
-      .eq("id", assetId),
+    assets.from("widget_assets").update(update).eq("id", assetId),
   ]);
 }
 
@@ -391,18 +426,10 @@ export function validateWidgetAssetContents(
     if (!dimensions) {
       throw contentMismatch();
     }
-  } else if (declaredMime === "image/svg+xml") {
-    dimensions = svgDimensions(bytes);
   } else {
     throw contentMismatch();
   }
 
-  if (!dimensions) {
-    throw new WidgetAssetValidationError(
-      "INVALID_DIMENSIONS",
-      "Image dimensions could not be determined.",
-    );
-  }
   validateDimensions(dimensions);
   return dimensions;
 }
@@ -532,69 +559,4 @@ function webpDimensions(bytes: Uint8Array): ImageDimensions | null {
     };
   }
   return null;
-}
-
-function svgDimensions(bytes: Uint8Array): ImageDimensions | null {
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    throw contentMismatch();
-  }
-
-  const trimmed = text.replace(/^\uFEFF/, "").trim();
-  if (
-    !/^<\?xml[\s\S]*?\?>\s*<svg\b/i.test(trimmed) &&
-    !/^<svg\b/i.test(trimmed)
-  ) {
-    throw contentMismatch();
-  }
-
-  if (
-    /<!DOCTYPE/i.test(trimmed) ||
-    /<\s*(?:script|style|foreignObject|iframe|object|embed)\b/i.test(trimmed) ||
-    /\son[a-z]+\s*=/i.test(trimmed) ||
-    /\sstyle\s*=/i.test(trimmed) ||
-    /\b(?:href|xlink:href)\s*=\s*["'](?!#)/i.test(trimmed) ||
-    /javascript\s*:/i.test(trimmed) ||
-    /url\s*\(\s*["']?(?!#)/i.test(trimmed)
-  ) {
-    throw new WidgetAssetValidationError(
-      "UNSAFE_SVG",
-      "SVG files cannot contain scripts or external resources.",
-    );
-  }
-
-  const openingTag = trimmed.match(/<svg\b[^>]*>/i)?.[0];
-  if (!openingTag) {
-    throw contentMismatch();
-  }
-
-  const width = numericSvgAttribute(openingTag, "width");
-  const height = numericSvgAttribute(openingTag, "height");
-  if (width !== null && height !== null) {
-    return { width: Math.round(width), height: Math.round(height) };
-  }
-
-  const viewBox = openingTag.match(
-    /\bviewBox\s*=\s*["']\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)\s*["']/i,
-  );
-  if (viewBox?.[1] && viewBox[2]) {
-    return {
-      width: Math.round(Number(viewBox[1])),
-      height: Math.round(Number(viewBox[2])),
-    };
-  }
-  return null;
-}
-
-function numericSvgAttribute(tag: string, attribute: string): number | null {
-  const match = tag.match(
-    new RegExp(`\\b${attribute}\\s*=\\s*["']\\s*([\\d.]+)(?:px)?\\s*["']`, "i"),
-  );
-  if (!match?.[1]) {
-    return null;
-  }
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : null;
 }

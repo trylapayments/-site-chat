@@ -3,11 +3,18 @@ import "server-only";
 import {
   WIDGET_ASSETS_BUCKET,
   WIDGET_ASSET_LIMITS,
+  applyPublicAppearanceEntitlements,
+  defaultWidgetStudioEntitlements,
+  isWidgetAssetStorageKeyForWorkspace,
   mapAppearanceToPublicConfig,
+  resolveWidgetStudioEntitlements,
   widgetAppearanceConfigSchema,
+  widgetConfigSigningBucket,
   widgetPublicAppearanceSchema,
+  type WidgetAppearanceConfig,
   type WidgetAssetKind,
   type WidgetPublicAppearance,
+  type WidgetStudioEntitlements,
 } from "@site-chat/shared";
 
 import { createSupabaseObjectStorage } from "@/lib/storage/supabase-object-storage";
@@ -20,16 +27,23 @@ type AssetTarget = {
 };
 
 /**
- * Fill visitor-safe published config with short-lived private asset URLs.
+ * Canonical visitor config finalizer:
+ * published appearance → entitlements → verified asset signed URLs.
  * Draft JSON is never read here.
  */
 export async function enrichWidgetPublicAppearance(input: {
   workspaceId: string;
   publicConfig: unknown;
+  entitlements?: WidgetStudioEntitlements;
 }): Promise<WidgetPublicAppearance> {
-  const parsedPublic = widgetPublicAppearanceSchema.safeParse(
-    input.publicConfig,
-  );
+  const entitlements =
+    input.entitlements ??
+    resolveWidgetStudioEntitlements({
+      // Until billing ships, defaults grant studio features. Tests pass
+      // restricted entitlements explicitly.
+      grantedFeatures: null,
+    });
+
   const supabase = createServiceClient();
   const { data: configRow, error: configError } = await supabase
     .from("widget_configs")
@@ -37,58 +51,60 @@ export async function enrichWidgetPublicAppearance(input: {
     .eq("workspace_id", input.workspaceId)
     .maybeSingle();
 
-  if (configError || !configRow) {
-    if (!parsedPublic.success) {
-      throw new Error("Invalid published widget appearance");
+  let published: WidgetAppearanceConfig | null = null;
+  let base: WidgetPublicAppearance;
+  if (!configError && configRow) {
+    const parsedPublished = widgetAppearanceConfigSchema.safeParse(
+      configRow.published_json,
+    );
+    if (parsedPublished.success) {
+      published = parsedPublished.data;
+      base = mapAppearanceToPublicConfig({
+        config: published,
+        publishedVersion: configRow.published_version,
+        publishedAt: configRow.published_at,
+        entitlements,
+      });
+    } else {
+      base = parsePublicAppearance(input.publicConfig);
     }
-    return clearAssetUrls(parsedPublic.data);
+  } else {
+    base = parsePublicAppearance(input.publicConfig);
   }
 
-  const published = widgetAppearanceConfigSchema.safeParse(
-    configRow.published_json,
-  );
-  if (!published.success) {
-    if (!parsedPublic.success) {
-      throw new Error("Invalid published widget appearance");
-    }
-    return clearAssetUrls(parsedPublic.data);
-  }
+  // Always remap showPoweredBy, even for already-valid public DTOs.
+  base = applyPublicAppearanceEntitlements(base, entitlements);
+  base = clearAssetUrls(base);
 
-  const publicAppearance = clearAssetUrls(
-    parsedPublic.success
-      ? parsedPublic.data
-      : mapAppearanceToPublicConfig({
-          config: published.data,
-          publishedVersion: configRow.published_version,
-          publishedAt: configRow.published_at,
-        }),
-  );
+  if (!published) {
+    return base;
+  }
 
   const targets: AssetTarget[] = [];
-  if (published.data.logoAssetId) {
+  if (published.logoAssetId) {
     targets.push({
-      id: published.data.logoAssetId,
+      id: published.logoAssetId,
       kind: "logo",
       field: "logoUrl",
     });
   }
-  if (published.data.launcherIconAssetId) {
+  if (published.launcherIconAssetId) {
     targets.push({
-      id: published.data.launcherIconAssetId,
+      id: published.launcherIconAssetId,
       kind: "launcher_icon",
       field: "launcherIconUrl",
     });
   }
-  if (published.data.agentAvatarAssetId) {
+  if (published.agentAvatarAssetId) {
     targets.push({
-      id: published.data.agentAvatarAssetId,
+      id: published.agentAvatarAssetId,
       kind: "agent_avatar",
       field: "agentAvatarUrl",
     });
   }
 
   if (targets.length === 0) {
-    return publicAppearance;
+    return base;
   }
 
   const { data: assets, error: assetsError } = await supabase
@@ -99,12 +115,11 @@ export async function enrichWidgetPublicAppearance(input: {
       "id",
       targets.map((target) => target.id),
     )
-    .is("deleted_at", null)
-    .not("width", "is", null)
-    .not("height", "is", null);
+    .eq("status", "verified")
+    .is("deleted_at", null);
 
   if (assetsError) {
-    return publicAppearance;
+    return base;
   }
 
   const storage = createSupabaseObjectStorage(WIDGET_ASSETS_BUCKET);
@@ -113,9 +128,22 @@ export async function enrichWidgetPublicAppearance(input: {
       async (target): Promise<[AssetTarget["field"], string | null]> => {
         const asset = assets.find(
           (candidate) =>
-            candidate.id === target.id && candidate.kind === target.kind,
+            candidate.id === target.id &&
+            candidate.kind === target.kind &&
+            candidate.status === "verified" &&
+            candidate.verified_at !== null &&
+            candidate.width !== null &&
+            candidate.height !== null,
         );
         if (!asset) {
+          return [target.field, null];
+        }
+        if (
+          !isWidgetAssetStorageKeyForWorkspace(
+            asset.storage_key,
+            input.workspaceId,
+          )
+        ) {
           return [target.field, null];
         }
         try {
@@ -125,7 +153,6 @@ export async function enrichWidgetPublicAppearance(input: {
           });
           return [target.field, signed.url];
         } catch {
-          // A missing object must not take down bootstrap; omit that asset.
           return [target.field, null];
         }
       },
@@ -143,13 +170,21 @@ export async function enrichWidgetPublicAppearance(input: {
   }
 
   return widgetPublicAppearanceSchema.parse({
-    ...publicAppearance,
+    ...base,
     ...urls,
     branding: {
-      ...publicAppearance.branding,
+      ...base.branding,
       logoUrl: urls.logoUrl ?? null,
     },
   });
+}
+
+function parsePublicAppearance(input: unknown): WidgetPublicAppearance {
+  const parsed = widgetPublicAppearanceSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error("Invalid published widget appearance");
+  }
+  return parsed.data;
 }
 
 function clearAssetUrls(
@@ -167,9 +202,30 @@ function clearAssetUrls(
   });
 }
 
+/**
+ * ETag includes published version + signing bucket so 304 cannot retain
+ * expired signed asset URLs after the signing epoch rolls.
+ * Cache max-age must stay shorter than signedDownloadTtlSeconds.
+ */
 export function widgetPublicConfigEtag(
   widgetPublicKey: string,
   version: number,
+  nowMs: number = Date.now(),
 ): string {
-  return `"widget-config-${widgetPublicKey}-${String(version)}"`;
+  const bucket = widgetConfigSigningBucket(
+    nowMs,
+    WIDGET_ASSET_LIMITS.configSigningBucketSeconds,
+  );
+  return `"widget-config-${widgetPublicKey}-v${String(version)}-s${String(bucket)}"`;
 }
+
+export function widgetPublicConfigCacheControl(): string {
+  // Keep public cache well below signed URL TTL and signing bucket width.
+  const maxAge = Math.min(
+    60,
+    Math.floor(WIDGET_ASSET_LIMITS.configSigningBucketSeconds / 2),
+  );
+  return `public, max-age=${String(maxAge)}, stale-while-revalidate=${String(maxAge)}`;
+}
+
+export { defaultWidgetStudioEntitlements };

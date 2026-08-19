@@ -54,12 +54,30 @@ export async function saveWidgetStudioDraft(
   return parseState(data);
 }
 
+export async function publishWidgetStudio(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  expectedPublishedVersion: number | null = null,
+): Promise<WidgetStudioState> {
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "publish_widget_studio",
+    {
+      p_workspace_id: workspaceId,
+      p_expected_published_version: expectedPublishedVersion,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return parseState(data);
+}
+
 async function runStateMutation(
   supabase: AppSupabaseClient,
-  functionName:
-    | "publish_widget_studio"
-    | "discard_widget_studio_draft"
-    | "reset_widget_studio_draft",
+  functionName: "discard_widget_studio_draft" | "reset_widget_studio_draft",
   workspaceId: string,
 ): Promise<WidgetStudioState> {
   const { data, error } = await callPublicRpc(supabase, functionName, {
@@ -71,13 +89,6 @@ async function runStateMutation(
   }
 
   return parseState(data);
-}
-
-export function publishWidgetStudio(
-  supabase: AppSupabaseClient,
-  workspaceId: string,
-): Promise<WidgetStudioState> {
-  return runStateMutation(supabase, "publish_widget_studio", workspaceId);
 }
 
 export function discardWidgetStudioDraft(
