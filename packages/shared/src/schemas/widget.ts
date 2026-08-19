@@ -52,6 +52,11 @@ export const widgetBrandingSchema = z
 
 export type WidgetBranding = z.infer<typeof widgetBrandingSchema>;
 
+/**
+ * @deprecated Prefer `widgetPublicAppearanceSchema` from `widget-studio`.
+ * Kept as a thin compatibility object for older call sites; bootstrap now
+ * validates the full public appearance DTO (see widget-studio/public-config).
+ */
 export const widgetPublicConfigSchema = z
   .object({
     /** Canonical widget UI locale (public branding/config only). */
@@ -60,8 +65,11 @@ export const widgetPublicConfigSchema = z
     reopenWindowHours: z.number().int().min(1).max(720),
     branding: widgetBrandingSchema,
     position: z.enum(["bottom-right", "bottom-left"]),
+    /** Present when Widget Studio published config is delivered. */
+    version: z.number().int().positive().optional(),
+    updatedAt: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 export type WidgetPublicConfig = z.infer<typeof widgetPublicConfigSchema>;
 

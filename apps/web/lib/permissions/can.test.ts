@@ -79,4 +79,18 @@ describe("can", () => {
     expect(can("agent", "manage_workspace_canned_responses")).toBe(false);
     expect(can("viewer", "manage_workspace_canned_responses")).toBe(false);
   });
+
+  it("restricts manage_widget_studio to owner and admin", () => {
+    expect(can("owner", "manage_widget_studio")).toBe(true);
+    expect(can("admin", "manage_widget_studio")).toBe(true);
+    expect(can("agent", "manage_widget_studio")).toBe(false);
+    expect(can("viewer", "manage_widget_studio")).toBe(false);
+  });
+
+  it("allows all roles to view widget studio", () => {
+    expect(can("owner", "view_widget_studio")).toBe(true);
+    expect(can("admin", "view_widget_studio")).toBe(true);
+    expect(can("agent", "view_widget_studio")).toBe(true);
+    expect(can("viewer", "view_widget_studio")).toBe(true);
+  });
 });

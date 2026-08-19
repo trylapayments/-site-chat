@@ -12,6 +12,10 @@ export const DASHBOARD_CAPABILITIES = [
   "view_canned_responses",
   "use_canned_responses",
   "manage_workspace_canned_responses",
+  /** Owner/admin: Widget Studio draft/publish and brand assets. */
+  "manage_widget_studio",
+  /** Any member may view published preview metadata in Studio (read-only). */
+  "view_widget_studio",
 ] as const;
 
 export type DashboardCapability = (typeof DASHBOARD_CAPABILITIES)[number];
@@ -34,6 +38,9 @@ const CAPABILITY_MATRIX: Record<DashboardCapability, readonly MemberRole[]> = {
   view_canned_responses: ["owner", "admin", "agent", "viewer"],
   use_canned_responses: ["owner", "admin", "agent"],
   manage_workspace_canned_responses: ["owner", "admin"],
+  manage_widget_studio: ["owner", "admin"],
+  // Agents/viewers can open Studio in read-only mode (no draft mutation).
+  view_widget_studio: ["owner", "admin", "agent", "viewer"],
 };
 
 export function rolesForCapability(capability: DashboardCapability): readonly MemberRole[] {
