@@ -47,16 +47,7 @@ async function openReadonlyStudio(page: Page, email: string): Promise<void> {
 async function setPrimaryColor(page: Page, color: string): Promise<void> {
   const normalized = color.toUpperCase();
   const input = page.getByTestId("widget-studio-primary-color");
-  // type="color" ignores many Playwright fill paths; set the value and fire
-  // the same input/change events the Studio ColorControl listens for.
-  await input.evaluate((element, next) => {
-    const target = element as HTMLInputElement;
-    const proto = window.HTMLInputElement.prototype;
-    const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
-    descriptor?.set?.call(target, next.toLowerCase());
-    target.dispatchEvent(new Event("input", { bubbles: true }));
-    target.dispatchEvent(new Event("change", { bubbles: true }));
-  }, normalized);
+  await input.fill(normalized);
   await expect(page.getByTestId("widget-studio-preview-panel")).toHaveAttribute(
     "data-primary-color",
     normalized,
@@ -138,7 +129,7 @@ test.describe.serial("Widget Studio", () => {
       timeout: 30_000,
     });
     await expect(page.getByTestId("widget-studio-primary-color")).toHaveValue(
-      SAVED_DRAFT_COLOR.toLowerCase(),
+      SAVED_DRAFT_COLOR.toUpperCase(),
     );
     await expect(page.getByTestId("widget-studio-dirty-badge")).toHaveAttribute(
       "data-dirty",
@@ -204,7 +195,7 @@ test.describe.serial("Widget Studio", () => {
     await resetDraft(page);
 
     await expect(page.getByTestId("widget-studio-primary-color")).toHaveValue(
-      DEFAULT_PRIMARY_COLOR.toLowerCase(),
+      DEFAULT_PRIMARY_COLOR.toUpperCase(),
     );
     await expect(page.getByTestId("widget-studio-preview-panel")).toHaveAttribute(
       "data-primary-color",

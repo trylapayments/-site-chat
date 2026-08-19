@@ -27,7 +27,13 @@ import {
   type WidgetLocalizedCopy,
   type WidgetStudioState,
 } from "@site-chat/shared";
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -203,13 +209,18 @@ function ColorControl({
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
+  const [hexText, setHexText] = useState(value);
+
+  useEffect(() => {
+    setHexText(value);
+  }, [value]);
+
   return (
     <div className="space-y-1">
       <Label htmlFor={id}>{label}</Label>
       <div className="flex items-center gap-2">
         <Input
           id={id}
-          data-testid={testId}
           type="color"
           className="w-14 p-1"
           value={value}
@@ -218,7 +229,29 @@ function ColorControl({
             onChange(event.target.value.toUpperCase());
           }}
         />
-        <code className="text-muted-foreground text-xs">{value}</code>
+        <Input
+          data-testid={testId}
+          type="text"
+          className="font-mono text-xs uppercase"
+          value={hexText}
+          maxLength={7}
+          disabled={disabled}
+          aria-label={`${label} hex`}
+          onChange={(event) => {
+            const raw = event.target.value.trim().toUpperCase();
+            if (raw.length === 0) {
+              setHexText("#");
+              return;
+            }
+            if (!/^#[0-9A-F]{0,6}$/.test(raw)) {
+              return;
+            }
+            setHexText(raw);
+            if (/^#[0-9A-F]{6}$/.test(raw)) {
+              onChange(raw);
+            }
+          }}
+        />
       </div>
     </div>
   );
