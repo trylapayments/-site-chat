@@ -3,10 +3,14 @@
  * Quick readiness check for the local visual demo.
  * Usage: pnpm demo:check
  *
- * Validates more than HTTP 200: proxied loader.js must be plain, decodable
- * JavaScript (no leftover Content-Encoding / gzip magic), and bootstrap must
- * return JSON with a published config version.
+ * Validates:
+ * - proxied loader.js is plain, decodable JavaScript
+ * - bootstrap returns published config + embed token
+ * - visitor session create + message send succeed through the proxy
+ *   (catches missing Authorization / embed-token header forwarding)
  */
+import { randomUUID } from "node:crypto";
+
 const demoOrigin = (process.env.DEMO_HOST_ORIGIN ?? "http://localhost:3001").replace(/\/$/, "");
 const appOrigin = (
   process.env.DEMO_APP_ORIGIN ??
@@ -33,7 +37,6 @@ function looksLikeGzip(bytes) {
 }
 
 function looksLikeBrotliOrZlib(bytes) {
-  // zlib/deflate often starts with 0x78; treat as compressed for this check.
   return (
     bytes.length >= 2 &&
     bytes[0] === 0x78 &&
@@ -41,10 +44,6 @@ function looksLikeBrotliOrZlib(bytes) {
   );
 }
 
-/**
- * Safari fails with "cannot decode raw data" when Content-Encoding says the
- * body is compressed but the proxy already decompressed it (or vice versa).
- */
 async function assertDecodableLoaderJs(response, label) {
   if (!response) {
     console.log(`FAIL ${label} → no response`);
@@ -89,7 +88,6 @@ async function assertDecodableLoaderJs(response, label) {
     console.log(`OK  ${label} Content-Type → ${contentType || "(none)"}`);
   }
 
-  // Production loader is an IIFE bundle; require readable JS markers.
   const hasJsMarkers =
     text.includes("SiteChatLoader") ||
     text.includes("sitechat") ||
@@ -105,6 +103,86 @@ async function assertDecodableLoaderJs(response, label) {
   return ok;
 }
 
+async function assertVisitorMessaging(embedToken) {
+  const sessionResponse = await fetch(`${demoOrigin}/api/v1/widget/session`, {
+    method: "POST",
+    headers: {
+      Origin: demoOrigin,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      embedToken,
+      locale: "en",
+      pageUrl: `${demoOrigin}/`,
+      pageTitle: "Demo check",
+      referrer: null,
+    }),
+  });
+
+  const sessionJson = await sessionResponse.json().catch(() => null);
+  if (!sessionResponse.ok || !sessionJson?.data?.sessionToken) {
+    console.log(
+      `FAIL proxied session → HTTP ${sessionResponse.status} ${JSON.stringify(sessionJson)}`,
+    );
+    return false;
+  }
+  console.log(
+    `OK  proxied session → conversation ${String(sessionJson.data.conversationId ?? "?")}`,
+  );
+
+  const sessionToken = sessionJson.data.sessionToken;
+  const clientMessageId = randomUUID();
+  const messageResponse = await fetch(`${demoOrigin}/api/v1/widget/messages`, {
+    method: "POST",
+    headers: {
+      Origin: demoOrigin,
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({
+      embedToken,
+      body: "Hello from demo:check",
+      clientMessageId,
+      pageUrl: `${demoOrigin}/`,
+      referrer: null,
+    }),
+  });
+
+  const messageJson = await messageResponse.json().catch(() => null);
+  if (!messageResponse.ok || !messageJson?.data?.message?.id) {
+    console.log(
+      `FAIL proxied message send → HTTP ${messageResponse.status} ${JSON.stringify(messageJson)}`,
+    );
+    console.log(
+      "     Hint: demo host must forward Authorization (and X-SiteChat-Embed-Token) to Next.",
+    );
+    return false;
+  }
+  console.log(
+    `OK  proxied message send → message ${String(messageJson.data.message.id)} seq=${String(messageJson.data.message.sequenceNumber ?? "?")}`,
+  );
+
+  const realtimeResponse = await fetch(`${demoOrigin}/api/v1/widget/realtime-token`, {
+    method: "POST",
+    headers: {
+      Origin: demoOrigin,
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ embedToken }),
+  });
+  const realtimeJson = await realtimeResponse.json().catch(() => null);
+  if (!realtimeResponse.ok || !realtimeJson?.data?.token) {
+    console.log(
+      `FAIL proxied realtime-token → HTTP ${realtimeResponse.status} ${JSON.stringify(realtimeJson)}`,
+    );
+    return false;
+  }
+  console.log("OK  proxied realtime-token → minted");
+
+  return true;
+}
+
 async function main() {
   console.log("Demo check");
   console.log(`  demo host: ${demoOrigin}`);
@@ -114,7 +192,6 @@ async function main() {
 
   const health = await check("demo health", `${demoOrigin}/demo-health`);
   const proxiedLoader = await check("proxied loader", `${demoOrigin}/widget/loader.js`, {
-    // Prefer identity so we observe what the demo host actually serves Safari.
     headers: { "Accept-Encoding": "gzip, deflate, br" },
   });
   const loaderBodyOk = await assertDecodableLoaderJs(proxiedLoader.response, "proxied loader body");
@@ -126,14 +203,16 @@ async function main() {
   );
 
   let bootstrapOk = bootstrap.ok;
+  let embedToken = null;
   if (bootstrap.response) {
     const json = await bootstrap.response.json().catch(() => null);
-    if (json?.data?.config) {
+    if (json?.data?.config && json?.data?.embedToken) {
+      embedToken = json.data.embedToken;
       console.log(
         `     bootstrap config version=${String(json.data.config.version ?? "?")} primary=${String(json.data.config.primaryColor ?? "?")}`,
       );
     } else {
-      console.log("FAIL proxied bootstrap → missing data.config");
+      console.log("FAIL proxied bootstrap → missing data.config / embedToken");
       console.log("     bootstrap body:", JSON.stringify(json));
       bootstrapOk = false;
     }
@@ -141,7 +220,12 @@ async function main() {
 
   await check("direct app loader", `${appOrigin}/widget/loader.js`);
 
-  if (!health.ok || !proxiedLoader.ok || !loaderBodyOk || !bootstrapOk) {
+  let messagingOk = false;
+  if (bootstrapOk && embedToken) {
+    messagingOk = await assertVisitorMessaging(embedToken);
+  }
+
+  if (!health.ok || !proxiedLoader.ok || !loaderBodyOk || !bootstrapOk || !messagingOk) {
     console.log("");
     console.log("Fix: ensure supabase is running, then:");
     console.log("  supabase db reset && pnpm demo:prepare && pnpm local:refresh && pnpm dev");
@@ -150,7 +234,7 @@ async function main() {
   }
 
   console.log("");
-  console.log("Ready. Open", demoOrigin, "— launcher should be bottom-right.");
+  console.log("Ready. Open", demoOrigin, "— send a visitor message; it should persist.");
 }
 
 main().catch((error) => {

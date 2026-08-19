@@ -50,15 +50,19 @@ const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
 
 function buildUpstreamRequestHeaders(request) {
   const headers = new Headers();
+  // Must forward auth + embed headers — without Authorization, message send and
+  // realtime-token mint return SESSION_EXPIRED while bootstrap still succeeds.
   for (const name of [
     "accept",
     "accept-language",
+    "authorization",
     "content-type",
     "if-none-match",
     "if-modified-since",
     "origin",
     "referer",
     "user-agent",
+    "x-sitechat-embed-token",
   ]) {
     const value = request.headers[name];
     if (value) headers.set(name, value);
