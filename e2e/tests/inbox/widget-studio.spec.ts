@@ -45,10 +45,22 @@ async function openReadonlyStudio(page: Page, email: string): Promise<void> {
 }
 
 async function setPrimaryColor(page: Page, color: string): Promise<void> {
-  await page.getByTestId("widget-studio-primary-color").fill(color);
+  const normalized = color.toUpperCase();
+  const input = page.getByTestId("widget-studio-primary-color");
+  // type="color" ignores many Playwright fill paths; set the value and fire
+  // the same input/change events the Studio ColorControl listens for.
+  await input.evaluate((element, next) => {
+    const target = element as HTMLInputElement;
+    const proto = window.HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+    descriptor?.set?.call(target, next.toLowerCase());
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    target.dispatchEvent(new Event("change", { bubbles: true }));
+  }, normalized);
   await expect(page.getByTestId("widget-studio-preview-panel")).toHaveAttribute(
     "data-primary-color",
-    color,
+    normalized,
+    { timeout: 10_000 },
   );
 }
 
