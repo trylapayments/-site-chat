@@ -22,7 +22,7 @@ vi.mock("@/lib/widget-studio/public-config", () => ({
     `"widget-config-${key}-${String(version)}"`,
 }));
 
-const { GET } = await import("./route");
+const { GET } = await import("@/app/api/v1/widget/config/route");
 
 const widgetPublicKey = "wk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const config = mapAppearanceToPublicConfig({
