@@ -1,8 +1,8 @@
 # Site Chat — Database Design
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Status:** Foundation  
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-19
 
 ---
 
@@ -49,8 +49,8 @@ Site Chat uses PostgreSQL 15+ hosted on Supabase. The database is the single sou
        │         │                       │                           │
        ▼         ▼                       ▼                           ▼
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐          ┌───────────────┐
-│ workspace_   │ │ workspace_   │ │ allowed_     │          │ workspace_    │
-│ members      │ │ subscriptions│ │ domains      │          │ settings      │
+│ workspace_   │ │ workspace_   │ │ allowed_     │          │ widget_configs│
+│ members      │ │ subscriptions│ │ domains      │          │ + assets       │
 └──────────────┘ └──────────────┘ └──────────────┘          └───────────────┘
 
        workspace_id (all below)
@@ -147,7 +147,7 @@ Top-level tenant entity.
 | name | TEXT | NOT NULL | Display name |
 | slug | TEXT | NOT NULL, UNIQUE | URL-safe identifier |
 | status | app_workspace_status | NOT NULL DEFAULT 'active' | Lifecycle status |
-| settings_json | JSONB | NOT NULL DEFAULT '{}' | Widget and workspace settings |
+| settings_json | JSONB | NOT NULL DEFAULT '{}' | Workspace settings; `widget` is legacy input/compatibility, not Widget Studio authority |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 | deleted_at | TIMESTAMPTZ | NULL | Soft delete timestamp |
@@ -155,7 +155,7 @@ Top-level tenant entity.
 **Indexes:**
 - `idx_workspaces_slug` UNIQUE ON `(slug)` WHERE `deleted_at IS NULL`
 
-**settings_json schema (validated in application):**
+**Legacy settings_json schema (validated in application):**
 ```json
 {
   "widget": {
@@ -174,6 +174,8 @@ Top-level tenant entity.
   }
 }
 ```
+
+Widget Studio stores current appearance state in `widget_configs`, not in this JSON bag. Migration/lazy initialization copies only allowlisted legacy `settings_json.widget` values into typed draft and published config. Studio mutations do not write those values back. `widget_reopen_window_hours` reads published config first, then the legacy value as a compatibility fallback, then 24 hours.
 
 ### 5.2 workspace_members
 
@@ -235,6 +237,44 @@ Domain allowlist for widget embedding.
 
 **Indexes:**
 - UNIQUE `(workspace_id, domain)`
+
+### 5.5 widget_configs
+
+One current Widget Studio draft and one current published snapshot per workspace. See [WIDGET-STUDIO.md](./WIDGET-STUDIO.md) and [ADR-009](./adr/ADR-009-widget-studio-draft-publish.md).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| workspace_id | UUID | PK, FK → workspaces, ON DELETE CASCADE | One config row per workspace |
+| draft_json | JSONB | NOT NULL | Latest operator-editable typed config; never visitor bootstrap input |
+| published_json | JSONB | NOT NULL | Last atomically published typed config; public mapper input |
+| published_version | INTEGER | NOT NULL DEFAULT 1, CHECK ≥ 1 | Monotonic public cache/version token |
+| draft_updated_at | TIMESTAMPTZ | NOT NULL | Last saved/reset/discarded draft |
+| published_at | TIMESTAMPTZ | NOT NULL | Last successful publish |
+| published_by | UUID | NULL, FK → auth.users, ON DELETE SET NULL | Last publisher |
+| draft_updated_by | UUID | NULL, FK → auth.users, ON DELETE SET NULL | Last draft actor |
+| created_at / updated_at | TIMESTAMPTZ | NOT NULL | Row lifecycle |
+
+`save_widget_studio_draft`, `publish_widget_studio`, `discard_widget_studio_draft`, and `reset_widget_studio_draft` are authenticated SECURITY DEFINER RPCs. Publish copies `draft_json` to `published_json` and increments `published_version` in one update. RLS is FORCE-enabled; authenticated members may SELECT their workspace row, but owners/admins alone pass mutation gates.
+
+### 5.6 widget_assets
+
+Private metadata for uploaded Widget Studio brand images. Appearance JSON references nullable asset UUIDs; it never stores a customer-supplied remote URL.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK | Asset identifier |
+| workspace_id | UUID | NOT NULL, FK → workspaces, ON DELETE CASCADE | Tenant scope |
+| kind | TEXT | CHECK `logo` / `launcher_icon` / `agent_avatar` | Expected use |
+| storage_key | TEXT | NOT NULL, UNIQUE per workspace | Private object path; not returned in public config |
+| mime_type | TEXT | NOT NULL | Declared allowlisted image MIME; content is verified on completion |
+| byte_size | INTEGER | CHECK 1–524288 | Declared bytes; exact object length is verified on completion |
+| width / height | INTEGER | NULL until upload confirmation | Verified dimensions; public signing requires both |
+| original_filename | TEXT | NOT NULL | Sanitized filename |
+| created_by | UUID | NULL, FK → auth.users, ON DELETE SET NULL | Upload actor |
+| created_at / updated_at | TIMESTAMPTZ | NOT NULL | |
+| deleted_at | TIMESTAMPTZ | NULL | Soft-delete marker |
+
+**Indexes:** workspace, plus active `(workspace_id, kind)`. FORCE RLS scopes SELECT to workspace members and INSERT/UPDATE to owners/admins. Objects live in the private `widget-assets` bucket; no anon/authenticated `storage.objects` policy is added. Application-signed URLs are the only upload/download path.
 
 ---
 

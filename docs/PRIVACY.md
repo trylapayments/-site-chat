@@ -1,10 +1,10 @@
 # Site Chat — Visitor Privacy
 
-**Version:** 1.1 (security-hardened)  
+**Version:** 1.2 (security-hardened)  
 **Status:** Foundation  
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-19
 
-Related: [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md), [DATA-RETENTION.md](./DATA-RETENTION.md), [SECURITY.md](./SECURITY.md)
+Related: [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md), [DATA-RETENTION.md](./DATA-RETENTION.md), [SECURITY.md](./SECURITY.md), [WIDGET-STUDIO.md](./WIDGET-STUDIO.md)
 
 ---
 
@@ -27,6 +27,7 @@ This is an engineering architecture note, not legal advice. Customer-facing term
 | Session context (redacted URLs) | URL origin + path + allowlisted UTM only, title, referrer, locale, timezone, language | Fragment and non-UTM query params are stripped before storage — see §4b |
 | Device class | Parsed browser/OS/device_type | **Not** raw User-Agent string |
 | Messaging | Message bodies, attachments metadata | Separate conversation retention rules |
+| Public widget presentation | Published colors, layout, localized brand copy, business-hours foundation, logo/launcher/avatar URLs | Workspace-provided presentation, not visitor profile data; see §3a |
 
 **Not collected by default:**
 
@@ -48,6 +49,16 @@ This is an engineering architecture note, not legal advice. Customer-facing term
 - Timeline APIs are operator-only (`list_customer_timeline`); visitors/anon cannot execute them. Timeline metadata must not store continuity tokens, auth secrets, signed URLs, or message bodies.
 
 Cross-tenant access attempts must fail in automated RLS tests.
+
+### 3a. Widget Studio brand assets and public bootstrap
+
+Published Widget Studio appearance is intentionally visitor-visible. Bootstrap/config may include typed colors and layout, localized title/subtitle/welcome/placeholder copy, business-hours fields, published version/timestamp, and short-lived signed URLs for a workspace logo, launcher icon, or agent avatar.
+
+These responses do **not** include visitor identity, operator email, workspace members, CRM data, draft copy, raw workspace settings, storage keys, billing, or secrets. Draft state remains available only to authenticated workspace members and is never used by visitor bootstrap.
+
+Brand files are stored in a private workspace-scoped bucket. Publishing an asset reference makes its signed representation visible to visitors on allowed embed origins for the URL lifetime, so customers should treat logos/copy as public and avoid unnecessary personal data. Agent avatars may identify a workspace member and should be uploaded only with an appropriate workplace basis. Original filenames and storage keys are not part of the public DTO.
+
+Site Chat does not fetch arbitrary customer-supplied remote asset URLs. This avoids turning widget bootstrap into a third-party tracking or server-side fetch channel. See [WIDGET-STUDIO.md](./WIDGET-STUDIO.md).
 
 ---
 
@@ -160,6 +171,7 @@ Page titles and URLs are attacker-controlled on compromised or malicious host pa
 
 | Date | Change |
 |------|--------|
+| 2026-08-19 | Documented Widget Studio published presentation fields, private brand-asset storage, signed visitor delivery, and draft/public boundary |
 | 2026-08-11 | Clarified URL privacy also covers conversation `source_url`/`referrer` and send/attachment write paths |
 | 2026-08-10 | Security hardening: distinguished `public_id` (non-secret, display-only) from `continuity_token`/`continuity_token_hash` (secret, the real continuity mechanism, hashed at rest); documented that unsigned identify never merges by email; added the URL privacy policy (allowlist sanitizer) section; split retention into implemented cascades vs. future purge jobs |
 | 2026-08-10 | Initial visitor privacy doc |

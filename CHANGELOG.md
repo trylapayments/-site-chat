@@ -6,6 +6,7 @@ All notable changes to Site Chat are documented in this file.
 
 ### Added
 
+- Widget Studio (v1, [PR #36](https://github.com/trylapayments/-site-chat/pull/36)): strict typed appearance config with presets and contrast warnings; durable draft/published snapshots with atomic publish and monotonic `published_version`; owner/admin management plus all-member read-only preview; private validated logo/launcher/avatar uploads with signed URLs; localization-safe override maps and physical RTL launcher positioning; public allowlisted `/api/v1/widget/config` DTO with ETag caching; entitlement seam for future white-label controls; business-hours configuration/evaluator foundation; docs `docs/WIDGET-STUDIO.md` and ADR-009.
 - Operator Notifications (v1, PR #35): durable notification center with taxonomy (`conversation_new`, `visitor_message`, assignment/transfer/unassign, `mention`), `(workspace_id, recipient_id, dedupe_key)` idempotency, O(1) `notification_unread_counts` with mark-all lock+reconcile, keyset list/mark-read RPCs, per-member preferences (in-app/browser/sound/email/DND — DND suppresses side effects only), shared quiet-hours evaluator, optional browser Notification API + sound with post-write-verified multi-tab leader election, email outbox claim-before-send (`pending→sending→sent|failed|skipped`); docs `docs/NOTIFICATIONS.md`; pgTAP `020_notifications.test.sql`; Playwright `e2e/tests/inbox/notifications.spec.ts`.
 
 ### Fixed

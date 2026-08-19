@@ -1,8 +1,8 @@
 # Site Chat — Product Roadmap
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Status:** Foundation  
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-19
 
 ---
 
@@ -105,7 +105,7 @@ The MVP is complete when:
 - [ ] Dashboard conversation detail page (message thread)
 - [ ] Agent message sending from dashboard
 - [ ] Conversation status management (open, pending, resolved)
-- [ ] Basic widget customization (color, position, greeting message)
+- [x] Basic widget customization / Widget Studio (typed appearance, presets, live preview, draft/publish, private brand assets, localization-safe copy model, public versioned config — see `docs/WIDGET-STUDIO.md`)
 
 **Exit criteria:** Widget embedded on a test site sends a message that appears in the dashboard inbox in realtime; agent reply appears in the widget in realtime.
 
@@ -228,7 +228,7 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 | Markdown message rendering (sanitized) | Richer agent replies | XSS-safe renderer |
 | Read receipts | Visitor engagement visibility | Message delivery tracking |
 | Conversation search enhancements (semantic / saved searches) | Agent productivity | Keyword global search shipped in Phase 3 (`docs/GLOBAL-SEARCH.md`); embeddings / saved searches remain post-MVP |
-| Business hours / offline mode | Professional appearance | Widget visibility rules |
+| Business hours / offline mode | Professional appearance | Weekly config/evaluator foundation ships with Widget Studio; routing, presence, and automated offline behavior remain |
 | Proactive chat triggers (time on page) | Lead capture | Widget rule engine |
 | Browser push notifications | Faster agent response | Service worker, VAPID |
 | Multi-language operator UI | International customers | i18n framework |
@@ -257,7 +257,7 @@ Features below are prioritized for delivery after GA. Priority may shift based o
 |---------|-------|--------------|
 | WhatsApp / SMS channels | Omnichannel support | Twilio/MessageBird, channel routing |
 | Mobile native apps (iOS, Android) | Agent mobility | React Native or native, push infra |
-| White-label / custom dashboard domain | Agency resale | Multi-domain routing, branding system |
+| White-label / custom dashboard domain | Agency resale | Widget Studio entitlement abstraction and brand assets shipped; custom domains and full product rebranding remain later work |
 | EU data residency | GDPR enterprise requirement | Supabase EU region, data routing |
 | Dedicated database tenancy (Enterprise) | Maximum isolation | Provisioning automation |
 | Knowledge base integration | Self-service deflection | KB product or integration |
