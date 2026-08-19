@@ -52,8 +52,7 @@ export function ConversationList({
     typeof params.conversationId === "string" ? params.conversationId : null;
 
   const query = useMemo(
-    () =>
-      parseInboxListQuery(Object.fromEntries(searchParams.entries())),
+    () => parseInboxListQuery(Object.fromEntries(searchParams.entries())),
     [searchParams],
   );
 
@@ -83,7 +82,11 @@ export function ConversationList({
   );
 
   useEffect(() => {
-    if (hasFilters || query.page > 1 || (query.sort && query.sort !== "-last_message_at")) {
+    if (
+      hasFilters ||
+      query.page > 1 ||
+      (query.sort && query.sort !== "-last_message_at")
+    ) {
       void refreshList();
     }
   }, [hasFilters, query.page, query.sort, queryKey, refreshList]);

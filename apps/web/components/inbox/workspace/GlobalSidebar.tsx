@@ -116,8 +116,7 @@ function isNavActive(
   }
 
   // assignment match — only when on inbox routes
-  const onInbox =
-    appPath === inboxBase || appPath.startsWith(`${inboxBase}/`);
+  const onInbox = appPath === inboxBase || appPath.startsWith(`${inboxBase}/`);
   if (!onInbox) {
     return false;
   }
@@ -174,7 +173,10 @@ export function GlobalSidebar({
         </div>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3" aria-label="Main">
+      <nav
+        className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3"
+        aria-label="Main"
+      >
         {items.map((item) => {
           const active = isNavActive(item, pathname, assignment, slug);
           const Icon = item.icon;
@@ -198,9 +200,7 @@ export function GlobalSidebar({
                   memberId={memberId}
                   className={cn(
                     "ml-auto",
-                    active
-                      ? "bg-white/20 text-white"
-                      : "bg-brand text-white",
+                    active ? "bg-white/20 text-white" : "bg-brand text-white",
                   )}
                 />
               ) : null}

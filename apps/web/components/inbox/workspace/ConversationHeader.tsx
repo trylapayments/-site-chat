@@ -56,8 +56,9 @@ export function ConversationHeader({
           </span>
         </div>
         <p className="text-inbox-muted mt-1 truncate text-[12px]">
-          {[locationLabel, deviceLabel, pageTitle].filter(Boolean).join(" · ") ||
-            "No visitor context yet"}
+          {[locationLabel, deviceLabel, pageTitle]
+            .filter(Boolean)
+            .join(" · ") || "No visitor context yet"}
         </p>
       </div>
     </header>

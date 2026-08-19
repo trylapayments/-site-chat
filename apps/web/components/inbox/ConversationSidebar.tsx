@@ -177,303 +177,314 @@ export function ConversationSidebar({
       </div>
 
       <div className="space-y-6 px-4 py-4">
-      <section className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-neutral-900">Visitor</h2>
-        <p className="text-sm font-medium text-neutral-800">{contactLabel}</p>
-        {publicId ? (
-          <div className="space-y-0.5">
-            <p className="text-muted-foreground text-xs">Public ID</p>
-            <p className="font-mono text-xs break-all">{publicId}</p>
-          </div>
-        ) : null}
+        <section className="space-y-3">
+          <h2 className="text-[13px] font-semibold text-neutral-900">
+            Visitor
+          </h2>
+          <p className="text-sm font-medium text-neutral-800">{contactLabel}</p>
+          {publicId ? (
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground text-xs">Public ID</p>
+              <p className="font-mono text-xs break-all">{publicId}</p>
+            </div>
+          ) : null}
 
-        {canUpdateVisitor ? (
-          <form
-            className="space-y-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setProfileError(null);
-              const patch = buildVisitorIdentityPatch({
-                baseline: identity.baseline,
-                draft: identity.draft,
-              });
-              if (!visitorIdentityPatchHasChanges(patch)) {
-                return;
-              }
-              const submittedBaseline = identity.baseline;
-              const submittedDraft = identity.draft;
-              startTransition(async () => {
-                const result = await updateVisitorProfileAction(workspaceSlug, {
-                  conversationId,
-                  ...patch,
+          {canUpdateVisitor ? (
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setProfileError(null);
+                const patch = buildVisitorIdentityPatch({
+                  baseline: identity.baseline,
+                  draft: identity.draft,
                 });
-                if (result.success) {
-                  setIdentity({
-                    baseline: {
-                      name:
-                        patch.name !== undefined
-                          ? (patch.name ?? null)
-                          : submittedBaseline.name,
-                      email:
-                        patch.email !== undefined
-                          ? (patch.email ?? null)
-                          : submittedBaseline.email,
-                      phone:
-                        patch.phone !== undefined
-                          ? (patch.phone ?? null)
-                          : submittedBaseline.phone,
-                    },
-                    draft: submittedDraft,
-                  });
-                  router.refresh();
-                } else {
-                  setProfileError(result.message);
+                if (!visitorIdentityPatchHasChanges(patch)) {
+                  return;
                 }
-              });
-            }}
-          >
-            <div className="space-y-1.5">
-              <Label htmlFor="visitor-name">Name</Label>
-              <Input
-                id="visitor-name"
-                value={identity.draft.name}
-                disabled={isPending}
-                onChange={(event) => {
-                  setIdentity((current) => ({
-                    ...current,
-                    draft: { ...current.draft, name: event.target.value },
-                  }));
-                }}
-                maxLength={120}
-                autoComplete="off"
-              />
+                const submittedBaseline = identity.baseline;
+                const submittedDraft = identity.draft;
+                startTransition(async () => {
+                  const result = await updateVisitorProfileAction(
+                    workspaceSlug,
+                    {
+                      conversationId,
+                      ...patch,
+                    },
+                  );
+                  if (result.success) {
+                    setIdentity({
+                      baseline: {
+                        name:
+                          patch.name !== undefined
+                            ? (patch.name ?? null)
+                            : submittedBaseline.name,
+                        email:
+                          patch.email !== undefined
+                            ? (patch.email ?? null)
+                            : submittedBaseline.email,
+                        phone:
+                          patch.phone !== undefined
+                            ? (patch.phone ?? null)
+                            : submittedBaseline.phone,
+                      },
+                      draft: submittedDraft,
+                    });
+                    router.refresh();
+                  } else {
+                    setProfileError(result.message);
+                  }
+                });
+              }}
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="visitor-name">Name</Label>
+                <Input
+                  id="visitor-name"
+                  value={identity.draft.name}
+                  disabled={isPending}
+                  onChange={(event) => {
+                    setIdentity((current) => ({
+                      ...current,
+                      draft: { ...current.draft, name: event.target.value },
+                    }));
+                  }}
+                  maxLength={120}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="visitor-email">Email</Label>
+                <Input
+                  id="visitor-email"
+                  type="email"
+                  value={identity.draft.email}
+                  disabled={isPending}
+                  onChange={(event) => {
+                    setIdentity((current) => ({
+                      ...current,
+                      draft: { ...current.draft, email: event.target.value },
+                    }));
+                  }}
+                  maxLength={254}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="visitor-phone">Phone</Label>
+                <Input
+                  id="visitor-phone"
+                  type="tel"
+                  value={identity.draft.phone}
+                  disabled={isPending}
+                  onChange={(event) => {
+                    setIdentity((current) => ({
+                      ...current,
+                      draft: { ...current.draft, phone: event.target.value },
+                    }));
+                  }}
+                  maxLength={64}
+                  autoComplete="off"
+                />
+              </div>
+              {profileError ? (
+                <p className="text-destructive text-xs">{profileError}</p>
+              ) : null}
+              <Button type="submit" size="sm" disabled={isPending}>
+                Save visitor
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-2">
+              {serverIdentity.email ? (
+                <p className="text-muted-foreground text-sm">
+                  {serverIdentity.email}
+                </p>
+              ) : null}
+              {serverIdentity.phone ? (
+                <p className="text-muted-foreground text-sm">
+                  {serverIdentity.phone}
+                </p>
+              ) : null}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="visitor-email">Email</Label>
-              <Input
-                id="visitor-email"
-                type="email"
-                value={identity.draft.email}
-                disabled={isPending}
-                onChange={(event) => {
-                  setIdentity((current) => ({
-                    ...current,
-                    draft: { ...current.draft, email: event.target.value },
-                  }));
-                }}
-                maxLength={254}
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="visitor-phone">Phone</Label>
-              <Input
-                id="visitor-phone"
-                type="tel"
-                value={identity.draft.phone}
-                disabled={isPending}
-                onChange={(event) => {
-                  setIdentity((current) => ({
-                    ...current,
-                    draft: { ...current.draft, phone: event.target.value },
-                  }));
-                }}
-                maxLength={64}
-                autoComplete="off"
-              />
-            </div>
-            {profileError ? (
-              <p className="text-destructive text-xs">{profileError}</p>
-            ) : null}
-            <Button type="submit" size="sm" disabled={isPending}>
-              Save visitor
-            </Button>
-          </form>
-        ) : (
-          <div className="space-y-2">
-            {serverIdentity.email ? (
-              <p className="text-muted-foreground text-sm">
-                {serverIdentity.email}
-              </p>
-            ) : null}
-            {serverIdentity.phone ? (
-              <p className="text-muted-foreground text-sm">
-                {serverIdentity.phone}
-              </p>
-            ) : null}
-          </div>
-        )}
-
-        {contactTags.length > 0 ? (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {contactTags.slice(0, 6).map((tag) => (
-              <ContactTagChip key={tag.id} tag={tag} />
-            ))}
-          </div>
-        ) : null}
-
-        {contact?.id ? (
-          <Link
-            href={toAppRoute(workspaceContactsPath(workspaceSlug, contact.id))}
-            className="text-brand text-sm font-medium hover:underline"
-            data-testid="view-full-profile"
-          >
-            {crmMessages.viewProfile}
-          </Link>
-        ) : null}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-neutral-900">
-          Current context
-        </h2>
-        <ContextRow label="Page" value={context?.current_title ?? null} />
-        <ContextRow
-          label="URL"
-          value={context?.current_url ?? conversation.source_url}
-        />
-        <ContextRow label="Landing" value={context?.landing_url ?? null} />
-        <ContextRow
-          label="Referrer"
-          value={context?.referrer ?? conversation.referrer ?? null}
-        />
-        <ContextRow
-          label="Device"
-          value={
-            [
-              context?.device_type,
-              context?.browser_family
-                ? `${context.browser_family}${context.browser_version ? ` ${context.browser_version}` : ""}`
-                : null,
-              context?.os_family,
-            ]
-              .filter(Boolean)
-              .join(" · ") || null
-          }
-        />
-        <ContextRow label="Locale" value={context?.locale ?? null} />
-        <ContextRow label="Timezone" value={context?.timezone ?? null} />
-        <ContextRow label="Language" value={context?.language ?? null} />
-        <ContextRow
-          label="Campaign"
-          value={
-            [context?.utm_source, context?.utm_medium, context?.utm_campaign]
-              .filter(Boolean)
-              .join(" / ") || null
-          }
-        />
-        {!context && !conversation.source_url ? (
-          <p className="text-inbox-muted text-sm">No page context yet.</p>
-        ) : null}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-neutral-900">Activity</h2>
-        <ContextRow
-          label="First seen"
-          value={formatDateTime(
-            activity?.first_seen_at ?? visitor?.first_seen_at,
           )}
-        />
-        <ContextRow
-          label="Last seen"
-          value={formatDateTime(
-            activity?.last_seen_at ?? visitor?.last_seen_at,
-          )}
-        />
-        <ContextRow
-          label="Visits"
-          value={
-            activity?.visit_count != null || visitor?.visit_count != null
-              ? String(activity?.visit_count ?? visitor?.visit_count)
-              : null
-          }
-        />
-        {activity?.recent_page_views &&
-        activity.recent_page_views.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-inbox-muted text-xs">Recent pages</p>
-            <ul className="space-y-2">
-              {activity.recent_page_views.map((view) => (
-                <li key={view.id} className="space-y-0.5">
-                  <p className="text-sm">{view.title ?? view.url}</p>
-                  {view.title ? (
-                    <p className="text-muted-foreground break-all text-xs">
-                      {view.url}
-                    </p>
-                  ) : null}
-                  <p className="text-muted-foreground text-xs">
-                    {formatDateTime(view.created_at)}
-                  </p>
-                </li>
+
+          {contactTags.length > 0 ? (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {contactTags.slice(0, 6).map((tag) => (
+                <ContactTagChip key={tag.id} tag={tag} />
               ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="text-inbox-muted text-sm">No recent page views.</p>
-        )}
-      </section>
+            </div>
+          ) : null}
 
-      {conversation.contact?.id ? (
-        <CustomerTimeline
+          {contact?.id ? (
+            <Link
+              href={toAppRoute(
+                workspaceContactsPath(workspaceSlug, contact.id),
+              )}
+              className="text-brand text-sm font-medium hover:underline"
+              data-testid="view-full-profile"
+            >
+              {crmMessages.viewProfile}
+            </Link>
+          ) : null}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-[13px] font-semibold text-neutral-900">
+            Current context
+          </h2>
+          <ContextRow label="Page" value={context?.current_title ?? null} />
+          <ContextRow
+            label="URL"
+            value={context?.current_url ?? conversation.source_url}
+          />
+          <ContextRow label="Landing" value={context?.landing_url ?? null} />
+          <ContextRow
+            label="Referrer"
+            value={context?.referrer ?? conversation.referrer ?? null}
+          />
+          <ContextRow
+            label="Device"
+            value={
+              [
+                context?.device_type,
+                context?.browser_family
+                  ? `${context.browser_family}${context.browser_version ? ` ${context.browser_version}` : ""}`
+                  : null,
+                context?.os_family,
+              ]
+                .filter(Boolean)
+                .join(" · ") || null
+            }
+          />
+          <ContextRow label="Locale" value={context?.locale ?? null} />
+          <ContextRow label="Timezone" value={context?.timezone ?? null} />
+          <ContextRow label="Language" value={context?.language ?? null} />
+          <ContextRow
+            label="Campaign"
+            value={
+              [context?.utm_source, context?.utm_medium, context?.utm_campaign]
+                .filter(Boolean)
+                .join(" / ") || null
+            }
+          />
+          {!context && !conversation.source_url ? (
+            <p className="text-inbox-muted text-sm">No page context yet.</p>
+          ) : null}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-[13px] font-semibold text-neutral-900">
+            Activity
+          </h2>
+          <ContextRow
+            label="First seen"
+            value={formatDateTime(
+              activity?.first_seen_at ?? visitor?.first_seen_at,
+            )}
+          />
+          <ContextRow
+            label="Last seen"
+            value={formatDateTime(
+              activity?.last_seen_at ?? visitor?.last_seen_at,
+            )}
+          />
+          <ContextRow
+            label="Visits"
+            value={
+              activity?.visit_count != null || visitor?.visit_count != null
+                ? String(activity?.visit_count ?? visitor?.visit_count)
+                : null
+            }
+          />
+          {activity?.recent_page_views &&
+          activity.recent_page_views.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-inbox-muted text-xs">Recent pages</p>
+              <ul className="space-y-2">
+                {activity.recent_page_views.map((view) => (
+                  <li key={view.id} className="space-y-0.5">
+                    <p className="text-sm">{view.title ?? view.url}</p>
+                    {view.title ? (
+                      <p className="text-muted-foreground break-all text-xs">
+                        {view.url}
+                      </p>
+                    ) : null}
+                    <p className="text-muted-foreground text-xs">
+                      {formatDateTime(view.created_at)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-inbox-muted text-sm">No recent page views.</p>
+          )}
+        </section>
+
+        {conversation.contact?.id ? (
+          <CustomerTimeline
+            workspaceId={workspaceId}
+            workspaceSlug={workspaceSlug}
+            contactId={conversation.contact.id}
+            conversationId={conversationId}
+          />
+        ) : null}
+
+        <AssignmentPanel
           workspaceId={workspaceId}
           workspaceSlug={workspaceSlug}
-          contactId={conversation.contact.id}
           conversationId={conversationId}
+          conversation={conversation}
+          members={members}
+          memberId={memberId}
+          canAssign={canAssign}
         />
-      ) : null}
 
-      <AssignmentPanel
-        workspaceId={workspaceId}
-        workspaceSlug={workspaceSlug}
-        conversationId={conversationId}
-        conversation={conversation}
-        members={members}
-        memberId={memberId}
-        canAssign={canAssign}
-      />
-
-      <section className="space-y-2">
-        <h2 className="text-[13px] font-semibold text-neutral-900">Status</h2>
-        {canUpdateStatus ? (
-          <div className="flex flex-wrap gap-2">
-            {conversationStatusSchema.options.map((status) => (
-              <Button
-                key={status}
-                type="button"
-                size="sm"
-                variant={conversation.status === status ? "default" : "outline"}
-                className={
-                  conversation.status === status
-                    ? "bg-brand text-brand-foreground hover:bg-brand/90"
-                    : undefined
-                }
-                disabled={isPending || conversation.status === status}
-                onClick={() => {
-                  startTransition(async () => {
-                    const result = await updateConversationStatusAction(
-                      workspaceSlug,
-                      {
-                        conversationId,
-                        status,
-                      },
-                    );
-                    if (result.success) {
-                      router.refresh();
-                    }
-                  });
-                }}
-              >
-                {status}
-              </Button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-inbox-muted text-sm capitalize">
-            {conversation.status}
-          </p>
-        )}
-      </section>
+        <section className="space-y-2">
+          <h2 className="text-[13px] font-semibold text-neutral-900">Status</h2>
+          {canUpdateStatus ? (
+            <div className="flex flex-wrap gap-2">
+              {conversationStatusSchema.options.map((status) => (
+                <Button
+                  key={status}
+                  type="button"
+                  size="sm"
+                  variant={
+                    conversation.status === status ? "default" : "outline"
+                  }
+                  className={
+                    conversation.status === status
+                      ? "bg-brand text-brand-foreground hover:bg-brand/90"
+                      : undefined
+                  }
+                  disabled={isPending || conversation.status === status}
+                  onClick={() => {
+                    startTransition(async () => {
+                      const result = await updateConversationStatusAction(
+                        workspaceSlug,
+                        {
+                          conversationId,
+                          status,
+                        },
+                      );
+                      if (result.success) {
+                        router.refresh();
+                      }
+                    });
+                  }}
+                >
+                  {status}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-inbox-muted text-sm capitalize">
+              {conversation.status}
+            </p>
+          )}
+        </section>
       </div>
     </aside>
   );

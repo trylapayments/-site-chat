@@ -16,10 +16,12 @@ function initialsFromLabel(label: string): string {
   if (parts.length === 0) {
     return "?";
   }
+  const first = parts[0] ?? "";
   if (parts.length === 1) {
-    return parts[0]!.slice(0, 2).toUpperCase();
+    return first.slice(0, 2).toUpperCase();
   }
-  return `${parts[0]!.slice(0, 1)}${parts[1]!.slice(0, 1)}`.toUpperCase();
+  const second = parts[1] ?? "";
+  return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
 }
 
 function StatusPill({ status }: { status: ConversationListItem["status"] }) {
@@ -57,12 +59,10 @@ export function ConversationListItemRow({
       ? `/app/${workspaceSlug}/inbox/${conversation.id}?${listQueryString}`
       : `/app/${workspaceSlug}/inbox/${conversation.id}`,
   );
-  const unread =
-    conversation.unread_count > 0 || conversation.has_unread;
+  const unread = conversation.unread_count > 0 || conversation.has_unread;
   const preview = conversation.last_message_preview ?? "No messages yet";
-  const hasAttachmentHint = /\.(png|jpe?g|gif|webp|pdf|docx?|xlsx?|zip)\b/i.test(
-    preview,
-  );
+  const hasAttachmentHint =
+    /\.(png|jpe?g|gif|webp|pdf|docx?|xlsx?|zip)\b/i.test(preview);
 
   return (
     <div
@@ -71,9 +71,7 @@ export function ConversationListItemRow({
       data-conversation-id={conversation.id}
       className={cn(
         "group relative border-b border-inbox-border/80 transition-colors",
-        selected
-          ? "bg-brand-soft"
-          : "hover:bg-inbox-hover bg-transparent",
+        selected ? "bg-brand-soft" : "hover:bg-inbox-hover bg-transparent",
       )}
     >
       {selected ? (
@@ -106,7 +104,9 @@ export function ConversationListItemRow({
               <p
                 className={cn(
                   "truncate text-[13px] leading-tight",
-                  unread ? "font-semibold text-neutral-900" : "font-medium text-neutral-800",
+                  unread
+                    ? "font-semibold text-neutral-900"
+                    : "font-medium text-neutral-800",
                 )}
               >
                 {label}
