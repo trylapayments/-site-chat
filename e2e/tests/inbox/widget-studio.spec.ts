@@ -290,9 +290,9 @@ test.describe.serial("Widget Studio", () => {
 
   test("uploads a verified PNG logo into the draft", async ({ page }) => {
     await openOwnerStudio(page);
-    // 1x1 PNG
+    // 16×16 PNG (meets WIDGET_ASSET_LIMITS.minWidth/minHeight)
     const png = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFUlEQVR42mNgSPtPGhrVMKph+GoAAMv/ZRA4477mAAAAAElFTkSuQmCC",
       "base64",
     );
     await page.getByTestId("widget-studio-asset-logo").setInputFiles({
@@ -301,9 +301,12 @@ test.describe.serial("Widget Studio", () => {
       buffer: png,
     });
 
-    await expect(page.getByTestId("widget-studio-notice")).toContainText("Asset uploaded", {
-      timeout: 60_000,
-    });
+    const outcome = page
+      .getByTestId("widget-studio-notice")
+      .or(page.getByTestId("widget-studio-error"));
+    await expect(outcome).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("widget-studio-error")).toHaveCount(0);
+    await expect(page.getByTestId("widget-studio-notice")).toContainText("Asset uploaded");
   });
 
   test("forces powered-by branding on production without white-label entitlement", async ({
