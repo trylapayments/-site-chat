@@ -13,6 +13,100 @@ const MESSAGE_SOURCE = "sitechat-loader";
 const WIDGET_MOUNTED_KEY = "__siteChatWidgetMounted";
 const LOCATION_CHANGE_EVENT = "sitechat:locationchange";
 const SITECHAT_API_VERSION = "1";
+const MOBILE_FULLSCREEN_BREAKPOINT = 640;
+
+type WidgetFrameConfig = {
+  hideLauncherWhenOpen: boolean;
+  launcherOffsetX: number;
+  launcherOffsetY: number;
+  launcherSize: number;
+  mobileBehavior: "responsive" | "fullscreen";
+  position: "bottom-right" | "bottom-left";
+  showGreeting: boolean;
+  widgetHeight: number;
+  widgetMaxHeight: number;
+  widgetWidth: number;
+};
+
+const DEFAULT_FRAME_CONFIG: WidgetFrameConfig = {
+  hideLauncherWhenOpen: false,
+  launcherOffsetX: 16,
+  launcherOffsetY: 16,
+  launcherSize: 56,
+  mobileBehavior: "responsive",
+  position: "bottom-right",
+  showGreeting: false,
+  widgetHeight: 560,
+  widgetMaxHeight: 720,
+  widgetWidth: 380,
+};
+
+function clampedNumber(
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(maximum, Math.max(minimum, Math.round(value)))
+    : fallback;
+}
+
+function readWidgetFrameConfig(value: unknown): WidgetFrameConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return DEFAULT_FRAME_CONFIG;
+  }
+  const config = value as Record<string, unknown>;
+  const launcherSize =
+    config.launcherSize === "sm" ? 48 : config.launcherSize === "lg" ? 64 : 56;
+  return {
+    hideLauncherWhenOpen: config.hideLauncherWhenOpen === true,
+    launcherOffsetX: clampedNumber(config.launcherOffsetX, 16, 0, 120),
+    launcherOffsetY: clampedNumber(config.launcherOffsetY, 16, 0, 120),
+    launcherSize,
+    mobileBehavior: config.mobileBehavior === "fullscreen" ? "fullscreen" : "responsive",
+    position: config.position === "bottom-left" ? "bottom-left" : "bottom-right",
+    showGreeting: config.showGreeting === true,
+    widgetHeight: clampedNumber(config.widgetHeight, 560, 360, 800),
+    widgetMaxHeight: clampedNumber(config.widgetMaxHeight, 720, 360, 900),
+    widgetWidth: clampedNumber(config.widgetWidth, 380, 300, 480),
+  };
+}
+
+function applyIframeLayout(
+  iframe: HTMLIFrameElement,
+  config: WidgetFrameConfig,
+  open: boolean,
+) {
+  const fullscreen =
+    open &&
+    config.mobileBehavior === "fullscreen" &&
+    window.innerWidth <= MOBILE_FULLSCREEN_BREAKPOINT;
+
+  iframe.style.left = config.position === "bottom-left" ? "0" : "auto";
+  iframe.style.right = config.position === "bottom-right" ? "0" : "auto";
+
+  if (fullscreen) {
+    iframe.style.width = `${String(window.innerWidth)}px`;
+    iframe.style.height = `${String(window.innerHeight)}px`;
+    return;
+  }
+
+  const closedWidth =
+    config.launcherOffsetX +
+    config.launcherSize +
+    (config.showGreeting ? 12 + 260 : 0);
+  const panelBottom =
+    config.launcherOffsetY +
+    (config.hideLauncherWhenOpen ? 0 : config.launcherSize + 12);
+  const openHeight =
+    Math.min(config.widgetHeight, config.widgetMaxHeight) + panelBottom + 8;
+  const width = open ? config.widgetWidth + config.launcherOffsetX : closedWidth;
+  const height = open ? openHeight : config.launcherOffsetY + config.launcherSize;
+
+  iframe.style.width = `${String(Math.min(window.innerWidth, width))}px`;
+  iframe.style.height = `${String(Math.min(window.innerHeight, height))}px`;
+}
 
 /** Host identify payload — validated lightly here; server is authoritative. */
 type IdentifyPayload = {
@@ -182,6 +276,9 @@ let originalPushState: HistoryMethod | null = null;
 let originalReplaceState: HistoryMethod | null = null;
 let navigationCleanup: (() => void) | null = null;
 let messageCleanup: (() => void) | null = null;
+let resizeCleanup: (() => void) | null = null;
+let activeFrameConfig = DEFAULT_FRAME_CONFIG;
+let widgetOpen = false;
 
 function getWidgetHost(script: HTMLScriptElement): string {
   return new URL(script.src).origin;
@@ -192,7 +289,11 @@ function getWidgetPublicKey(script: HTMLScriptElement): string | null {
   return key?.trim() || null;
 }
 
-function createIframe(widgetHost: string, parentOrigin: string): HTMLIFrameElement {
+function createIframe(
+  widgetHost: string,
+  parentOrigin: string,
+  config: WidgetFrameConfig,
+): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
   iframe.src = buildEmbedIframeSrc(widgetHost, parentOrigin);
   iframe.title = "Site Chat";
@@ -200,14 +301,12 @@ function createIframe(widgetHost: string, parentOrigin: string): HTMLIFrameEleme
   iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
   iframe.style.position = "fixed";
   iframe.style.bottom = "0";
-  iframe.style.right = "0";
-  iframe.style.width = "420px";
-  iframe.style.height = "640px";
   iframe.style.maxWidth = "100vw";
   iframe.style.maxHeight = "100vh";
   iframe.style.border = "0";
   iframe.style.zIndex = "2147483646";
   iframe.style.background = "transparent";
+  applyIframeLayout(iframe, config, false);
   return iframe;
 }
 
@@ -419,6 +518,8 @@ function installSiteChatHostApi() {
 function teardownLoader() {
   messageCleanup?.();
   messageCleanup = null;
+  resizeCleanup?.();
+  resizeCleanup = null;
   navigationCleanup?.();
   if (pageViewThrottleTimer !== null) {
     clearTimeout(pageViewThrottleTimer);
@@ -428,6 +529,8 @@ function teardownLoader() {
   pendingInitPayload = null;
   widgetHostOrigin = null;
   iframeReady = false;
+  activeFrameConfig = DEFAULT_FRAME_CONFIG;
+  widgetOpen = false;
   lastPagePostAt = 0;
   lastPostedUrl = null;
   identifyQueue = [];
@@ -476,7 +579,9 @@ function mount() {
   void bootstrap(widgetHost, widgetPublicKey)
     .then((data) => {
       const page = currentPagePayload();
-      const iframe = createIframe(widgetHost, window.location.origin);
+      activeFrameConfig = readWidgetFrameConfig(data.config);
+      widgetOpen = false;
+      const iframe = createIframe(widgetHost, window.location.origin, activeFrameConfig);
       activeIframe = iframe;
       pendingInitPayload = {
         widgetPublicKey: data.widgetPublicKey,
@@ -490,6 +595,17 @@ function mount() {
       };
 
       document.body.appendChild(iframe);
+
+      const onResize = () => {
+        if (activeIframe) {
+          applyIframeLayout(activeIframe, activeFrameConfig, widgetOpen);
+        }
+      };
+      window.addEventListener("resize", onResize);
+      resizeCleanup = () => {
+        window.removeEventListener("resize", onResize);
+        resizeCleanup = null;
+      };
     })
     .catch(() => {
       teardownLoader();
@@ -522,6 +638,10 @@ function mount() {
     }
 
     if (data.type === "sitechat:visibility") {
+      if (typeof data.payload?.open === "boolean") {
+        widgetOpen = data.payload.open;
+        applyIframeLayout(activeIframe, activeFrameConfig, widgetOpen);
+      }
       return;
     }
 
@@ -532,6 +652,8 @@ function mount() {
             return;
           }
 
+          activeFrameConfig = readWidgetFrameConfig(boot.config);
+          applyIframeLayout(activeIframe, activeFrameConfig, widgetOpen);
           const page = currentPagePayload();
           postInitMessage(activeIframe, widgetHost, {
             widgetPublicKey: boot.widgetPublicKey,

@@ -9,12 +9,76 @@ export type WidgetBranding = {
   showPoweredBy: boolean;
 };
 
+export type WidgetLocalizedCopy = {
+  useSystemDefaults: boolean;
+  overrides: Record<string, string>;
+};
+
+export type WidgetBusinessHours = {
+  enabled: boolean;
+  timezone: string;
+  weekly: Array<{
+    day: number;
+    start: string;
+    end: string;
+  }>;
+  onlineGreeting: WidgetLocalizedCopy | null;
+  offlineGreeting: WidgetLocalizedCopy | null;
+  awayMessage: WidgetLocalizedCopy | null;
+};
+
 export type WidgetPublicConfig = {
+  version: number;
+  updatedAt: string;
   locale: WidgetLocale;
   greetingMessage: string;
   reopenWindowHours: number;
   branding: WidgetBranding;
+
+  primaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  textColor: string;
+  launcherColor: string;
+
+  launcherIcon: "chat" | "message" | "help" | "custom";
+  launcherShape: "circle" | "rounded-square" | "square";
+  launcherSize: "sm" | "md" | "lg";
   position: "bottom-right" | "bottom-left";
+  launcherOffsetX: number;
+  launcherOffsetY: number;
+  launcherIconUrl: string | null;
+
+  borderRadius: number;
+  shadowLevel: "none" | "sm" | "md" | "lg";
+  widgetWidth: number;
+  widgetHeight: number;
+  widgetMaxHeight: number;
+  density: "compact" | "comfortable";
+
+  headerStyle: "solid" | "minimal" | "branded";
+  headerTitle: WidgetLocalizedCopy;
+  subtitle: WidgetLocalizedCopy;
+  logoUrl: string | null;
+  agentAvatarUrl: string | null;
+
+  welcomeMessage: WidgetLocalizedCopy;
+  placeholderText: WidgetLocalizedCopy;
+  sendButtonStyle: "icon" | "text" | "icon-text";
+
+  fontFamily: "system" | "inter" | "geist" | "source-sans" | "ibm-plex-sans" | "nunito-sans";
+  fontSizeScale: "sm" | "md" | "lg";
+  colorMode: "light" | "dark" | "system";
+
+  autoOpenDelayMs: number | null;
+  hideLauncherWhenOpen: boolean;
+  showGreeting: boolean;
+  mobileBehavior: "responsive" | "fullscreen";
+  showAgentAvatars: boolean;
+  showPoweredBy: boolean;
+  soundEnabled: boolean;
+
+  businessHours: WidgetBusinessHours;
 };
 
 export type BootstrapPayload = {

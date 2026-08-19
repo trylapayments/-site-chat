@@ -18,7 +18,10 @@ describe("loader shared constant alignment", () => {
   });
 });
 
-function bootstrapResponse(widgetPublicKey: string) {
+function bootstrapResponse(
+  widgetPublicKey: string,
+  configOverrides: Record<string, unknown> = {},
+) {
   return Response.json({
     data: {
       widgetPublicKey,
@@ -33,6 +36,7 @@ function bootstrapResponse(widgetPublicKey: string) {
           showPoweredBy: true,
         },
         position: "bottom-right",
+        ...configOverrides,
       },
       embedToken: "embed-token",
       embedTokenExpiresAt: new Date().toISOString(),
@@ -40,10 +44,13 @@ function bootstrapResponse(widgetPublicKey: string) {
   });
 }
 
-async function mountLoader(widgetPublicKey: string) {
+async function mountLoader(
+  widgetPublicKey: string,
+  configOverrides: Record<string, unknown> = {},
+) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(() => Promise.resolve(bootstrapResponse(widgetPublicKey))),
+    vi.fn(() => Promise.resolve(bootstrapResponse(widgetPublicKey, configOverrides))),
   );
 
   const postMessage = vi.fn();
@@ -87,7 +94,14 @@ async function mountLoader(widgetPublicKey: string) {
     setTimeout(resolve, 0);
   });
 
-  return { postMessage, iframeWindow, loader };
+  const iframeElement = appendChildSpy.mock.calls
+    .map(([node]) => node)
+    .find((node): node is HTMLIFrameElement => node instanceof HTMLIFrameElement);
+  if (!iframeElement) {
+    throw new Error("Expected loader to create an iframe");
+  }
+
+  return { postMessage, iframeWindow, iframeElement, loader };
 }
 
 function signalReady(iframeWindow: Window) {
@@ -103,12 +117,28 @@ function signalReady(iframeWindow: Window) {
   );
 }
 
+function signalVisibility(iframeWindow: Window, open: boolean) {
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      origin: "https://app.example.com",
+      source: iframeWindow,
+      data: {
+        source: "sitechat-embed",
+        type: "sitechat:visibility",
+        payload: { open },
+      },
+    }),
+  );
+}
+
 describe("widget loader", () => {
   let activeLoader: LoaderModule | null = null;
 
   beforeEach(() => {
     vi.resetModules();
     document.body.innerHTML = "";
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
     (window as Window & { [WIDGET_MOUNTED_KEY]?: boolean })[WIDGET_MOUNTED_KEY] = false;
     delete (window as Window & { SiteChat?: unknown }).SiteChat;
     activeLoader = null;
@@ -240,6 +270,48 @@ describe("widget loader", () => {
       type: "sitechat:page",
       payload: { url: "http://localhost:3001/" },
     });
+  });
+
+  it("uses physical left placement and configured frame dimensions", async () => {
+    const mounted = await mountLoader("wk_33333333333333333333333333333333", {
+      position: "bottom-left",
+      launcherOffsetX: 24,
+      launcherOffsetY: 20,
+      launcherSize: "md",
+      widgetWidth: 380,
+      widgetHeight: 560,
+      widgetMaxHeight: 720,
+    });
+    activeLoader = mounted.loader;
+    const iframe = mounted.iframeElement;
+
+    expect(iframe.style.left).toBe("0px");
+    expect(iframe.style.right).toBe("auto");
+    expect(iframe.style.width).toBe("80px");
+    expect(iframe.style.height).toBe("76px");
+
+    signalReady(mounted.iframeWindow);
+    signalVisibility(mounted.iframeWindow, true);
+
+    expect(iframe.style.left).toBe("0px");
+    expect(iframe.style.width).toBe("404px");
+    expect(iframe.style.height).toBe("656px");
+  });
+
+  it("expands a fullscreen mobile widget to the host viewport", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 700 });
+    const mounted = await mountLoader("wk_44444444444444444444444444444444", {
+      mobileBehavior: "fullscreen",
+    });
+    activeLoader = mounted.loader;
+    const iframe = mounted.iframeElement;
+
+    signalReady(mounted.iframeWindow);
+    signalVisibility(mounted.iframeWindow, true);
+
+    expect(iframe.style.width).toBe("390px");
+    expect(iframe.style.height).toBe("700px");
   });
 
   it("mounts only one widget when script executes twice", async () => {

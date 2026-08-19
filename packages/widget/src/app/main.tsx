@@ -27,6 +27,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 
 import { WidgetApiClient, type BootstrapPayload, type WidgetPublicConfig } from "../api/client";
@@ -65,6 +66,19 @@ import {
   writeSessionToken,
   writeVisitorPublicId,
 } from "../session/storage";
+import {
+  clampedPixels,
+  contrastingTextColor,
+  fontFamilyStack,
+  fontSizeForScale,
+  launcherRadius,
+  launcherSizePixels,
+  mixHexColors,
+  positionInsets,
+  resolveLocalizedCopy,
+  safeHexColor,
+  widgetShadow,
+} from "./appearance";
 import { isNearBottom, scrollContainerToBottom, shouldAutoScroll } from "./scroll";
 
 const EMPTY_RECEIPTS: ReceiptCursors = {
@@ -116,15 +130,150 @@ function applyDocumentLocale(locale: WidgetLocale, direction: "ltr" | "rtl") {
   document.documentElement.dir = direction;
 }
 
-function positionInsets(position: "bottom-right" | "bottom-left"): {
-  left?: string;
-  right?: string;
-} {
-  // Physical left/right so launcher/panel position is NOT mirrored in RTL.
-  if (position === "bottom-left") {
-    return { left: "1rem", right: "auto" };
+type WidgetCssProperties = CSSProperties & {
+  "--widget-accent": string;
+  "--widget-background": string;
+  "--widget-border": string;
+  "--widget-density-padding": string;
+  "--widget-font-family": string;
+  "--widget-font-size": string;
+  "--widget-message-gap": string;
+  "--widget-primary": string;
+  "--widget-surface": string;
+  "--widget-text": string;
+};
+
+const WIDGET_STYLES = `
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: transparent;
   }
-  return { right: "1rem", left: "auto" };
+  *, *::before, *::after { box-sizing: border-box; }
+  button:focus-visible, textarea:focus-visible {
+    outline: 3px solid var(--widget-accent);
+    outline-offset: 2px;
+  }
+  button:disabled { cursor: not-allowed !important; opacity: 0.58; }
+  .sitechat-panel { overscroll-behavior: contain; }
+  .sitechat-messages { min-height: 0; overscroll-behavior: contain; }
+  .sitechat-composer-row { min-width: 0; }
+  .sitechat-composer { min-width: 0; }
+  @media (max-width: 640px) {
+    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-panel {
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      border-radius: 0 !important;
+    }
+    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-header {
+      padding-top: calc(var(--widget-density-padding) + env(safe-area-inset-top));
+      padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
+      padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
+    }
+    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-footer {
+      padding-bottom: calc(var(--widget-density-padding) + env(safe-area-inset-bottom));
+      padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
+      padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
+    }
+  }
+`;
+
+function LauncherGlyph({
+  customUrl,
+  icon,
+  open,
+}: {
+  customUrl: string | null;
+  icon: WidgetPublicConfig["launcherIcon"];
+  open: boolean;
+}) {
+  if (open) {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="44%" height="44%">
+        <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
+
+  if (customUrl) {
+    return (
+      <img
+        src={customUrl}
+        alt=""
+        referrerPolicy="no-referrer"
+        style={{ width: "58%", height: "58%", objectFit: "contain" }}
+      />
+    );
+  }
+
+  if (icon === "help") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="50%" height="50%">
+        <path
+          d="M9.6 9a2.5 2.5 0 1 1 3.2 2.4c-.8.3-1.3.9-1.3 1.8v.3M12 17.5h.01"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="2"
+        />
+      </svg>
+    );
+  }
+
+  if (icon === "message") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="52%" height="52%">
+        <path
+          d="M5 5h14v10H9l-4 4V5Z"
+          fill="none"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="2"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="52%" height="52%">
+      <path
+        d="M4 5h16v12H8l-4 3V5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path d="M8 10h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function SendButtonContent({
+  copy,
+  sending,
+  style,
+}: {
+  copy: WidgetMessages;
+  sending: boolean;
+  style: WidgetPublicConfig["sendButtonStyle"];
+}) {
+  if (sending) {
+    return copy.sendingLabel;
+  }
+  if (style === "text") {
+    return copy.sendLabel;
+  }
+  return (
+    <>
+      <span aria-hidden="true">➤</span>
+      {style === "icon-text" ? <span>{copy.sendLabel}</span> : null}
+    </>
+  );
 }
 
 function WidgetApp() {
@@ -167,6 +316,8 @@ function WidgetApp() {
   const lastRecordedPageUrlRef = useRef<string | null>(null);
   const identifyInFlightRef = useRef(false);
   const pendingIdentifyRef = useRef<HostIdentifyPayload | null>(null);
+  const autoOpenAttemptedRef = useRef(false);
+  const visitorToggledOpenRef = useRef(false);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -216,6 +367,32 @@ function WidgetApp() {
 
   const config: WidgetPublicConfig | null =
     state.status === "ready" ? state.init.config : (initRef.current?.config ?? null);
+
+  useEffect(() => {
+    const delay = config?.autoOpenDelayMs;
+    if (
+      delay === null ||
+      delay === undefined ||
+      autoOpenAttemptedRef.current ||
+      visitorToggledOpenRef.current
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => {
+        autoOpenAttemptedRef.current = true;
+        if (!visitorToggledOpenRef.current) {
+          setOpen(true);
+        }
+      },
+      clampedPixels(delay, 0, 0, 60_000),
+    );
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [config?.autoOpenDelayMs, config?.updatedAt, config?.version]);
 
   const readySessionToken = state.status === "ready" ? state.sessionToken : null;
   const readyEmbedToken = state.status === "ready" ? state.init.embedToken : null;
@@ -916,61 +1093,178 @@ function WidgetApp() {
     }
   };
 
-  const primaryColor = config?.branding.primaryColor ?? "#0066FF";
+  const primaryColor = safeHexColor(
+    config?.primaryColor ?? config?.branding.primaryColor,
+    "#0066FF",
+  );
+  const accentColor = safeHexColor(config?.accentColor, "#0052CC");
+  const backgroundColor = safeHexColor(config?.backgroundColor, "#FFFFFF");
+  const textColor = safeHexColor(config?.textColor, "#111827");
+  const launcherColor = safeHexColor(config?.launcherColor, primaryColor);
+  const surfaceColor = mixHexColors(backgroundColor, textColor, 0.04);
+  const borderColor = mixHexColors(backgroundColor, textColor, 0.16);
+  const mutedColor = mixHexColors(backgroundColor, textColor, 0.62);
   const position = config?.position ?? "bottom-right";
-  const insets = positionInsets(position);
-  const panelLabel = config?.branding.displayName ?? messagesCopy.chatPanelLabel;
+  const launcherOffsetX = clampedPixels(config?.launcherOffsetX, 16, 0, 120);
+  const launcherOffsetY = clampedPixels(config?.launcherOffsetY, 16, 0, 120);
+  const launcherSize = launcherSizePixels(config?.launcherSize);
+  const insets = positionInsets(position, launcherOffsetX);
+  const greetingInsets = positionInsets(position, launcherOffsetX + launcherSize + 12);
+  const hideLauncherWhenOpen = config?.hideLauncherWhenOpen === true;
+  const panelBottom =
+    launcherOffsetY + (hideLauncherWhenOpen ? 0 : launcherSize + 12);
+  const widgetWidth = clampedPixels(config?.widgetWidth, 380, 300, 480);
+  const widgetHeight = clampedPixels(config?.widgetHeight, 560, 360, 800);
+  const widgetMaxHeight = clampedPixels(config?.widgetMaxHeight, 720, 360, 900);
+  const borderRadius = clampedPixels(config?.borderRadius, 16, 0, 32);
+  const densityPadding = config?.density === "compact" ? "0.75rem" : "1rem";
+  const messageGap = config?.density === "compact" ? "0.5rem" : "0.75rem";
+  const presenceFallback = operatorsOnline ? messagesCopy.online : messagesCopy.offline;
+  const headerTitle = resolveLocalizedCopy({
+    copy: config?.headerTitle,
+    locale,
+    systemFallback: config?.branding.displayName ?? messagesCopy.chatPanelLabel,
+  });
+  const subtitle = config?.subtitle
+    ? resolveLocalizedCopy({
+        copy: config.subtitle,
+        locale,
+        systemFallback: presenceFallback,
+      })
+    : (config?.greetingMessage ?? presenceFallback);
+  const welcomeMessage = config?.welcomeMessage
+    ? resolveLocalizedCopy({
+        copy: config.welcomeMessage,
+        locale,
+        systemFallback: messagesCopy.welcomeTitle,
+      })
+    : (config?.greetingMessage ?? messagesCopy.welcomeTitle);
+  const placeholderText = resolveLocalizedCopy({
+    copy: config?.placeholderText,
+    locale,
+    systemFallback: messagesCopy.composerPlaceholder,
+  });
+  const headerStyle = config?.headerStyle ?? "solid";
+  const headerBackground =
+    headerStyle === "minimal"
+      ? backgroundColor
+      : headerStyle === "branded"
+        ? `linear-gradient(135deg, ${primaryColor}, ${accentColor})`
+        : primaryColor;
+  const headerColor =
+    headerStyle === "minimal"
+      ? textColor
+      : contrastingTextColor(
+          headerStyle === "branded"
+            ? mixHexColors(primaryColor, accentColor, 0.5)
+            : primaryColor,
+        );
+  const logoUrl = config ? (config.logoUrl ?? config.branding.logoUrl) : null;
+  const panelLabel = headerTitle || messagesCopy.chatPanelLabel;
+  const rootStyle: WidgetCssProperties = {
+    "--widget-accent": accentColor,
+    "--widget-background": backgroundColor,
+    "--widget-border": borderColor,
+    "--widget-density-padding": densityPadding,
+    "--widget-font-family": fontFamilyStack(config?.fontFamily),
+    "--widget-font-size": fontSizeForScale(config?.fontSizeScale),
+    "--widget-message-gap": messageGap,
+    "--widget-primary": primaryColor,
+    "--widget-surface": surfaceColor,
+    "--widget-text": textColor,
+    color: textColor,
+    colorScheme: config?.colorMode === "system" ? "light dark" : (config?.colorMode ?? "light"),
+    fontFamily: "var(--widget-font-family)",
+    fontSize: "var(--widget-font-size)",
+  };
 
   return (
     <div
+      className="sitechat-widget"
       dir={direction}
       lang={locale}
+      data-config-version={config?.version}
+      data-mobile-behavior={config?.mobileBehavior ?? "responsive"}
       data-widget-locale={locale}
       data-widget-dir={direction}
-      style={{
-        fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif",
-        color: "#111827",
-      }}
+      style={rootStyle}
     >
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-label={open ? messagesCopy.launcherOpenLabel : messagesCopy.launcherLabel}
-        onClick={() => {
-          setOpen((value) => !value);
-        }}
-        style={{
-          position: "fixed",
-          bottom: "1rem",
-          ...insets,
-          width: "3.5rem",
-          height: "3.5rem",
-          borderRadius: "9999px",
-          border: "none",
-          background: primaryColor,
-          color: "#fff",
-          cursor: "pointer",
-          boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
-          zIndex: 1,
-        }}
-      >
-        {open ? "×" : "💬"}
-      </button>
+      <style>{WIDGET_STYLES}</style>
+      {config?.showGreeting === true && !open ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            bottom: `${String(launcherOffsetY + Math.max(0, (launcherSize - 44) / 2))}px`,
+            ...greetingInsets,
+            width: "min(16.25rem, calc(100vw - 1rem))",
+            minHeight: "2.75rem",
+            padding: "0.7rem 0.85rem",
+            border: `1px solid ${borderColor}`,
+            borderRadius: `${String(Math.min(borderRadius, 14))}px`,
+            background: backgroundColor,
+            color: textColor,
+            boxShadow: widgetShadow(config.shadowLevel),
+            zIndex: 1,
+          }}
+        >
+          {welcomeMessage}
+        </div>
+      ) : null}
+
+      {!open || !hideLauncherWhenOpen ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? messagesCopy.launcherOpenLabel : messagesCopy.launcherLabel}
+          onClick={() => {
+            visitorToggledOpenRef.current = true;
+            setOpen((value) => !value);
+          }}
+          style={{
+            position: "fixed",
+            bottom: `${String(launcherOffsetY)}px`,
+            ...insets,
+            width: `${String(launcherSize)}px`,
+            height: `${String(launcherSize)}px`,
+            padding: 0,
+            borderRadius: launcherRadius(config?.launcherShape),
+            border: "none",
+            background: launcherColor,
+            color: contrastingTextColor(launcherColor),
+            cursor: "pointer",
+            boxShadow: widgetShadow(config?.shadowLevel),
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2,
+          }}
+        >
+          <LauncherGlyph
+            customUrl={config?.launcherIconUrl ?? null}
+            icon={config?.launcherIcon ?? "chat"}
+            open={open}
+          />
+        </button>
+      ) : null}
 
       {open ? (
         <section
+          className="sitechat-panel"
           aria-label={panelLabel}
           data-testid="widget-realtime-ready"
           data-realtime-state={connectionState}
           style={{
             position: "fixed",
-            bottom: "5rem",
+            bottom: `${String(panelBottom)}px`,
             ...insets,
-            width: "min(100vw - 2rem, 24rem)",
-            height: "min(100vh - 7rem, 32rem)",
-            background: "#fff",
-            borderRadius: "1rem",
-            boxShadow: "0 20px 40px rgba(0,0,0,0.18)",
+            width: `min(calc(100vw - ${String(launcherOffsetX)}px), ${String(widgetWidth)}px)`,
+            height: `min(${String(widgetHeight)}px, ${String(widgetMaxHeight)}px, calc(100dvh - ${String(panelBottom + 8)}px))`,
+            maxHeight: `${String(widgetMaxHeight)}px`,
+            background: backgroundColor,
+            color: textColor,
+            borderRadius: `${String(borderRadius)}px`,
+            boxShadow: widgetShadow(config?.shadowLevel),
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -978,45 +1272,96 @@ function WidgetApp() {
           }}
         >
           <header
+            className="sitechat-header"
             style={{
-              padding: "1rem",
-              borderBottom: "1px solid #e5e7eb",
-              background: primaryColor,
-              color: "#fff",
+              padding: densityPadding,
+              borderBottom: `1px solid ${headerStyle === "minimal" ? borderColor : "transparent"}`,
+              background: headerBackground,
+              color: headerColor,
             }}
           >
-            <div style={{ fontWeight: 600 }}>
-              {config?.branding.displayName ?? messagesCopy.chatPanelLabel}
-            </div>
-            <div
-              data-testid="widget-operator-presence"
-              data-presence={operatorsOnline ? "online" : "offline"}
-              style={{
-                fontSize: "0.75rem",
-                opacity: 0.9,
-                marginTop: "0.2rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.35rem",
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: "0.4rem",
-                  height: "0.4rem",
-                  borderRadius: "9999px",
-                  background: operatorsOnline ? "#86efac" : "rgba(255,255,255,0.45)",
-                  display: "inline-block",
-                }}
-              />
-              {operatorsOnline ? messagesCopy.online : messagesCopy.offline}
-            </div>
-            {config?.greetingMessage ? (
-              <div style={{ fontSize: "0.875rem", opacity: 0.95, marginTop: "0.25rem" }}>
-                {config.greetingMessage}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  style={{
+                    width: "2rem",
+                    height: "2rem",
+                    borderRadius: "0.5rem",
+                    objectFit: "contain",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : null}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 650, overflowWrap: "anywhere" }}>{headerTitle}</div>
+                <div
+                  data-testid="widget-operator-presence"
+                  data-presence={operatorsOnline ? "online" : "offline"}
+                  style={{
+                    fontSize: "0.78em",
+                    opacity: 0.86,
+                    marginTop: "0.15rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: "0.4rem",
+                      height: "0.4rem",
+                      borderRadius: "50%",
+                      background: operatorsOnline ? "#22C55E" : "currentColor",
+                      opacity: operatorsOnline ? 1 : 0.45,
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span dir="auto">{subtitle}</span>
+                </div>
               </div>
-            ) : null}
+              {config?.showAgentAvatars !== false && config?.agentAvatarUrl ? (
+                <img
+                  src={config.agentAvatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  style={{
+                    width: "2rem",
+                    height: "2rem",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : null}
+              <button
+                type="button"
+                aria-label={messagesCopy.closeLabel}
+                onClick={() => {
+                  visitorToggledOpenRef.current = true;
+                  setOpen(false);
+                }}
+                style={{
+                  width: "2rem",
+                  height: "2rem",
+                  padding: 0,
+                  border: 0,
+                  borderRadius: "50%",
+                  background: "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                  fontSize: "1.35rem",
+                  lineHeight: 1,
+                  flexShrink: 0,
+                }}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
             {connectionState !== "connected" && connectionState !== "connecting" ? (
               <div
                 role="status"
@@ -1034,6 +1379,7 @@ function WidgetApp() {
           </header>
 
           <div
+            className="sitechat-messages"
             ref={messagesContainerRef}
             aria-live="polite"
             data-testid="widget-messages"
@@ -1043,11 +1389,11 @@ function WidgetApp() {
             style={{
               flex: 1,
               overflowY: "auto",
-              padding: "1rem",
+              padding: densityPadding,
               display: "flex",
               flexDirection: "column",
-              gap: "0.75rem",
-              background: "#f9fafb",
+              gap: messageGap,
+              background: surfaceColor,
             }}
           >
             {state.status === "error" ? <p role="alert">{state.message}</p> : null}
@@ -1055,7 +1401,7 @@ function WidgetApp() {
             {state.status === "booting" ? <p>{messagesCopy.welcomeTitle}</p> : null}
 
             {state.status === "ready" && messages.length === 0 ? (
-              <p>{config?.greetingMessage ?? messagesCopy.welcomeTitle}</p>
+              <p dir="auto">{welcomeMessage}</p>
             ) : null}
 
             {messages.map((message) => {
@@ -1072,70 +1418,118 @@ function WidgetApp() {
                       peer: agentReceipts,
                     })
                   : null;
+              const showAvatar =
+                message.senderType === "agent" && config?.showAgentAvatars !== false;
 
               return (
-                <article
+                <div
                   key={message.id}
-                  data-testid={isVisitor ? "visitor-message" : "agent-message"}
                   style={{
                     alignSelf: isVisitor ? "flex-end" : "flex-start",
-                    maxWidth: "85%",
-                    background: isVisitor ? primaryColor : "#fff",
-                    color: isVisitor ? "#fff" : "#111827",
-                    padding: "0.625rem 0.75rem",
-                    borderRadius: "0.75rem",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-                    opacity: message.status === "pending" ? 0.8 : 1,
+                    maxWidth: "88%",
+                    display: "flex",
+                    alignItems: "flex-end",
+                    gap: "0.45rem",
+                    direction: "ltr",
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", opacity: 0.85, marginBottom: "0.25rem" }}>
-                    {label} · {formatMessageTime(message.createdAt, locale)}
-                  </div>
-                  {message.body ? (
-                    <div dir="auto" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                      {message.body}
-                    </div>
-                  ) : null}
-                  {state.status === "ready" &&
-                  message.attachments &&
-                  message.attachments.length > 0 ? (
-                    <MessageAttachments
-                      attachments={message.attachments}
-                      isVisitor={isVisitor}
-                      api={api}
-                      embedToken={state.init.embedToken}
-                      sessionToken={state.sessionToken}
-                      copy={messagesCopy}
-                    />
-                  ) : null}
-                  {receiptStatus ? (
-                    <MessageReceiptTicks
-                      status={receiptStatus}
-                      label={receiptLabel(receiptStatus, messagesCopy)}
-                    />
-                  ) : null}
-                  {message.status === "failed" ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setComposer(message.body);
-                        pendingClientMessageIdRef.current =
-                          message.clientMessageId ?? failedClientMessageId;
-                      }}
+                  {showAvatar ? (
+                    <span
+                      aria-hidden="true"
                       style={{
-                        marginTop: "0.35rem",
-                        background: "transparent",
-                        border: "none",
-                        color: isVisitor ? "#fff" : "#b91c1c",
-                        textDecoration: "underline",
-                        cursor: "pointer",
-                        fontSize: "0.75rem",
+                        width: "1.75rem",
+                        height: "1.75rem",
+                        borderRadius: "50%",
+                        background: backgroundColor,
+                        border: `1px solid ${borderColor}`,
+                        color: textColor,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
                       }}
                     >
-                      {messagesCopy.retryLabel}
-                    </button>
+                      {config?.agentAvatarUrl ? (
+                        <img
+                          src={config.agentAvatarUrl}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        messagesCopy.agentLabel.slice(0, 1)
+                      )}
+                    </span>
                   ) : null}
-                </article>
+                  <article
+                    data-testid={isVisitor ? "visitor-message" : "agent-message"}
+                    style={{
+                      minWidth: 0,
+                      background: isVisitor ? primaryColor : backgroundColor,
+                      color: isVisitor ? contrastingTextColor(primaryColor) : textColor,
+                      padding:
+                        config?.density === "compact"
+                          ? "0.5rem 0.625rem"
+                          : "0.625rem 0.75rem",
+                      border: isVisitor ? "none" : `1px solid ${borderColor}`,
+                      borderRadius: `${String(Math.min(borderRadius, 14))}px`,
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+                      opacity: message.status === "pending" ? 0.8 : 1,
+                      direction,
+                    }}
+                  >
+                    <div style={{ fontSize: "0.75em", opacity: 0.78, marginBottom: "0.25rem" }}>
+                      {label} · {formatMessageTime(message.createdAt, locale)}
+                    </div>
+                    {message.body ? (
+                      <div dir="auto" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                        {message.body}
+                      </div>
+                    ) : null}
+                    {state.status === "ready" &&
+                    message.attachments &&
+                    message.attachments.length > 0 ? (
+                      <MessageAttachments
+                        attachments={message.attachments}
+                        isVisitor={isVisitor}
+                        api={api}
+                        embedToken={state.init.embedToken}
+                        sessionToken={state.sessionToken}
+                        copy={messagesCopy}
+                      />
+                    ) : null}
+                    {receiptStatus ? (
+                      <MessageReceiptTicks
+                        status={receiptStatus}
+                        label={receiptLabel(receiptStatus, messagesCopy)}
+                      />
+                    ) : null}
+                    {message.status === "failed" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComposer(message.body);
+                          pendingClientMessageIdRef.current =
+                            message.clientMessageId ?? failedClientMessageId;
+                        }}
+                        style={{
+                          marginTop: "0.35rem",
+                          background: "transparent",
+                          border: "none",
+                          color: isVisitor ? contrastingTextColor(primaryColor) : "#B91C1C",
+                          textDecoration: "underline",
+                          cursor: "pointer",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {messagesCopy.retryLabel}
+                      </button>
+                    ) : null}
+                  </article>
+                </div>
               );
             })}
             <div data-testid="widget-messages-end" aria-hidden="true" />
@@ -1147,10 +1541,10 @@ function WidgetApp() {
             aria-atomic="true"
             style={{
               minHeight: "1.25rem",
-              padding: "0 1rem",
+              padding: `0 ${densityPadding}`,
               fontSize: "0.75rem",
-              color: "#6b7280",
-              background: "#f9fafb",
+              color: mutedColor,
+              background: surfaceColor,
             }}
           >
             {agentTyping.active
@@ -1161,12 +1555,14 @@ function WidgetApp() {
           </div>
 
           <footer
+            className="sitechat-footer"
             style={{
-              borderTop: "1px solid #e5e7eb",
-              padding: "0.75rem",
+              borderTop: `1px solid ${borderColor}`,
+              padding: densityPadding,
               position: "relative",
-              outline: dragActive ? `2px solid ${primaryColor}` : undefined,
-              background: dragActive ? "#eff6ff" : undefined,
+              outline: dragActive ? `2px solid ${accentColor}` : undefined,
+              background: dragActive ? surfaceColor : backgroundColor,
+              flexShrink: 0,
             }}
             onDragEnter={(event) => {
               event.preventDefault();
@@ -1197,7 +1593,8 @@ function WidgetApp() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "rgba(239,246,255,0.92)",
+                  background: surfaceColor,
+                  color: textColor,
                   zIndex: 2,
                   fontSize: "0.875rem",
                   fontWeight: 600,
@@ -1266,7 +1663,7 @@ function WidgetApp() {
                         border: "none",
                         background: "transparent",
                         cursor: "pointer",
-                        color: "#6b7280",
+                        color: mutedColor,
                       }}
                     >
                       ×
@@ -1282,7 +1679,7 @@ function WidgetApp() {
               data-upload-status={uploadBatchAriaStatus(uploadBatch.status)}
               style={{
                 fontSize: "0.75rem",
-                color: "#6b7280",
+                color: mutedColor,
                 minHeight: uploadBatch.status === "idle" ? 0 : "1rem",
                 marginBottom: uploadBatch.status === "idle" ? 0 : "0.35rem",
               }}
@@ -1299,7 +1696,10 @@ function WidgetApp() {
                 return uploading ? ` ${String(uploading.progress)}%` : null;
               })()}
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+            <div
+              className="sitechat-composer-row"
+              style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
+            >
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1323,10 +1723,10 @@ function WidgetApp() {
                 disabled={state.status !== "ready" || sending}
                 onClick={() => fileInputRef.current?.click()}
                 style={{
-                  borderRadius: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  background: "#fff",
-                  color: "#111827",
+                  borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                  border: `1px solid ${borderColor}`,
+                  background: backgroundColor,
+                  color: textColor,
                   padding: "0.625rem 0.75rem",
                   cursor: "pointer",
                 }}
@@ -1334,6 +1734,7 @@ function WidgetApp() {
                 +
               </button>
               <textarea
+                className="sitechat-composer"
                 value={composer}
                 onChange={(event) => {
                   const next = event.target.value;
@@ -1356,8 +1757,8 @@ function WidgetApp() {
                     void addLocalFiles(files);
                   }
                 }}
-                placeholder={messagesCopy.composerPlaceholder}
-                aria-label={messagesCopy.composerPlaceholder}
+                placeholder={placeholderText}
+                aria-label={placeholderText}
                 dir="auto"
                 rows={2}
                 disabled={state.status !== "ready" || sending}
@@ -1370,8 +1771,10 @@ function WidgetApp() {
                 style={{
                   flex: 1,
                   resize: "none",
-                  borderRadius: "0.75rem",
-                  border: "1px solid #d1d5db",
+                  borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                  border: `1px solid ${borderColor}`,
+                  background: backgroundColor,
+                  color: textColor,
                   padding: "0.625rem 0.75rem",
                   font: "inherit",
                 }}
@@ -1394,9 +1797,10 @@ function WidgetApp() {
                     setSending(false);
                   }}
                   style={{
-                    borderRadius: "0.75rem",
-                    border: "1px solid #d1d5db",
-                    background: "#fff",
+                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                    border: `1px solid ${borderColor}`,
+                    background: backgroundColor,
+                    color: textColor,
                     padding: "0 0.75rem",
                     cursor: "pointer",
                   }}
@@ -1414,10 +1818,10 @@ function WidgetApp() {
                     void handleSend();
                   }}
                   style={{
-                    borderRadius: "0.75rem",
+                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
                     border: "none",
-                    background: primaryColor,
-                    color: "#fff",
+                    background: accentColor,
+                    color: contrastingTextColor(accentColor),
                     padding: "0 1rem",
                     cursor: "pointer",
                   }}
@@ -1437,25 +1841,34 @@ function WidgetApp() {
                   }
                   aria-label={sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
                   style={{
-                    borderRadius: "0.75rem",
+                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
                     border: "none",
-                    background: primaryColor,
-                    color: "#fff",
+                    background: accentColor,
+                    color: contrastingTextColor(accentColor),
                     padding: "0 1rem",
                     cursor: "pointer",
-                    minWidth: "4.5rem",
+                    minWidth: config?.sendButtonStyle === "icon" ? "2.75rem" : "4.5rem",
+                    minHeight: "2.75rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.4rem",
                   }}
                 >
-                  {sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
+                  <SendButtonContent
+                    copy={messagesCopy}
+                    sending={sending}
+                    style={config?.sendButtonStyle ?? "text"}
+                  />
                 </button>
               )}
             </div>
-            {config?.branding.showPoweredBy !== false ? (
+            {(config?.showPoweredBy ?? config?.branding.showPoweredBy) !== false ? (
               <div
                 style={{
                   marginTop: "0.5rem",
                   fontSize: "0.75rem",
-                  color: "#6b7280",
+                  color: mutedColor,
                   textAlign: "end",
                 }}
               >
