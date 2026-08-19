@@ -19,7 +19,9 @@ vi.mock("@/lib/widget/service", () => ({
 
 vi.mock("@/lib/widget-studio/public-config", () => ({
   widgetPublicConfigEtag: (key: string, version: number) =>
-    `"widget-config-${key}-${String(version)}"`,
+    `"widget-config-${key}-v${String(version)}-s123"`,
+  widgetPublicConfigCacheControl: () =>
+    "public, max-age=60, stale-while-revalidate=60",
 }));
 
 const { GET } = await import("@/app/api/v1/widget/config/route");
@@ -62,10 +64,10 @@ describe("widget public config route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe(
-      "public, max-age=60, stale-while-revalidate=300",
+      "public, max-age=60, stale-while-revalidate=60",
     );
     expect(response.headers.get("etag")).toBe(
-      `"widget-config-${widgetPublicKey}-4"`,
+      `"widget-config-${widgetPublicKey}-v4-s123"`,
     );
     expect(body.data.version).toBe(4);
     expect(body.data.primaryColor).toBe("#0066FF");
@@ -79,7 +81,7 @@ describe("widget public config route", () => {
         {
           headers: {
             Origin: "https://customer.example.com",
-            "If-None-Match": `"widget-config-${widgetPublicKey}-4"`,
+            "If-None-Match": `"widget-config-${widgetPublicKey}-v4-s123"`,
           },
         },
       ),

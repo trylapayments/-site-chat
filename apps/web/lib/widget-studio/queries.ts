@@ -64,7 +64,9 @@ export async function publishWidgetStudio(
     "publish_widget_studio",
     {
       p_workspace_id: workspaceId,
-      p_expected_published_version: expectedPublishedVersion,
+      ...(expectedPublishedVersion === null
+        ? {}
+        : { p_expected_published_version: expectedPublishedVersion }),
     },
   );
 
