@@ -26,7 +26,29 @@ function shouldProxy(pathname) {
   return PROXY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
-async function proxyToApp(request, response, targetUrl) {
+/**
+ * Headers that must not be forwarded from Node fetch() responses.
+ *
+ * undici/Node fetch automatically decompresses gzip/br/deflate bodies, but still
+ * exposes the upstream Content-Encoding header. Forwarding that header with an
+ * already-decoded body makes Safari fail with "cannot decode raw data".
+ */
+const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  // Recomputed against the (possibly decompressed) body we actually send.
+  "content-length",
+  "content-encoding",
+]);
+
+function buildUpstreamRequestHeaders(request) {
   const headers = new Headers();
   for (const name of [
     "accept",
@@ -34,7 +56,6 @@ async function proxyToApp(request, response, targetUrl) {
     "content-type",
     "if-none-match",
     "if-modified-since",
-    "range",
     "origin",
     "referer",
     "user-agent",
@@ -43,10 +64,35 @@ async function proxyToApp(request, response, targetUrl) {
     if (value) headers.set(name, value);
   }
 
+  // Ask upstream for identity encoding when possible. Even if Next still gzips,
+  // fetch decompresses and we strip Content-Encoding below.
+  headers.set("accept-encoding", "identity");
+
   // Preserve the demo-site Origin so bootstrap allowlisting sees localhost:3001.
   if (!headers.has("origin") && request.headers.host) {
     headers.set("origin", `http://${request.headers.host}`);
   }
+
+  return headers;
+}
+
+function buildProxiedResponseHeaders(upstream, bodyByteLength) {
+  const responseHeaders = {
+    // Always advertise the byte length of the body we are about to write.
+    "Content-Length": String(bodyByteLength),
+  };
+
+  upstream.headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+    if (HOP_BY_HOP_RESPONSE_HEADERS.has(lower)) return;
+    responseHeaders[key] = value;
+  });
+
+  return responseHeaders;
+}
+
+async function proxyToApp(request, response, targetUrl) {
+  const headers = buildUpstreamRequestHeaders(request);
 
   let body;
   if (request.method !== "GET" && request.method !== "HEAD") {
@@ -72,18 +118,16 @@ async function proxyToApp(request, response, targetUrl) {
     return;
   }
 
-  const responseHeaders = {};
-  upstream.headers.forEach((value, key) => {
-    if (key.toLowerCase() === "transfer-encoding") return;
-    responseHeaders[key] = value;
-  });
+  // Buffer first so Content-Length matches the (decompressed) payload we send.
+  const buffer =
+    request.method === "HEAD" ? Buffer.alloc(0) : Buffer.from(await upstream.arrayBuffer());
+  const responseHeaders = buildProxiedResponseHeaders(upstream, buffer.byteLength);
 
   response.writeHead(upstream.status, responseHeaders);
   if (request.method === "HEAD") {
     response.end();
     return;
   }
-  const buffer = Buffer.from(await upstream.arrayBuffer());
   response.end(buffer);
 }
 
