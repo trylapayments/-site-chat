@@ -90,11 +90,7 @@ export function collectAppearanceContrastWarnings(input: {
   primaryColor: string;
   launcherColor: string;
 }): WidgetAppearanceContrastWarnings {
-  const textOnBackground = checkContrast(
-    input.textColor,
-    input.backgroundColor,
-    "Body text",
-  );
+  const textOnBackground = checkContrast(input.textColor, input.backgroundColor, "Body text");
   const primaryOnBackground = checkContrast(
     input.primaryColor,
     input.backgroundColor,

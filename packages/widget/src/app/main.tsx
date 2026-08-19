@@ -1111,8 +1111,7 @@ function WidgetApp() {
   const insets = positionInsets(position, launcherOffsetX);
   const greetingInsets = positionInsets(position, launcherOffsetX + launcherSize + 12);
   const hideLauncherWhenOpen = config?.hideLauncherWhenOpen === true;
-  const panelBottom =
-    launcherOffsetY + (hideLauncherWhenOpen ? 0 : launcherSize + 12);
+  const panelBottom = launcherOffsetY + (hideLauncherWhenOpen ? 0 : launcherSize + 12);
   const widgetWidth = clampedPixels(config?.widgetWidth, 380, 300, 480);
   const widgetHeight = clampedPixels(config?.widgetHeight, 560, 360, 800);
   const widgetMaxHeight = clampedPixels(config?.widgetMaxHeight, 720, 360, 900);
@@ -1155,9 +1154,7 @@ function WidgetApp() {
     headerStyle === "minimal"
       ? textColor
       : contrastingTextColor(
-          headerStyle === "branded"
-            ? mixHexColors(primaryColor, accentColor, 0.5)
-            : primaryColor,
+          headerStyle === "branded" ? mixHexColors(primaryColor, accentColor, 0.5) : primaryColor,
         );
   const logoUrl = config ? (config.logoUrl ?? config.branding.logoUrl) : null;
   const panelLabel = headerTitle || messagesCopy.chatPanelLabel;
@@ -1471,9 +1468,7 @@ function WidgetApp() {
                       background: isVisitor ? primaryColor : backgroundColor,
                       color: isVisitor ? contrastingTextColor(primaryColor) : textColor,
                       padding:
-                        config?.density === "compact"
-                          ? "0.5rem 0.625rem"
-                          : "0.625rem 0.75rem",
+                        config?.density === "compact" ? "0.5rem 0.625rem" : "0.625rem 0.75rem",
                       border: isVisitor ? "none" : `1px solid ${borderColor}`,
                       borderRadius: `${String(Math.min(borderRadius, 14))}px`,
                       boxShadow: "0 1px 2px rgba(0,0,0,0.06)",

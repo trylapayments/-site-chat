@@ -41,12 +41,7 @@ const DEFAULT_FRAME_CONFIG: WidgetFrameConfig = {
   widgetWidth: 380,
 };
 
-function clampedNumber(
-  value: unknown,
-  fallback: number,
-  minimum: number,
-  maximum: number,
-): number {
+function clampedNumber(value: unknown, fallback: number, minimum: number, maximum: number): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(maximum, Math.max(minimum, Math.round(value)))
     : fallback;
@@ -57,8 +52,7 @@ function readWidgetFrameConfig(value: unknown): WidgetFrameConfig {
     return DEFAULT_FRAME_CONFIG;
   }
   const config = value as Record<string, unknown>;
-  const launcherSize =
-    config.launcherSize === "sm" ? 48 : config.launcherSize === "lg" ? 64 : 56;
+  const launcherSize = config.launcherSize === "sm" ? 48 : config.launcherSize === "lg" ? 64 : 56;
   return {
     hideLauncherWhenOpen: config.hideLauncherWhenOpen === true,
     launcherOffsetX: clampedNumber(config.launcherOffsetX, 16, 0, 120),
@@ -73,11 +67,7 @@ function readWidgetFrameConfig(value: unknown): WidgetFrameConfig {
   };
 }
 
-function applyIframeLayout(
-  iframe: HTMLIFrameElement,
-  config: WidgetFrameConfig,
-  open: boolean,
-) {
+function applyIframeLayout(iframe: HTMLIFrameElement, config: WidgetFrameConfig, open: boolean) {
   const fullscreen =
     open &&
     config.mobileBehavior === "fullscreen" &&
@@ -93,14 +83,10 @@ function applyIframeLayout(
   }
 
   const closedWidth =
-    config.launcherOffsetX +
-    config.launcherSize +
-    (config.showGreeting ? 12 + 260 : 0);
+    config.launcherOffsetX + config.launcherSize + (config.showGreeting ? 12 + 260 : 0);
   const panelBottom =
-    config.launcherOffsetY +
-    (config.hideLauncherWhenOpen ? 0 : config.launcherSize + 12);
-  const openHeight =
-    Math.min(config.widgetHeight, config.widgetMaxHeight) + panelBottom + 8;
+    config.launcherOffsetY + (config.hideLauncherWhenOpen ? 0 : config.launcherSize + 12);
+  const openHeight = Math.min(config.widgetHeight, config.widgetMaxHeight) + panelBottom + 8;
   const width = open ? config.widgetWidth + config.launcherOffsetX : closedWidth;
   const height = open ? openHeight : config.launcherOffsetY + config.launcherSize;
 

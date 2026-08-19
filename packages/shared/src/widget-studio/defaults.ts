@@ -69,9 +69,7 @@ export function defaultWidgetAppearanceConfig(): WidgetAppearanceConfig {
 /**
  * Migrate legacy `settings_json.widget` (pre–Widget Studio) into appearance config.
  */
-export function appearanceFromLegacyWidgetSettings(
-  legacy: unknown,
-): WidgetAppearanceConfig {
+export function appearanceFromLegacyWidgetSettings(legacy: unknown): WidgetAppearanceConfig {
   const base = defaultWidgetAppearanceConfig();
   if (!legacy || typeof legacy !== "object") {
     return base;

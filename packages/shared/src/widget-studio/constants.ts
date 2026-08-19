@@ -60,13 +60,7 @@ export type WidgetMobileBehavior = (typeof WIDGET_MOBILE_BEHAVIORS)[number];
 export const WIDGET_ASSET_KINDS = ["logo", "launcher_icon", "agent_avatar"] as const;
 export type WidgetAssetKind = (typeof WIDGET_ASSET_KINDS)[number];
 
-export const WIDGET_PRESET_IDS = [
-  "clean",
-  "minimal",
-  "modern",
-  "dark",
-  "rounded",
-] as const;
+export const WIDGET_PRESET_IDS = ["clean", "minimal", "modern", "dark", "rounded"] as const;
 export type WidgetPresetId = (typeof WIDGET_PRESET_IDS)[number];
 
 /** Hex color (#RRGGBB). */

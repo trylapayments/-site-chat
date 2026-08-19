@@ -64,33 +64,23 @@ export function contrastingTextColor(background: string): "#000000" | "#FFFFFF" 
   return whiteContrast >= blackContrast ? "#FFFFFF" : "#000000";
 }
 
-export function fontFamilyStack(
-  family: WidgetPublicConfig["fontFamily"] | undefined,
-): string {
+export function fontFamilyStack(family: WidgetPublicConfig["fontFamily"] | undefined): string {
   return FONT_STACKS[family ?? "system"];
 }
 
-export function fontSizeForScale(
-  scale: WidgetPublicConfig["fontSizeScale"] | undefined,
-): string {
+export function fontSizeForScale(scale: WidgetPublicConfig["fontSizeScale"] | undefined): string {
   return scale === "sm" ? "14px" : scale === "lg" ? "18px" : "16px";
 }
 
-export function launcherSizePixels(
-  size: WidgetPublicConfig["launcherSize"] | undefined,
-): number {
+export function launcherSizePixels(size: WidgetPublicConfig["launcherSize"] | undefined): number {
   return size === "sm" ? 48 : size === "lg" ? 64 : 56;
 }
 
-export function launcherRadius(
-  shape: WidgetPublicConfig["launcherShape"] | undefined,
-): string {
+export function launcherRadius(shape: WidgetPublicConfig["launcherShape"] | undefined): string {
   return shape === "square" ? "0.375rem" : shape === "rounded-square" ? "28%" : "50%";
 }
 
-export function widgetShadow(
-  level: WidgetPublicConfig["shadowLevel"] | undefined,
-): string {
+export function widgetShadow(level: WidgetPublicConfig["shadowLevel"] | undefined): string {
   return SHADOWS[level ?? "md"];
 }
 

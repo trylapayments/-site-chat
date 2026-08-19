@@ -18,10 +18,7 @@ describe("loader shared constant alignment", () => {
   });
 });
 
-function bootstrapResponse(
-  widgetPublicKey: string,
-  configOverrides: Record<string, unknown> = {},
-) {
+function bootstrapResponse(widgetPublicKey: string, configOverrides: Record<string, unknown> = {}) {
   return Response.json({
     data: {
       widgetPublicKey,
@@ -44,10 +41,7 @@ function bootstrapResponse(
   });
 }
 
-async function mountLoader(
-  widgetPublicKey: string,
-  configOverrides: Record<string, unknown> = {},
-) {
+async function mountLoader(widgetPublicKey: string, configOverrides: Record<string, unknown> = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn(() => Promise.resolve(bootstrapResponse(widgetPublicKey, configOverrides))),
