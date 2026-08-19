@@ -16,7 +16,10 @@
     "db:types:check": "tmp=$(mktemp) && supabase gen types typescript --local > \"$tmp\" && diff -u packages/shared/src/database.types.ts \"$tmp\" && rm \"$tmp\"",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "local:refresh": "node scripts/local-refresh.mjs",
-    "local:restart": "node scripts/local-restart.mjs"
+    "local:restart": "node scripts/local-restart.mjs",
+    "demo:prepare": "node scripts/prepare-local-demo.mjs",
+    "demo:media": "node scripts/seed-demo-media.mjs",
+    "demo:host": "node demo/host-server.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme — Demo website</title>
+    <style>
+      :root {
+        --ink: #0f172a;
+        --muted: #475569;
+        --line: #e2e8f0;
+        --bg: #f8fafc;
+        --brand: #0066ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 500px at 10% -10%, #dbeafe 0%, transparent 55%),
+          radial-gradient(900px 400px at 100% 0%, #e0f2fe 0%, transparent 50%),
+          var(--bg);
+        min-height: 100vh;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(8px);
+      }
+      .brand {
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        font-size: 1.15rem;
+      }
+      .brand span {
+        color: var(--brand);
+      }
+      nav {
+        display: flex;
+        gap: 1rem;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 4rem 1.5rem 6rem;
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 2.75rem);
+        line-height: 1.15;
+        letter-spacing: -0.03em;
+        margin: 0 0 1rem;
+      }
+      p {
+        color: var(--muted);
+        font-size: 1.05rem;
+        line-height: 1.6;
+        margin: 0 0 1rem;
+      }
+      .hint {
+        margin-top: 2rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        font-size: 0.95rem;
+        color: var(--ink);
+      }
+      .hint strong {
+        display: block;
+        margin-bottom: 0.35rem;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.9em;
+        background: #f1f5f9;
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">Acme <span>Cloud</span></div>
+      <nav>
+        <span>Product</span>
+        <span>Pricing</span>
+        <span>Docs</span>
+      </nav>
+    </header>
+    <main>
+      <h1>Customer messaging for modern websites</h1>
+      <p>
+        This is a local demo host page. The production Site Chat widget is embedded below —
+        open the launcher to start a visitor conversation against the seeded
+        <code>acme-support</code> workspace.
+      </p>
+      <div class="hint">
+        <strong>Demo tip</strong>
+        After you publish Widget Studio changes, reload this page to see the published appearance.
+      </div>
+    </main>
+    <script
+      src="http://localhost:3000/widget/loader.js"
+      data-widget-key="wk_e2e00000000000000000000000000001"
+    ></script>
+  </body>
+</html>
