@@ -388,7 +388,13 @@ SELECT is(
 );
 SELECT throws_ok(
   format(
-    'SELECT public.save_widget_studio_draft(%L::uuid, app_private.widget_appearance_defaults())',
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        public.get_widget_studio_state(%L::uuid) -> 'draft'
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
   'FORBIDDEN: Only owners and admins can manage Widget Studio.',
@@ -410,7 +416,13 @@ SELECT tests.authenticate_as(
 
 SELECT throws_ok(
   format(
-    'SELECT public.save_widget_studio_draft(%L::uuid, app_private.widget_appearance_defaults())',
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        public.get_widget_studio_state(%L::uuid) -> 'draft'
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
   'FORBIDDEN: Only owners and admins can manage Widget Studio.',
@@ -440,12 +452,13 @@ SELECT lives_ok(
       SELECT public.save_widget_studio_draft(
         %L::uuid,
         jsonb_set(
-          app_private.widget_appearance_defaults(),
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
           '{primaryColor}',
           '"#112233"'::jsonb
         )
       )
     $sql$,
+    tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
   'owner can save a Widget Studio draft'
@@ -468,6 +481,7 @@ SELECT is(
   '#0066FF',
   'save draft does not change published_json'
 );
+SELECT tests.clear_auth();
 SELECT is(
   app_private.widget_public_config_for_workspace(
     tests.fixture('workspace_a')::uuid
@@ -476,7 +490,6 @@ SELECT is(
   'public config continues to use published_json before publish'
 );
 
-SELECT tests.clear_auth();
 SELECT set_config(
   'tests.version_before_publish',
   (
@@ -515,6 +528,7 @@ SELECT is(
   current_setting('tests.version_before_publish')::integer + 1,
   'publish atomically increments published_version by one'
 );
+SELECT tests.clear_auth();
 SELECT is(
   app_private.widget_public_config_for_workspace(
     tests.fixture('workspace_a')::uuid
@@ -547,10 +561,11 @@ SELECT throws_ok(
     $sql$
       SELECT public.save_widget_studio_draft(
         %L::uuid,
-        app_private.widget_appearance_defaults()
+        (public.get_widget_studio_state(%L::uuid) -> 'draft')
         || '{"nested":{"customCss":"* { color: red; }"}}'::jsonb
       )
     $sql$,
+    tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
   'INVALID_APPEARANCE: customCss and customJS are not allowed.',
@@ -563,12 +578,13 @@ SELECT lives_ok(
       SELECT public.save_widget_studio_draft(
         %L::uuid,
         jsonb_set(
-          app_private.widget_appearance_defaults(),
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
           '{primaryColor}',
           '"#ABCDEF"'::jsonb
         )
       )
     $sql$,
+    tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
   'owner can save another unpublished draft'
@@ -599,12 +615,13 @@ SELECT lives_ok(
       SELECT public.save_widget_studio_draft(
         %L::uuid,
         jsonb_set(
-          app_private.widget_appearance_defaults(),
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
           '{primaryColor}',
           '"#445566"'::jsonb
         )
       )
     $sql$,
+    tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
   'admin can save Widget Studio draft'
@@ -637,6 +654,7 @@ SELECT lives_ok(
   ),
   'owner can reset Widget Studio draft'
 );
+SELECT tests.clear_auth();
 SELECT ok(
   (
     SELECT draft_json = app_private.widget_appearance_defaults()
@@ -653,6 +671,10 @@ SELECT is(
   ),
   '#445566',
   'reset draft does not alter published_json'
+);
+SELECT tests.authenticate_as(
+  tests.fixture('owner_a')::uuid,
+  'studio-owner-a@test.local'
 );
 SELECT throws_ok(
   format(
