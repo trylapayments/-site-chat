@@ -1,10 +1,9 @@
 import {
-  widgetBootstrapDataSchema,
   widgetPublicAppearanceSchema,
   widgetPublicKeySchema,
 } from "@site-chat/shared";
 
-import { issueEmbedToken, resolveBootstrapContext } from "@/lib/widget/context";
+import { resolveBootstrapContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
 import { getRequestOrigin } from "@/lib/widget/origin";
 import {
@@ -21,6 +20,8 @@ import {
 import { consumeWidgetRateLimit } from "@/lib/widget/service";
 import { widgetPublicConfigEtag } from "@/lib/widget-studio/public-config";
 
+const CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300";
+
 export async function GET(request: Request) {
   const requestId = createRequestId();
   const origin = getRequestOrigin(request);
@@ -30,10 +31,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const url = new URL(request.url);
-    const keyParam = url.searchParams.get("key");
-    const keyResult = widgetPublicKeySchema.safeParse(keyParam);
-
+    const keyResult = widgetPublicKeySchema.safeParse(
+      new URL(request.url).searchParams.get("key"),
+    );
     if (!keyResult.success) {
       return widgetJsonError(
         "FORBIDDEN",
@@ -44,12 +44,11 @@ export async function GET(request: Request) {
       );
     }
 
-    const bootstrapContext = await resolveBootstrapContext({
+    const context = await resolveBootstrapContext({
       widgetPublicKey: keyResult.data,
       requestOrigin: origin,
     });
-
-    if (!bootstrapContext.ok) {
+    if (!context.ok) {
       return widgetJsonError(
         "FORBIDDEN",
         GENERIC_FORBIDDEN_MESSAGE,
@@ -64,7 +63,6 @@ export async function GET(request: Request) {
       WIDGET_RATE_LIMITS.bootstrap.windowSeconds,
       WIDGET_RATE_LIMITS.bootstrap.limit,
     );
-
     if (!allowed) {
       return widgetJsonError(
         "RATE_LIMITED",
@@ -75,35 +73,21 @@ export async function GET(request: Request) {
       );
     }
 
-    const { token, expiresAt } = issueEmbedToken(
-      bootstrapContext.workspace,
-      bootstrapContext.parentOrigin,
+    const config = widgetPublicAppearanceSchema.parse(context.workspace.config);
+    const etag = widgetPublicConfigEtag(
+      context.workspace.widgetPublicKey,
+      config.version,
     );
-    const config = widgetPublicAppearanceSchema.parse(
-      bootstrapContext.workspace.config,
-    );
+    const responseHeaders = cacheHeaders(origin, etag);
 
-    return widgetJsonSuccess(
-      widgetBootstrapDataSchema,
-      {
-        widgetPublicKey: bootstrapContext.workspace.widgetPublicKey,
-        config,
-        embedToken: token,
-        embedTokenExpiresAt: expiresAt.toISOString(),
-      },
-      requestId,
-      {
-        status: 200,
-        headers: {
-          ...Object.fromEntries(corsHeaders(origin)?.entries() ?? []),
-          "Cache-Control": "no-store",
-          ETag: widgetPublicConfigEtag(
-            bootstrapContext.workspace.widgetPublicKey,
-            config.version,
-          ),
-        },
-      },
-    );
+    if (request.headers.get("if-none-match") === etag) {
+      return new Response(null, { status: 304, headers: responseHeaders });
+    }
+
+    return widgetJsonSuccess(widgetPublicAppearanceSchema, config, requestId, {
+      status: 200,
+      headers: responseHeaders,
+    });
   } catch {
     return widgetJsonError(
       "INTERNAL_ERROR",
@@ -123,11 +107,17 @@ export function OPTIONS(request: Request) {
   );
 }
 
+function cacheHeaders(origin: string | null, etag: string): Headers {
+  const headers = corsHeaders(origin) ?? new Headers();
+  headers.set("Cache-Control", CACHE_CONTROL);
+  headers.set("ETag", etag);
+  return headers;
+}
+
 function corsHeaders(origin: string | null): Headers | undefined {
   if (!origin) {
     return undefined;
   }
-
   const headers = new Headers();
   headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Vary", "Origin");

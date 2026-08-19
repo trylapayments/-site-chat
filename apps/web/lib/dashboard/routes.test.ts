@@ -5,6 +5,7 @@ import {
   SETTINGS_SECTION_CANNED_RESPONSES,
   SETTINGS_SECTION_CRM,
   SETTINGS_SECTION_NOTIFICATIONS,
+  SETTINGS_SECTION_WIDGET_STUDIO,
   workspaceBasePath,
   workspaceContactsPath,
   workspaceNavPath,
@@ -30,6 +31,9 @@ describe("workspaceSettingsPath", () => {
     );
     expect(workspaceSettingsPath("acme", SETTINGS_SECTION_NOTIFICATIONS)).toBe(
       "/app/acme/settings/notifications",
+    );
+    expect(workspaceSettingsPath("acme", SETTINGS_SECTION_WIDGET_STUDIO)).toBe(
+      "/app/acme/settings/widget-studio",
     );
   });
 });

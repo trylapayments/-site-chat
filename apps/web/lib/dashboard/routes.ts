@@ -65,6 +65,7 @@ export function workspaceNavPath(slug: string, segment: string): string {
 export const SETTINGS_SECTION_CANNED_RESPONSES = "canned-responses";
 export const SETTINGS_SECTION_CRM = "crm";
 export const SETTINGS_SECTION_NOTIFICATIONS = "notifications";
+export const SETTINGS_SECTION_WIDGET_STUDIO = "widget-studio";
 
 export function workspaceSettingsPath(slug: string, section?: string): string {
   const settings = workspaceNavPath(slug, "settings");
