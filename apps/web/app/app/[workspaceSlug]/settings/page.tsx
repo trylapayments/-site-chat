@@ -2,8 +2,9 @@ import {
   cannedResponsesMessagesEn,
   crmMessagesEn,
   notificationsMessagesEn,
+  widgetStudioMessagesEn,
 } from "@site-chat/shared";
-import { Bell, MessageSquareQuote, Tags } from "lucide-react";
+import { Bell, MessageSquareQuote, Palette, Tags } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -12,12 +13,14 @@ import {
   SETTINGS_SECTION_CANNED_RESPONSES,
   SETTINGS_SECTION_CRM,
   SETTINGS_SECTION_NOTIFICATIONS,
+  SETTINGS_SECTION_WIDGET_STUDIO,
   workspaceSettingsPath,
 } from "@/lib/dashboard/routes";
 
 const cannedMessages = cannedResponsesMessagesEn;
 const crmMessages = crmMessagesEn;
 const notificationMessages = notificationsMessagesEn;
+const widgetMessages = widgetStudioMessagesEn;
 
 export default async function SettingsPage({
   params,
@@ -34,6 +37,33 @@ export default async function SettingsPage({
       />
 
       <ul className="grid gap-4 sm:grid-cols-2">
+        <li>
+          <Link
+            href={toAppRoute(
+              workspaceSettingsPath(
+                workspaceSlug,
+                SETTINGS_SECTION_WIDGET_STUDIO,
+              ),
+            )}
+            className="border-border/60 hover:border-border hover:bg-muted/40 focus-visible:ring-ring flex h-full items-start gap-3 rounded-lg border p-4 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            data-testid="settings-link-widget-studio"
+          >
+            <span
+              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-md"
+              aria-hidden="true"
+            >
+              <Palette className="size-5" />
+            </span>
+            <span className="space-y-1">
+              <span className="block text-sm font-medium">
+                {widgetMessages.settingsLinkLabel}
+              </span>
+              <span className="text-muted-foreground block text-sm">
+                {widgetMessages.settingsLinkDescription}
+              </span>
+            </span>
+          </Link>
+        </li>
         <li>
           <Link
             href={toAppRoute(

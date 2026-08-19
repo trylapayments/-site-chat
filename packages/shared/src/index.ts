@@ -23,6 +23,7 @@ export * from "./crm/index";
 export * from "./notes/index";
 export * from "./notifications/index";
 export * from "./search/index";
+export * from "./widget-studio/index";
 export * from "./realtime/merge-messages";
 export * from "./realtime/merge-conversations";
 export * from "./realtime/connection-state";

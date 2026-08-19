@@ -199,3 +199,5 @@ Trade-off: main `app.js` grew modestly for the shared registry and sync English 
 ## Configuration contract
 
 Bootstrap `config.locale` is public branding/config data only (no tenant IDs or secrets). Zod (`widgetLocaleInputSchema`) and SQL (`normalize_widget_locale`) accept all 48 canonical codes and fall back to `en` when invalid.
+
+Widget Studio adds localized copy objects with system defaults plus exact per-locale overrides. An `en` override never replaces another locale: when the active locale has no matching override, the widget uses that locale’s system dictionary. The current Studio form edits English copy while preserving any existing non-English map entries; the durable/public model supports canonical-locale overrides. Launcher `bottom-left` / `bottom-right` remains physical under Studio RTL preview and in the embedded widget. See [WIDGET-STUDIO.md](./WIDGET-STUDIO.md#7-localization-and-rtl).

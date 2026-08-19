@@ -1984,6 +1984,115 @@ export type Database = {
           },
         ]
       }
+      widget_assets: {
+        Row: {
+          byte_size: number
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          height: number | null
+          id: string
+          kind: string
+          mime_type: string
+          original_filename: string
+          status: string
+          storage_key: string
+          updated_at: string
+          verified_at: string | null
+          width: number | null
+          workspace_id: string
+        }
+        Insert: {
+          byte_size: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          kind: string
+          mime_type: string
+          original_filename: string
+          status?: string
+          storage_key: string
+          updated_at?: string
+          verified_at?: string | null
+          width?: number | null
+          workspace_id: string
+        }
+        Update: {
+          byte_size?: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          kind?: string
+          mime_type?: string
+          original_filename?: string
+          status?: string
+          storage_key?: string
+          updated_at?: string
+          verified_at?: string | null
+          width?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "widget_assets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      widget_configs: {
+        Row: {
+          created_at: string
+          draft_json: Json
+          draft_updated_at: string
+          draft_updated_by: string | null
+          published_at: string
+          published_by: string | null
+          published_json: Json
+          published_version: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          draft_json: Json
+          draft_updated_at?: string
+          draft_updated_by?: string | null
+          published_at?: string
+          published_by?: string | null
+          published_json: Json
+          published_version?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          draft_json?: Json
+          draft_updated_at?: string
+          draft_updated_by?: string | null
+          published_at?: string
+          published_by?: string | null
+          published_json?: Json
+          published_version?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "widget_configs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       widget_rate_limit_buckets: {
         Row: {
           bucket_key: string
@@ -2291,6 +2400,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      discard_widget_studio_draft: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
       finalize_notification_email_outbox: {
         Args: {
           p_id: string
@@ -2355,6 +2468,10 @@ export type Database = {
         Returns: Json
       }
       get_notification_unread_count: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
+      get_widget_studio_state: {
         Args: { p_workspace_id: string }
         Returns: Json
       }
@@ -2463,6 +2580,10 @@ export type Database = {
         Args: { p_member_id: string }
         Returns: undefined
       }
+      publish_widget_studio: {
+        Args: { p_expected_published_version?: number; p_workspace_id: string }
+        Returns: Json
+      }
       record_canned_response_usage: {
         Args: { p_id: string; p_workspace_id: string }
         Returns: Json
@@ -2471,9 +2592,17 @@ export type Database = {
         Args: { p_member_id: string }
         Returns: undefined
       }
+      reset_widget_studio_draft: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
       revoke_workspace_invitation: {
         Args: { p_invitation_id: string }
         Returns: undefined
+      }
+      save_widget_studio_draft: {
+        Args: { p_draft: Json; p_workspace_id: string }
+        Returns: Json
       }
       send_operator_message: {
         Args: {

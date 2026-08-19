@@ -1,8 +1,8 @@
 # Site Chat — System Architecture
 
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Foundation  
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-19
 
 ---
 
@@ -81,6 +81,8 @@ AI subsystem details: `docs/AI-ARCHITECTURE.md`, `docs/AI-SECURITY.md`, `docs/AI
 Visitor identity + context: `docs/VISITOR-IDENTITY.md`, `docs/PRIVACY.md`, `docs/DATA-RETENTION.md`, `docs/adr/ADR-003-visitor-identity-model.md`.
 
 Visitor Profile / CRM-lite (companies, tags, typed custom fields, contact list + profile): `docs/VISITOR-PROFILE.md`, `docs/adr/ADR-008-crm-companies-custom-fields.md`.
+
+Widget Studio (typed appearance, draft/publish, private brand assets, public config DTO): `docs/WIDGET-STUDIO.md`, `docs/adr/ADR-009-widget-studio-draft-publish.md`.
 
 ---
 
@@ -221,6 +223,7 @@ GraphQL and tRPC are explicitly not used in v1 to reduce long-term surface area.
 - Auth: Visitor session token issued on widget initialization/resume, sent as a standard `Authorization: Bearer <session_token>` header (opaque token, hashed at rest — not a JWT).
 - Rate limited per IP and per session (Vercel edge middleware + Upstash Redis or Supabase-based counter).
 - Endpoints:
+  - `GET /api/v1/widget/config` — Fetch the published, visitor-safe appearance DTO; origin-checked and cacheable by published-version ETag
   - `POST /api/v1/widget/session` — Create/resume session; return token, `visitor_public_id` (display only), and — the first time one is minted — a `continuity_token` the client must persist to resume the same contact later
   - `POST /api/v1/widget/messages` — Send visitor message
   - `GET /api/v1/widget/messages` — Fetch conversation history
@@ -386,6 +389,12 @@ The iframe hosts the full widget UI, isolating styles and preventing host page J
 ### 7.3 Internationalization
 
 Visitor widget UI strings are localized via the shared locale registry and per-locale dictionaries. See `docs/WIDGET-I18N.md` for the LiveChat-aligned 48-locale list, resolution order, RTL rules, and `i18n:check` gate. Message bodies are never auto-translated.
+
+### 7.4 Widget Studio settings and publication
+
+Settings → Widget Studio stores one typed `schemaVersion: 1` appearance document as separate draft and published snapshots. All workspace roles can view Studio; only owners/admins can save, publish, reset, discard, apply presets, or upload assets (`view_widget_studio` / `manage_widget_studio`). The dashboard previews draft state, while visitor bootstrap and `GET /api/v1/widget/config` map only published state through an explicit public DTO allowlist.
+
+Publishing uses compare-and-swap on the displayed `published_version`, then atomically copies draft to published and increments that version; the public ETag combines it with a signing bucket so cached signed asset URLs refresh before expiry. Brand assets use UUID references into workspace-scoped `widget_assets`; authenticated writes are closed, and the private bucket is exposed only through short-lived signed URLs after explicit verified-state, raster MIME/bytes/dimensions, workspace path, and asset-kind checks. Entitlements are remapped on every visitor delivery path. System color mode listens to `prefers-color-scheme`, while business-hours fields remain a disabled, non-enforced foundation. The model accepts typed fields and allowlisted fonts/assets only—no arbitrary CSS, JavaScript, SVG uploads, or remote URLs. See `docs/WIDGET-STUDIO.md` and ADR-009.
 
 ---
 
@@ -636,5 +645,6 @@ Detailed security controls are documented in [SECURITY.md](./SECURITY.md). Archi
 | 2026-07-30 | Monorepo with separate widget package | Independent bundle size optimization | Single package |
 | 2026-08-10 | Contacts as visitor identity + opaque `public_id` | Durable identity without CRM rename/fingerprint | See ADR-003 |
 | 2026-08-16 | CRM-lite companies + typed custom fields (EAV) | Operator CRM without host JSONB merge or domain auto-merge | See ADR-008 |
+| 2026-08-19 | Widget Studio draft/published snapshots + monotonic version | Safe preview, atomic production promotion, explicit public cache boundary | See ADR-009 |
 
 Decisions are append-only. Superseded decisions are marked but not deleted.

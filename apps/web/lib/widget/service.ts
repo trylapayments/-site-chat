@@ -3,7 +3,7 @@ import {
   visitorPageViewDataSchema,
   widgetListMessagesDataSchema,
   widgetMarkReceiptDataSchema,
-  widgetPublicConfigSchema,
+  widgetPublicAppearanceSchema,
   widgetSendMessageDataSchema,
   widgetSessionDataSchema,
   sanitizePageUrl,
@@ -13,13 +13,14 @@ import {
   type VisitorPageViewData,
   type WidgetListMessagesData,
   type WidgetMarkReceiptData,
-  type WidgetPublicConfig,
+  type WidgetPublicAppearance,
   type WidgetSendMessageData,
   type WidgetSessionData,
   type Json,
 } from "@site-chat/shared";
 
 import { createServiceClient } from "@/lib/supabase/service";
+import { enrichWidgetPublicAppearance } from "@/lib/widget-studio/public-config";
 
 function parseRpcResult<T>(
   label: string,
@@ -55,7 +56,7 @@ function asRecord(value: Json): Record<string, Json> {
   return value as Record<string, Json>;
 }
 
-function mapPublicConfigFromRpc(data: Json): unknown {
+export function mapPublicConfigFromRpc(data: Json): unknown {
   const record = asRecord(data);
   const config = asRecord(record.config ?? {});
   const branding = asRecord(config.branding ?? {});
@@ -64,16 +65,15 @@ function mapPublicConfigFromRpc(data: Json): unknown {
     workspaceId: record.workspace_id,
     widgetPublicKey: record.widget_public_key,
     config: {
-      locale: config.locale ?? "en",
-      greetingMessage: config.greetingMessage,
-      reopenWindowHours: config.reopenWindowHours,
+      ...config,
+      greetingMessage: config.greetingMessage ?? "Hi! How can we help?",
       branding: {
         displayName: branding.displayName ?? null,
         logoUrl: branding.logoUrl ?? null,
         primaryColor: branding.primaryColor,
         showPoweredBy: branding.showPoweredBy ?? true,
       },
-      position: config.position ?? "bottom-right",
+      position: config.position ?? config.launcherPosition ?? "bottom-right",
     },
   };
 }
@@ -156,7 +156,7 @@ function mapListMessagesFromRpc(data: Json): unknown {
 export type WidgetWorkspaceLookup = {
   workspaceId: string;
   widgetPublicKey: string;
-  config: WidgetPublicConfig;
+  config: WidgetPublicAppearance;
 };
 
 export async function resolveWidgetByPublicKey(
@@ -180,17 +180,23 @@ export async function resolveWidgetByPublicKey(
       const record = value as {
         workspaceId: string;
         widgetPublicKey: string;
-        config: WidgetPublicConfig;
+        config: WidgetPublicAppearance;
       };
       return {
         workspaceId: record.workspaceId,
         widgetPublicKey: record.widgetPublicKey,
-        config: widgetPublicConfigSchema.parse(record.config),
+        config: widgetPublicAppearanceSchema.parse(record.config),
       };
     },
   });
 
-  return parsed;
+  return {
+    ...parsed,
+    config: await enrichWidgetPublicAppearance({
+      workspaceId: parsed.workspaceId,
+      publicConfig: parsed.config,
+    }),
+  };
 }
 
 export async function validateWidgetOrigin(
