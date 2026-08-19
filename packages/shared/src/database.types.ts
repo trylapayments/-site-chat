@@ -2581,10 +2581,7 @@ export type Database = {
         Returns: undefined
       }
       publish_widget_studio: {
-        Args: {
-          p_expected_published_version?: number
-          p_workspace_id: string
-        }
+        Args: { p_expected_published_version?: number; p_workspace_id: string }
         Returns: Json
       }
       record_canned_response_usage: {
