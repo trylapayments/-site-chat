@@ -27,10 +27,10 @@ async function openCannedSettings(page: Page) {
   });
   // Dashboard chrome (notification bell) is client-only; wait for it so create
   // clicks are not lost on a still-hydrating tree after full page loads.
+  // Do not wait for networkidle — notification realtime keeps sockets open.
   await expect(page.getByTestId("notification-bell")).toBeVisible({
     timeout: 30_000,
   });
-  await page.waitForLoadState("networkidle");
 }
 
 async function createSnippet(
