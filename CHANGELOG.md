@@ -4,6 +4,10 @@ All notable changes to Site Chat are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Operator Notifications (v1, PR #35): durable notification center with taxonomy (`conversation_new`, `visitor_message`, assignment/transfer/unassign, `mention`), `(workspace_id, recipient_id, dedupe_key)` idempotency, O(1) `notification_unread_counts` with mark-all lock+reconcile, keyset list/mark-read RPCs, per-member preferences (in-app/browser/sound/email/DND — DND suppresses side effects only), shared quiet-hours evaluator, optional browser Notification API + sound with post-write-verified multi-tab leader election, email outbox claim-before-send (`pending→sending→sent|failed|skipped`); docs `docs/NOTIFICATIONS.md`; pgTAP `020_notifications.test.sql`; Playwright `e2e/tests/inbox/notifications.spec.ts`.
+
 ### Fixed
 
 - Global Search hardening (PR #34): CI-deterministic widget `app.js` bundle; workspace-scoped message GIN + staged candidate cap; short-query policy (`< 3` chars); conversation `search_vector` re-sanitizes `source_url` and drops assignee labels; safe LIKE escaping; Viewer internal-message/attachment denial regressions; palette stale-request guard; `list_messages.around_message_id` deep-links; note deep-link hydrate via full navigation + `get_internal_note` (avoids stale empty notes RSC); Playwright CI serves `next start` with `AI_ALLOW_MOCK_PROVIDER` (not `next dev`) to avoid mid-suite memory restarts; docs/EXPLAIN assumptions corrected (`limit_per_type` does not bound scan cost).

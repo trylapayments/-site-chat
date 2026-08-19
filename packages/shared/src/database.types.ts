@@ -1471,11 +1471,238 @@ export type Database = {
           },
         ]
       }
+      notification_email_outbox: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          dedupe_key: string
+          email_category: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          notification_id: string | null
+          provider_message_id: string | null
+          recipient_member_id: string
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          dedupe_key: string
+          email_category: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          notification_id?: string | null
+          provider_message_id?: string | null
+          recipient_member_id: string
+          sent_at?: string | null
+          status?: string
+          subject: string
+          to_email: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          dedupe_key?: string
+          email_category?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          notification_id?: string | null
+          provider_message_id?: string | null
+          recipient_member_id?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_notification_email_outbox_member_workspace"
+            columns: ["recipient_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "notification_email_outbox_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_email_outbox_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          browser_assignment: boolean
+          browser_conversation_new: boolean
+          browser_enabled: boolean
+          browser_mention: boolean
+          browser_permission_denied_at: string | null
+          browser_visitor_message: boolean
+          created_at: string
+          dnd_enabled: boolean
+          email_assignment: boolean
+          email_conversation_new: boolean
+          email_mention: boolean
+          email_visitor_message: boolean
+          id: string
+          in_app_assignment: boolean
+          in_app_conversation_new: boolean
+          in_app_mention: boolean
+          in_app_transfer: boolean
+          in_app_visitor_message: boolean
+          quiet_hours_end: string | null
+          quiet_hours_start: string | null
+          sound_assignment: boolean
+          sound_enabled: boolean
+          sound_visitor_message: boolean
+          timezone: string
+          updated_at: string
+          workspace_id: string
+          workspace_member_id: string
+        }
+        Insert: {
+          browser_assignment?: boolean
+          browser_conversation_new?: boolean
+          browser_enabled?: boolean
+          browser_mention?: boolean
+          browser_permission_denied_at?: string | null
+          browser_visitor_message?: boolean
+          created_at?: string
+          dnd_enabled?: boolean
+          email_assignment?: boolean
+          email_conversation_new?: boolean
+          email_mention?: boolean
+          email_visitor_message?: boolean
+          id?: string
+          in_app_assignment?: boolean
+          in_app_conversation_new?: boolean
+          in_app_mention?: boolean
+          in_app_transfer?: boolean
+          in_app_visitor_message?: boolean
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
+          sound_assignment?: boolean
+          sound_enabled?: boolean
+          sound_visitor_message?: boolean
+          timezone?: string
+          updated_at?: string
+          workspace_id: string
+          workspace_member_id: string
+        }
+        Update: {
+          browser_assignment?: boolean
+          browser_conversation_new?: boolean
+          browser_enabled?: boolean
+          browser_mention?: boolean
+          browser_permission_denied_at?: string | null
+          browser_visitor_message?: boolean
+          created_at?: string
+          dnd_enabled?: boolean
+          email_assignment?: boolean
+          email_conversation_new?: boolean
+          email_mention?: boolean
+          email_visitor_message?: boolean
+          id?: string
+          in_app_assignment?: boolean
+          in_app_conversation_new?: boolean
+          in_app_mention?: boolean
+          in_app_transfer?: boolean
+          in_app_visitor_message?: boolean
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
+          sound_assignment?: boolean
+          sound_enabled?: boolean
+          sound_visitor_message?: boolean
+          timezone?: string
+          updated_at?: string
+          workspace_id?: string
+          workspace_member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_notification_preferences_member_workspace"
+            columns: ["workspace_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_unread_counts: {
+        Row: {
+          member_id: string
+          unread_count: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          member_id: string
+          unread_count?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          member_id?: string
+          unread_count?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_notification_unread_counts_member_workspace"
+            columns: ["member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "notification_unread_counts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
+          actor_member_id: string | null
           body: string | null
+          conversation_id: string | null
           created_at: string
+          dedupe_key: string
           id: string
+          payload_json: Json
           read_at: string | null
           recipient_id: string
           resource_id: string | null
@@ -1485,9 +1712,13 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_member_id?: string | null
           body?: string | null
+          conversation_id?: string | null
           created_at?: string
+          dedupe_key: string
           id?: string
+          payload_json?: Json
           read_at?: string | null
           recipient_id: string
           resource_id?: string | null
@@ -1497,9 +1728,13 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_member_id?: string | null
           body?: string | null
+          conversation_id?: string | null
           created_at?: string
+          dedupe_key?: string
           id?: string
+          payload_json?: Json
           read_at?: string | null
           recipient_id?: string
           resource_id?: string | null
@@ -1509,6 +1744,20 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_notifications_actor_workspace"
+            columns: ["actor_member_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "fk_notifications_conversation_workspace"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "fk_notifications_recipient_workspace"
             columns: ["recipient_id", "workspace_id"]
@@ -1926,6 +2175,34 @@ export type Database = {
         }
         Returns: number
       }
+      claim_notification_email_outbox: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          dedupe_key: string
+          email_category: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          notification_id: string | null
+          provider_message_id: string | null
+          recipient_member_id: string
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+          updated_at: string
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_email_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       clear_contact_custom_field_value: {
         Args: {
           p_contact_id: string
@@ -2014,6 +2291,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      finalize_notification_email_outbox: {
+        Args: {
+          p_id: string
+          p_last_error?: string
+          p_provider_message_id?: string
+          p_status: string
+        }
+        Returns: boolean
+      }
       finalize_operator_attachment_message: {
         Args: {
           p_attachments?: Json
@@ -2062,6 +2348,14 @@ export type Database = {
       }
       get_internal_note: {
         Args: { p_note_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      get_notification_preferences: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
+      get_notification_unread_count: {
+        Args: { p_workspace_id: string }
         Returns: Json
       }
       global_search: {
@@ -2129,6 +2423,14 @@ export type Database = {
         }
         Returns: Json
       }
+      list_notifications: {
+        Args: { p_query?: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      mark_all_notifications_read: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
       mark_attachment_uploads_uploaded: {
         Args: {
           p_batch_id: string
@@ -2151,6 +2453,10 @@ export type Database = {
           p_through_sequence?: number
           p_workspace_id: string
         }
+        Returns: Json
+      }
+      mark_notification_read: {
+        Args: { p_notification_id: string; p_workspace_id: string }
         Returns: Json
       }
       promote_workspace_member_to_owner: {
@@ -2303,6 +2609,10 @@ export type Database = {
           p_note_id: string
           p_workspace_id: string
         }
+        Returns: Json
+      }
+      update_notification_preferences: {
+        Args: { p_patch: Json; p_workspace_id: string }
         Returns: Json
       }
       update_visitor_profile: {
@@ -2478,6 +2788,9 @@ export type Database = {
         | "mention"
         | "billing_payment_failed"
         | "trial_ending"
+        | "visitor_message"
+        | "conversation_transferred"
+        | "conversation_unassigned"
       app_workspace_status: "active" | "suspended" | "pending_deletion"
     }
     CompositeTypes: {
@@ -2640,6 +2953,9 @@ export const Constants = {
         "mention",
         "billing_payment_failed",
         "trial_ending",
+        "visitor_message",
+        "conversation_transferred",
+        "conversation_unassigned",
       ],
       app_workspace_status: ["active", "suspended", "pending_deletion"],
     },

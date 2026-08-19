@@ -6,6 +6,7 @@ import type { AccessibleWorkspace } from "@site-chat/shared";
 
 import { GlobalSearch } from "@/components/dashboard/global-search/GlobalSearch";
 import { MobileNav } from "@/components/dashboard/MobileNav";
+import { NotificationBell } from "@/components/dashboard/notifications/NotificationBell";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
 
@@ -46,6 +47,13 @@ export function DashboardTopBar({
             currentPath={pathname}
           />
         </div>
+        {memberId ? (
+          <NotificationBell
+            workspaceSlug={slug}
+            workspaceId={currentWorkspaceId}
+            memberId={memberId}
+          />
+        ) : null}
         <div className="hidden lg:block">
           <UserMenu email={email} />
         </div>

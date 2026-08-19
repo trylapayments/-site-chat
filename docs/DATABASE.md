@@ -610,42 +610,43 @@ Pending team member invitations.
 
 ### 9.1 notifications
 
-In-app notifications for workspace members. Table shipped with internal notes (mention delivery); notification center UI remains Phase 3.
+In-app notifications for workspace members. Extended in PR #35 (center UI, dedupe, unread counters, emit hooks). See `docs/NOTIFICATIONS.md`.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PK | |
 | workspace_id | UUID | NOT NULL, FK → workspaces | |
 | recipient_id | UUID | NOT NULL, FK → workspace_members | |
-| type | app_notification_type | NOT NULL | Includes `mention` |
+| type | app_notification_type | NOT NULL | Includes `mention`, `conversation_new`, `visitor_message`, assignment/transfer/unassign |
 | title | TEXT | NOT NULL | |
-| body | TEXT | NULL | |
-| resource_type | TEXT | NULL | e.g., `internal_note` |
+| body | TEXT | NULL | Safe label only — never note body |
+| resource_type | TEXT | NULL | e.g., `internal_note`, `conversation`, `message` |
 | resource_id | UUID | NULL | |
+| conversation_id | UUID | NULL, composite FK → conversations | Deep-link |
+| actor_member_id | UUID | NULL, composite FK → workspace_members | Nullable after member removal |
+| dedupe_key | TEXT | NOT NULL | Unique per `(workspace_id, recipient_id, dedupe_key)` |
+| payload_json | JSONB | NOT NULL DEFAULT `{}` | Safe metadata only |
 | read_at | TIMESTAMPTZ | NULL | |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
 
 **Indexes:**
-- `idx_notifications_recipient` ON `(recipient_id, read_at NULLS FIRST, created_at DESC)`
-- Non-unique partial index `idx_notifications_mention_note_recipient` ON `(workspace_id, recipient_id, resource_id, created_at DESC)` WHERE `type = 'mention' AND resource_type = 'internal_note'` — supports mention history lookups. **Re-adding a mention after removal inserts a new mention row and notifies again**; there is intentionally no lifetime unique constraint that would suppress future mention notifications.
+- `idx_notifications_recipient_created` ON `(workspace_id, recipient_id, created_at DESC, id DESC)` — keyset feed
+- `idx_notifications_recipient_unread` partial WHERE `read_at IS NULL`
+- `uq_notifications_recipient_dedupe` UNIQUE `(workspace_id, recipient_id, dedupe_key)`
 
-**RLS:** SELECT for recipient only.
+**RLS:** SELECT for recipient only. No direct INSERT/UPDATE/DELETE for `authenticated`.
+
+### 9.1b notification_unread_counts
+
+Per-member O(1) unread badge. PK `(workspace_id, member_id)`. Maintained by triggers on `notifications`. Invariant: `unread_count = COUNT(*)` of durable rows with `read_at IS NULL` for that member. `mark_all_notifications_read` locks the counter row and reconciles to that COUNT in the same transaction.
 
 ### 9.2 notification_preferences
 
-Per-agent email and in-app notification settings.
+Per-member channel preferences (no workspace overwrite). Columns cover in-app / browser / sound / email categories, DND quiet hours, timezone, and `browser_permission_denied_at`. Writes via `update_notification_preferences` only. DND/quiet hours gate side effects only — not durable in-app inserts.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK | |
-| workspace_member_id | UUID | NOT NULL, UNIQUE, FK → workspace_members | |
-| email_conversation_new | BOOLEAN | NOT NULL DEFAULT true | |
-| email_conversation_assigned | BOOLEAN | NOT NULL DEFAULT true | |
-| quiet_hours_start | TIME | NULL | Local time |
-| quiet_hours_end | TIME | NULL | Local time |
-| timezone | TEXT | NOT NULL DEFAULT 'UTC' | |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
-| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+### 9.2b notification_email_outbox
+
+Email delivery queue (`dedupe_key` unique per workspace). State machine: `pending` → `sending` (atomic claim) → `sent` / `skipped` / `failed`. Columns include `attempts`, `claimed_at`, `next_attempt_at`, `provider_message_id`, `last_error`. No authenticated access; claim/finalize are service_role RPCs. Stale `sending` rows recover after 15 minutes.
 
 ### 9.3 audit_logs
 

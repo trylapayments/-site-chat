@@ -25,6 +25,12 @@ async function openCannedSettings(page: Page) {
   await expect(page.getByTestId("canned-responses-page")).toBeVisible({
     timeout: 60_000,
   });
+  // Dashboard chrome (notification bell) is client-only; wait for it so create
+  // clicks are not lost on a still-hydrating tree after full page loads.
+  // Do not wait for networkidle — notification realtime keeps sockets open.
+  await expect(page.getByTestId("notification-bell")).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 async function createSnippet(
@@ -36,10 +42,20 @@ async function createSnippet(
     visibility?: "workspace" | "personal";
   },
 ) {
-  await page.getByTestId("canned-create").click();
-  await expect(page.getByTestId("canned-form")).toBeVisible({
-    timeout: 30_000,
-  });
+  const form = page.getByTestId("canned-form");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await form.isVisible().catch(() => false)) {
+      break;
+    }
+    await page.getByTestId("canned-create").click();
+    try {
+      await expect(form).toBeVisible({ timeout: 5_000 });
+      break;
+    } catch {
+      // Hydration may still be attaching handlers after a full navigation.
+    }
+  }
+  await expect(form).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("canned-form-title").fill(input.title);
   await page.getByTestId("canned-form-body").fill(input.body);
   if (input.shortcut) {
@@ -49,9 +65,7 @@ async function createSnippet(
     await page.getByTestId("canned-form-visibility").selectOption(input.visibility);
   }
   await page.getByTestId("canned-form-submit").click();
-  await expect(page.getByTestId("canned-form")).toHaveCount(0, {
-    timeout: 30_000,
-  });
+  await expect(form).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByTestId("canned-item").filter({ hasText: input.title })).toBeVisible({
     timeout: 30_000,
   });

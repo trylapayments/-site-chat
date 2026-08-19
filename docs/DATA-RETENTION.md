@@ -26,6 +26,7 @@ This document describes the **architecture**. Automated purge jobs and settings 
 | `contacts` | Workspace-configurable (default aligned with message retention, e.g. 12 months) | Keep while conversations may still be needed |
 | Conversation messages | Workspace-configurable | Separate from page-view trail; see DATABASE §15 |
 | Audit logs | Plan-dependent | Not visitor browsing data |
+| Operator notifications | ~90 days | In-app `notifications` rows; email outbox ~30 days after terminal status — see `docs/NOTIFICATIONS.md` |
 
 Operator conversation detail returns at most **20** recent page views regardless of stored history.
 

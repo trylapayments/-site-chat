@@ -59,7 +59,7 @@ Unique `(note_id, mentioned_member_id)`. Mention targets must be active owner/ad
 
 ### `notifications`
 
-Minimal durable notification store (Phase 3 foundation). Mention rows use `type = 'mention'`, `resource_type = 'internal_note'`, `resource_id = note_id`. There is **no lifetime unique constraint** suppressing future notifications: remove → re-add intentionally notifies again. Notification `body` is a short label (who mentioned you), never the note body.
+Durable notification store. Mention rows use `type = 'mention'`, `resource_type = 'internal_note'`, `resource_id = note_id`, and `dedupe_key = mention:{mention_row_id}`. Re-adding a mention after removal inserts a new mention row → new dedupe key → notifies again. Notification `body` is a short label (who mentioned you), never the note body. Full center UI, preferences, DND side-effect suppression (durable history still persists), and additional types: `docs/NOTIFICATIONS.md`.
 
 ---
 
@@ -173,8 +173,7 @@ Notes use amber-tinted surfaces, author avatar initials, timestamps, mention hig
 ## 11. Known v1 limitations
 
 - Concurrent edits are last-write-wins (no CAS)
-- No email delivery for mentions (Phase 3 notification preferences / Resend)
-- No full notification center UI (durable rows + realtime flash only)
+- No full notification center UI beyond durable rows + realtime flash (superseded by PR #35 — see `docs/NOTIFICATIONS.md`)
 - Author display label is email-based until `display_name` lands
 - Notes are not mixed into the message transcript (separate tab by design)
 - Authoritative catch-up sends a `catch_up_since` watermark when the client has a server-originated cursor; tombstones are limited to soft-deletes with `updated_at >= watermark` (supported by `idx_internal_notes_conversation_tombstones`). The RPC also returns `server_watermark` (GREATEST of `catch_up_since` and returned row `updated_at` values). Missed deletes in-window still reconcile; full-history tombstone scans and client-clock cursor jumps are not used.

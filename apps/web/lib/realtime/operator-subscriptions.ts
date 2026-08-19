@@ -445,29 +445,63 @@ export function subscribeOperatorCannedResponses(input: {
 }
 
 /**
- * Durable in-app notifications for the current member (mention realtime).
+ * Durable in-app notifications for the current member.
+ * INSERT/UPDATE on notifications + unread counter CDC for the badge.
  */
 export function subscribeOperatorNotifications(input: {
   workspaceId: string;
   memberId: string;
   onInsert: (payload: Record<string, unknown>) => void;
+  onUpdate?: (payload: Record<string, unknown>) => void;
+  onUnreadCountChange?: (payload: Record<string, unknown>) => void;
   onConnectionChange?: RealtimeConnectionListener;
 }): () => void {
   const supabase = createClient();
+
+  const bindings: OperatorBinding[] = [
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "notifications",
+      filter: `recipient_id=eq.${input.memberId}`,
+      handler: input.onInsert,
+    },
+  ];
+
+  if (input.onUpdate) {
+    bindings.push({
+      event: "UPDATE",
+      schema: "public",
+      table: "notifications",
+      filter: `recipient_id=eq.${input.memberId}`,
+      handler: input.onUpdate,
+    });
+  }
+
+  if (input.onUnreadCountChange) {
+    bindings.push(
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "notification_unread_counts",
+        filter: `member_id=eq.${input.memberId}`,
+        handler: input.onUnreadCountChange,
+      },
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "notification_unread_counts",
+        filter: `member_id=eq.${input.memberId}`,
+        handler: input.onUnreadCountChange,
+      },
+    );
+  }
 
   return subscribeWithOperatorAuth({
     supabase,
     channelName: `notifications:${input.memberId}`,
     onConnectionChange: input.onConnectionChange,
-    bindings: [
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `recipient_id=eq.${input.memberId}`,
-        handler: input.onInsert,
-      },
-    ],
+    bindings,
   });
 }
 

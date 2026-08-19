@@ -59,7 +59,8 @@ export function ConversationMainPanel({
 }) {
   const searchParams = useSearchParams();
   const focusMessageId = searchParams.get("message");
-  const focusNoteId = searchParams.get("note");
+  // Prefer noteId (notification deep-links); fall back to note (search hits).
+  const focusNoteId = searchParams.get("noteId") ?? searchParams.get("note");
   const initialTab: Tab =
     searchParams.get("tab") === "notes" && canManageNotes
       ? "notes"
