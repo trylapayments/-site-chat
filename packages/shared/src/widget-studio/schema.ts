@@ -37,9 +37,7 @@ export const widgetLocalizedCopySchema = z
      * Per-locale overrides only. Keys must be canonical widget locales.
      * Locales absent here keep system copy when useSystemDefaults is true.
      */
-    overrides: z
-      .record(widgetLocaleSchema, z.string().trim().min(1).max(500))
-      .default({}),
+    overrides: z.record(widgetLocaleSchema, z.string().trim().min(1).max(500)).default({}),
   })
   .strict();
 
@@ -77,7 +75,7 @@ const assetIdSchema = z.string().uuid().nullable();
  * Full durable appearance + behavior config (draft and published share this shape).
  * No arbitrary CSS — typed fields only.
  */
-export const widgetAppearanceConfigSchema = z
+const widgetAppearanceConfigObjectSchema = z
   .object({
     schemaVersion: z.literal(1).default(1),
 
@@ -170,8 +168,10 @@ export const widgetAppearanceConfigSchema = z
     // --- Optional preset stamp (informational; fields remain authoritative) ---
     presetId: z.enum(WIDGET_PRESET_IDS).nullable().default(null),
   })
-  .strict()
-  .superRefine((config, ctx) => {
+  .strict();
+
+export const widgetAppearanceConfigSchema = widgetAppearanceConfigObjectSchema.superRefine(
+  (config, ctx) => {
     if (config.widgetMaxHeight < config.widgetHeight) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -179,18 +179,17 @@ export const widgetAppearanceConfigSchema = z
         path: ["widgetMaxHeight"],
       });
     }
-  });
+  },
+);
 
 export type WidgetAppearanceConfig = z.infer<typeof widgetAppearanceConfigSchema>;
 
 /** Partial patch for Studio saves (deep-merge applied server-side against draft). */
-export const widgetAppearanceConfigPatchSchema = widgetAppearanceConfigSchema
+export const widgetAppearanceConfigPatchSchema = widgetAppearanceConfigObjectSchema
   .partial()
   .strict();
 
-export type WidgetAppearanceConfigPatch = z.infer<
-  typeof widgetAppearanceConfigPatchSchema
->;
+export type WidgetAppearanceConfigPatch = z.infer<typeof widgetAppearanceConfigPatchSchema>;
 
 export const widgetAssetKindSchema = z.enum(WIDGET_ASSET_KINDS);
 

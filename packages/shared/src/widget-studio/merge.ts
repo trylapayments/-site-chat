@@ -14,8 +14,7 @@ export function mergeAppearanceConfig(
     ...patch,
     headerTitle: patch.headerTitle
       ? {
-          useSystemDefaults:
-            patch.headerTitle.useSystemDefaults ?? base.headerTitle.useSystemDefaults,
+          useSystemDefaults: patch.headerTitle.useSystemDefaults,
           overrides: {
             ...base.headerTitle.overrides,
             ...patch.headerTitle.overrides,
@@ -24,8 +23,7 @@ export function mergeAppearanceConfig(
       : base.headerTitle,
     subtitle: patch.subtitle
       ? {
-          useSystemDefaults:
-            patch.subtitle.useSystemDefaults ?? base.subtitle.useSystemDefaults,
+          useSystemDefaults: patch.subtitle.useSystemDefaults,
           overrides: {
             ...base.subtitle.overrides,
             ...patch.subtitle.overrides,
@@ -34,9 +32,7 @@ export function mergeAppearanceConfig(
       : base.subtitle,
     welcomeMessage: patch.welcomeMessage
       ? {
-          useSystemDefaults:
-            patch.welcomeMessage.useSystemDefaults ??
-            base.welcomeMessage.useSystemDefaults,
+          useSystemDefaults: patch.welcomeMessage.useSystemDefaults,
           overrides: {
             ...base.welcomeMessage.overrides,
             ...patch.welcomeMessage.overrides,
@@ -45,9 +41,7 @@ export function mergeAppearanceConfig(
       : base.welcomeMessage,
     placeholderText: patch.placeholderText
       ? {
-          useSystemDefaults:
-            patch.placeholderText.useSystemDefaults ??
-            base.placeholderText.useSystemDefaults,
+          useSystemDefaults: patch.placeholderText.useSystemDefaults,
           overrides: {
             ...base.placeholderText.overrides,
             ...patch.placeholderText.overrides,
@@ -58,9 +52,8 @@ export function mergeAppearanceConfig(
       ? {
           ...base.businessHours,
           ...patch.businessHours,
-          weekly: patch.businessHours.weekly ?? base.businessHours.weekly,
-          onlineGreeting:
-            patch.businessHours.onlineGreeting ?? base.businessHours.onlineGreeting,
+          weekly: patch.businessHours.weekly,
+          onlineGreeting: patch.businessHours.onlineGreeting ?? base.businessHours.onlineGreeting,
           offlineGreeting:
             patch.businessHours.offlineGreeting ?? base.businessHours.offlineGreeting,
           awayMessage: patch.businessHours.awayMessage ?? base.businessHours.awayMessage,

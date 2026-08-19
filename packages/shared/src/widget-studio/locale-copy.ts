@@ -16,17 +16,13 @@ export function resolveLocalizedCopy(input: {
     return input.systemFallback;
   }
 
-  const override = copy.overrides?.[input.locale];
+  const override = copy.overrides[input.locale];
   if (typeof override === "string" && override.trim().length > 0) {
     return override;
   }
 
-  if (copy.useSystemDefaults !== false) {
-    return input.systemFallback;
-  }
-
-  // Custom mode with no override for this locale: still prefer system so
-  // operators do not accidentally blank non-English locales.
+  // Missing overrides use system copy in either mode so operators do not
+  // accidentally blank non-English locales.
   return input.systemFallback;
 }
 
@@ -34,7 +30,7 @@ export function hasLocaleOverride(
   copy: WidgetLocalizedCopy | undefined | null,
   locale: WidgetLocale,
 ): boolean {
-  if (!copy?.overrides) {
+  if (!copy) {
     return false;
   }
   const value = copy.overrides[locale];

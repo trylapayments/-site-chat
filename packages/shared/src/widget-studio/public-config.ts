@@ -126,13 +126,13 @@ function toPublicCopy(copy: WidgetLocalizedCopy): {
   overrides: Record<string, string>;
 } {
   const overrides: Record<string, string> = {};
-  for (const [locale, value] of Object.entries(copy.overrides ?? {})) {
+  for (const [locale, value] of Object.entries(copy.overrides)) {
     if (typeof value === "string" && value.trim().length > 0) {
       overrides[locale] = value;
     }
   }
   return {
-    useSystemDefaults: copy.useSystemDefaults !== false,
+    useSystemDefaults: copy.useSystemDefaults,
     overrides,
   };
 }
@@ -142,11 +142,11 @@ function firstOverrideOr(
   fallback: string,
   preferredLocale = "en",
 ): string {
-  const preferred = copy.overrides?.[preferredLocale as keyof typeof copy.overrides];
+  const preferred = copy.overrides[preferredLocale as keyof typeof copy.overrides];
   if (typeof preferred === "string" && preferred.trim().length > 0) {
     return preferred;
   }
-  const values = Object.values(copy.overrides ?? {});
+  const values = Object.values(copy.overrides);
   for (const value of values) {
     if (typeof value === "string" && value.trim().length > 0) {
       return value;
@@ -182,10 +182,7 @@ export function mapAppearanceToPublicConfig(
 
   const welcome = toPublicCopy(config.welcomeMessage);
   const headerTitle = toPublicCopy(config.headerTitle);
-  const greetingMessage = firstOverrideOr(
-    config.welcomeMessage,
-    "Hi! How can we help?",
-  );
+  const greetingMessage = firstOverrideOr(config.welcomeMessage, "Hi! How can we help?");
   const displayName = firstOverrideOr(config.headerTitle, "") || null;
 
   const logoUrl = input.assets?.logoUrl ?? null;

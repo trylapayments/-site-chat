@@ -10,11 +10,13 @@ export type WeeklyAvailability = {
 };
 
 function parseHm(value: string): number {
-  const [h, m] = value.split(":").map((part) => Number.parseInt(part, 10));
-  if (!Number.isFinite(h) || !Number.isFinite(m)) {
+  const parts = value.split(":");
+  const hours = Number.parseInt(parts[0] ?? "", 10);
+  const minutes = Number.parseInt(parts[1] ?? "", 10);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
     return -1;
   }
-  return h * 60 + m;
+  return hours * 60 + minutes;
 }
 
 /**
@@ -48,14 +50,8 @@ export function isWithinBusinessHours(input: {
     }).formatToParts(instant);
 
     const weekday = parts.find((part) => part.type === "weekday")?.value ?? "Sun";
-    const hour = Number.parseInt(
-      parts.find((part) => part.type === "hour")?.value ?? "0",
-      10,
-    );
-    const minute = Number.parseInt(
-      parts.find((part) => part.type === "minute")?.value ?? "0",
-      10,
-    );
+    const hour = Number.parseInt(parts.find((part) => part.type === "hour")?.value ?? "0", 10);
+    const minute = Number.parseInt(parts.find((part) => part.type === "minute")?.value ?? "0", 10);
     const weekdayMap: Record<string, number> = {
       Sun: 0,
       Mon: 1,

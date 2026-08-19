@@ -53,8 +53,7 @@ export const widgetBrandingSchema = z
 export type WidgetBranding = z.infer<typeof widgetBrandingSchema>;
 
 /**
- * @deprecated Prefer `widgetPublicAppearanceSchema` from `widget-studio`.
- * Kept as a thin compatibility object for older call sites; bootstrap now
+ * Thin compatibility object for older call sites; bootstrap now
  * validates the full public appearance DTO (see widget-studio/public-config).
  */
 export const widgetPublicConfigSchema = z
