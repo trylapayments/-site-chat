@@ -119,6 +119,15 @@ export function LiveConversationThread({
   const ephemeralRef = useRef<OperatorEphemeralController | null>(null);
   const lastReadBroadcastRef = useRef(0);
   const lastDeliveredRef = useRef(0);
+  // Keep ephemeral subscribe identity stable across router.refresh() / RSC
+  // prop churn (receipts, display label). Recreating the channel on those
+  // updates races presence .on() after subscribe() and jumps the UI.
+  const memberDisplayLabelRef = useRef(memberDisplayLabel);
+  memberDisplayLabelRef.current = memberDisplayLabel;
+  const workspaceSlugRef = useRef(workspaceSlug);
+  workspaceSlugRef.current = workspaceSlug;
+  const initialVisitorReceiptsRef = useRef(initialVisitorReceipts);
+  initialVisitorReceiptsRef.current = initialVisitorReceipts;
 
   const {
     messages,
@@ -172,10 +181,11 @@ export function LiveConversationThread({
     const controller = subscribeOperatorConversationEphemeral({
       ephemeralTopic,
       memberId,
-      displayLabel: memberDisplayLabel,
+      displayLabel: memberDisplayLabelRef.current,
       initialVisitorReceipts: {
-        lastDeliveredSequence: initialDelivered,
-        lastReadSequence: initialRead,
+        lastDeliveredSequence:
+          initialVisitorReceiptsRef.current.lastDeliveredSequence,
+        lastReadSequence: initialVisitorReceiptsRef.current.lastReadSequence,
       },
       onVisitorTyping: (indicator) => {
         setVisitorTyping(indicator.active);
@@ -194,9 +204,12 @@ export function LiveConversationThread({
       onSubscribed: () => {
         // Durable catch-up after (re)subscribe — covers missed receipt.v1.
         void (async () => {
-          const result = await fetchVisitorReceiptCursorsAction(workspaceSlug, {
-            conversationId,
-          });
+          const result = await fetchVisitorReceiptCursorsAction(
+            workspaceSlugRef.current,
+            {
+              conversationId,
+            },
+          );
           if (!result.success) {
             return;
           }
@@ -216,15 +229,9 @@ export function LiveConversationThread({
       setVisitorTyping(false);
       setVisitorOnline(false);
     };
-  }, [
-    conversationId,
-    ephemeralTopic,
-    initialDelivered,
-    initialRead,
-    memberDisplayLabel,
-    memberId,
-    workspaceSlug,
-  ]);
+    // Intentionally omit receipt/display-label props: router.refresh() after
+    // mark-read must not tear down the ephemeral channel.
+  }, [conversationId, ephemeralTopic, memberId]);
 
   const markReadThrough = useCallback(
     (sequence: number) => {

@@ -62,9 +62,67 @@ type PendingReceiptBroadcast = {
   lastReadSequence: number;
 };
 
+type OperatorSupabaseClient = ReturnType<typeof createClient>;
+
+/** True when RealtimeChannel will reject new presence/postgres_changes handlers. */
+export function channelRejectsPresenceCallbacks(
+  candidate: Pick<RealtimeChannel, "state" | "joinedOnce">,
+): boolean {
+  return (
+    candidate.joinedOnce ||
+    candidate.state === "joined" ||
+    candidate.state === "joining"
+  );
+}
+
+/**
+ * Match a client channel to the logical ephemeral topic name passed to
+ * `supabase.channel(name)`. The client stores topics as `realtime:<name>`.
+ */
+export function channelMatchesEphemeralTopic(
+  channelTopic: string,
+  ephemeralTopic: string,
+): boolean {
+  if (!ephemeralTopic) {
+    return false;
+  }
+  return (
+    channelTopic === ephemeralTopic ||
+    channelTopic === `realtime:${ephemeralTopic}` ||
+    channelTopic.endsWith(`:${ephemeralTopic}`)
+  );
+}
+
+async function removeEphemeralTopicChannels(
+  supabase: OperatorSupabaseClient,
+  ephemeralTopic: string,
+): Promise<void> {
+  const existing = supabase
+    .getChannels()
+    .filter((candidate) =>
+      channelMatchesEphemeralTopic(candidate.topic, ephemeralTopic),
+    );
+
+  await Promise.all(
+    existing.map(async (candidate) => {
+      try {
+        await supabase.removeChannel(candidate);
+      } catch {
+        // Best-effort cleanup before creating a fresh channel.
+      }
+    }),
+  );
+}
+
 /**
  * Subscribe to private ephemeral topic for typing Broadcast + Presence + receipts.
  * Does not replace CDC message subscriptions.
+ *
+ * Lifecycle rules (Supabase Realtime):
+ * - All `.on("presence", …)` handlers MUST be attached before `.subscribe()`.
+ * - `supabase.channel(sameName)` returns an existing channel; binding presence
+ *   on a joining/joined channel throws. Always remove matching channels first
+ *   and serialize start attempts so auth refresh / reconnect cannot race.
  */
 export function subscribeOperatorConversationEphemeral(input: {
   ephemeralTopic: string;
@@ -97,9 +155,16 @@ export function subscribeOperatorConversationEphemeral(input: {
     lastDeliveredSequence: 0,
     lastReadSequence: 0,
   };
+  let lastVisitorOnline: boolean | null = null;
+  let lastVisitorTyping: boolean | null = null;
   let currentStatus:
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed" =
     "connecting";
+
+  // Subscription incarnation id — bump only when creating/replacing a channel
+  // (or disposing). Same-token no-ops must preserve the live generation.
+  let subscriptionGeneration = 0;
+  let startQueue: Promise<void> = Promise.resolve();
 
   input.onConnectionChange?.(currentStatus);
 
@@ -115,9 +180,12 @@ export function subscribeOperatorConversationEphemeral(input: {
   }
 
   function emitVisitorTyping() {
-    input.onVisitorTyping({
-      active: isAnyoneTyping(remoteTyping, "visitor"),
-    });
+    const activeTyping = isAnyoneTyping(remoteTyping, "visitor");
+    if (lastVisitorTyping === activeTyping) {
+      return;
+    }
+    lastVisitorTyping = activeTyping;
+    input.onVisitorTyping({ active: activeTyping });
   }
 
   function clearRemoteTyping() {
@@ -258,16 +326,22 @@ export function subscribeOperatorConversationEphemeral(input: {
 
   function emitPresence() {
     if (!channel) {
-      input.onVisitorPresence({ online: false });
+      if (lastVisitorOnline !== false) {
+        lastVisitorOnline = false;
+        input.onVisitorPresence({ online: false });
+      }
       return;
     }
 
     const peers: PresencePeer[] = reconcilePresencePeers(
       channel.presenceState(),
     );
-    input.onVisitorPresence({
-      online: isRoleOnline(peers, "visitor"),
-    });
+    const online = isRoleOnline(peers, "visitor");
+    if (lastVisitorOnline === online) {
+      return;
+    }
+    lastVisitorOnline = online;
+    input.onVisitorPresence({ online });
   }
 
   async function trackPresence() {
@@ -395,7 +469,7 @@ export function subscribeOperatorConversationEphemeral(input: {
     retryTimer = setTimeout(() => {
       retryTimer = null;
       if (active) {
-        void startSubscription();
+        enqueueStart(true);
       }
     }, delayMs);
   }
@@ -418,7 +492,10 @@ export function subscribeOperatorConversationEphemeral(input: {
       channel = null;
       presenceTracked = false;
       clearRemoteTyping();
-      input.onVisitorPresence({ online: false });
+      if (lastVisitorOnline !== false) {
+        lastVisitorOnline = false;
+        input.onVisitorPresence({ online: false });
+      }
       setStatus("reconnecting");
       void supabase.removeChannel(source);
       scheduleResubscribe();
@@ -429,7 +506,10 @@ export function subscribeOperatorConversationEphemeral(input: {
       channel = null;
       presenceTracked = false;
       clearRemoteTyping();
-      input.onVisitorPresence({ online: false });
+      if (lastVisitorOnline !== false) {
+        lastVisitorOnline = false;
+        input.onVisitorPresence({ online: false });
+      }
       if (active) {
         setStatus("reconnecting");
         scheduleResubscribe();
@@ -437,8 +517,20 @@ export function subscribeOperatorConversationEphemeral(input: {
     }
   }
 
-  async function startSubscription(force = false) {
-    clearRetryTimer();
+  function enqueueStart(force = false): void {
+    const run = () => startSubscriptionLocked(force);
+    startQueue = startQueue.then(run, run);
+  }
+
+  /**
+   * Start or replace the ephemeral subscription.
+   *
+   * `subscriptionGeneration` is a subscription *incarnation* id — advanced only
+   * when we actually create/replace a channel (or dispose). Same-token no-ops
+   * must not bump it, or a still-joining channel's SUBSCRIBED callback is
+   * orphaned and receipts stay queued forever.
+   */
+  async function startSubscriptionLocked(force = false) {
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -456,8 +548,9 @@ export function subscribeOperatorConversationEphemeral(input: {
       return;
     }
 
-    // Same token + live channel: setAuth is enough — avoid reconnect storms that
-    // drop in-flight receipt.v1 broadcasts (common on INITIAL_SESSION).
+    // Same token + live/joining channel: setAuth is enough. Do not clear retry
+    // timers, bump generation, or replace the channel — INITIAL_SESSION /
+    // TOKEN_REFRESHED with an identical token must not orphan SUBSCRIBED.
     if (
       !force &&
       appliedAuthToken === session.access_token &&
@@ -467,32 +560,49 @@ export function subscribeOperatorConversationEphemeral(input: {
       return;
     }
 
+    // Real replace/create: invalidate the prior incarnation, then build a new one.
+    clearRetryTimer();
+    const generation = ++subscriptionGeneration;
+
     appliedAuthToken = session.access_token;
 
     if (channel) {
-      const previous = channel;
       channel = null;
       presenceTracked = false;
       if (currentStatus === "connected") {
         setStatus("reconnecting");
       }
-      await supabase.removeChannel(previous);
-      if (!isActive()) {
-        return;
-      }
+    }
+
+    // Critical: supabase.channel(name) reuses an existing topic. If a prior
+    // subscribe is still joining/joined, attaching presence handlers throws.
+    await removeEphemeralTopicChannels(supabase, input.ephemeralTopic);
+    if (!isActive() || generation !== subscriptionGeneration) {
+      return;
     }
 
     setStatus(retryAttempt > 0 ? "reconnecting" : "connecting");
 
-    const nextChannel = supabase
-      .channel(input.ephemeralTopic, {
-        config: {
-          private: true,
-          presence: {
-            key: actorKey,
-          },
+    const nextChannel = supabase.channel(input.ephemeralTopic, {
+      config: {
+        private: true,
+        presence: {
+          key: actorKey,
         },
-      })
+      },
+    });
+
+    if (channelRejectsPresenceCallbacks(nextChannel)) {
+      // Still not fully removed — force cleanup and retry instead of binding.
+      await supabase.removeChannel(nextChannel);
+      if (isActive() && generation === subscriptionGeneration) {
+        scheduleResubscribe();
+      }
+      return;
+    }
+
+    // Bind broadcast + presence BEFORE subscribe() — required by Realtime.
+    nextChannel
       .on("broadcast", { event: TYPING_BROADCAST_EVENT }, (payload) => {
         if (channel !== nextChannel) {
           return;
@@ -524,13 +634,21 @@ export function subscribeOperatorConversationEphemeral(input: {
         emitPresence();
       });
 
+    if (!isActive() || generation !== subscriptionGeneration) {
+      void supabase.removeChannel(nextChannel);
+      return;
+    }
+
     channel = nextChannel;
     nextChannel.subscribe((status) => {
+      if (generation !== subscriptionGeneration) {
+        return;
+      }
       handleChannelStatus(status, nextChannel);
     });
   }
 
-  void startSubscription();
+  enqueueStart(false);
 
   const {
     data: { subscription: authSubscription },
@@ -544,8 +662,8 @@ export function subscribeOperatorConversationEphemeral(input: {
       if (!active) {
         return;
       }
-      // Resubscribe only when the access token actually changes (auth refresh).
-      void startSubscription(false);
+      // Serialized: only recreates the channel when the access token changes.
+      enqueueStart(false);
     })();
   });
 
@@ -557,13 +675,17 @@ export function subscribeOperatorConversationEphemeral(input: {
     },
     unsubscribe: () => {
       active = false;
+      subscriptionGeneration += 1;
       clearRetryTimer();
       authSubscription.unsubscribe();
       clearTypingIdleTimer();
       stopTypingExpiryLoop();
       void emitTypingStopped();
       clearRemoteTyping();
-      input.onVisitorPresence({ online: false });
+      if (lastVisitorOnline !== false) {
+        lastVisitorOnline = false;
+        input.onVisitorPresence({ online: false });
+      }
 
       if (channel) {
         const current = channel;
@@ -577,6 +699,8 @@ export function subscribeOperatorConversationEphemeral(input: {
           }
           await supabase.removeChannel(current);
         })();
+      } else {
+        void removeEphemeralTopicChannels(supabase, input.ephemeralTopic);
       }
     },
   };
