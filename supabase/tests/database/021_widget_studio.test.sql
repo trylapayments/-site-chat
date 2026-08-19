@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(87);
+SELECT plan(114);
 
 TRUNCATE tests.fixtures;
 
@@ -18,6 +18,8 @@ DECLARE
   v_workspace_a uuid;
   v_workspace_b uuid;
   v_public_key_a text;
+  v_pending_asset_a uuid;
+  v_verified_asset_a uuid;
 BEGIN
   v_owner_a := tests.create_auth_user('studio-owner-a@test.local');
   v_admin_a := tests.create_auth_user('studio-admin-a@test.local');
@@ -51,6 +53,54 @@ BEGIN
   FROM public.workspaces
   WHERE id = v_workspace_a;
 
+  INSERT INTO public.widget_assets (
+    workspace_id,
+    kind,
+    storage_key,
+    mime_type,
+    byte_size,
+    original_filename,
+    created_by
+  )
+  VALUES (
+    v_workspace_a,
+    'logo',
+    format('workspaces/%s/widget-assets/pending-logo.png', v_workspace_a),
+    'image/png',
+    128,
+    'pending-logo.png',
+    v_owner_a
+  )
+  RETURNING id INTO v_pending_asset_a;
+
+  INSERT INTO public.widget_assets (
+    workspace_id,
+    kind,
+    storage_key,
+    mime_type,
+    byte_size,
+    width,
+    height,
+    original_filename,
+    created_by,
+    status,
+    verified_at
+  )
+  VALUES (
+    v_workspace_a,
+    'agent_avatar',
+    format('workspaces/%s/widget-assets/verified-avatar.webp', v_workspace_a),
+    'image/webp',
+    256,
+    64,
+    64,
+    'verified-avatar.webp',
+    v_owner_a,
+    'verified',
+    now()
+  )
+  RETURNING id INTO v_verified_asset_a;
+
   INSERT INTO tests.fixtures (key, value)
   VALUES
     ('owner_a', v_owner_a::text),
@@ -60,12 +110,14 @@ BEGIN
     ('owner_b', v_owner_b::text),
     ('workspace_a', v_workspace_a::text),
     ('workspace_b', v_workspace_b::text),
-    ('public_key_a', v_public_key_a);
+    ('public_key_a', v_public_key_a),
+    ('pending_asset_a', v_pending_asset_a::text),
+    ('verified_asset_a', v_verified_asset_a::text);
 END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Schema, indexes, and RLS
+-- Schema, constraints, indexes, and RLS
 -- ---------------------------------------------------------------------------
 
 SELECT has_table('public', 'widget_configs', 'widget_configs table exists');
@@ -74,11 +126,26 @@ SELECT has_table('public', 'widget_assets', 'widget_assets table exists');
 SELECT has_column('public', 'widget_configs', 'workspace_id', 'widget_configs.workspace_id exists');
 SELECT has_column('public', 'widget_configs', 'draft_json', 'widget_configs.draft_json exists');
 SELECT has_column('public', 'widget_configs', 'published_json', 'widget_configs.published_json exists');
-SELECT has_column('public', 'widget_configs', 'published_version', 'widget_configs.published_version exists');
-SELECT has_column('public', 'widget_configs', 'draft_updated_at', 'widget_configs.draft_updated_at exists');
+SELECT has_column(
+  'public',
+  'widget_configs',
+  'published_version',
+  'widget_configs.published_version exists'
+);
+SELECT has_column(
+  'public',
+  'widget_configs',
+  'draft_updated_at',
+  'widget_configs.draft_updated_at exists'
+);
 SELECT has_column('public', 'widget_configs', 'published_at', 'widget_configs.published_at exists');
 SELECT has_column('public', 'widget_configs', 'published_by', 'widget_configs.published_by exists');
-SELECT has_column('public', 'widget_configs', 'draft_updated_by', 'widget_configs.draft_updated_by exists');
+SELECT has_column(
+  'public',
+  'widget_configs',
+  'draft_updated_by',
+  'widget_configs.draft_updated_by exists'
+);
 SELECT has_column('public', 'widget_configs', 'created_at', 'widget_configs.created_at exists');
 SELECT has_column('public', 'widget_configs', 'updated_at', 'widget_configs.updated_at exists');
 
@@ -90,20 +157,66 @@ SELECT has_column('public', 'widget_assets', 'mime_type', 'widget_assets.mime_ty
 SELECT has_column('public', 'widget_assets', 'byte_size', 'widget_assets.byte_size exists');
 SELECT has_column('public', 'widget_assets', 'width', 'widget_assets.width exists');
 SELECT has_column('public', 'widget_assets', 'height', 'widget_assets.height exists');
-SELECT has_column('public', 'widget_assets', 'original_filename', 'widget_assets.original_filename exists');
+SELECT has_column(
+  'public',
+  'widget_assets',
+  'original_filename',
+  'widget_assets.original_filename exists'
+);
 SELECT has_column('public', 'widget_assets', 'created_by', 'widget_assets.created_by exists');
 SELECT has_column('public', 'widget_assets', 'created_at', 'widget_assets.created_at exists');
 SELECT has_column('public', 'widget_assets', 'updated_at', 'widget_assets.updated_at exists');
 SELECT has_column('public', 'widget_assets', 'deleted_at', 'widget_assets.deleted_at exists');
+SELECT has_column('public', 'widget_assets', 'status', 'widget_assets.status exists');
+SELECT has_column('public', 'widget_assets', 'verified_at', 'widget_assets.verified_at exists');
 
-SELECT has_index('public', 'widget_configs', 'widget_configs_pkey', 'widget_configs primary-key index exists');
-SELECT has_index('public', 'widget_assets', 'idx_widget_assets_workspace', 'widget_assets workspace index exists');
-SELECT has_index('public', 'widget_assets', 'idx_widget_assets_workspace_kind', 'widget_assets active-kind index exists');
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_constraint c
+    WHERE c.conrelid = 'public.widget_assets'::regclass
+      AND c.conname = 'chk_widget_assets_storage_key_workspace'
+      AND c.contype = 'c'
+      AND pg_catalog.pg_get_constraintdef(c.oid) LIKE '%workspace_id%'
+  ),
+  'widget_assets has a workspace-prefixed storage_key check constraint'
+);
+
+SELECT has_index(
+  'public',
+  'widget_configs',
+  'widget_configs_pkey',
+  'widget_configs primary-key index exists'
+);
+SELECT has_index(
+  'public',
+  'widget_assets',
+  'widget_assets_pkey',
+  'widget_assets primary-key index exists'
+);
+SELECT has_index(
+  'public',
+  'widget_assets',
+  'idx_widget_assets_workspace',
+  'widget_assets workspace index exists'
+);
+SELECT has_index(
+  'public',
+  'widget_assets',
+  'idx_widget_assets_workspace_kind',
+  'widget_assets active-kind index exists'
+);
 SELECT has_index(
   'public',
   'widget_assets',
   'uq_widget_assets_workspace_storage_key',
   'widget_assets workspace storage-key unique index exists'
+);
+SELECT has_index(
+  'public',
+  'widget_assets',
+  'idx_widget_assets_workspace_verified',
+  'widget_assets verified-asset lookup index exists'
 );
 
 SELECT ok(
@@ -111,7 +224,11 @@ SELECT ok(
   'widget_configs has RLS enabled'
 );
 SELECT ok(
-  (SELECT relforcerowsecurity FROM pg_catalog.pg_class WHERE oid = 'public.widget_configs'::regclass),
+  (
+    SELECT relforcerowsecurity
+    FROM pg_catalog.pg_class
+    WHERE oid = 'public.widget_configs'::regclass
+  ),
   'widget_configs forces RLS'
 );
 SELECT ok(
@@ -119,54 +236,115 @@ SELECT ok(
   'widget_assets has RLS enabled'
 );
 SELECT ok(
-  (SELECT relforcerowsecurity FROM pg_catalog.pg_class WHERE oid = 'public.widget_assets'::regclass),
+  (
+    SELECT relforcerowsecurity
+    FROM pg_catalog.pg_class
+    WHERE oid = 'public.widget_assets'::regclass
+  ),
   'widget_assets forces RLS'
 );
 
 -- ---------------------------------------------------------------------------
--- Function privileges and locked search paths
+-- Least-privilege table and function boundaries
 -- ---------------------------------------------------------------------------
 
 SELECT ok(
-  has_function_privilege('authenticated', 'public.get_widget_studio_state(uuid)', 'EXECUTE'),
-  'authenticated can execute get_widget_studio_state'
+  has_table_privilege('authenticated', 'public.widget_assets', 'SELECT'),
+  'authenticated has SELECT on widget_assets'
 );
 SELECT ok(
-  has_function_privilege('authenticated', 'public.save_widget_studio_draft(uuid,jsonb)', 'EXECUTE'),
-  'authenticated can execute save_widget_studio_draft'
+  NOT has_table_privilege('authenticated', 'public.widget_assets', 'INSERT'),
+  'authenticated has no INSERT on widget_assets'
 );
 SELECT ok(
-  has_function_privilege('authenticated', 'public.publish_widget_studio(uuid)', 'EXECUTE'),
-  'authenticated can execute publish_widget_studio'
+  NOT has_table_privilege('authenticated', 'public.widget_assets', 'UPDATE'),
+  'authenticated has no UPDATE on widget_assets'
 );
 SELECT ok(
-  has_function_privilege('authenticated', 'public.discard_widget_studio_draft(uuid)', 'EXECUTE'),
-  'authenticated can execute discard_widget_studio_draft'
+  NOT has_table_privilege('authenticated', 'public.widget_assets', 'DELETE'),
+  'authenticated has no DELETE on widget_assets'
 );
 SELECT ok(
-  has_function_privilege('authenticated', 'public.reset_widget_studio_draft(uuid)', 'EXECUTE'),
-  'authenticated can execute reset_widget_studio_draft'
+  NOT has_column_privilege('authenticated', 'public.widget_assets', 'width', 'UPDATE')
+    AND NOT has_column_privilege('authenticated', 'public.widget_assets', 'height', 'UPDATE')
+    AND NOT has_column_privilege('authenticated', 'public.widget_assets', 'status', 'UPDATE')
+    AND NOT has_column_privilege('authenticated', 'public.widget_assets', 'verified_at', 'UPDATE')
+    AND NOT has_column_privilege('authenticated', 'public.widget_assets', 'storage_key', 'UPDATE'),
+  'authenticated cannot update asset dimensions, verification state, or storage_key'
+);
+SELECT ok(
+  NOT has_table_privilege('anon', 'public.widget_assets', 'INSERT')
+    AND NOT has_table_privilege('anon', 'public.widget_assets', 'UPDATE')
+    AND NOT has_table_privilege('anon', 'public.widget_assets', 'DELETE'),
+  'anon cannot mutate widget_assets'
+);
+SELECT ok(
+  has_table_privilege('service_role', 'public.widget_assets', 'INSERT'),
+  'service_role has INSERT on widget_assets'
 );
 
 SELECT ok(
-  NOT has_function_privilege('anon', 'public.get_widget_studio_state(uuid)', 'EXECUTE'),
-  'anon cannot execute get_widget_studio_state'
+  has_function_privilege(
+    'authenticated',
+    'public.get_widget_studio_state(uuid)',
+    'EXECUTE'
+  ),
+  'authenticated can execute get_widget_studio_state'
 );
 SELECT ok(
-  NOT has_function_privilege('anon', 'public.save_widget_studio_draft(uuid,jsonb)', 'EXECUTE'),
-  'anon cannot execute save_widget_studio_draft'
+  has_function_privilege(
+    'authenticated',
+    'public.save_widget_studio_draft(uuid,jsonb)',
+    'EXECUTE'
+  ),
+  'authenticated can execute save_widget_studio_draft'
 );
 SELECT ok(
-  NOT has_function_privilege('anon', 'public.publish_widget_studio(uuid)', 'EXECUTE'),
-  'anon cannot execute publish_widget_studio'
+  has_function_privilege(
+    'authenticated',
+    'public.publish_widget_studio(uuid,integer)',
+    'EXECUTE'
+  ),
+  'authenticated can execute CAS publish_widget_studio'
 );
 SELECT ok(
-  NOT has_function_privilege('anon', 'public.discard_widget_studio_draft(uuid)', 'EXECUTE'),
-  'anon cannot execute discard_widget_studio_draft'
+  has_function_privilege(
+    'authenticated',
+    'public.discard_widget_studio_draft(uuid)',
+    'EXECUTE'
+  ),
+  'authenticated can execute discard_widget_studio_draft'
 );
 SELECT ok(
-  NOT has_function_privilege('anon', 'public.reset_widget_studio_draft(uuid)', 'EXECUTE'),
-  'anon cannot execute reset_widget_studio_draft'
+  has_function_privilege(
+    'authenticated',
+    'public.reset_widget_studio_draft(uuid)',
+    'EXECUTE'
+  ),
+  'authenticated can execute reset_widget_studio_draft'
+);
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    'public.save_widget_studio_draft(uuid,jsonb)',
+    'EXECUTE'
+  )
+    AND NOT has_function_privilege(
+      'anon',
+      'public.publish_widget_studio(uuid,integer)',
+      'EXECUTE'
+    )
+    AND NOT has_function_privilege(
+      'anon',
+      'public.discard_widget_studio_draft(uuid)',
+      'EXECUTE'
+    )
+    AND NOT has_function_privilege(
+      'anon',
+      'public.reset_widget_studio_draft(uuid)',
+      'EXECUTE'
+    ),
+  'anon cannot execute Widget Studio mutation RPCs'
 );
 SELECT ok(
   NOT has_function_privilege(
@@ -177,11 +355,19 @@ SELECT ok(
   'authenticated cannot execute app_private.require_widget_studio_manage'
 );
 SELECT ok(
-  has_function_privilege('service_role', 'public.widget_resolve_public_key(text)', 'EXECUTE'),
+  has_function_privilege(
+    'service_role',
+    'public.widget_resolve_public_key(text)',
+    'EXECUTE'
+  ),
   'service_role can execute widget_resolve_public_key'
 );
 SELECT ok(
-  NOT has_function_privilege('anon', 'public.widget_resolve_public_key(text)', 'EXECUTE'),
+  NOT has_function_privilege(
+    'anon',
+    'public.widget_resolve_public_key(text)',
+    'EXECUTE'
+  ),
   'anon cannot execute widget_resolve_public_key'
 );
 
@@ -204,10 +390,11 @@ SELECT is(
         'widget_public_config',
         'widget_public_config_for_workspace',
         'widget_resolve_public_key',
-        'widget_reopen_window_hours'
+        'widget_reopen_window_hours',
+        'widget_assets_protect_immutable_fields'
       )
   ),
-  13::bigint,
+  14::bigint,
   'all Widget Studio app_private functions exist'
 );
 SELECT ok(
@@ -229,7 +416,8 @@ SELECT ok(
         'widget_public_config',
         'widget_public_config_for_workspace',
         'widget_resolve_public_key',
-        'widget_reopen_window_hours'
+        'widget_reopen_window_hours',
+        'widget_assets_protect_immutable_fields'
       )
       AND NOT COALESCE(p.proconfig @> ARRAY['search_path=""'], false)
   ),
@@ -249,31 +437,16 @@ SELECT ok(
         'reset_widget_studio_draft',
         'widget_resolve_public_key'
       )
-      AND NOT COALESCE(p.proconfig @> ARRAY['search_path=""'], false)
-  ),
-  'all Widget Studio public RPCs set search_path to empty'
-);
-SELECT ok(
-  NOT EXISTS (
-    SELECT 1
-    FROM pg_catalog.pg_proc p
-    INNER JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-    WHERE n.nspname = 'public'
-      AND p.proname IN (
-        'get_widget_studio_state',
-        'save_widget_studio_draft',
-        'publish_widget_studio',
-        'discard_widget_studio_draft',
-        'reset_widget_studio_draft',
-        'widget_resolve_public_key'
+      AND (
+        NOT p.prosecdef
+        OR NOT COALESCE(p.proconfig @> ARRAY['search_path=""'], false)
       )
-      AND NOT p.prosecdef
   ),
-  'all Widget Studio public RPCs are SECURITY DEFINER'
+  'all Widget Studio public RPCs are SECURITY DEFINER with empty search_path'
 );
 
 -- ---------------------------------------------------------------------------
--- Workspace isolation and asset ownership
+-- Asset mutation denial, trusted seeding, and tenant isolation
 -- ---------------------------------------------------------------------------
 
 SELECT tests.authenticate_as(
@@ -301,23 +474,15 @@ SELECT is(
 );
 SELECT throws_ok(
   format(
-    'UPDATE public.widget_configs SET published_version = published_version + 1 WHERE workspace_id = %L::uuid',
-    tests.fixture('workspace_b')
-  ),
-  '42501',
-  'permission denied for table widget_configs',
-  'authenticated callers cannot update foreign widget configs directly'
-);
-SELECT throws_ok(
-  format(
     'SELECT public.get_widget_studio_state(%L::uuid)',
     tests.fixture('workspace_b')
   ),
-  'FORBIDDEN: Workspace not accessible',
+  'P0001',
+  'Workspace not accessible',
   'workspace A owner cannot get workspace B Studio state'
 );
 
-SELECT lives_ok(
+SELECT throws_ok(
   format(
     $sql$
       INSERT INTO public.widget_assets (
@@ -331,24 +496,168 @@ SELECT lives_ok(
       ) VALUES (
         %L::uuid,
         'logo',
-        'studio-test/logo.png',
+        'workspaces/%s/widget-assets/authenticated-forge.png',
         'image/png',
-        128,
-        'logo.png',
+        64,
+        'authenticated-forge.png',
         %L::uuid
       )
     $sql$,
     tests.fixture('workspace_a'),
+    tests.fixture('workspace_a'),
     tests.fixture('owner_a')
   ),
-  'workspace A owner can insert a workspace A asset'
+  '42501',
+  'permission denied for table widget_assets',
+  'authenticated owner cannot insert widget_assets rows'
+);
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.widget_assets
+      SET
+        width = 128,
+        height = 128,
+        status = 'verified',
+        verified_at = now(),
+        storage_key = 'workspaces/%s/widget-assets/authenticated-rewrite.png'
+      WHERE id = %L::uuid
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('pending_asset_a')
+  ),
+  '42501',
+  'permission denied for table widget_assets',
+  'authenticated owner cannot forge asset metadata or storage_key'
+);
+
+SELECT tests.clear_auth();
+SELECT set_config('role', 'anon', true);
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.widget_assets (
+        workspace_id,
+        kind,
+        storage_key,
+        mime_type,
+        byte_size,
+        original_filename
+      ) VALUES (
+        %L::uuid,
+        'logo',
+        'workspaces/%s/widget-assets/anon-forge.png',
+        'image/png',
+        64,
+        'anon-forge.png'
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  '42501',
+  'permission denied for table widget_assets',
+  'anon insert into widget_assets is denied'
+);
+
+SELECT tests.clear_auth();
+SELECT throws_ok(
+  format(
+    $sql$
+      INSERT INTO public.widget_assets (
+        workspace_id,
+        kind,
+        storage_key,
+        mime_type,
+        byte_size,
+        original_filename
+      ) VALUES (
+        %L::uuid,
+        'logo',
+        'workspaces/%s/widget-assets/wrong-workspace.png',
+        'image/png',
+        64,
+        'wrong-workspace.png'
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_b')
+  ),
+  'P0001',
+  'INVALID_STORAGE_KEY: storage_key must be scoped to the asset workspace.',
+  'trusted insert still rejects a storage_key with the wrong workspace prefix'
+);
+
+SELECT set_config('role', 'service_role', true);
+SELECT lives_ok(
+  format(
+    $sql$
+      INSERT INTO public.widget_assets (
+        workspace_id,
+        kind,
+        storage_key,
+        mime_type,
+        byte_size,
+        original_filename
+      ) VALUES (
+        %L::uuid,
+        'launcher_icon',
+        'workspaces/%s/widget-assets/service-role-pending.webp',
+        'image/webp',
+        96,
+        'service-role-pending.webp'
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  'service_role can insert trusted widget asset metadata'
+);
+
+SELECT tests.clear_auth();
+SELECT throws_ok(
+  format(
+    $sql$
+      UPDATE public.widget_assets
+      SET storage_key = 'workspaces/%s/widget-assets/renamed.png'
+      WHERE id = %L::uuid
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('pending_asset_a')
+  ),
+  'P0001',
+  'FORBIDDEN: widget_assets.storage_key is immutable.',
+  'storage_key remains immutable even for a privileged update'
+);
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM public.widget_assets
+    WHERE id = tests.fixture('pending_asset_a')::uuid
+      AND status = 'pending'
+      AND verified_at IS NULL
+      AND width IS NULL
+      AND height IS NULL
+  ),
+  'pending assets remain explicitly unverified for public-enrichment exclusion'
+);
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM public.widget_assets
+    WHERE id = tests.fixture('verified_asset_a')::uuid
+      AND status = 'verified'
+      AND verified_at IS NOT NULL
+      AND width = 64
+      AND height = 64
+  ),
+  'verified assets are distinguishable from pending assets'
 );
 
 SELECT tests.authenticate_as(
   tests.fixture('owner_b')::uuid,
   'studio-owner-b@test.local'
 );
-
 SELECT is(
   (
     SELECT count(*)::integer
@@ -356,20 +665,7 @@ SELECT is(
     WHERE workspace_id = tests.fixture('workspace_a')::uuid
   ),
   0,
-  'workspace B member cannot see workspace A assets'
-);
-SELECT is(
-  (
-    WITH changed AS (
-      UPDATE public.widget_assets
-      SET original_filename = 'cross-workspace.png'
-      WHERE workspace_id = tests.fixture('workspace_a')::uuid
-      RETURNING 1
-    )
-    SELECT count(*)::integer FROM changed
-  ),
-  0,
-  'workspace B member cannot update workspace A assets through RLS'
+  'workspace B owner cannot select workspace A assets'
 );
 
 -- ---------------------------------------------------------------------------
@@ -380,7 +676,6 @@ SELECT tests.authenticate_as(
   tests.fixture('agent_a')::uuid,
   'studio-agent-a@test.local'
 );
-
 SELECT is(
   public.get_widget_studio_state(tests.fixture('workspace_a')::uuid) ->> 'publishedVersion',
   '1',
@@ -397,6 +692,7 @@ SELECT throws_ok(
     tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
+  'P0001',
   'FORBIDDEN: Only owners and admins can manage Widget Studio.',
   'agent cannot save Widget Studio draft'
 );
@@ -405,6 +701,7 @@ SELECT throws_ok(
     'SELECT public.publish_widget_studio(%L::uuid)',
     tests.fixture('workspace_a')
   ),
+  'P0001',
   'FORBIDDEN: Only owners and admins can manage Widget Studio.',
   'agent cannot publish Widget Studio'
 );
@@ -413,7 +710,11 @@ SELECT tests.authenticate_as(
   tests.fixture('viewer_a')::uuid,
   'studio-viewer-a@test.local'
 );
-
+SELECT is(
+  public.get_widget_studio_state(tests.fixture('workspace_a')::uuid) ->> 'publishedVersion',
+  '1',
+  'viewer can view Widget Studio state'
+);
 SELECT throws_ok(
   format(
     $sql$
@@ -425,6 +726,7 @@ SELECT throws_ok(
     tests.fixture('workspace_a'),
     tests.fixture('workspace_a')
   ),
+  'P0001',
   'FORBIDDEN: Only owners and admins can manage Widget Studio.',
   'viewer cannot save Widget Studio draft'
 );
@@ -433,17 +735,27 @@ SELECT throws_ok(
     'SELECT public.publish_widget_studio(%L::uuid)',
     tests.fixture('workspace_a')
   ),
+  'P0001',
   'FORBIDDEN: Only owners and admins can manage Widget Studio.',
   'viewer cannot publish Widget Studio'
 );
 
 -- ---------------------------------------------------------------------------
--- Owner draft/publish behavior and atomic publication
+-- Draft, publish CAS, discard, reset, and monotonic version lifecycle
 -- ---------------------------------------------------------------------------
 
 SELECT tests.authenticate_as(
   tests.fixture('owner_a')::uuid,
   'studio-owner-a@test.local'
+);
+SELECT set_config(
+  'tests.initial_published_version',
+  (
+    SELECT published_version::text
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  true
 );
 
 SELECT lives_ok(
@@ -481,35 +793,62 @@ SELECT is(
   '#0066FF',
   'save draft does not change published_json'
 );
+SELECT is(
+  (
+    SELECT published_version
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  current_setting('tests.initial_published_version')::integer,
+  'save draft does not change published_version'
+);
+
 SELECT tests.clear_auth();
 SELECT is(
   app_private.widget_public_config_for_workspace(
     tests.fixture('workspace_a')::uuid
   ) ->> 'primaryColor',
   '#0066FF',
-  'public config continues to use published_json before publish'
+  'workspace public config reads published_json before publish'
+);
+SELECT is(
+  app_private.widget_resolve_public_key(
+    tests.fixture('public_key_a')
+  ) -> 'config' ->> 'primaryColor',
+  '#0066FF',
+  'public-key resolution reads published_json before publish'
 );
 
-SELECT set_config(
-  'tests.version_before_publish',
-  (
-    SELECT published_version::text
-    FROM public.widget_configs
-    WHERE workspace_id = tests.fixture('workspace_a')::uuid
-  ),
-  true
-);
 SELECT tests.authenticate_as(
   tests.fixture('owner_a')::uuid,
   'studio-owner-a@test.local'
 );
-
+SELECT throws_ok(
+  format(
+    'SELECT public.publish_widget_studio(%L::uuid, %s)',
+    tests.fixture('workspace_a'),
+    current_setting('tests.initial_published_version')::integer + 100
+  ),
+  'P0001',
+  'PUBLISH_CONFLICT: Widget Studio publish version mismatch.',
+  'publish with the wrong expected version raises PUBLISH_CONFLICT'
+);
+SELECT is(
+  (
+    SELECT published_version
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  current_setting('tests.initial_published_version')::integer,
+  'failed CAS publish leaves published_version unchanged'
+);
 SELECT lives_ok(
   format(
-    'SELECT public.publish_widget_studio(%L::uuid)',
-    tests.fixture('workspace_a')
+    'SELECT public.publish_widget_studio(%L::uuid, %s)',
+    tests.fixture('workspace_a'),
+    current_setting('tests.initial_published_version')::integer
   ),
-  'owner can publish Widget Studio'
+  'publish with the correct expected version succeeds'
 );
 SELECT ok(
   (
@@ -525,53 +864,43 @@ SELECT is(
     FROM public.widget_configs
     WHERE workspace_id = tests.fixture('workspace_a')::uuid
   ),
-  current_setting('tests.version_before_publish')::integer + 1,
+  current_setting('tests.initial_published_version')::integer + 1,
   'publish atomically increments published_version by one'
 );
+
 SELECT tests.clear_auth();
 SELECT is(
   app_private.widget_public_config_for_workspace(
     tests.fixture('workspace_a')::uuid
   ) ->> 'primaryColor',
   '#112233',
-  'public config reflects the published appearance'
+  'workspace public config reflects the newly published appearance'
+);
+SELECT is(
+  app_private.widget_resolve_public_key(
+    tests.fixture('public_key_a')
+  ) -> 'config' ->> 'primaryColor',
+  '#112233',
+  'public-key resolution reflects the newly published appearance'
+);
+SELECT is(
+  (
+    app_private.widget_public_config_for_workspace(
+      tests.fixture('workspace_a')::uuid
+    ) ->> 'version'
+  )::integer,
+  (
+    SELECT published_version
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  'public config version matches published_version'
 );
 
--- ---------------------------------------------------------------------------
--- Validation, discard, reset, and admin management
--- ---------------------------------------------------------------------------
-
-SELECT tests.clear_auth();
-SELECT throws_ok(
-  $$
-    SELECT app_private.validate_widget_appearance(
-      app_private.widget_appearance_defaults()
-      || '{"customCss":"body { display: none; }"}'::jsonb
-    )
-  $$,
-  'INVALID_APPEARANCE: customCss and customJS are not allowed.',
-  'validate_widget_appearance rejects customCss'
-);
 SELECT tests.authenticate_as(
   tests.fixture('owner_a')::uuid,
   'studio-owner-a@test.local'
 );
-SELECT throws_ok(
-  format(
-    $sql$
-      SELECT public.save_widget_studio_draft(
-        %L::uuid,
-        (public.get_widget_studio_state(%L::uuid) -> 'draft')
-        || '{"nested":{"customCss":"* { color: red; }"}}'::jsonb
-      )
-    $sql$,
-    tests.fixture('workspace_a'),
-    tests.fixture('workspace_a')
-  ),
-  'INVALID_APPEARANCE: customCss and customJS are not allowed.',
-  'save_widget_studio_draft rejects nested customCss'
-);
-
 SELECT lives_ok(
   format(
     $sql$
@@ -626,12 +955,22 @@ SELECT lives_ok(
   ),
   'admin can save Widget Studio draft'
 );
+SELECT set_config(
+  'tests.version_before_admin_publish',
+  (
+    SELECT published_version::text
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  true
+);
 SELECT lives_ok(
   format(
-    'SELECT public.publish_widget_studio(%L::uuid)',
-    tests.fixture('workspace_a')
+    'SELECT public.publish_widget_studio(%L::uuid, %s)',
+    tests.fixture('workspace_a'),
+    current_setting('tests.version_before_admin_publish')::integer
   ),
-  'admin can publish Widget Studio'
+  'admin can publish with the current expected version'
 );
 SELECT is(
   (
@@ -641,6 +980,24 @@ SELECT is(
   ),
   '#445566',
   'admin publication persists'
+);
+SELECT is(
+  (
+    SELECT published_version
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  current_setting('tests.version_before_admin_publish')::integer + 1,
+  'published_version increases monotonically on a later publish'
+);
+SELECT set_config(
+  'tests.version_after_admin_publish',
+  (
+    SELECT published_version::text
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  true
 );
 
 SELECT tests.authenticate_as(
@@ -661,7 +1018,7 @@ SELECT ok(
     FROM public.widget_configs
     WHERE workspace_id = tests.fixture('workspace_a')::uuid
   ),
-  'reset draft restores canonical defaults'
+  'reset restores canonical defaults to draft_json'
 );
 SELECT is(
   (
@@ -670,19 +1027,153 @@ SELECT is(
     WHERE workspace_id = tests.fixture('workspace_a')::uuid
   ),
   '#445566',
-  'reset draft does not alter published_json'
+  'reset does not alter published_json'
 );
+SELECT is(
+  (
+    SELECT published_version
+    FROM public.widget_configs
+    WHERE workspace_id = tests.fixture('workspace_a')::uuid
+  ),
+  current_setting('tests.version_after_admin_publish')::integer,
+  'reset does not alter published_version'
+);
+
+-- ---------------------------------------------------------------------------
+-- Direct RPC validation parity with the strict appearance schema
+-- ---------------------------------------------------------------------------
+
 SELECT tests.authenticate_as(
   tests.fixture('owner_a')::uuid,
   'studio-owner-a@test.local'
 );
+
 SELECT throws_ok(
   format(
-    'SELECT public.publish_widget_studio(%L::uuid)',
-    tests.fixture('workspace_b')
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        jsonb_set(
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
+          '{widgetWidth}',
+          '9999'::jsonb
+        )
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
   ),
-  'FORBIDDEN: Workspace not accessible',
-  'workspace A owner cannot publish workspace B'
+  'P0001',
+  'INVALID_APPEARANCE: widgetWidth must be between 300 and 480.',
+  'save_widget_studio_draft rejects oversized widgetWidth'
+);
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        jsonb_set(
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
+          '{widgetHeight}',
+          '9999'::jsonb
+        )
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  'P0001',
+  'INVALID_APPEARANCE: widgetHeight must be between 360 and 800.',
+  'save_widget_studio_draft rejects oversized widgetHeight'
+);
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        jsonb_set(
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
+          '{fontFamily}',
+          '"comic-sans"'::jsonb
+        )
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  'P0001',
+  'INVALID_APPEARANCE: invalid fontFamily.',
+  'save_widget_studio_draft rejects an unapproved fontFamily'
+);
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        jsonb_set(
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
+          '{launcherShape}',
+          '"triangle"'::jsonb
+        )
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  'P0001',
+  'INVALID_APPEARANCE: invalid launcherShape.',
+  'save_widget_studio_draft rejects an illegal launcherShape enum'
+);
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        (public.get_widget_studio_state(%L::uuid) -> 'draft')
+          || '{"unexpected":true}'::jsonb
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  'P0001',
+  'INVALID_APPEARANCE: unknown key unexpected is not allowed.',
+  'save_widget_studio_draft rejects unknown top-level keys'
+);
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        jsonb_set(
+          public.get_widget_studio_state(%L::uuid) -> 'draft',
+          '{logoAssetId}',
+          '"not-a-uuid"'::jsonb
+        )
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  'P0001',
+  'INVALID_APPEARANCE: logoAssetId must be a UUID or null.',
+  'save_widget_studio_draft rejects invalid asset UUID text'
+);
+SELECT throws_ok(
+  format(
+    $sql$
+      SELECT public.save_widget_studio_draft(
+        %L::uuid,
+        (public.get_widget_studio_state(%L::uuid) -> 'draft')
+          || '{"nested":{"customCss":"* { display: none; }"}}'::jsonb
+      )
+    $sql$,
+    tests.fixture('workspace_a'),
+    tests.fixture('workspace_a')
+  ),
+  'P0001',
+  'INVALID_APPEARANCE: customCss and customJS are not allowed.',
+  'save_widget_studio_draft rejects nested customCss'
 );
 
 -- ---------------------------------------------------------------------------
@@ -702,28 +1193,46 @@ SELECT ok(
       'crm',
       'secrets',
       'members',
-      'draft_json'
+      'draft_json',
+      'storage_key'
     ]
   ),
-  'public config excludes draft and sensitive workspace keys'
+  'workspace public config excludes draft, sensitive, and storage keys'
 );
 SELECT ok(
-  app_private.widget_public_config_for_workspace(
-    tests.fixture('workspace_a')::uuid
-  ) ? 'position',
-  'public config exposes position'
+  NOT (
+    app_private.widget_resolve_public_key(
+      tests.fixture('public_key_a')
+    ) -> 'config' ?| ARRAY[
+      'draft',
+      'billing',
+      'ai',
+      'crm',
+      'secrets',
+      'members',
+      'draft_json',
+      'storage_key'
+    ]
+  ),
+  'public-key config excludes draft, sensitive, and storage keys'
 );
 SELECT ok(
-  app_private.widget_public_config_for_workspace(
-    tests.fixture('workspace_a')::uuid
-  ) ? 'greetingMessage',
-  'public config exposes greetingMessage'
+  app_private.widget_resolve_public_key(
+    tests.fixture('public_key_a')
+  ) -> 'config' ? 'position',
+  'public-key config exposes position'
 );
 SELECT ok(
-  app_private.widget_public_config_for_workspace(
-    tests.fixture('workspace_a')::uuid
-  ) ? 'version',
-  'public config exposes version'
+  app_private.widget_resolve_public_key(
+    tests.fixture('public_key_a')
+  ) -> 'config' ? 'greetingMessage',
+  'public-key config exposes greetingMessage'
+);
+SELECT ok(
+  app_private.widget_resolve_public_key(
+    tests.fixture('public_key_a')
+  ) -> 'config' ? 'version',
+  'public-key config exposes version'
 );
 SELECT is(
   app_private.widget_resolve_public_key(
@@ -733,6 +1242,24 @@ SELECT is(
     tests.fixture('workspace_a')::uuid
   ),
   'public-key resolution returns exactly the published public config'
+);
+
+-- ---------------------------------------------------------------------------
+-- Cross-workspace mutation denial uses the actual access exception
+-- ---------------------------------------------------------------------------
+
+SELECT tests.authenticate_as(
+  tests.fixture('owner_a')::uuid,
+  'studio-owner-a@test.local'
+);
+SELECT throws_ok(
+  format(
+    'SELECT public.publish_widget_studio(%L::uuid, NULL)',
+    tests.fixture('workspace_b')
+  ),
+  'P0001',
+  'Workspace not accessible',
+  'workspace A owner cannot publish workspace B'
 );
 
 SELECT * FROM finish();
