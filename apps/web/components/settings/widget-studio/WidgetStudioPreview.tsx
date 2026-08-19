@@ -160,6 +160,7 @@ export function WidgetStudioPreview({
           data-viewport={viewport}
           data-primary-color={config.primaryColor}
           data-position={config.launcherPosition}
+          data-color-mode={config.colorMode}
         >
           <div className="text-muted-foreground p-4 text-xs">
             {rtl ? "תצוגה מקדימה של האתר" : "Example website preview"}
@@ -280,7 +281,10 @@ export function WidgetStudioPreview({
                 </span>
               </footer>
               {config.showPoweredBy ? (
-                <p className="text-muted-foreground border-t py-1 text-center text-[10px]">
+                <p
+                  className="text-muted-foreground border-t py-1 text-center text-[10px]"
+                  data-testid="widget-studio-preview-powered-by"
+                >
                   Powered by Site Chat
                 </p>
               ) : null}

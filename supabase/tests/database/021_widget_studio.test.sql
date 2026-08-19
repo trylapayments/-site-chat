@@ -588,25 +588,31 @@ SELECT throws_ok(
   'trusted insert still rejects a storage_key with the wrong workspace prefix'
 );
 
-SELECT set_config('role', 'service_role', true);
+-- Resolve fixtures while still postgres: service_role has no USAGE on schema tests.
 SELECT lives_ok(
   format(
     $sql$
-      INSERT INTO public.widget_assets (
-        workspace_id,
-        kind,
-        storage_key,
-        mime_type,
-        byte_size,
-        original_filename
-      ) VALUES (
-        %L::uuid,
-        'launcher_icon',
-        'workspaces/%s/widget-assets/service-role-pending.webp',
-        'image/webp',
-        96,
-        'service-role-pending.webp'
-      )
+      DO $do$
+      BEGIN
+        SET LOCAL ROLE service_role;
+        INSERT INTO public.widget_assets (
+          workspace_id,
+          kind,
+          storage_key,
+          mime_type,
+          byte_size,
+          original_filename
+        ) VALUES (
+          %L::uuid,
+          'launcher_icon',
+          'workspaces/%s/widget-assets/service-role-pending.webp',
+          'image/webp',
+          96,
+          'service-role-pending.webp'
+        );
+        RESET ROLE;
+      END
+      $do$;
     $sql$,
     tests.fixture('workspace_a'),
     tests.fixture('workspace_a')

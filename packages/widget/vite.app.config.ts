@@ -7,10 +7,12 @@ import { resolve } from "node:path";
  * Built after the loader IIFE pass with emptyOutDir: false so loader.js is kept.
  */
 export default defineConfig({
+  // CI sets NODE_ENV=test; pin Vite mode so minify/define match committed output.
+  mode: "production",
   plugins: [
     react({
-      // CI sets NODE_ENV=test globally; force production JSX so bundles never
-      // embed machine-specific jsxDEV fileName metadata.
+      // Force production JSX so bundles never embed machine-specific jsxDEV
+      // fileName metadata when NODE_ENV=test in CI.
       jsxRuntime: "automatic",
     }),
   ],

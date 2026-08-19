@@ -8,6 +8,8 @@ import { resolve } from "node:path";
  * Built first (emptyOutDir: true). See vite.app.config.ts for the app pass.
  */
 export default defineConfig({
+  // CI sets NODE_ENV=test; pin Vite mode so minify/define match committed output.
+  mode: "production",
   plugins: [
     react({
       jsxRuntime: "automatic",

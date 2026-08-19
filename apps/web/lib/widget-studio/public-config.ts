@@ -39,8 +39,8 @@ export async function enrichWidgetPublicAppearance(input: {
   const entitlements =
     input.entitlements ??
     resolveWidgetStudioEntitlements({
-      // Until billing ships, defaults grant studio features. Tests pass
-      // restricted entitlements explicitly.
+      // Until billing ships, defaults grant studio features except
+      // hide_powered_by / custom_domain. Tests pass restricted grants.
       grantedFeatures: null,
     });
 

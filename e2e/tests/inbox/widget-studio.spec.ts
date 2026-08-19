@@ -23,6 +23,7 @@ type BootstrapPayload = {
       position: "bottom-left" | "bottom-right";
       primaryColor: string;
       version: number;
+      showPoweredBy: boolean;
     };
   };
 };
@@ -265,6 +266,82 @@ test.describe.serial("Widget Studio", () => {
     await openOwnerStudio(page);
     await expect(page.getByTestId("widget-studio-business-hours-foundation")).toBeVisible();
     await expect(page.getByText("Business hours (foundation)", { exact: true })).toBeVisible();
+  });
+
+  test("rejects non-raster asset uploads", async ({ page }) => {
+    await openOwnerStudio(page);
+    await page.getByTestId("widget-studio-asset-logo").setInputFiles({
+      name: "evil.svg",
+      mimeType: "image/svg+xml",
+      buffer: Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+        "utf8",
+      ),
+    });
+
+    await expect(page.getByTestId("widget-studio-error")).toContainText(
+      "Use a PNG, JPEG, or WebP image.",
+      { timeout: 30_000 },
+    );
+  });
+
+  test("uploads a verified PNG logo into the draft", async ({ page }) => {
+    await openOwnerStudio(page);
+    // 1x1 PNG
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await page.getByTestId("widget-studio-asset-logo").setInputFiles({
+      name: "logo.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
+
+    await expect(page.getByTestId("widget-studio-notice")).toContainText("Asset uploaded", {
+      timeout: 60_000,
+    });
+  });
+
+  test("forces powered-by branding on production without white-label entitlement", async ({
+    browser,
+    page,
+  }) => {
+    await openOwnerStudio(page);
+    await page.locator("#studio-powered-by").uncheck();
+    await publishDraft(page);
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    const bootstrap = await openProductionWidget(visitor);
+    expect(bootstrap.data.config.showPoweredBy).toBe(true);
+    await visitorContext.close();
+  });
+
+  test("applies system color mode in the studio preview", async ({ page }) => {
+    await openOwnerStudio(page);
+    await page.getByTestId("widget-studio-color-mode").selectOption("system");
+    await expect(page.getByTestId("widget-studio-preview-panel")).toHaveAttribute(
+      "data-color-mode",
+      "system",
+    );
+  });
+
+  test("rejects a stale publish with CAS conflict", async ({ browser, page }) => {
+    await openOwnerStudio(page);
+    await setPrimaryColor(page, "#0EA5E9");
+
+    const rivalContext = await browser.newContext();
+    const rival = await rivalContext.newPage();
+    await openOwnerStudio(rival);
+    await setPrimaryColor(rival, "#F97316");
+    await publishDraft(rival);
+    await rivalContext.close();
+
+    await page.getByTestId("widget-studio-publish").click();
+    await expect(page.getByTestId("widget-studio-error")).toContainText(/Publish conflict/i, {
+      timeout: 30_000,
+    });
   });
 
   test("keeps viewers and agents read-only", async ({ browser }) => {

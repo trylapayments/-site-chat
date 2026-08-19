@@ -245,7 +245,7 @@ Publish saves the currently displayed draft before publishing, so unsaved form e
 
 Widget Studio does not hardcode billing plan names. Shared entitlement features describe behavior (`basic_styling`, `custom_logo`, `hide_powered_by`, `business_hours`, and related capabilities), and `resolveShowPoweredBy` computes effective branding from configuration plus entitlements.
 
-Billing-backed grants are not wired yet. Current defaults grant Studio editing features except `custom_domain`, so the published powered-by choice is honored in the current foundation. Future billing integration should supply feature grants to the same abstraction rather than branch on labels such as “Starter” or “Enterprise” in components.
+Billing-backed grants are not wired yet. Current defaults grant Studio editing features except `hide_powered_by` and `custom_domain`, so production branding stays fail-closed: published `showPoweredBy=false` is remapped to `true` until billing grants `hide_powered_by`. Future billing integration should supply feature grants to the same abstraction rather than branch on labels such as “Starter” or “Enterprise” in components.
 
 Full white-labeling—custom widget/dashboard domains and broader product rebranding—remains roadmap work. The entitlement seam and asset/config model make that additive; they do not claim that white-label delivery is already implemented.
 

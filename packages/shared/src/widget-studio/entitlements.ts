@@ -20,7 +20,8 @@ export type WidgetStudioFeature = (typeof WIDGET_STUDIO_FEATURES)[number];
 
 /**
  * Entitlement snapshot for a workspace. Until billing ships, defaults grant
- * studio-editing features except enterprise-only custom_domain.
+ * studio-editing features except white-label hide_powered_by and enterprise
+ * custom_domain (fail-closed branding).
  */
 export type WidgetStudioEntitlements = {
   features: ReadonlySet<WidgetStudioFeature>;
@@ -31,7 +32,6 @@ const DEFAULT_FEATURES: readonly WidgetStudioFeature[] = [
   "custom_logo",
   "custom_launcher_icon",
   "advanced_styling",
-  "hide_powered_by",
   "business_hours",
   "locale_copy_overrides",
 ];

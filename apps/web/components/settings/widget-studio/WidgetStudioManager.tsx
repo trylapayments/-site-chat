@@ -468,6 +468,7 @@ export function WidgetStudioManager({
         <Label htmlFor={`studio-asset-${kind}`}>{label}</Label>
         <Input
           id={`studio-asset-${kind}`}
+          data-testid={`widget-studio-asset-${kind}`}
           type="file"
           accept={WIDGET_ASSET_LIMITS.allowedMimeTypes.join(",")}
           disabled={disabled}
@@ -582,12 +583,20 @@ export function WidgetStudioManager({
       </div>
 
       {error ? (
-        <p className="text-destructive text-sm" role="alert">
+        <p
+          className="text-destructive text-sm"
+          role="alert"
+          data-testid="widget-studio-error"
+        >
           {error}
         </p>
       ) : null}
       {notice ? (
-        <p className="text-muted-foreground text-sm" role="status">
+        <p
+          className="text-muted-foreground text-sm"
+          role="status"
+          data-testid="widget-studio-notice"
+        >
           {notice}
         </p>
       ) : null}
@@ -890,6 +899,7 @@ export function WidgetStudioManager({
               label="Color mode"
               value={draft.colorMode}
               options={WIDGET_COLOR_MODES}
+              testId="widget-studio-color-mode"
               disabled={disabled}
               onChange={(colorMode) => {
                 updateDraft({
@@ -1026,16 +1036,18 @@ export function WidgetStudioManager({
           <Section title={messages.sections.branding}>
             {assetControl("logo", "Workspace logo")}
             {assetControl("agent_avatar", "Agent avatar")}
-            <ToggleControl
-              id="studio-powered-by"
-              label="Show “Powered by Site Chat”"
-              description="The effective setting also follows workspace feature entitlements."
-              checked={draft.showPoweredBy}
-              disabled={disabled}
-              onChange={(showPoweredBy) => {
-                updateDraft({ showPoweredBy });
-              }}
-            />
+            <div data-testid="widget-studio-powered-by">
+              <ToggleControl
+                id="studio-powered-by"
+                label="Show “Powered by Site Chat”"
+                description="Without the white-label entitlement, production always shows Site Chat branding."
+                checked={draft.showPoweredBy}
+                disabled={disabled}
+                onChange={(showPoweredBy) => {
+                  updateDraft({ showPoweredBy });
+                }}
+              />
+            </div>
           </Section>
 
           <Section title={messages.sections.behavior}>

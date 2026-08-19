@@ -162,10 +162,22 @@ describe("locale overrides", () => {
 });
 
 describe("entitlements", () => {
-  it("defaults grant studio features except custom_domain", () => {
+  it("defaults grant studio features except white-label and custom_domain", () => {
     const entitlements = defaultWidgetStudioEntitlements();
-    expect(hasWidgetStudioFeature(entitlements, "hide_powered_by")).toBe(true);
+    expect(hasWidgetStudioFeature(entitlements, "basic_styling")).toBe(true);
+    expect(hasWidgetStudioFeature(entitlements, "hide_powered_by")).toBe(false);
     expect(hasWidgetStudioFeature(entitlements, "custom_domain")).toBe(false);
+  });
+
+  it("allows hiding powered-by only when entitled", () => {
+    expect(
+      resolveShowPoweredBy({
+        configured: false,
+        entitlements: resolveWidgetStudioEntitlements({
+          grantedFeatures: ["hide_powered_by"],
+        }),
+      }),
+    ).toBe(false);
   });
 
   it("fail-closed when grantedFeatures is empty", () => {
