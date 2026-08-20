@@ -207,6 +207,13 @@ export default async function ConversationDetailPage({
           locationLabel={context?.timezone ?? null}
           deviceLabel={deviceSummary || null}
           pageTitle={context?.current_title ?? null}
+          workspaceSlug={workspaceSlug}
+          workspaceId={workspace.workspace_id}
+          conversation={conversation}
+          members={members}
+          memberId={memberId}
+          canAssign={canAssign}
+          canUpdateStatus={can(workspace.role, "update_conversation_status")}
         />
 
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -246,7 +253,7 @@ export default async function ConversationDetailPage({
       </section>
 
       {/* Customer inspector — collapses before the thread on narrower desktops */}
-      <div className="hidden w-[300px] shrink-0 overflow-hidden xl:flex 2xl:w-[320px]">
+      <div className="hidden w-[320px] shrink-0 overflow-hidden xl:flex 2xl:w-[340px]">
         <ConversationSidebar
           workspaceId={workspace.workspace_id}
           workspaceSlug={workspaceSlug}

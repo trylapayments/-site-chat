@@ -5,10 +5,7 @@ import { Paperclip } from "lucide-react";
 import Link from "next/link";
 
 import { toAppRoute } from "@/lib/auth/redirect";
-import {
-  formatConversationContactLabel,
-  formatRelativeTime,
-} from "@/lib/inbox/search-params";
+import { formatConversationContactLabel } from "@/lib/inbox/search-params";
 import { cn } from "@/lib/utils";
 
 function initialsFromLabel(label: string): string {
@@ -24,6 +21,38 @@ function initialsFromLabel(label: string): string {
   return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
 }
 
+/** Short relative clock for dense inbox rows (list-only; not used in SSR thread). */
+function formatListTime(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  const diffMs = Date.now() - date.getTime();
+  const minutes = Math.max(0, Math.floor(diffMs / 60_000));
+  if (minutes < 1) {
+    return "now";
+  }
+  if (minutes < 60) {
+    return `${String(minutes)}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${String(hours)}h`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 7) {
+    return `${String(days)}d`;
+  }
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 function StatusPill({ status }: { status: ConversationListItem["status"] }) {
   if (status === "open") {
     return null;
@@ -31,7 +60,7 @@ function StatusPill({ status }: { status: ConversationListItem["status"] }) {
   return (
     <span
       className={cn(
-        "inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium capitalize",
+        "inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-medium capitalize",
         status === "pending" && "bg-amber-100 text-amber-800",
         status === "resolved" && "bg-sky-100 text-sky-800",
         status === "closed" && "bg-neutral-100 text-neutral-500",
@@ -63,6 +92,7 @@ export function ConversationListItemRow({
   const preview = conversation.last_message_preview ?? "No messages yet";
   const hasAttachmentHint =
     /\.(png|jpe?g|gif|webp|pdf|docx?|xlsx?|zip)\b/i.test(preview);
+  const isPending = conversation.status === "pending";
 
   return (
     <div
@@ -70,8 +100,10 @@ export function ConversationListItemRow({
       data-selected={selected ? "true" : "false"}
       data-conversation-id={conversation.id}
       className={cn(
-        "group relative border-b border-inbox-border/80 transition-colors",
-        selected ? "bg-brand-soft" : "hover:bg-inbox-hover bg-transparent",
+        "group relative transition-colors",
+        selected
+          ? "bg-brand-soft shadow-[inset_3px_0_0_0_var(--brand)]"
+          : "hover:bg-inbox-hover bg-transparent",
       )}
     >
       {selected ? (
@@ -83,57 +115,70 @@ export function ConversationListItemRow({
       <div role="cell" className="w-full">
         <Link
           href={href}
-          className="flex gap-3 px-3 py-3 outline-none focus-visible:bg-brand-soft"
+          className="flex gap-3.5 px-4 py-3.5 outline-none focus-visible:bg-brand-soft"
         >
-          <div className="relative shrink-0">
+          <div className="relative shrink-0 self-start pt-0.5">
             <div
               className={cn(
-                "flex size-9 items-center justify-center rounded-full text-[11px] font-semibold",
+                "flex size-10 items-center justify-center rounded-full text-[12px] font-semibold",
                 selected
-                  ? "bg-brand/15 text-brand"
-                  : "bg-neutral-200/80 text-neutral-600",
+                  ? "bg-brand/12 text-brand"
+                  : "bg-neutral-200/90 text-neutral-600",
               )}
               aria-hidden="true"
             >
               {initialsFromLabel(label)}
             </div>
+            {isPending ? (
+              <span
+                className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-amber-400"
+                title="Pending"
+                aria-hidden="true"
+              />
+            ) : conversation.status === "open" ? (
+              <span
+                className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-emerald-500"
+                title="Open"
+                aria-hidden="true"
+              />
+            ) : null}
           </div>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <p
                 className={cn(
-                  "truncate text-[13px] leading-tight",
+                  "truncate text-[14px] leading-snug",
                   unread
-                    ? "font-semibold text-neutral-900"
+                    ? "font-semibold text-neutral-950"
                     : "font-medium text-neutral-800",
                 )}
               >
                 {label}
               </p>
-              <time className="text-inbox-muted shrink-0 text-[11px] tabular-nums">
-                {formatRelativeTime(conversation.last_message_at)}
+              <time className="text-inbox-muted shrink-0 pt-0.5 text-[12px] tabular-nums">
+                {formatListTime(conversation.last_message_at)}
               </time>
             </div>
 
-            <div className="mt-0.5 flex items-center gap-1.5">
+            <div className="mt-1 flex items-center gap-2">
               <p
                 className={cn(
-                  "min-w-0 flex-1 truncate text-[12px] leading-snug",
-                  unread ? "text-neutral-700" : "text-inbox-muted",
+                  "min-w-0 flex-1 truncate text-[13px] leading-snug",
+                  unread ? "font-medium text-neutral-700" : "text-inbox-muted",
                 )}
               >
                 {preview}
               </p>
               {hasAttachmentHint ? (
                 <Paperclip
-                  className="text-inbox-muted size-3 shrink-0"
+                  className="text-inbox-muted size-3.5 shrink-0"
                   aria-hidden="true"
                 />
               ) : null}
               {unread ? (
                 <span
-                  className="bg-brand text-brand-foreground inline-flex min-w-5 shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+                  className="bg-brand text-brand-foreground inline-flex min-w-5 shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
                   data-testid="conversation-unread-badge"
                   data-unread-count={Math.max(1, conversation.unread_count)}
                   aria-label={
@@ -149,10 +194,10 @@ export function ConversationListItemRow({
               ) : null}
             </div>
 
-            <div className="mt-1.5 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2">
               <StatusPill status={conversation.status} />
               <span
-                className="text-inbox-muted truncate text-[11px]"
+                className="text-inbox-muted truncate text-[12px]"
                 data-testid="inbox-row-assignee"
                 data-assignee-id={conversation.assigned_to?.member_id ?? ""}
               >

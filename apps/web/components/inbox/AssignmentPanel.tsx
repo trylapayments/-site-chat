@@ -40,6 +40,7 @@ export function AssignmentPanel({
   members,
   memberId,
   canAssign,
+  variant = "default",
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -48,6 +49,8 @@ export function AssignmentPanel({
   members: WorkspaceMemberOption[];
   memberId: string;
   canAssign: boolean;
+  /** Compact controls for the conversation header. */
+  variant?: "default" | "header";
 }) {
   const router = useRouter();
   // Explicit busy flag — do not use useTransition here. router.refresh() inside
@@ -258,21 +261,33 @@ export function AssignmentPanel({
 
   return (
     <section
-      className="space-y-3"
+      className={variant === "header" ? "space-y-2" : "space-y-3"}
       aria-labelledby="assignment-heading"
       data-testid="assignment-panel"
       data-pending={busy ? "true" : "false"}
       data-assignee-id={assignee?.member_id ?? ""}
       data-assignment-version={String(assignmentVersion)}
     >
-      <h2 id="assignment-heading" className="text-sm font-semibold">
-        {messages.sectionTitle}
-      </h2>
+      {variant === "header" ? (
+        <h2 id="assignment-heading" className="sr-only">
+          {messages.sectionTitle}
+        </h2>
+      ) : (
+        <h2 id="assignment-heading" className="text-sm font-semibold">
+          {messages.sectionTitle}
+        </h2>
+      )}
 
-      <div className="space-y-1">
-        <p className="text-muted-foreground text-xs">{messages.assignedTo}</p>
+      <div className={variant === "header" ? "space-y-0.5" : "space-y-1"}>
+        {variant === "header" ? null : (
+          <p className="text-muted-foreground text-xs">{messages.assignedTo}</p>
+        )}
         <p
-          className="text-sm font-medium"
+          className={
+            variant === "header"
+              ? "max-w-[200px] truncate text-[13px] font-medium text-neutral-800"
+              : "text-sm font-medium"
+          }
           data-testid="assignment-current"
           data-assignee-id={assignee?.member_id ?? ""}
         >

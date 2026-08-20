@@ -19,6 +19,73 @@ const messages = internalNotesMessagesEn;
 
 type Tab = "messages" | "notes";
 
+function ModeTabs({
+  tab,
+  canManageNotes,
+  onChange,
+}: {
+  tab: Tab;
+  canManageNotes: boolean;
+  onChange: (next: Tab) => void;
+}) {
+  return (
+    <div
+      className="border-inbox-border bg-inbox-panel flex shrink-0 gap-1 border-t px-6 pt-2"
+      role="tablist"
+      aria-label="Conversation content"
+      data-testid="conversation-main-tabs"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === "messages"}
+        data-testid="conversation-tab-messages"
+        className={cn(
+          "relative px-3.5 py-2.5 text-[13.5px] font-medium transition-colors",
+          tab === "messages"
+            ? "text-brand"
+            : "text-inbox-muted hover:text-neutral-800",
+        )}
+        onClick={() => {
+          onChange("messages");
+        }}
+      >
+        Reply
+        {tab === "messages" ? (
+          <span
+            className="bg-brand absolute inset-x-2.5 bottom-0 h-0.5 rounded-full"
+            aria-hidden="true"
+          />
+        ) : null}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === "notes"}
+        data-testid="conversation-tab-notes"
+        className={cn(
+          "relative px-3.5 py-2.5 text-[13.5px] font-medium transition-colors",
+          tab === "notes"
+            ? "text-amber-800"
+            : "text-inbox-muted hover:text-neutral-800",
+          !canManageNotes && "opacity-60",
+        )}
+        onClick={() => {
+          onChange("notes");
+        }}
+      >
+        {messages.tabNotes}
+        {tab === "notes" ? (
+          <span
+            className="absolute inset-x-2.5 bottom-0 h-0.5 rounded-full bg-amber-600"
+            aria-hidden="true"
+          />
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
 export function ConversationMainPanel({
   workspaceId,
   workspaceSlug,
@@ -75,62 +142,21 @@ export function ConversationMainPanel({
     }
   }, [canManageNotes, focusMessageId, searchParams]);
 
+  const modeTabs = (
+    <ModeTabs
+      tab={tab}
+      canManageNotes={canManageNotes}
+      onChange={(next) => {
+        if (next === "notes" && !canManageNotes) {
+          return;
+        }
+        setTab(next);
+      }}
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div
-        className="border-inbox-border flex shrink-0 gap-1 border-b bg-inbox-panel px-5"
-        role="tablist"
-        aria-label="Conversation content"
-        data-testid="conversation-main-tabs"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "messages"}
-          data-testid="conversation-tab-messages"
-          className={cn(
-            "relative px-3 py-2.5 text-[13px] font-medium transition-colors",
-            tab === "messages"
-              ? "text-brand"
-              : "text-inbox-muted hover:text-neutral-800",
-          )}
-          onClick={() => {
-            setTab("messages");
-          }}
-        >
-          Reply
-          {tab === "messages" ? (
-            <span
-              className="bg-brand absolute inset-x-2 bottom-0 h-0.5 rounded-full"
-              aria-hidden="true"
-            />
-          ) : null}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "notes"}
-          data-testid="conversation-tab-notes"
-          className={cn(
-            "relative px-3 py-2.5 text-[13px] font-medium transition-colors",
-            tab === "notes"
-              ? "text-amber-800"
-              : "text-inbox-muted hover:text-neutral-800",
-          )}
-          onClick={() => {
-            setTab("notes");
-          }}
-        >
-          {messages.tabNotes}
-          {tab === "notes" ? (
-            <span
-              className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-amber-600"
-              aria-hidden="true"
-            />
-          ) : null}
-        </button>
-      </div>
-
       <div
         role="tabpanel"
         hidden={tab !== "messages"}
@@ -155,29 +181,29 @@ export function ConversationMainPanel({
           canUseCannedResponses={canUseCannedResponses}
           aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
           focusMessageId={focusMessageId}
+          composerAccessory={modeTabs}
         />
       </div>
 
       <div
         role="tabpanel"
         hidden={tab !== "notes"}
-        className={
-          tab === "notes"
-            ? "min-h-0 flex-1 overflow-y-auto px-5 py-4"
-            : "hidden"
-        }
+        className={tab === "notes" ? "flex min-h-0 flex-1 flex-col" : "hidden"}
       >
-        <InternalNotesPanel
-          workspaceId={workspaceId}
-          workspaceSlug={workspaceSlug}
-          conversationId={conversationId}
-          memberId={memberId}
-          members={members}
-          initialNotes={initialNotes}
-          canManage={canManageNotes}
-          active={tab === "notes"}
-          focusNoteId={focusNoteId}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <InternalNotesPanel
+            workspaceId={workspaceId}
+            workspaceSlug={workspaceSlug}
+            conversationId={conversationId}
+            memberId={memberId}
+            members={members}
+            initialNotes={initialNotes}
+            canManage={canManageNotes}
+            active={tab === "notes"}
+            focusNoteId={focusNoteId}
+          />
+        </div>
+        {modeTabs}
       </div>
     </div>
   );

@@ -33,8 +33,6 @@ export function InboxListFilters() {
     mutator(params);
     params.delete("page");
     const query = params.toString();
-    // Filters always apply to the inbox list root so conversation detail
-    // routes do not trap filter state under /inbox/[id].
     const inboxRoot = pathname.replace(/\/inbox\/[^/]+$/, "/inbox");
     router.push(toAppRoute(query ? `${inboxRoot}?${query}` : inboxRoot));
   }
@@ -42,11 +40,11 @@ export function InboxListFilters() {
   const assignmentValue = searchParams.get("assignment") ?? "all";
 
   return (
-    <div className="space-y-2.5">
+    <div className="bg-inbox-panel space-y-2.5 border-b border-inbox-border/80 pb-2.5">
       <div
         role="tablist"
         aria-label={messages.filterLabel}
-        className="flex gap-0 border-b border-inbox-border"
+        className="flex gap-0 px-2"
         data-testid="inbox-assignment-tabs"
       >
         {ASSIGNMENT_TABS.map((tab) => {
@@ -62,7 +60,7 @@ export function InboxListFilters() {
               aria-selected={selected}
               data-testid={`inbox-assignment-tab-${tab.value}`}
               className={cn(
-                "relative px-3 py-2 text-[12px] font-medium transition-colors",
+                "relative px-3.5 py-2.5 text-[13px] font-medium transition-colors",
                 selected
                   ? "text-brand"
                   : "text-inbox-muted hover:text-neutral-800",
@@ -80,7 +78,7 @@ export function InboxListFilters() {
               {tab.label}
               {selected ? (
                 <span
-                  className="bg-brand absolute inset-x-2 bottom-0 h-0.5 rounded-full"
+                  className="bg-brand absolute inset-x-2.5 bottom-0 h-0.5 rounded-full"
                   aria-hidden="true"
                 />
               ) : null}
@@ -89,7 +87,7 @@ export function InboxListFilters() {
         })}
       </div>
 
-      <div className="flex items-center gap-2 px-3">
+      <div className="flex items-center gap-2 px-4">
         <label className="sr-only" htmlFor="inbox-status-filter">
           Status
         </label>
@@ -106,7 +104,7 @@ export function InboxListFilters() {
               }
             });
           }}
-          className="border-inbox-border bg-inbox-surface text-inbox-muted focus-visible:ring-brand h-8 w-full rounded-md border px-2 text-[12px] focus-visible:ring-1 focus-visible:outline-none"
+          className="border-inbox-border bg-inbox-surface text-inbox-muted focus-visible:ring-brand/30 h-9 w-full rounded-lg border px-2.5 text-[13px] shadow-[var(--inbox-shadow)] focus-visible:ring-1 focus-visible:outline-none"
         >
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value || "all"} value={option.value}>

@@ -49,7 +49,7 @@ export function InboxListSearch({ className }: { className?: string }) {
   return (
     <div className={cn("relative w-full", className)}>
       <Search
-        className="text-inbox-muted pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+        className="text-inbox-muted pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
         aria-hidden="true"
       />
       <input
@@ -60,7 +60,7 @@ export function InboxListSearch({ className }: { className?: string }) {
         }}
         placeholder="Search contacts or messages…"
         aria-label="Search contacts or messages"
-        className="border-inbox-border bg-inbox-surface focus-visible:ring-brand h-8 w-full rounded-md border pr-2.5 pl-8 text-[12px] outline-none focus-visible:ring-1"
+        className="border-inbox-border bg-inbox-surface text-[13.5px] placeholder:text-inbox-muted focus-visible:ring-brand/35 h-10 w-full rounded-lg border pr-3 pl-10 shadow-[var(--inbox-shadow)] outline-none focus-visible:ring-2"
       />
     </div>
   );

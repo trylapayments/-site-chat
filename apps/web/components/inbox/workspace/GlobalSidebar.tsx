@@ -14,9 +14,9 @@ import {
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import { InboxUnreadBadge } from "@/components/inbox/InboxUnreadBadge";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
+import { InboxUnreadBadge } from "@/components/inbox/InboxUnreadBadge";
 import { toAppRoute } from "@/lib/auth/redirect";
 import {
   SETTINGS_SECTION_CANNED_RESPONSES,
@@ -115,7 +115,6 @@ function isNavActive(
     return appPath === target || appPath.startsWith(`${target}/`);
   }
 
-  // assignment match — only when on inbox routes
   const onInbox = appPath === inboxBase || appPath.startsWith(`${inboxBase}/`);
   if (!onInbox) {
     return false;
@@ -152,29 +151,29 @@ export function GlobalSidebar({
 
   return (
     <aside
-      className="bg-inbox-nav text-inbox-nav-foreground flex h-full w-[220px] shrink-0 flex-col"
+      className="bg-inbox-nav text-inbox-nav-foreground flex h-full w-[232px] shrink-0 flex-col"
       data-testid="inbox-global-sidebar"
       aria-label="Workspace"
     >
-      <div className="border-inbox-nav-border flex items-center gap-2.5 border-b px-4 py-4">
+      <div className="border-inbox-nav-border flex items-center gap-3 border-b px-4 py-5">
         <div
-          className="bg-brand flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-bold tracking-wide text-white"
           aria-hidden="true"
         >
           SC
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold tracking-tight">
+          <p className="truncate text-[15px] font-semibold tracking-tight">
             Site Chat
           </p>
-          <p className="text-inbox-nav-muted truncate text-[11px]">
+          <p className="text-inbox-nav-muted truncate text-[12px]">
             {workspaceName}
           </p>
         </div>
       </div>
 
       <nav
-        className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3"
+        className="flex-1 space-y-1 overflow-y-auto px-2.5 py-4"
         aria-label="Main"
       >
         {items.map((item) => {
@@ -186,13 +185,19 @@ export function GlobalSidebar({
               href={toAppRoute(item.href)}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
+                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
                 active
-                  ? "bg-brand text-white shadow-sm"
+                  ? "bg-inbox-nav-active text-white"
                   : "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground",
               )}
             >
-              <Icon className="size-4 shrink-0 opacity-90" aria-hidden={true} />
+              <Icon
+                className={cn(
+                  "size-[18px] shrink-0",
+                  active ? "text-brand-muted" : "opacity-80",
+                )}
+                aria-hidden={true}
+              />
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {item.showUnread && workspaceId && memberId ? (
                 <InboxUnreadBadge
@@ -200,7 +205,9 @@ export function GlobalSidebar({
                   memberId={memberId}
                   className={cn(
                     "ml-auto",
-                    active ? "bg-white/20 text-white" : "bg-brand text-white",
+                    active
+                      ? "bg-brand/80 text-white"
+                      : "bg-brand/70 text-white",
                   )}
                 />
               ) : null}
@@ -209,8 +216,8 @@ export function GlobalSidebar({
         })}
       </nav>
 
-      <div className="border-inbox-nav-border space-y-2 border-t px-2.5 py-3">
-        <div className="px-1 [&_button]:border-white/15 [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+      <div className="border-inbox-nav-border mt-auto space-y-2 border-t px-2.5 py-3.5">
+        <div className="px-1 [&_button]:border-white/12 [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
           <WorkspaceSwitcher
             workspaces={workspaces}
             currentWorkspaceId={workspaceId}
@@ -220,15 +227,18 @@ export function GlobalSidebar({
         <Link
           href={settingsHref}
           className={cn(
-            "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
+            "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
             pathname.startsWith(settingsHref) &&
-              "bg-inbox-nav-hover text-inbox-nav-foreground",
+              "bg-inbox-nav-active text-inbox-nav-foreground",
           )}
         >
-          <Settings className="size-4 shrink-0" aria-hidden={true} />
+          <Settings
+            className="size-[18px] shrink-0 opacity-80"
+            aria-hidden={true}
+          />
           Settings
         </Link>
-        <div className="px-1 pt-1 [&_button]:border-white/15 [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+        <div className="px-1 pt-1 [&_button]:border-white/12 [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
           <UserMenu email={email} />
         </div>
       </div>

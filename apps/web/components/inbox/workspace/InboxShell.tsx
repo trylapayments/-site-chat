@@ -32,8 +32,8 @@ export function InboxShell({
       className="bg-inbox-canvas flex h-full min-h-0 w-full"
       data-testid="inbox-workspace-shell"
     >
-      <div className="flex w-[300px] shrink-0 flex-col md:w-[320px] xl:w-[340px]">
-        <div className="border-inbox-border flex shrink-0 items-center gap-2 border-b bg-inbox-panel px-2 py-2">
+      <div className="border-inbox-border/80 flex w-[340px] shrink-0 flex-col border-r shadow-[1px_0_0_0_transparent] xl:w-[360px]">
+        <div className="border-inbox-border flex shrink-0 items-center gap-2 border-b bg-inbox-panel px-3 py-2.5">
           <div className="min-w-0 flex-1">
             <GlobalSearch
               workspaceSlug={workspaceSlug}
@@ -49,15 +49,13 @@ export function InboxShell({
           ) : null}
         </div>
 
-        <div className="border-inbox-border shrink-0 border-b bg-inbox-panel px-3 pb-2 pt-3">
-          <h1 className="text-[15px] font-semibold tracking-tight text-neutral-900">
+        <div className="border-inbox-border shrink-0 space-y-3 border-b bg-inbox-panel px-4 pt-4 pb-3">
+          <h1 className="text-[18px] font-semibold tracking-tight text-neutral-950">
             Inbox
           </h1>
-          <div className="mt-2">
-            <Suspense fallback={null}>
-              <InboxListSearch />
-            </Suspense>
-          </div>
+          <Suspense fallback={null}>
+            <InboxListSearch />
+          </Suspense>
         </div>
 
         <Suspense fallback={null}>
