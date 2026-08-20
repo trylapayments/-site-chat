@@ -29,7 +29,11 @@ type NavItem = {
   id: string;
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  icon: React.ComponentType<{
+    className?: string;
+    "aria-hidden"?: boolean;
+    strokeWidth?: number;
+  }>;
   showUnread?: boolean;
   match?: "exact" | "prefix" | "assignment";
   assignment?: string;
@@ -194,8 +198,9 @@ export function GlobalSidebar({
               <Icon
                 className={cn(
                   "size-[18px] shrink-0",
-                  active ? "text-brand-muted" : "opacity-80",
+                  active ? "text-brand-muted" : "opacity-75",
                 )}
+                strokeWidth={1.75}
                 aria-hidden={true}
               />
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -233,7 +238,8 @@ export function GlobalSidebar({
           )}
         >
           <Settings
-            className="size-[18px] shrink-0 opacity-80"
+            className="size-[18px] shrink-0 opacity-75"
+            strokeWidth={1.75}
             aria-hidden={true}
           />
           Settings

@@ -326,17 +326,17 @@ export function LiveConversationThread({
         data-realtime-state={connectionState}
         hidden
       />
-      <div className="border-inbox-border/70 flex shrink-0 items-center justify-between gap-3 bg-inbox-surface px-6 py-2">
+      <div className="flex shrink-0 items-center gap-3 bg-inbox-surface px-6 py-1.5">
         <p
-          className="text-inbox-muted text-[13px]"
+          className="text-inbox-muted text-[12.5px]"
           data-testid="visitor-presence"
           data-presence={visitorOnline ? "online" : "offline"}
         >
           <span
             className={
               visitorOnline
-                ? "mr-2 inline-block size-2 rounded-full bg-emerald-500"
-                : "mr-2 inline-block size-2 rounded-full bg-neutral-300"
+                ? "mr-1.5 inline-block size-1.5 rounded-full bg-emerald-500"
+                : "mr-1.5 inline-block size-1.5 rounded-full bg-neutral-300"
             }
             aria-hidden="true"
           />
@@ -485,7 +485,7 @@ function MessageList({
   let lastDay = "";
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4">
+    <div className="mx-auto w-full max-w-[960px] space-y-3.5">
       {messages.map((message) => {
         const receiptStatus =
           message.senderType === "agent" && !message.isOptimistic
@@ -503,19 +503,19 @@ function MessageList({
         return (
           <div key={message.id}>
             {showDay ? (
-              <div className="flex items-center gap-3 py-3">
-                <div className="bg-inbox-border h-px flex-1" />
+              <div className="flex items-center gap-3 py-2.5">
+                <div className="bg-inbox-border/80 h-px flex-1" />
                 <span className="text-inbox-muted text-[12px] font-medium tracking-wide">
                   {day}
                 </span>
-                <div className="bg-inbox-border h-px flex-1" />
+                <div className="bg-inbox-border/80 h-px flex-1" />
               </div>
             ) : null}
             <article
               className={
                 isVisitor
-                  ? "ml-auto flex w-full max-w-[min(100%,34rem)] flex-row-reverse gap-2.5"
-                  : "mr-auto flex w-full max-w-[min(100%,34rem)] gap-2.5"
+                  ? "ml-auto flex w-full max-w-[min(100%,36rem)] flex-row-reverse gap-2.5"
+                  : "mr-auto flex w-full max-w-[min(100%,36rem)] gap-2.5"
               }
               data-sequence={message.sequenceNumber}
               data-message-id={message.id}
@@ -523,14 +523,14 @@ function MessageList({
             >
               {!isVisitor ? (
                 <div
-                  className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-200/90 text-[10px] font-semibold text-neutral-600"
+                  className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-neutral-200/80 text-[10px] font-semibold text-neutral-600"
                   aria-hidden="true"
                 >
                   {initialsFromSender(message.senderLabel)}
                 </div>
               ) : (
                 <div
-                  className="bg-brand/15 text-brand mt-1 flex size-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  className="bg-brand/12 text-brand mt-1 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
                   aria-hidden="true"
                 >
                   {initialsFromSender(message.senderLabel)}
@@ -539,20 +539,20 @@ function MessageList({
               <div
                 className={
                   isVisitor
-                    ? `min-w-0 flex-1 rounded-2xl rounded-br-md bg-brand-soft px-4 py-3${focused ? " ring-2 ring-brand/35" : ""}`
-                    : `min-w-0 flex-1 rounded-2xl rounded-bl-md border border-inbox-border bg-white px-4 py-3 shadow-[var(--inbox-shadow)]${focused ? " ring-2 ring-brand/35" : ""}`
+                    ? `min-w-0 flex-1 rounded-xl rounded-br-md bg-inbox-bubble-visitor px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
+                    : `min-w-0 flex-1 rounded-xl rounded-bl-md border border-zinc-200/60 bg-inbox-bubble-agent px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
                 }
               >
-                <header className="mb-1.5 flex items-center justify-between gap-3">
-                  <span className="text-[13px] font-medium text-neutral-700">
+                <header className="mb-1 flex items-center justify-between gap-3">
+                  <span className="text-[12.5px] font-medium text-neutral-600">
                     {message.senderLabel}
                   </span>
-                  <time className="text-inbox-muted text-[12px] tabular-nums">
+                  <time className="text-inbox-muted text-[11.5px] tabular-nums">
                     {formatRelativeTime(message.createdAt)}
                   </time>
                 </header>
                 {message.body ? (
-                  <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap text-neutral-900">
+                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-neutral-900">
                     {message.body}
                   </p>
                 ) : null}
@@ -688,7 +688,7 @@ function LiveReplyComposer({
 
   return (
     <form
-      className="border-inbox-border bg-inbox-panel shrink-0 border-t px-6 py-3.5 shadow-[0_-1px_0_0_var(--inbox-border)]"
+      className="bg-inbox-panel shrink-0 px-5 py-2.5"
       onDragOver={(event) => {
         event.preventDefault();
       }}
@@ -1016,7 +1016,7 @@ function LiveReplyComposer({
           {uploadProgress}
         </p>
       ) : null}
-      <div className="border-inbox-border bg-inbox-surface focus-within:ring-brand/25 rounded-xl border shadow-[var(--inbox-shadow)] focus-within:ring-2">
+      <div className="border-inbox-border/90 bg-inbox-surface focus-within:ring-brand/20 rounded-lg border focus-within:ring-1">
         <div className="relative">
           {canned.query !== null ? (
             <CannedSlashMenu
@@ -1056,41 +1056,44 @@ function LiveReplyComposer({
                 );
               }
             }}
-            rows={3}
+            rows={2}
             maxLength={4000}
             placeholder="Write a reply..."
             disabled={isPending}
-            className="w-full resize-none bg-transparent px-4 py-3.5 text-[14.5px] leading-relaxed outline-none placeholder:text-neutral-400"
+            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-neutral-400"
           />
         </div>
-        {cannedEnabled ? (
-          <p
-            className="text-inbox-muted border-inbox-border border-t px-4 py-2 text-[12px]"
-            data-testid="canned-slash-hint"
-          >
-            {cannedMessages.slashHint}
-          </p>
-        ) : null}
-        <div className="border-inbox-border flex items-center justify-between gap-2 border-t px-3 py-2.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={isPending}
-            aria-label="Attach files"
-            data-testid="operator-attach-button"
-            className="text-inbox-muted hover:text-neutral-800 gap-1.5"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip className="size-4" aria-hidden="true" />
-            Attach
-          </Button>
+        <div className="border-inbox-border/80 flex items-center justify-between gap-2 border-t px-2.5 py-1.5">
+          <div className="flex min-w-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isPending}
+              aria-label="Attach files"
+              data-testid="operator-attach-button"
+              className="text-inbox-muted hover:text-neutral-800 h-8 gap-1.5 px-2"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="size-3.5" aria-hidden="true" />
+              Attach
+            </Button>
+            {cannedEnabled ? (
+              <span
+                className="text-inbox-muted hidden truncate text-[11.5px] sm:inline"
+                data-testid="canned-slash-hint"
+              >
+                {cannedMessages.slashHint}
+              </span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
             {activeBatchId && isPending ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-8"
                 aria-label="Cancel upload"
                 data-testid="operator-upload-cancel"
                 onClick={() => {
@@ -1115,6 +1118,7 @@ function LiveReplyComposer({
                 type="submit"
                 variant="outline"
                 size="sm"
+                className="h-8"
                 aria-label="Retry upload"
                 data-testid="operator-upload-retry"
               >
@@ -1124,7 +1128,7 @@ function LiveReplyComposer({
               <Button
                 type="submit"
                 size="sm"
-                className="bg-brand text-brand-foreground hover:bg-brand/90 h-9 px-4 text-[13.5px]"
+                className="bg-brand text-brand-foreground hover:bg-brand/90 h-8 px-3.5 text-[13px]"
                 disabled={
                   isPending ||
                   (body.trim().length === 0 && pendingFiles.length === 0)

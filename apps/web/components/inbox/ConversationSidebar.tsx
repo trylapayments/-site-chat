@@ -208,7 +208,7 @@ export function ConversationSidebar({
 
   return (
     <aside
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-zinc-50/90"
+      className="bg-inbox-panel flex h-full min-h-0 w-full flex-col overflow-hidden"
       data-testid="customer-inspector"
     >
       <VisitorSidebarLiveRefresh
@@ -217,23 +217,20 @@ export function ConversationSidebar({
         contactId={conversation.contact?.id ?? null}
       />
 
-      <div className="border-inbox-border shrink-0 border-b bg-white px-4 pt-4 pb-3.5">
+      <div className="border-inbox-border/80 shrink-0 border-b px-4 pt-4 pb-3.5">
         <div className="flex items-start gap-3">
           <div
-            className="bg-brand/10 text-brand flex size-12 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tracking-wide"
+            className="bg-brand/10 text-brand flex size-11 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold tracking-wide"
             aria-hidden="true"
           >
             {initialsFromLabel(contactLabel)}
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
-            <p className="truncate text-[16px] font-semibold tracking-tight text-neutral-950">
+            <p className="truncate text-[15px] font-semibold tracking-tight text-neutral-950">
               {contactLabel}
             </p>
-            <p className="text-inbox-muted mt-1 truncate font-mono text-[11px]">
-              {publicId ?? conversationId.slice(0, 8)}
-            </p>
             {locationLabel ? (
-              <p className="text-inbox-muted mt-1.5 truncate text-[12.5px]">
+              <p className="text-inbox-muted mt-1 truncate text-[12.5px]">
                 {locationLabel}
               </p>
             ) : null}
@@ -282,7 +279,7 @@ export function ConversationSidebar({
       </div>
 
       <div
-        className="border-inbox-border flex shrink-0 gap-1 border-b bg-white px-3 py-2"
+        className="border-inbox-border/80 flex shrink-0 gap-1 border-b px-3 py-1.5"
         role="tablist"
         aria-label="Customer inspector"
       >
@@ -303,10 +300,10 @@ export function ConversationSidebar({
                 setTab(item.id);
               }}
               className={cn(
-                "flex-1 rounded-md px-2 py-2 text-[12.5px] font-semibold transition-colors",
+                "flex-1 rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition-colors",
                 active
-                  ? "bg-zinc-100 text-neutral-900"
-                  : "text-inbox-muted hover:bg-zinc-50 hover:text-neutral-800",
+                  ? "bg-zinc-100/80 text-neutral-900"
+                  : "text-inbox-muted hover:text-neutral-800",
               )}
             >
               {item.label}
@@ -315,10 +312,10 @@ export function ConversationSidebar({
         })}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-1">
         {tab === "details" ? (
-          <>
-            <section className="border-inbox-border rounded-xl border bg-white p-3.5 shadow-[var(--inbox-shadow)]">
+          <div className="divide-y divide-zinc-100">
+            <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Visitor
               </h2>
@@ -434,7 +431,7 @@ export function ConversationSidebar({
                   </Button>
                 </form>
               ) : (
-                <dl className="mt-2 divide-y divide-zinc-100">
+                <dl className="mt-2">
                   <MetaRow label="Name" value={contactLabel} />
                   <MetaRow
                     label="Email"
@@ -448,11 +445,11 @@ export function ConversationSidebar({
               )}
             </section>
 
-            <section className="border-inbox-border rounded-xl border bg-white p-3.5 shadow-[var(--inbox-shadow)]">
+            <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Conversation
               </h2>
-              <dl className="mt-2 divide-y divide-zinc-100">
+              <dl className="mt-2">
                 <MetaRow
                   label="Status"
                   value={
@@ -468,7 +465,7 @@ export function ConversationSidebar({
                 />
                 <MetaRow label="Channel" value="Website chat" />
               </dl>
-              <div className="mt-3 border-t border-zinc-100 pt-3">
+              <div className="mt-3">
                 <AssignmentPanel
                   workspaceId={workspaceId}
                   workspaceSlug={workspaceSlug}
@@ -479,8 +476,8 @@ export function ConversationSidebar({
                   canAssign={canAssign}
                 />
               </div>
-              <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
-                <h3 className="text-[12px] font-semibold text-neutral-800">
+              <div className="mt-3 space-y-2">
+                <h3 className="text-[12px] font-medium text-neutral-700">
                   Status
                 </h3>
                 {canUpdateStatus ? (
@@ -495,8 +492,8 @@ export function ConversationSidebar({
                         }
                         className={
                           conversation.status === status
-                            ? "bg-brand text-brand-foreground hover:bg-brand/90 h-8 capitalize"
-                            : "h-8 capitalize"
+                            ? "bg-brand text-brand-foreground hover:bg-brand/90 h-7 capitalize"
+                            : "h-7 capitalize"
                         }
                         disabled={isPending || conversation.status === status}
                         onClick={() => {
@@ -526,7 +523,7 @@ export function ConversationSidebar({
               </div>
             </section>
 
-            <section className="border-inbox-border rounded-xl border bg-white p-3.5 shadow-[var(--inbox-shadow)]">
+            <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Current context
               </h2>
@@ -577,11 +574,11 @@ export function ConversationSidebar({
               </div>
             </section>
 
-            <section className="border-inbox-border rounded-xl border bg-white p-3.5 shadow-[var(--inbox-shadow)]">
+            <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Activity
               </h2>
-              <dl className="mt-2 divide-y divide-zinc-100">
+              <dl className="mt-2">
                 <MetaRow
                   label="First seen"
                   value={formatDateTime(
@@ -609,9 +606,9 @@ export function ConversationSidebar({
               activity.recent_page_views.length > 0 ? (
                 <ol className="relative mt-4 space-y-0 border-l border-zinc-200 pl-4">
                   {activity.recent_page_views.map((view) => (
-                    <li key={view.id} className="relative pb-4 last:pb-0">
+                    <li key={view.id} className="relative pb-3.5 last:pb-0">
                       <span
-                        className="absolute top-1.5 -left-[1.28rem] size-2.5 rounded-full border-2 border-white bg-indigo-500 shadow-sm"
+                        className="bg-brand absolute top-1.5 -left-[1.2rem] size-2 rounded-full border-2 border-white"
                         aria-hidden="true"
                       />
                       <p className="text-[13px] font-medium leading-snug text-neutral-900">
@@ -634,10 +631,10 @@ export function ConversationSidebar({
                 </p>
               )}
             </section>
-          </>
+          </div>
         ) : (
-          <>
-            <section className="border-inbox-border rounded-xl border bg-white p-3.5 shadow-[var(--inbox-shadow)]">
+          <div className="divide-y divide-zinc-100">
+            <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Activity
               </h2>
@@ -648,9 +645,9 @@ export function ConversationSidebar({
               activity.recent_page_views.length > 0 ? (
                 <ol className="relative mt-4 space-y-0 border-l border-zinc-200 pl-4">
                   {activity.recent_page_views.map((view) => (
-                    <li key={view.id} className="relative pb-4 last:pb-0">
+                    <li key={view.id} className="relative pb-3.5 last:pb-0">
                       <span
-                        className="bg-brand absolute top-1.5 -left-[1.28rem] size-2.5 rounded-full border-2 border-white shadow-sm"
+                        className="bg-brand absolute top-1.5 -left-[1.2rem] size-2 rounded-full border-2 border-white"
                         aria-hidden="true"
                       />
                       <p className="text-[13px] font-medium leading-snug text-neutral-900">
@@ -675,7 +672,7 @@ export function ConversationSidebar({
             </section>
 
             {conversation.contact?.id ? (
-              <div className="border-inbox-border rounded-xl border bg-white p-3.5 shadow-[var(--inbox-shadow)]">
+              <div className="py-4">
                 <CustomerTimeline
                   workspaceId={workspaceId}
                   workspaceSlug={workspaceSlug}
@@ -684,7 +681,7 @@ export function ConversationSidebar({
                 />
               </div>
             ) : null}
-          </>
+          </div>
         )}
       </div>
     </aside>

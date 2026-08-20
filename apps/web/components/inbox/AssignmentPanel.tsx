@@ -261,7 +261,7 @@ export function AssignmentPanel({
 
   return (
     <section
-      className={variant === "header" ? "space-y-2" : "space-y-3"}
+      className={variant === "header" ? "relative min-w-0" : "space-y-3"}
       aria-labelledby="assignment-heading"
       data-testid="assignment-panel"
       data-pending={busy ? "true" : "false"}
@@ -278,22 +278,132 @@ export function AssignmentPanel({
         </h2>
       )}
 
-      <div className={variant === "header" ? "space-y-0.5" : "space-y-1"}>
-        {variant === "header" ? null : (
-          <p className="text-muted-foreground text-xs">{messages.assignedTo}</p>
-        )}
-        <p
-          className={
-            variant === "header"
-              ? "max-w-[200px] truncate text-[13px] font-medium text-neutral-800"
-              : "text-sm font-medium"
-          }
-          data-testid="assignment-current"
-          data-assignee-id={assignee?.member_id ?? ""}
-        >
-          {assignee?.display_label ?? messages.unassigned}
-        </p>
-      </div>
+      {variant === "header" ? (
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p
+            className="text-inbox-muted max-w-[120px] truncate text-[12.5px]"
+            data-testid="assignment-current"
+            data-assignee-id={assignee?.member_id ?? ""}
+            title={assignee?.display_label ?? messages.unassigned}
+          >
+            {assignee?.display_label ?? messages.unassigned}
+          </p>
+          {canAssign ? (
+            <div className="flex items-center gap-1">
+              {takeDecision.action === "take" ? (
+                <Button
+                  ref={takeButtonRef}
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-[12px]"
+                  disabled={busy || !memberId}
+                  data-testid="assignment-take"
+                  onClick={() => {
+                    void runTake();
+                  }}
+                >
+                  {busy ? messages.taking : messages.take}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[12px]"
+                disabled={busy}
+                data-testid="assignment-open-picker"
+                aria-expanded={pickerOpen}
+                aria-haspopup="listbox"
+                onClick={() => {
+                  setPickerOpen((open) => !open);
+                }}
+              >
+                {assignLabel}
+              </Button>
+              {hasAssignee ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="text-inbox-muted h-7 px-2 text-[12px]"
+                  disabled={busy}
+                  data-testid="assignment-unassign"
+                  onClick={() => {
+                    void runUnassign();
+                  }}
+                >
+                  {busy ? messages.unassigning : messages.unassign}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs">
+              {messages.assignedTo}
+            </p>
+            <p
+              className="text-sm font-medium"
+              data-testid="assignment-current"
+              data-assignee-id={assignee?.member_id ?? ""}
+            >
+              {assignee?.display_label ?? messages.unassigned}
+            </p>
+          </div>
+
+          {canAssign ? (
+            <div className="flex flex-wrap gap-2">
+              {takeDecision.action === "take" ? (
+                <Button
+                  ref={takeButtonRef}
+                  type="button"
+                  size="sm"
+                  disabled={busy || !memberId}
+                  data-testid="assignment-take"
+                  onClick={() => {
+                    void runTake();
+                  }}
+                >
+                  {busy ? messages.taking : messages.take}
+                </Button>
+              ) : null}
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                data-testid="assignment-open-picker"
+                aria-expanded={pickerOpen}
+                aria-haspopup="listbox"
+                onClick={() => {
+                  setPickerOpen((open) => !open);
+                }}
+              >
+                {assignLabel}
+              </Button>
+
+              {hasAssignee ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  data-testid="assignment-unassign"
+                  onClick={() => {
+                    void runUnassign();
+                  }}
+                >
+                  {busy ? messages.unassigning : messages.unassign}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      )}
 
       <div
         id={liveRegionId}
@@ -305,58 +415,13 @@ export function AssignmentPanel({
         {statusMessage ?? error ?? ""}
       </div>
 
-      {canAssign ? (
-        <div className="flex flex-wrap gap-2">
-          {takeDecision.action === "take" ? (
-            <Button
-              ref={takeButtonRef}
-              type="button"
-              size="sm"
-              disabled={busy || !memberId}
-              data-testid="assignment-take"
-              onClick={() => {
-                void runTake();
-              }}
-            >
-              {busy ? messages.taking : messages.take}
-            </Button>
-          ) : null}
-
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            data-testid="assignment-open-picker"
-            aria-expanded={pickerOpen}
-            aria-haspopup="listbox"
-            onClick={() => {
-              setPickerOpen((open) => !open);
-            }}
-          >
-            {assignLabel}
-          </Button>
-
-          {hasAssignee ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              data-testid="assignment-unassign"
-              onClick={() => {
-                void runUnassign();
-              }}
-            >
-              {busy ? messages.unassigning : messages.unassign}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-
       {canAssign && pickerOpen ? (
         <div
-          className="space-y-2 rounded-md border p-2"
+          className={
+            variant === "header"
+              ? "absolute z-20 mt-1 w-64 space-y-2 rounded-md border bg-white p-2 shadow-md"
+              : "space-y-2 rounded-md border p-2"
+          }
           role="dialog"
           aria-label={messages.selectAssignee}
           data-testid="assignment-picker"

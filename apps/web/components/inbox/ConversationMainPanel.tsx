@@ -30,7 +30,7 @@ function ModeTabs({
 }) {
   return (
     <div
-      className="border-inbox-border bg-inbox-panel flex shrink-0 gap-1 border-t px-6 pt-2"
+      className="bg-inbox-panel flex shrink-0 gap-1 px-5 pt-1"
       role="tablist"
       aria-label="Conversation content"
       data-testid="conversation-main-tabs"
@@ -41,7 +41,7 @@ function ModeTabs({
         aria-selected={tab === "messages"}
         data-testid="conversation-tab-messages"
         className={cn(
-          "relative px-3.5 py-2.5 text-[13.5px] font-medium transition-colors",
+          "relative px-3 py-2 text-[13px] font-medium transition-colors",
           tab === "messages"
             ? "text-brand"
             : "text-inbox-muted hover:text-neutral-800",
@@ -64,7 +64,7 @@ function ModeTabs({
         aria-selected={tab === "notes"}
         data-testid="conversation-tab-notes"
         className={cn(
-          "relative px-3.5 py-2.5 text-[13.5px] font-medium transition-colors",
+          "relative px-3 py-2 text-[13px] font-medium transition-colors",
           tab === "notes"
             ? "text-amber-800"
             : "text-inbox-muted hover:text-neutral-800",

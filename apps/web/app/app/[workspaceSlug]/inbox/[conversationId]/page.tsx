@@ -199,7 +199,7 @@ export default async function ConversationDetailPage({
       />
 
       {/* Active conversation column */}
-      <section className="bg-inbox-surface flex min-w-0 flex-1 flex-col border-r border-inbox-border">
+      <section className="bg-inbox-surface flex min-w-0 flex-1 flex-col border-r border-inbox-border/70">
         <ConversationHeader
           contactLabel={contactLabel}
           conversationId={conversationId}

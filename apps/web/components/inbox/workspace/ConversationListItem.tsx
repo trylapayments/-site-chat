@@ -101,14 +101,12 @@ export function ConversationListItemRow({
       data-conversation-id={conversation.id}
       className={cn(
         "group relative transition-colors",
-        selected
-          ? "bg-brand-soft shadow-[inset_3px_0_0_0_var(--brand)]"
-          : "hover:bg-inbox-hover bg-transparent",
+        selected ? "bg-brand-soft" : "hover:bg-inbox-hover bg-transparent",
       )}
     >
       {selected ? (
         <span
-          className="bg-brand absolute inset-y-0 left-0 w-[3px]"
+          className="bg-brand absolute inset-y-2 left-0 w-0.5 rounded-full"
           aria-hidden="true"
         />
       ) : null}
@@ -119,25 +117,20 @@ export function ConversationListItemRow({
         >
           <div className="relative shrink-0 self-start pt-0.5">
             <div
-              className={cn(
-                "flex size-10 items-center justify-center rounded-full text-[12px] font-semibold",
-                selected
-                  ? "bg-brand/12 text-brand"
-                  : "bg-neutral-200/90 text-neutral-600",
-              )}
+              className="flex size-10 items-center justify-center rounded-full bg-neutral-200/80 text-[12px] font-semibold text-neutral-600"
               aria-hidden="true"
             >
               {initialsFromLabel(label)}
             </div>
             {isPending ? (
               <span
-                className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-amber-400"
+                className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full border-2 border-white bg-amber-400"
                 title="Pending"
                 aria-hidden="true"
               />
             ) : conversation.status === "open" ? (
               <span
-                className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-emerald-500"
+                className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full border-2 border-white bg-emerald-500"
                 title="Open"
                 aria-hidden="true"
               />
@@ -164,8 +157,10 @@ export function ConversationListItemRow({
             <div className="mt-1 flex items-center gap-2">
               <p
                 className={cn(
-                  "min-w-0 flex-1 truncate text-[13px] leading-snug",
-                  unread ? "font-medium text-neutral-700" : "text-inbox-muted",
+                  "min-w-0 flex-1 truncate bg-transparent text-[13px] leading-snug",
+                  unread
+                    ? "font-medium text-neutral-800"
+                    : "font-normal text-inbox-muted",
                 )}
               >
                 {preview}
@@ -178,7 +173,7 @@ export function ConversationListItemRow({
               ) : null}
               {unread ? (
                 <span
-                  className="bg-brand text-brand-foreground inline-flex min-w-5 shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
+                  className="bg-brand text-brand-foreground inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
                   data-testid="conversation-unread-badge"
                   data-unread-count={Math.max(1, conversation.unread_count)}
                   aria-label={

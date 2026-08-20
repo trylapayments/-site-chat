@@ -32,7 +32,7 @@ export function InboxShell({
       className="bg-inbox-canvas flex h-full min-h-0 w-full"
       data-testid="inbox-workspace-shell"
     >
-      <div className="border-inbox-border/80 flex w-[340px] shrink-0 flex-col border-r shadow-[1px_0_0_0_transparent] xl:w-[360px]">
+      <div className="border-inbox-border/60 flex w-[340px] shrink-0 flex-col border-r xl:w-[360px]">
         <div className="border-inbox-border flex shrink-0 items-center gap-2 border-b bg-inbox-panel px-3 py-2.5">
           <div className="min-w-0 flex-1">
             <GlobalSearch
