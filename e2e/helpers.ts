@@ -111,6 +111,9 @@ export async function openOperatorConversation(page: Page, previewText: string) 
   const target = href.startsWith("http") ? href : `${APP_URL}${href}`;
   await page.goto(target);
   await expect(page).toHaveURL(/\/inbox\/[0-9a-f-]{36}/i, { timeout: 60_000 });
+  await expect(page.getByTestId("inbox-conversation-workspace")).toBeVisible({
+    timeout: 60_000,
+  });
   await expect(page.getByTestId("conversation-main-tabs")).toBeVisible({
     timeout: 60_000,
   });

@@ -23,23 +23,26 @@ function ModeTabs({
   tab,
   canManageNotes,
   onChange,
+  testIds = false,
 }: {
   tab: Tab;
   canManageNotes: boolean;
   onChange: (next: Tab) => void;
+  /** Playwright locators must be unique; both tab panels stay mounted. */
+  testIds?: boolean;
 }) {
   return (
     <div
       className="bg-inbox-panel flex shrink-0 gap-1 px-5 pt-1"
       role="tablist"
       aria-label="Conversation content"
-      data-testid="conversation-main-tabs"
+      data-testid={testIds ? "conversation-main-tabs" : undefined}
     >
       <button
         type="button"
         role="tab"
         aria-selected={tab === "messages"}
-        data-testid="conversation-tab-messages"
+        data-testid={testIds ? "conversation-tab-messages" : undefined}
         className={cn(
           "relative px-3 py-2 text-[13px] font-medium transition-colors",
           tab === "messages"
@@ -62,7 +65,7 @@ function ModeTabs({
         type="button"
         role="tab"
         aria-selected={tab === "notes"}
-        data-testid="conversation-tab-notes"
+        data-testid={testIds ? "conversation-tab-notes" : undefined}
         className={cn(
           "relative px-3 py-2 text-[13px] font-medium transition-colors",
           tab === "notes"
@@ -142,18 +145,12 @@ export function ConversationMainPanel({
     }
   }, [canManageNotes, focusMessageId, searchParams]);
 
-  const modeTabs = (
-    <ModeTabs
-      tab={tab}
-      canManageNotes={canManageNotes}
-      onChange={(next) => {
-        if (next === "notes" && !canManageNotes) {
-          return;
-        }
-        setTab(next);
-      }}
-    />
-  );
+  const onTabChange = (next: Tab) => {
+    if (next === "notes" && !canManageNotes) {
+      return;
+    }
+    setTab(next);
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -181,7 +178,14 @@ export function ConversationMainPanel({
           canUseCannedResponses={canUseCannedResponses}
           aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
           focusMessageId={focusMessageId}
-          composerAccessory={modeTabs}
+          composerAccessory={
+            <ModeTabs
+              tab={tab}
+              canManageNotes={canManageNotes}
+              onChange={onTabChange}
+              testIds={tab === "messages"}
+            />
+          }
         />
       </div>
 
@@ -203,7 +207,12 @@ export function ConversationMainPanel({
             focusNoteId={focusNoteId}
           />
         </div>
-        {modeTabs}
+        <ModeTabs
+          tab={tab}
+          canManageNotes={canManageNotes}
+          onChange={onTabChange}
+          testIds={tab === "notes"}
+        />
       </div>
     </div>
   );
