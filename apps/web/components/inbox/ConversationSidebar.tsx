@@ -80,12 +80,12 @@ function MetaRow({
     return null;
   }
   return (
-    <div
-      className="flex items-start justify-between gap-3 py-1.5"
-      data-testid={testId}
-    >
+    <div className="flex items-start justify-between gap-3 py-1.5">
       <dt className="text-inbox-muted shrink-0 text-[12px]">{label}</dt>
-      <dd className="min-w-0 text-right text-[12.5px] font-medium leading-snug break-all text-neutral-800">
+      <dd
+        className="min-w-0 text-right text-[12.5px] font-medium leading-snug break-all text-neutral-800"
+        data-testid={testId}
+      >
         {value}
       </dd>
     </div>
