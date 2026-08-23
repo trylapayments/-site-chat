@@ -24,7 +24,9 @@ import {
   useRef,
   useState,
   useTransition,
+  type ReactNode,
 } from "react";
+import { Paperclip } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -84,6 +86,7 @@ export function LiveConversationThread({
   canUseCannedResponses,
   aiSuggestedRepliesEnabled = false,
   focusMessageId = null,
+  composerAccessory = null,
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -103,6 +106,8 @@ export function LiveConversationThread({
   aiSuggestedRepliesEnabled?: boolean;
   /** From global search: scroll/focus a message when present. */
   focusMessageId?: string | null;
+  /** Optional chrome rendered above the composer (e.g. Reply / Internal note). */
+  composerAccessory?: ReactNode;
 }) {
   // Stabilize mapped props so useLiveConversationThread's effect does not see a
   // fresh array reference on every parent re-render.
@@ -315,23 +320,26 @@ export function LiveConversationThread({
   );
 
   return (
-    <div className="space-y-4">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      data-testid="conversation-thread"
+    >
       <span
         data-testid="thread-realtime-ready"
         data-realtime-state={connectionState}
         hidden
       />
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex shrink-0 items-center gap-3 bg-inbox-surface px-6 py-1.5">
         <p
-          className="text-muted-foreground text-xs"
+          className="text-inbox-muted text-[12.5px]"
           data-testid="visitor-presence"
           data-presence={visitorOnline ? "online" : "offline"}
         >
           <span
             className={
               visitorOnline
-                ? "bg-emerald-500 mr-1.5 inline-block size-1.5 rounded-full"
-                : "bg-muted-foreground/40 mr-1.5 inline-block size-1.5 rounded-full"
+                ? "mr-1.5 inline-block size-1.5 rounded-full bg-emerald-500"
+                : "mr-1.5 inline-block size-1.5 rounded-full bg-neutral-300"
             }
             aria-hidden="true"
           />
@@ -344,35 +352,47 @@ export function LiveConversationThread({
           void catchUp();
         }}
       />
-      <MessageList
-        workspaceId={workspaceId}
-        messages={messages}
-        visitorReceipts={visitorReceipts}
-        bottomRef={observeBottom}
-        focusMessageId={focusMessageId}
-      />
-      {newMessagesBelow > 0 ? (
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              observeBottom(document.createElement("div"));
-            }}
-          >
-            New messages
-          </Button>
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <MessageList
+          workspaceId={workspaceId}
+          messages={messages}
+          visitorReceipts={visitorReceipts}
+          bottomRef={observeBottom}
+          focusMessageId={focusMessageId}
+        />
+        {newMessagesBelow > 0 ? (
+          <div className="flex justify-center py-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                observeBottom(document.createElement("div"));
+              }}
+            >
+              New messages
+            </Button>
+          </div>
+        ) : null}
+        <div
+          className="text-inbox-muted min-h-6 pt-2 text-[13px]"
+          data-testid="visitor-typing"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {visitorTyping ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="flex gap-1" aria-hidden="true">
+                <span className="bg-brand/50 size-1.5 animate-pulse rounded-full" />
+                <span className="bg-brand/50 size-1.5 animate-pulse rounded-full [animation-delay:120ms]" />
+                <span className="bg-brand/50 size-1.5 animate-pulse rounded-full [animation-delay:240ms]" />
+              </span>
+              Visitor is typing…
+            </span>
+          ) : null}
         </div>
-      ) : null}
-      <div
-        className="text-muted-foreground min-h-5 text-xs"
-        data-testid="visitor-typing"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {visitorTyping ? "Visitor is typing…" : null}
       </div>
+      {composerAccessory}
       <LiveReplyComposer
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
@@ -405,6 +425,32 @@ export function LiveConversationThread({
   );
 }
 
+function messageDayKey(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "unknown";
+  }
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function initialsFromSender(label: string): string {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return "?";
+  }
+  const first = parts[0] ?? "";
+  if (parts.length === 1) {
+    return first.slice(0, 2).toUpperCase();
+  }
+  const second = parts[1] ?? "";
+  return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
+}
+
 function MessageList({
   workspaceId,
   messages,
@@ -433,14 +479,16 @@ function MessageList({
 
   if (messages.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
+      <p className="text-inbox-muted py-12 text-center text-[14px]">
         No messages in this conversation yet.
       </p>
     );
   }
 
+  let lastDay = "";
+
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-[960px] space-y-3.5">
       {messages.map((message) => {
         const receiptStatus =
           message.senderType === "agent" && !message.isOptimistic
@@ -450,44 +498,89 @@ function MessageList({
               })
             : null;
         const focused = focusMessageId === message.id;
+        const isVisitor = message.senderType === "visitor";
+        const day = messageDayKey(message.createdAt);
+        const showDay = day !== lastDay;
+        lastDay = day;
 
         return (
-          <article
-            key={message.id}
-            className={
-              message.senderType === "agent"
-                ? `bg-primary/5 ml-8 rounded-lg border px-4 py-3${focused ? " ring-2 ring-foreground/30" : ""}`
-                : `bg-muted/40 mr-8 rounded-lg border px-4 py-3${focused ? " ring-2 ring-foreground/30" : ""}`
-            }
-            data-sequence={message.sequenceNumber}
-            data-message-id={message.id}
-            tabIndex={focused ? -1 : undefined}
-          >
-            <header className="mb-1 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{message.senderLabel}</span>
-              <time className="text-muted-foreground text-xs">
-                {formatRelativeTime(message.createdAt)}
-              </time>
-            </header>
-            {message.body ? (
-              <p className="text-sm whitespace-pre-wrap">{message.body}</p>
+          <div key={message.id}>
+            {showDay ? (
+              <div className="flex items-center gap-3 py-2.5">
+                <div className="bg-inbox-border/80 h-px flex-1" />
+                <span className="text-inbox-muted text-[12px] font-medium tracking-wide">
+                  {day}
+                </span>
+                <div className="bg-inbox-border/80 h-px flex-1" />
+              </div>
             ) : null}
-            {message.attachments && message.attachments.length > 0 ? (
-              <OperatorMessageAttachments
-                workspaceId={workspaceId}
-                attachments={message.attachments}
-              />
-            ) : null}
-            {message.status === "pending" ? (
-              <p className="text-muted-foreground mt-2 text-xs">Sending...</p>
-            ) : null}
-            {message.status === "failed" ? (
-              <p className="text-destructive mt-2 text-xs">Failed to send</p>
-            ) : null}
-            {receiptStatus ? (
-              <MessageReceiptIndicator status={receiptStatus} />
-            ) : null}
-          </article>
+            <article
+              className={
+                isVisitor
+                  ? "ml-auto flex w-full max-w-[min(100%,36rem)] flex-row-reverse gap-2.5"
+                  : "mr-auto flex w-full max-w-[min(100%,36rem)] gap-2.5"
+              }
+              data-sequence={message.sequenceNumber}
+              data-message-id={message.id}
+              tabIndex={focused ? -1 : undefined}
+            >
+              {!isVisitor ? (
+                <div
+                  className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-neutral-200/80 text-[10px] font-semibold text-neutral-600"
+                  aria-hidden="true"
+                >
+                  {initialsFromSender(message.senderLabel)}
+                </div>
+              ) : (
+                <div
+                  className="bg-brand/12 text-brand mt-1 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  aria-hidden="true"
+                >
+                  {initialsFromSender(message.senderLabel)}
+                </div>
+              )}
+              <div
+                className={
+                  isVisitor
+                    ? `min-w-0 flex-1 rounded-xl rounded-br-md bg-inbox-bubble-visitor px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
+                    : `min-w-0 flex-1 rounded-xl rounded-bl-md border border-zinc-200/60 bg-inbox-bubble-agent px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
+                }
+              >
+                <header className="mb-1 flex items-center justify-between gap-3">
+                  <span className="text-[12.5px] font-medium text-neutral-600">
+                    {message.senderLabel}
+                  </span>
+                  <time className="text-inbox-muted text-[11.5px] tabular-nums">
+                    {formatRelativeTime(message.createdAt)}
+                  </time>
+                </header>
+                {message.body ? (
+                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-neutral-900">
+                    {message.body}
+                  </p>
+                ) : null}
+                {message.attachments && message.attachments.length > 0 ? (
+                  <OperatorMessageAttachments
+                    workspaceId={workspaceId}
+                    attachments={message.attachments}
+                  />
+                ) : null}
+                {message.status === "pending" ? (
+                  <p className="text-inbox-muted mt-2 text-[12px]">
+                    Sending...
+                  </p>
+                ) : null}
+                {message.status === "failed" ? (
+                  <p className="text-destructive mt-2 text-[12px]">
+                    Failed to send
+                  </p>
+                ) : null}
+                {receiptStatus ? (
+                  <MessageReceiptIndicator status={receiptStatus} />
+                ) : null}
+              </div>
+            </article>
+          </div>
         );
       })}
       <div ref={bottomRef} aria-hidden="true" />
@@ -580,7 +673,7 @@ function LiveReplyComposer({
 
   if (!canSend) {
     return (
-      <p className="text-muted-foreground border-t pt-4 text-sm">
+      <p className="text-inbox-muted border-inbox-border border-t bg-inbox-panel px-6 py-4 text-[14px]">
         You have read-only access to this conversation.
       </p>
     );
@@ -598,7 +691,7 @@ function LiveReplyComposer({
 
   return (
     <form
-      className="border-t pt-4"
+      className="bg-inbox-panel shrink-0 px-5 py-2.5"
       onDragOver={(event) => {
         event.preventDefault();
       }}
@@ -903,7 +996,7 @@ function LiveReplyComposer({
               <span className="truncate">{file.name}</span>
               <button
                 type="button"
-                className="text-muted-foreground underline"
+                className="text-inbox-muted underline"
                 onClick={() => {
                   setPendingFiles((current) =>
                     current.filter((item) => item !== file),
@@ -918,7 +1011,7 @@ function LiveReplyComposer({
       ) : null}
       {uploadProgress ? (
         <p
-          className="text-muted-foreground mb-2 text-xs"
+          className="text-inbox-muted mb-2 text-xs"
           role="status"
           aria-live="polite"
           data-testid="operator-upload-status"
@@ -926,116 +1019,131 @@ function LiveReplyComposer({
           {uploadProgress}
         </p>
       ) : null}
-      <div className="relative">
-        {canned.query !== null ? (
-          <CannedSlashMenu
-            options={canned.options}
-            activeIndex={canned.activeIndex}
-            onSelect={canned.select}
+      <div className="border-inbox-border/90 bg-inbox-surface focus-within:ring-brand/20 rounded-lg border focus-within:ring-1">
+        <div className="relative">
+          {canned.query !== null ? (
+            <CannedSlashMenu
+              options={canned.options}
+              activeIndex={canned.activeIndex}
+              onSelect={canned.select}
+            />
+          ) : null}
+          <textarea
+            id="reply-body"
+            ref={bodyRef}
+            value={body}
+            onChange={(event) => {
+              const next = event.target.value;
+              setBody(next);
+              onComposerChange(next);
+              canned.sync(next, event.target.selectionStart);
+            }}
+            onKeyDown={(event) => {
+              canned.onKeyDown(event);
+            }}
+            onBlur={() => {
+              canned.close();
+            }}
+            onClick={(event) => {
+              canned.sync(body, event.currentTarget.selectionStart);
+            }}
+            onPaste={(event) => {
+              const files = Array.from(event.clipboardData.items)
+                .filter((item) => item.kind === "file")
+                .map((item) => item.getAsFile())
+                .filter((file): file is File => file !== null);
+              if (files.length > 0) {
+                event.preventDefault();
+                setPendingFiles((current) =>
+                  [...current, ...files].slice(0, 10),
+                );
+              }
+            }}
+            rows={2}
+            maxLength={4000}
+            placeholder="Write a reply..."
+            disabled={isPending}
+            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-neutral-400"
           />
-        ) : null}
-        <textarea
-          id="reply-body"
-          ref={bodyRef}
-          value={body}
-          onChange={(event) => {
-            const next = event.target.value;
-            setBody(next);
-            onComposerChange(next);
-            canned.sync(next, event.target.selectionStart);
-          }}
-          onKeyDown={(event) => {
-            canned.onKeyDown(event);
-          }}
-          onBlur={() => {
-            canned.close();
-          }}
-          onClick={(event) => {
-            canned.sync(body, event.currentTarget.selectionStart);
-          }}
-          onPaste={(event) => {
-            const files = Array.from(event.clipboardData.items)
-              .filter((item) => item.kind === "file")
-              .map((item) => item.getAsFile())
-              .filter((file): file is File => file !== null);
-            if (files.length > 0) {
-              event.preventDefault();
-              setPendingFiles((current) => [...current, ...files].slice(0, 10));
-            }
-          }}
-          rows={4}
-          maxLength={4000}
-          placeholder="Write a reply..."
-          disabled={isPending}
-          className="border-input bg-background w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm"
-        />
-      </div>
-      {cannedEnabled ? (
-        <p
-          className="text-muted-foreground mt-1 text-xs"
-          data-testid="canned-slash-hint"
-        >
-          {cannedMessages.slashHint}
-        </p>
-      ) : null}
-      {error ? <p className="text-destructive mt-2 text-sm">{error}</p> : null}
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={isPending}
-          aria-label="Attach files"
-          data-testid="operator-attach-button"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Attach
-        </Button>
-        <div className="flex items-center gap-2">
-          {activeBatchId && isPending ? (
+        </div>
+        <div className="border-inbox-border/80 flex items-center justify-between gap-2 border-t px-2.5 py-1.5">
+          <div className="flex min-w-0 items-center gap-1">
             <Button
               type="button"
-              variant="outline"
-              aria-label="Cancel upload"
-              data-testid="operator-upload-cancel"
-              onClick={() => {
-                uploadAbortRef.current?.abort();
-                const batchId = activeBatchId;
-                setActiveBatchId(null);
-                setUploadProgress(null);
-                void import("@/lib/inbox/actions").then(
-                  ({ cancelOperatorUploadsAction }) => {
-                    void cancelOperatorUploadsAction(workspaceSlug, {
-                      batchId,
-                    });
-                  },
-                );
-              }}
+              variant="ghost"
+              size="sm"
+              disabled={isPending}
+              aria-label="Attach files"
+              data-testid="operator-attach-button"
+              className="text-inbox-muted hover:text-neutral-800 h-8 gap-1.5 px-2"
+              onClick={() => fileInputRef.current?.click()}
             >
-              Cancel
+              <Paperclip className="size-3.5" aria-hidden="true" />
+              Attach
             </Button>
-          ) : null}
-          {uploadFailed && !isPending ? (
-            <Button
-              type="submit"
-              variant="outline"
-              aria-label="Retry upload"
-              data-testid="operator-upload-retry"
-            >
-              Retry upload
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              disabled={
-                isPending ||
-                (body.trim().length === 0 && pendingFiles.length === 0)
-              }
-            >
-              {isPending ? "Sending..." : "Send reply"}
-            </Button>
-          )}
+            {cannedEnabled ? (
+              <span
+                className="text-inbox-muted hidden truncate text-[11.5px] sm:inline"
+                data-testid="canned-slash-hint"
+              >
+                {cannedMessages.slashHint}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            {activeBatchId && isPending ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                aria-label="Cancel upload"
+                data-testid="operator-upload-cancel"
+                onClick={() => {
+                  uploadAbortRef.current?.abort();
+                  const batchId = activeBatchId;
+                  setActiveBatchId(null);
+                  setUploadProgress(null);
+                  void import("@/lib/inbox/actions").then(
+                    ({ cancelOperatorUploadsAction }) => {
+                      void cancelOperatorUploadsAction(workspaceSlug, {
+                        batchId,
+                      });
+                    },
+                  );
+                }}
+              >
+                Cancel
+              </Button>
+            ) : null}
+            {uploadFailed && !isPending ? (
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                aria-label="Retry upload"
+                data-testid="operator-upload-retry"
+              >
+                Retry upload
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="sm"
+                className="bg-brand text-brand-foreground hover:bg-brand/90 h-8 px-3.5 text-[13px]"
+                disabled={
+                  isPending ||
+                  (body.trim().length === 0 && pendingFiles.length === 0)
+                }
+              >
+                {isPending ? "Sending..." : "Send reply"}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
+      {error ? <p className="text-destructive mt-2 text-sm">{error}</p> : null}
     </form>
   );
 }

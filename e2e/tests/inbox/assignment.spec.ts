@@ -4,8 +4,10 @@ import {
   ADMIN_EMAIL,
   AGENT_EMAIL,
   APP_URL,
+  assignmentHeader,
   loginAs,
   loginOperator,
+  openInspectorActivity,
   openOperatorConversation,
   openWidget,
   sendWidgetMessage,
@@ -23,7 +25,7 @@ async function prepareInbox(page: Page, email: string) {
 async function openAssignmentConversation(page: Page, marker: string) {
   await openOperatorConversation(page, marker);
   await waitForOperatorThreadRealtimeReady(page);
-  await expect(page.getByTestId("assignment-panel")).toBeVisible({
+  await expect(assignmentHeader(page)).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -34,7 +36,7 @@ async function openAssignmentConversation(page: Page, marker: string) {
  * aborts the in-flight Next.js server action and leaves the DB unchanged.
  */
 async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
-  const panel = page.getByTestId("assignment-panel");
+  const panel = assignmentHeader(page);
   // Prefer the pending cycle (authoritative mutation completion). Live region
   // text can lag or retain a prior announcement under suite load.
   await expect(panel)
@@ -43,7 +45,7 @@ async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
   await expect(panel).toHaveAttribute("data-pending", "false", {
     timeout: 30_000,
   });
-  await expect(page.getByTestId("assignment-live")).toHaveText(successPattern, {
+  await expect(panel.getByTestId("assignment-live")).toHaveText(successPattern, {
     timeout: 15_000,
   });
 }
@@ -79,8 +81,10 @@ test.describe("conversation assignment & queues", () => {
     });
 
     await openAssignmentConversation(operatorA, marker);
-    await expect(operatorA.getByTestId("assignment-current")).toHaveText(/Unassigned/i);
-    await operatorA.getByTestId("assignment-take").click();
+    await expect(assignmentHeader(operatorA).getByTestId("assignment-current")).toHaveText(
+      /Unassigned/i,
+    );
+    await assignmentHeader(operatorA).getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operatorA, /assigned to you/i);
 
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
@@ -99,8 +103,10 @@ test.describe("conversation assignment & queues", () => {
     });
 
     await openAssignmentConversation(operatorB, marker);
-    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i);
-    await expect(operatorB.getByTestId("assignment-take")).toHaveCount(0);
+    await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).not.toHaveText(
+      /Unassigned/i,
+    );
+    await expect(assignmentHeader(operatorB).getByTestId("assignment-take")).toHaveCount(0);
 
     await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=all`);
     await waitForOperatorInboxRealtimeReady(operatorB);
@@ -109,9 +115,9 @@ test.describe("conversation assignment & queues", () => {
     });
 
     await openAssignmentConversation(operatorA, marker);
-    await operatorA.getByTestId("assignment-open-picker").click();
-    await expect(operatorA.getByTestId("assignment-picker")).toBeVisible();
-    const adminOption = operatorA
+    await assignmentHeader(operatorA).getByTestId("assignment-open-picker").click();
+    await expect(assignmentHeader(operatorA).getByTestId("assignment-picker")).toBeVisible();
+    const adminOption = assignmentHeader(operatorA)
       .locator('[data-testid^="assignment-member-"]')
       .filter({ hasText: ADMIN_EMAIL });
     await expect(adminOption).toBeVisible({ timeout: 15_000 });
@@ -130,7 +136,7 @@ test.describe("conversation assignment & queues", () => {
     });
 
     await openAssignmentConversation(operatorB, marker);
-    await operatorB.getByTestId("assignment-unassign").click();
+    await assignmentHeader(operatorB).getByTestId("assignment-unassign").click();
     await waitForAssignmentMutation(operatorB, /unassigned/i);
 
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
@@ -140,6 +146,7 @@ test.describe("conversation assignment & queues", () => {
     });
 
     await openAssignmentConversation(operatorA, marker);
+    await openInspectorActivity(operatorA);
     const timeline = operatorA.getByTestId("customer-timeline");
     await expect(timeline).toBeVisible({ timeout: 30_000 });
     await expect(timeline.locator('[data-event-type="conversation_assigned"]')).toBeVisible({
@@ -171,18 +178,18 @@ test.describe("conversation assignment & queues", () => {
     await operatorA.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operatorA);
     await openAssignmentConversation(operatorA, marker);
-    await operatorA.getByTestId("assignment-take").click();
+    await assignmentHeader(operatorA).getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operatorA, /assigned to you/i);
 
     await prepareInbox(operatorB, ADMIN_EMAIL);
     await operatorB.goto(`${APP_URL}/app/acme-support/inbox?assignment=all`);
     await waitForOperatorInboxRealtimeReady(operatorB);
     await openAssignmentConversation(operatorB, marker);
-    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i);
+    await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).not.toHaveText(
+      /Unassigned/i,
+    );
 
-    const staleVersion = await operatorB
-      .getByTestId("assignment-panel")
-      .getAttribute("data-assignment-version");
+    const staleVersion = await assignmentHeader(operatorB).getAttribute("data-assignment-version");
     expect(staleVersion).toBeTruthy();
 
     // Keep operator B on a stale assignment_version by blocking RSC refreshes
@@ -204,10 +211,10 @@ test.describe("conversation assignment & queues", () => {
 
     // Operator A is already on the taken conversation — do not re-open via the
     // Unassigned inbox list (the row leaves that filter after Take).
-    await expect(operatorA.getByTestId("assignment-panel")).toBeVisible();
-    await operatorA.getByTestId("assignment-open-picker").click();
-    await expect(operatorA.getByTestId("assignment-picker")).toBeVisible();
-    const adminOption = operatorA
+    await expect(assignmentHeader(operatorA)).toBeVisible();
+    await assignmentHeader(operatorA).getByTestId("assignment-open-picker").click();
+    await expect(assignmentHeader(operatorA).getByTestId("assignment-picker")).toBeVisible();
+    const adminOption = assignmentHeader(operatorA)
       .locator('[data-testid^="assignment-member-"]')
       .filter({ hasText: ADMIN_EMAIL });
     await expect(adminOption).toBeVisible({ timeout: 15_000 });
@@ -216,48 +223,56 @@ test.describe("conversation assignment & queues", () => {
 
     // Realtime may advance B's assignment_version even while RSC is blocked.
     // Only the stale-conflict path applies when B is still on the captured version.
-    const versionAfterTransfer = await operatorB
-      .getByTestId("assignment-panel")
-      .getAttribute("data-assignment-version");
+    const versionAfterTransfer =
+      await assignmentHeader(operatorB).getAttribute("data-assignment-version");
 
     if (versionAfterTransfer === staleVersion) {
-      await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(ADMIN_EMAIL, {
-        timeout: 5_000,
-      });
+      await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).not.toHaveText(
+        ADMIN_EMAIL,
+        {
+          timeout: 5_000,
+        },
+      );
 
-      await operatorB.getByTestId("assignment-open-picker").click();
-      await expect(operatorB.getByTestId("assignment-picker")).toBeVisible();
-      const staleAdminOption = operatorB
+      await assignmentHeader(operatorB).getByTestId("assignment-open-picker").click();
+      await expect(assignmentHeader(operatorB).getByTestId("assignment-picker")).toBeVisible();
+      const staleAdminOption = assignmentHeader(operatorB)
         .locator('[data-testid^="assignment-member-"]')
         .filter({ hasText: ADMIN_EMAIL });
       await expect(staleAdminOption).toBeVisible({ timeout: 15_000 });
       await staleAdminOption.click();
 
-      await expect(operatorB.getByTestId("assignment-panel")).toHaveAttribute(
-        "data-pending",
-        "false",
-        { timeout: 30_000 },
-      );
-      await expect(operatorB.getByTestId("assignment-live")).toHaveText(
+      await expect(assignmentHeader(operatorB)).toHaveAttribute("data-pending", "false", {
+        timeout: 30_000,
+      });
+      await expect(assignmentHeader(operatorB).getByTestId("assignment-live")).toHaveText(
         /just assigned|current assignee|conflict|changed concurrently|version mismatch/i,
         { timeout: 30_000 },
       );
 
       // Optimistic UI rolled back to the pre-click (stale) assignee label.
-      await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(ADMIN_EMAIL);
+      await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).not.toHaveText(
+        ADMIN_EMAIL,
+      );
     } else {
       // Live CDC already reconciled B — transfer is visible without a stale conflict.
-      await expect(operatorB.getByTestId("assignment-current")).toContainText(ADMIN_EMAIL, {
-        timeout: 15_000,
-      });
+      await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).toContainText(
+        ADMIN_EMAIL,
+        {
+          timeout: 15_000,
+        },
+      );
     }
 
     await operatorB.unrouteAll();
     await operatorB.reload();
     await waitForOperatorThreadRealtimeReady(operatorB);
-    await expect(operatorB.getByTestId("assignment-current")).toContainText(ADMIN_EMAIL, {
-      timeout: 30_000,
-    });
+    await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).toContainText(
+      ADMIN_EMAIL,
+      {
+        timeout: 30_000,
+      },
+    );
 
     await visitorContext.close();
     await operatorAContext.close();
@@ -285,41 +300,39 @@ test.describe("conversation assignment & queues", () => {
     await openAssignmentConversation(operatorB, marker);
 
     await Promise.all([
-      operatorA.getByTestId("assignment-take").click(),
-      operatorB.getByTestId("assignment-take").click(),
+      assignmentHeader(operatorA).getByTestId("assignment-take").click(),
+      assignmentHeader(operatorB).getByTestId("assignment-take").click(),
     ]);
 
-    await expect(operatorA.getByTestId("assignment-panel")).toHaveAttribute(
-      "data-pending",
-      "false",
-      { timeout: 30_000 },
-    );
-    await expect(operatorB.getByTestId("assignment-panel")).toHaveAttribute(
-      "data-pending",
-      "false",
-      { timeout: 30_000 },
-    );
+    await expect(assignmentHeader(operatorA)).toHaveAttribute("data-pending", "false", {
+      timeout: 30_000,
+    });
+    await expect(assignmentHeader(operatorB)).toHaveAttribute("data-pending", "false", {
+      timeout: 30_000,
+    });
 
     await operatorA.reload();
     await operatorB.reload();
     await waitForOperatorThreadRealtimeReady(operatorA);
     await waitForOperatorThreadRealtimeReady(operatorB);
 
-    await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
-      timeout: 30_000,
-    });
-    await expect(operatorB.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
-      timeout: 30_000,
-    });
+    await expect(assignmentHeader(operatorA).getByTestId("assignment-current")).not.toHaveText(
+      /Unassigned/i,
+      {
+        timeout: 30_000,
+      },
+    );
+    await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).not.toHaveText(
+      /Unassigned/i,
+      {
+        timeout: 30_000,
+      },
+    );
     await expect
       .poll(
         async () => {
-          const aId =
-            (await operatorA.getByTestId("assignment-panel").getAttribute("data-assignee-id")) ??
-            "";
-          const bId =
-            (await operatorB.getByTestId("assignment-panel").getAttribute("data-assignee-id")) ??
-            "";
+          const aId = (await assignmentHeader(operatorA).getAttribute("data-assignee-id")) ?? "";
+          const bId = (await assignmentHeader(operatorB).getAttribute("data-assignee-id")) ?? "";
           return aId.length > 0 && aId === bId;
         },
         { timeout: 30_000 },
@@ -350,7 +363,7 @@ test.describe("conversation assignment & queues", () => {
       timeout: 60_000,
     });
     await openAssignmentConversation(tab1, marker);
-    await tab1.getByTestId("assignment-take").click();
+    await assignmentHeader(tab1).getByTestId("assignment-take").click();
     await waitForAssignmentMutation(tab1, /assigned to you/i);
 
     await tab2.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);
@@ -381,15 +394,18 @@ test.describe("conversation assignment & queues", () => {
     await operatorA.context().setOffline(true);
     await prepareInbox(operatorB, ADMIN_EMAIL);
     await openAssignmentConversation(operatorB, marker);
-    await operatorB.getByTestId("assignment-take").click();
+    await assignmentHeader(operatorB).getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operatorB, /assigned to you/i);
 
     await operatorA.context().setOffline(false);
     await operatorA.reload();
     await waitForOperatorThreadRealtimeReady(operatorA);
-    await expect(operatorA.getByTestId("assignment-current")).not.toHaveText(/Unassigned/i, {
-      timeout: 60_000,
-    });
+    await expect(assignmentHeader(operatorA).getByTestId("assignment-current")).not.toHaveText(
+      /Unassigned/i,
+      {
+        timeout: 60_000,
+      },
+    );
 
     await visitorContext.close();
     await operatorAContext.close();
@@ -409,14 +425,14 @@ test.describe("conversation assignment & queues", () => {
     await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operator);
     await openAssignmentConversation(operator, orderMarkerOld);
-    await operator.getByTestId("assignment-take").click();
+    await assignmentHeader(operator).getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operator, /assigned to you/i);
 
     const { context: visitorNewContext } = await startVisitorConversation(browser, orderMarkerNew);
     await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=unassigned`);
     await waitForOperatorInboxRealtimeReady(operator);
     await openAssignmentConversation(operator, orderMarkerNew);
-    await operator.getByTestId("assignment-take").click();
+    await assignmentHeader(operator).getByTestId("assignment-take").click();
     await waitForAssignmentMutation(operator, /assigned to you/i);
 
     await operator.goto(`${APP_URL}/app/acme-support/inbox?assignment=assigned_to_me`);

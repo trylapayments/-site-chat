@@ -99,7 +99,38 @@ export function operatorReplyComposer(page: Page) {
   return page.getByPlaceholder("Write a reply...");
 }
 
+export function conversationThread(page: Page) {
+  return page.getByTestId("conversation-thread");
+}
+
+export function assignmentHeader(page: Page) {
+  return page.getByTestId("assignment-panel-header");
+}
+
+export function customerInspector(page: Page) {
+  return page.getByTestId("customer-inspector");
+}
+
+/** Inspector is xl+ only; keep operator pages at a workspace desktop width. */
+export async function ensureOperatorDesktopWorkspace(page: Page) {
+  const size = page.viewportSize();
+  if (!size || size.width < 1440) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+}
+
+export async function openInspectorActivity(page: Page) {
+  await ensureOperatorDesktopWorkspace(page);
+  const inspector = customerInspector(page);
+  await expect(inspector).toBeVisible({ timeout: 30_000 });
+  await inspector.getByTestId("inspector-activity-tab").click();
+  await expect(inspector.getByTestId("inspector-activity")).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
 export async function openOperatorConversation(page: Page, previewText: string) {
+  await ensureOperatorDesktopWorkspace(page);
   const row = page.getByRole("row").filter({ hasText: previewText });
   await expect(row).toBeVisible({ timeout: 60_000 });
   const href = await row.getByRole("link").first().getAttribute("href");
@@ -111,6 +142,9 @@ export async function openOperatorConversation(page: Page, previewText: string) 
   const target = href.startsWith("http") ? href : `${APP_URL}${href}`;
   await page.goto(target);
   await expect(page).toHaveURL(/\/inbox\/[0-9a-f-]{36}/i, { timeout: 60_000 });
+  await expect(page.getByTestId("inbox-conversation-workspace")).toBeVisible({
+    timeout: 60_000,
+  });
   await expect(page.getByTestId("conversation-main-tabs")).toBeVisible({
     timeout: 60_000,
   });
@@ -130,7 +164,9 @@ export async function sendOperatorReply(page: Page, body: string) {
   const composer = operatorReplyComposer(page);
   await composer.fill(body);
   await page.getByRole("button", { name: "Send reply" }).click();
-  await expect(page.getByText(body)).toBeVisible({ timeout: 30_000 });
+  await expect(conversationThread(page).getByRole("article").getByText(body)).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 export function widgetFrameLocator(page: Page): FrameLocator {

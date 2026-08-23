@@ -7,6 +7,7 @@ import {
   VIEWER_EMAIL,
   loginAs,
   loginOperator,
+  openInspectorActivity,
   openOperatorConversation,
   openWidget,
   sendWidgetMessage,
@@ -80,6 +81,7 @@ async function recoverOperatorConversation(page: Page, marker: string) {
   await waitForOperatorInboxRealtimeReady(page);
   await openOperatorConversation(page, marker);
   await waitForOperatorThreadRealtimeReady(page);
+  await openInspectorActivity(page);
 }
 
 test.describe("customer timeline", () => {
@@ -102,6 +104,7 @@ test.describe("customer timeline", () => {
     await prepareOperatorInbox(operator);
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
+    await openInspectorActivity(operator);
 
     const timeline = operator.getByTestId("customer-timeline");
     await expect(timeline).toBeVisible({ timeout: 30_000 });
@@ -207,6 +210,7 @@ test.describe("customer timeline", () => {
 
     await operator.reload();
     await waitForOperatorThreadRealtimeReady(operator);
+    await openInspectorActivity(operator);
     await expect(operator.getByTestId("customer-timeline")).toBeVisible({
       timeout: 30_000,
     });
@@ -242,6 +246,7 @@ test.describe("customer timeline", () => {
     await prepareOperatorInbox(operator);
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
+    await openInspectorActivity(operator);
 
     const timeline = operator.getByTestId("customer-timeline");
     await expect(timeline).toBeVisible({ timeout: 30_000 });
@@ -308,6 +313,7 @@ test.describe("customer timeline", () => {
     await prepareOperatorInbox(operator);
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
+    await openInspectorActivity(operator);
 
     const timeline = operator.getByTestId("customer-timeline");
     await expect(timeline.locator('[data-event-type="conversation_started"]')).toBeVisible({
@@ -397,6 +403,7 @@ test.describe("customer timeline", () => {
     await viewer.goto(`${APP_URL}/app/acme-support/inbox`);
     await waitForOperatorInboxRealtimeReady(viewer);
     await openOperatorConversation(viewer, marker);
+    await openInspectorActivity(viewer);
 
     const timeline = viewer.getByTestId("customer-timeline");
     await expect(timeline).toBeVisible({ timeout: 30_000 });

@@ -4,21 +4,17 @@ import {
   type ContactTagSummary,
   type InternalNote,
 } from "@site-chat/shared";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-import { DashboardPage } from "@/components/dashboard/layout/DashboardPage";
-import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPageHeader";
 import { ConversationMainPanel } from "@/components/inbox/ConversationMainPanel";
 import { ConversationSidebar } from "@/components/inbox/ConversationSidebar";
 import { MarkConversationRead } from "@/components/inbox/ConversationThread";
+import { ConversationHeader } from "@/components/inbox/workspace/ConversationHeader";
 import { loadWorkspaceAIConfig } from "@/lib/ai/config";
 import { requireUser } from "@/lib/auth/session";
-import { toAppRoute } from "@/lib/auth/redirect";
 import { fetchCannedResponses } from "@/lib/canned/queries";
 import { fetchContactProfile } from "@/lib/crm/queries";
-import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   fetchAssignableMembers,
@@ -81,8 +77,6 @@ export default async function ConversationDetailPage({
       }),
     ]);
   } catch {
-    // Deep-link around_message_id can 404 if the message is missing / internal
-    // for viewers — fall back to the newest window so the thread still loads.
     if (focusMessageId) {
       try {
         [conversation, messages] = await Promise.all([
@@ -121,8 +115,6 @@ export default async function ConversationDetailPage({
       initialNotes = [];
     }
 
-    // Deep-link `?note=` must still surface the target even if the list page
-    // was empty/stale or the list RPC failed under load.
     if (focusNoteId && !initialNotes.some((note) => note.id === focusNoteId)) {
       try {
         const focused = await fetchInternalNote(
@@ -143,9 +135,6 @@ export default async function ConversationDetailPage({
     can(workspace.role, "send_messages") &&
     can(workspace.role, "use_canned_responses");
 
-  // Prefetched so `/shortcut` resolves on the first keystroke; the composer's
-  // realtime hook keeps the list fresh from there. Failure must not block the
-  // conversation shell (notes SSR / messages still load).
   let initialCannedResponses: CannedResponse[] = [];
   if (canUseCannedResponses) {
     try {
@@ -186,32 +175,51 @@ export default async function ConversationDetailPage({
     0,
   );
 
-  return (
-    <DashboardPage size="full">
-      <DashboardPageHeader
-        title={formatConversationContactLabel(conversation.contact)}
-        description={`Conversation · ${conversation.status}`}
-        actions={
-          <Link
-            href={toAppRoute(workspaceNavPath(workspaceSlug, "inbox"))}
-            className="text-primary text-sm font-medium hover:underline"
-          >
-            Back to inbox
-          </Link>
-        }
-      />
+  const contactLabel = formatConversationContactLabel(conversation.contact);
+  const context = conversation.visitor_context;
+  const deviceSummary = [
+    context?.device_type,
+    context?.browser_family
+      ? `${context.browser_family}${context.browser_version ? ` ${context.browser_version}` : ""}`
+      : null,
+    context?.os_family,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
+  return (
+    <div
+      className="flex h-full min-h-0 min-w-0 flex-1"
+      data-testid="inbox-conversation-workspace"
+    >
       <MarkConversationRead
         workspaceSlug={workspaceSlug}
         conversationId={conversationId}
         throughSequence={maxSequence > 0 ? maxSequence : undefined}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <section className="rounded-lg border p-4">
+      {/* Active conversation column */}
+      <section className="bg-inbox-surface flex min-w-0 flex-1 flex-col border-r border-inbox-border/70">
+        <ConversationHeader
+          contactLabel={contactLabel}
+          conversationId={conversationId}
+          status={conversation.status}
+          locationLabel={context?.timezone ?? null}
+          deviceLabel={deviceSummary || null}
+          pageTitle={context?.current_title ?? null}
+          workspaceSlug={workspaceSlug}
+          workspaceId={workspace.workspace_id}
+          conversation={conversation}
+          members={members}
+          memberId={memberId}
+          canAssign={canAssign}
+          canUpdateStatus={can(workspace.role, "update_conversation_status")}
+        />
+
+        <div className="min-h-0 flex-1 overflow-hidden">
           <Suspense
             fallback={
-              <p className="text-muted-foreground text-sm">
+              <p className="text-inbox-muted p-4 text-sm">
                 Loading conversation…
               </p>
             }
@@ -241,8 +249,11 @@ export default async function ConversationDetailPage({
               aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
             />
           </Suspense>
-        </section>
+        </div>
+      </section>
 
+      {/* Customer inspector — collapses before the thread on narrower desktops */}
+      <div className="hidden w-[320px] shrink-0 overflow-hidden xl:flex 2xl:w-[340px]">
         <ConversationSidebar
           workspaceId={workspace.workspace_id}
           workspaceSlug={workspaceSlug}
@@ -256,6 +267,6 @@ export default async function ConversationDetailPage({
           contactTags={contactTags}
         />
       </div>
-    </DashboardPage>
+    </div>
   );
 }

@@ -1,97 +1,21 @@
-import { Suspense } from "react";
+import { Inbox } from "lucide-react";
 
-import { ListPagination } from "@/components/dashboard/data-table/ListPagination";
-import { SearchInput } from "@/components/dashboard/filters/SearchInput";
-import { DashboardPage } from "@/components/dashboard/layout/DashboardPage";
-import { DashboardPageHeader } from "@/components/dashboard/layout/DashboardPageHeader";
-import { DashboardPageToolbar } from "@/components/dashboard/layout/DashboardPageToolbar";
-import { InboxFilters } from "@/components/inbox/InboxFilters";
-import { LiveInboxTable } from "@/components/inbox/LiveInboxTable";
-import { requireInboxWorkspace } from "@/lib/inbox/guards";
-import { fetchConversations } from "@/lib/inbox/queries";
-import { parseInboxListQuery } from "@/lib/inbox/search-params";
-import { getListQueryPageMeta } from "@/lib/dashboard/search-params";
-import { requireUser } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
-
-export default async function InboxPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ workspaceSlug: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const { workspaceSlug } = await params;
-  const resolvedSearchParams = await searchParams;
-  const { workspace } = await requireInboxWorkspace(workspaceSlug);
-  const query = parseInboxListQuery(resolvedSearchParams);
-  const supabase = await createClient();
-  const { user } = await requireUser(supabase);
-
-  let memberId = "";
-  if (user) {
-    const { data: memberRow } = await supabase
-      .from("workspace_members")
-      .select("id")
-      .eq("workspace_id", workspace.workspace_id)
-      .eq("user_id", user.id)
-      .maybeSingle<{ id: string }>();
-    memberId = memberRow?.id ?? "";
-  }
-
-  let conversations;
-  let loadError = false;
-
-  try {
-    conversations = await fetchConversations(
-      supabase,
-      workspace.workspace_id,
-      query,
-    );
-  } catch {
-    loadError = true;
-    conversations = {
-      items: [],
-      total: 0,
-      page: query.page,
-      pageSize: query.pageSize,
-    };
-  }
-
-  const pageMeta = getListQueryPageMeta(query, conversations.total);
-  const hasFilters = Boolean(query.q || query.status || query.assignment);
-
+export default function InboxPage() {
   return (
-    <DashboardPage>
-      <DashboardPageHeader
-        title="Inbox"
-        description="Review and respond to customer conversations from one place."
-      />
-      <DashboardPageToolbar>
-        <SearchInput placeholder="Search contacts or messages..." />
-        <Suspense fallback={null}>
-          <InboxFilters />
-        </Suspense>
-      </DashboardPageToolbar>
-
-      {loadError ? (
-        <p className="text-destructive text-sm">
-          Unable to load conversations. Refresh the page to try again.
-        </p>
-      ) : (
-        <>
-          <LiveInboxTable
-            workspaceId={workspace.workspace_id}
-            workspaceSlug={workspaceSlug}
-            memberId={memberId}
-            initialItems={conversations.items}
-            query={query}
-            currentSort={query.sort ?? "-last_message_at"}
-            hasFilters={hasFilters}
-          />
-          <ListPagination pageMeta={pageMeta} />
-        </>
-      )}
-    </DashboardPage>
+    <div
+      className="bg-inbox-surface flex h-full min-h-0 flex-1 flex-col items-center justify-center px-8 text-center"
+      data-testid="inbox-empty-selection"
+    >
+      <div className="bg-brand-soft text-brand mb-4 flex size-14 items-center justify-center rounded-2xl">
+        <Inbox className="size-7" aria-hidden="true" />
+      </div>
+      <h2 className="text-base font-semibold text-neutral-900">
+        Select a conversation
+      </h2>
+      <p className="text-inbox-muted mt-1.5 max-w-sm text-sm leading-relaxed">
+        Choose a conversation from the queue to reply, assign, and review
+        customer context — without leaving your inbox.
+      </p>
+    </div>
   );
 }
