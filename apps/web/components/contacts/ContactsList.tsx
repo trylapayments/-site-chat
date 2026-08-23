@@ -3,12 +3,13 @@
 import {
   crmMessagesEn,
   type ContactListItem,
+  type ListContactsQuery,
   type ListContactsResult,
 } from "@site-chat/shared";
 import Link from "next/link";
 import type { Route } from "next";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   contactDisplayLabel,
@@ -19,8 +20,10 @@ import {
 import { ContactTagChip } from "@/components/crm/ContactTagsEditor";
 import { Button } from "@/components/ui/button";
 import { toAppRoute } from "@/lib/auth/redirect";
-import { listContactsAction } from "@/lib/crm/actions";
+import { fetchContacts } from "@/lib/crm/queries";
 import { workspaceContactsPath } from "@/lib/dashboard/routes";
+import { createClient } from "@/lib/supabase/client";
+import type { AppSupabaseClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
 const messages = crmMessagesEn;
@@ -43,12 +46,24 @@ function buildListHref(
   return toAppRoute(qs ? `${path}?${qs}` : path);
 }
 
+async function loadContactsPage(
+  workspaceId: string,
+  query: ListContactsQuery,
+): Promise<ListContactsResult> {
+  // Browser RPC (not a Server Action) so Load more / filter refresh cannot
+  // trigger App Router refresh that remounts the contacts layout list.
+  const supabase = createClient() as AppSupabaseClient;
+  return fetchContacts(supabase, workspaceId, query);
+}
+
 export function ContactsList({
+  workspaceId,
   workspaceSlug,
   initialItems,
   initialNextBefore,
   initialHasMore,
 }: {
+  workspaceId: string;
   workspaceSlug: string;
   initialItems: ContactListItem[];
   initialNextBefore: ListContactsResult["next_before"];
@@ -65,7 +80,7 @@ export function ContactsList({
   const [nextBefore, setNextBefore] = useState(initialNextBefore);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const filterKey = `${q}|${tagId}`;
   const skipInitialUnfilteredFetch = useRef(!(q.trim() || tagId));
@@ -85,29 +100,33 @@ export function ContactsList({
     setIsRefreshing(true);
     setError(null);
     void (async () => {
-      const result = await listContactsAction(workspaceSlug, {
-        limit: 50,
-        q: q.trim() || undefined,
-        tag_ids: tagId ? [tagId] : undefined,
-      });
-      if (controller.cancelled) {
-        return;
+      try {
+        const result = await loadContactsPage(workspaceId, {
+          limit: 50,
+          q: q.trim() || undefined,
+          tag_ids: tagId ? [tagId] : undefined,
+        });
+        if (controller.cancelled) {
+          return;
+        }
+        setItems(result.items);
+        setNextBefore(result.next_before);
+        setHasMore(result.has_more);
+      } catch {
+        if (!controller.cancelled) {
+          setError(messages.contactsError);
+        }
+      } finally {
+        if (!controller.cancelled) {
+          setIsRefreshing(false);
+        }
       }
-      if (!result.success) {
-        setError(result.message);
-        setIsRefreshing(false);
-        return;
-      }
-      setItems(result.data.items);
-      setNextBefore(result.data.next_before);
-      setHasMore(result.data.has_more);
-      setIsRefreshing(false);
     })();
 
     return () => {
       controller.cancelled = true;
     };
-  }, [filterKey, workspaceSlug, q, tagId]);
+  }, [filterKey, workspaceId, q, tagId]);
 
   return (
     <div
@@ -277,31 +296,35 @@ export function ContactsList({
             className="border-inbox-border h-8 w-full text-[13px]"
             disabled={isPending || isRefreshing || !nextBefore}
             onClick={() => {
-              if (!nextBefore) {
+              if (!nextBefore || isPending) {
                 return;
               }
+              const cursor = nextBefore;
               setError(null);
-              startTransition(async () => {
-                const result = await listContactsAction(workspaceSlug, {
-                  limit: 50,
-                  q: q.trim() || undefined,
-                  tag_ids: tagId ? [tagId] : undefined,
-                  before: nextBefore,
-                });
-                if (!result.success) {
-                  setError(result.message);
-                  return;
+              setIsPending(true);
+              void (async () => {
+                try {
+                  const result = await loadContactsPage(workspaceId, {
+                    limit: 50,
+                    q: q.trim() || undefined,
+                    tag_ids: tagId ? [tagId] : undefined,
+                    before: cursor,
+                  });
+                  setItems((current) => {
+                    const seen = new Set(current.map((item) => item.id));
+                    const appended = result.items.filter(
+                      (item) => !seen.has(item.id),
+                    );
+                    return [...current, ...appended];
+                  });
+                  setNextBefore(result.next_before);
+                  setHasMore(result.has_more);
+                } catch {
+                  setError(messages.contactsError);
+                } finally {
+                  setIsPending(false);
                 }
-                setItems((current) => {
-                  const seen = new Set(current.map((item) => item.id));
-                  const appended = result.data.items.filter(
-                    (item) => !seen.has(item.id),
-                  );
-                  return [...current, ...appended];
-                });
-                setNextBefore(result.data.next_before);
-                setHasMore(result.data.has_more);
-              });
+              })();
             }}
           >
             {isPending

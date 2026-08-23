@@ -99,6 +99,7 @@ export function ContactsShell({
               }
             >
               <ContactsList
+                workspaceId={workspaceId}
                 workspaceSlug={workspaceSlug}
                 initialItems={initialItems}
                 initialNextBefore={initialNextBefore}
