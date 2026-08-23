@@ -32,10 +32,16 @@ export function DashboardShell({
   const pathname = usePathname();
   const canSearchNotes = can(role, "manage_internal_notes");
   const inboxBase = `/app/${slug}/inbox`;
+  const contactsBase = `/app/${slug}/contacts`;
   const isInbox =
     pathname === inboxBase || pathname.startsWith(`${inboxBase}/`);
+  const isContacts =
+    pathname === contactsBase || pathname.startsWith(`${contactsBase}/`);
+  // Contacts inherits Inbox chrome (GlobalSidebar + full-height canvas) only.
+  // Inbox layout/visuals remain unchanged.
+  const useOperatorWorkspaceChrome = isInbox || isContacts;
 
-  if (isInbox) {
+  if (useOperatorWorkspaceChrome) {
     return (
       <div className="bg-inbox-canvas flex h-dvh overflow-hidden">
         <div className="hidden lg:flex">

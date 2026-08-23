@@ -1,92 +1,136 @@
 "use client";
 
-import { crmMessagesEn, type ContactTag } from "@site-chat/shared";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { Search } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { crmMessagesEn, type ContactTag } from "@site-chat/shared";
+
 import { toAppRoute } from "@/lib/auth/redirect";
 import { workspaceContactsPath } from "@/lib/dashboard/routes";
+import { cn } from "@/lib/utils";
 
 const messages = crmMessagesEn;
 
+/**
+ * Contacts list search. Preserves contact detail segment when filtering so the
+ * master–detail shell stays mounted; clears to contacts root when empty.
+ */
 export function ContactsSearchForm({
   workspaceSlug,
-  initialQuery,
   tags,
-  selectedTagId,
+  className,
 }: {
   workspaceSlug: string;
-  initialQuery: string;
   tags: ContactTag[];
-  selectedTagId: string;
+  className?: string;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [query, setQuery] = useState(initialQuery);
-  const [tagId, setTagId] = useState(selectedTagId);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
+
+  const currentQuery = searchParams.get("q") ?? "";
+  const currentTag = searchParams.get("tag") ?? "";
+  const [query, setQuery] = useState(currentQuery);
+  const [tagId, setTagId] = useState(currentTag);
+
+  useEffect(() => {
+    setQuery(currentQuery);
+  }, [currentQuery]);
+
+  useEffect(() => {
+    setTagId(currentTag);
+  }, [currentTag]);
+
+  function navigate(nextQuery: string, nextTag: string) {
+    const params = new URLSearchParams();
+    if (nextQuery.trim()) {
+      params.set("q", nextQuery.trim());
+    }
+    if (nextTag) {
+      params.set("tag", nextTag);
+    }
+    const contactsRoot = toAppRoute(workspaceContactsPath(workspaceSlug));
+    const onContactsRoot =
+      pathname === contactsRoot || pathname === `${contactsRoot}/`;
+    // Keep detail selection when filtering; only jump to root from nested paths
+    // when clearing would otherwise leave a stale selected contact hidden.
+    const base = onContactsRoot
+      ? contactsRoot
+      : pathname.startsWith(`${contactsRoot}/`)
+        ? pathname
+        : contactsRoot;
+    const qs = params.toString();
+    startTransition(() => {
+      router.replace(toAppRoute(qs ? `${base}?${qs}` : base));
+    });
+  }
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (query === currentQuery) {
+        return;
+      }
+      navigate(query, tagId);
+    }, 300);
+    return () => {
+      window.clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce query only
+  }, [query]);
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3"
+      className={cn("space-y-2", className)}
+      data-testid="contacts-search-form"
       onSubmit={(event) => {
         event.preventDefault();
-        const params = new URLSearchParams();
-        if (query.trim()) {
-          params.set("q", query.trim());
-        }
-        if (tagId) {
-          params.set("tag", tagId);
-        }
-        const qs = params.toString();
-        startTransition(() => {
-          router.push(
-            toAppRoute(
-              `${workspaceContactsPath(workspaceSlug)}${qs ? `?${qs}` : ""}`,
-            ),
-          );
-        });
+        navigate(query, tagId);
       }}
     >
-      <div className="space-y-1.5">
-        <Label htmlFor="contacts-search">{messages.contactsSearchLabel}</Label>
-        <Input
+      <div className="relative w-full">
+        <Search
+          className="text-inbox-muted pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+          aria-hidden="true"
+          strokeWidth={1.75}
+        />
+        <input
           id="contacts-search"
+          type="search"
           value={query}
-          disabled={isPending}
-          placeholder={messages.contactsSearchPlaceholder}
           onChange={(event) => {
             setQuery(event.target.value);
           }}
-          className="min-w-[16rem]"
+          placeholder={messages.contactsSearchPlaceholder}
+          aria-label={messages.contactsSearchLabel}
+          className="border-inbox-border bg-inbox-surface text-[13.5px] placeholder:text-inbox-muted focus-visible:ring-brand/35 h-10 w-full rounded-lg border pr-3 pl-10 shadow-[var(--inbox-shadow)] outline-none focus-visible:ring-2"
         />
       </div>
       {tags.length > 0 ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="contacts-tag">Tag</Label>
-          <select
-            id="contacts-tag"
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-            value={tagId}
-            disabled={isPending}
-            onChange={(event) => {
-              setTagId(event.target.value);
-            }}
-          >
-            <option value="">All tags</option>
-            {tags.map((tag) => (
-              <option key={tag.id} value={tag.id}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <label className="sr-only" htmlFor="contacts-tag">
+          Tag
+        </label>
       ) : null}
-      <Button type="submit" size="sm" disabled={isPending}>
-        Search
-      </Button>
+      {tags.length > 0 ? (
+        <select
+          id="contacts-tag"
+          className="border-inbox-border bg-inbox-surface text-inbox-muted focus-visible:ring-brand/35 h-9 w-full rounded-lg border px-2.5 text-[13px] outline-none focus-visible:ring-2"
+          value={tagId}
+          onChange={(event) => {
+            const next = event.target.value;
+            setTagId(next);
+            navigate(query, next);
+          }}
+        >
+          <option value="">All tags</option>
+          {tags.map((tag) => (
+            <option key={tag.id} value={tag.id}>
+              {tag.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
     </form>
   );
 }

@@ -266,7 +266,7 @@ test.describe("visitor profile / CRM-lite", () => {
 
     const list = page.getByTestId("contacts-list");
     await expect(list).toBeVisible({ timeout: 30_000 });
-    const initialCount = await list.locator("li").count();
+    const initialCount = await list.locator("[data-contact-id]").count();
     expect(initialCount).toBeLessThanOrEqual(50);
     expect(initialCount).toBeGreaterThan(0);
 
@@ -274,7 +274,9 @@ test.describe("visitor profile / CRM-lite", () => {
     await expect(loadMore).toBeVisible({ timeout: 30_000 });
     await loadMore.click();
     await expect
-      .poll(async () => list.locator("li").count(), { timeout: 30_000 })
+      .poll(async () => list.locator("[data-contact-id]").count(), {
+        timeout: 30_000,
+      })
       .toBeGreaterThan(initialCount);
   });
 
