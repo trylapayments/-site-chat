@@ -125,7 +125,7 @@ export function ContactsList({
       </div>
 
       <div
-        className="border-inbox-border/70 text-inbox-muted hidden shrink-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_72px] gap-3 border-b px-4 py-2 text-[11px] font-medium tracking-wide uppercase xl:grid"
+        className="border-inbox-border/70 text-inbox-muted hidden shrink-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_72px] gap-3 border-b px-4 py-2 text-[11px] font-medium tracking-wide uppercase 2xl:grid"
         role="row"
       >
         <span role="columnheader">Customer</span>
@@ -189,7 +189,7 @@ export function ContactsList({
               ) : null}
               <Link
                 href={href}
-                className="grid grid-cols-1 gap-2 px-4 py-3 outline-none focus-visible:bg-brand-soft xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_72px] xl:items-center xl:gap-3"
+                className="grid grid-cols-1 gap-2 px-4 py-3 outline-none focus-visible:bg-brand-soft 2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_72px] 2xl:items-center 2xl:gap-3"
                 aria-current={selected ? "page" : undefined}
               >
                 <div role="cell" className="flex min-w-0 items-start gap-3">
@@ -216,7 +216,7 @@ export function ContactsList({
                       </p>
                     ) : null}
                     {contact.tags.length > 0 ? (
-                      <div className="mt-1.5 flex flex-wrap gap-1 xl:hidden">
+                      <div className="mt-1.5 flex flex-wrap gap-1 2xl:hidden">
                         {contact.tags.slice(0, 3).map((tagItem) => (
                           <ContactTagChip key={tagItem.id} tag={tagItem} />
                         ))}
@@ -227,30 +227,30 @@ export function ContactsList({
 
                 <div
                   role="cell"
-                  className="text-inbox-muted hidden min-w-0 truncate text-[13px] xl:block"
+                  className="text-inbox-muted hidden min-w-0 truncate text-[13px] 2xl:block"
                 >
                   {contact.email?.trim() || "—"}
                 </div>
                 <div
                   role="cell"
-                  className="text-inbox-muted hidden min-w-0 truncate text-[13px] xl:block"
+                  className="text-inbox-muted hidden min-w-0 truncate text-[13px] 2xl:block"
                 >
                   {contact.company?.name.trim() || "—"}
                 </div>
                 <div
                   role="cell"
-                  className="text-inbox-muted hidden min-w-0 truncate text-[13px] xl:block"
+                  className="text-inbox-muted hidden min-w-0 truncate text-[13px] 2xl:block"
                 >
                   {location || "—"}
                 </div>
                 <div
                   role="cell"
-                  className="text-inbox-muted hidden text-right text-[12px] tabular-nums xl:block"
+                  className="text-inbox-muted hidden text-right text-[12px] tabular-nums 2xl:block"
                 >
                   {formatContactListTime(contact.last_seen_at)}
                 </div>
 
-                <div className="text-inbox-muted flex items-center justify-between gap-3 text-[12px] xl:hidden">
+                <div className="text-inbox-muted flex items-center justify-between gap-3 text-[12px] 2xl:hidden">
                   <span className="min-w-0 truncate">
                     {[contact.email, contact.company?.name, location]
                       .filter(Boolean)
