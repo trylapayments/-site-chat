@@ -178,11 +178,17 @@ test.describe("internal notes + mentions", () => {
     await viewerPage.goto(`${APP_URL}/app/acme-support/inbox`);
     await waitForOperatorInboxRealtimeReady(viewerPage);
     await openOperatorConversation(viewerPage, marker);
+    await expect(viewerPage.getByTestId("conversation-tab-notes")).toBeVisible({
+      timeout: 15_000,
+    });
     await viewerPage.getByTestId("conversation-tab-notes").click();
     await expect(viewerPage.getByTestId("internal-notes-denied")).toBeVisible({
       timeout: 30_000,
     });
+    await expect(viewerPage.getByTestId("internal-notes-panel")).toHaveCount(0);
     await expect(viewerPage.getByTestId("internal-note-composer")).toHaveCount(0);
+    await expect(viewerPage.getByTestId("internal-note-send")).toHaveCount(0);
+    await expect(viewerPage.getByTestId("internal-note-item")).toHaveCount(0);
 
     await visitorContext.close();
     await ownerContext.close();

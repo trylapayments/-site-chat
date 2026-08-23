@@ -5,6 +5,7 @@ import {
   APP_URL,
   HOST_URL,
   VIEWER_EMAIL,
+  customerInspector,
   loginAs,
   loginOperator,
   openOperatorConversation,
@@ -68,16 +69,14 @@ test.describe("visitor identity + context", () => {
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
 
-    const sidebar = operator.locator("main aside");
-    await expect(sidebar.getByRole("heading", { name: "Visitor", exact: true })).toBeVisible();
-    await expect(sidebar.getByText("Public ID")).toBeVisible({ timeout: 30_000 });
-    await expect(sidebar.getByText(/^vis_[a-f0-9]{32}$/)).toBeVisible({
-      timeout: 30_000,
-    });
+    const inspector = customerInspector(operator);
+    await expect(inspector).toBeVisible({ timeout: 30_000 });
+    await expect(inspector.getByTestId("inspector-details")).toBeVisible();
+    await expect(inspector.getByRole("heading", { name: "Visitor", exact: true })).toBeVisible();
     await expect(
-      sidebar.getByRole("heading", { name: "Current context", exact: true }),
+      inspector.getByRole("heading", { name: "Current context", exact: true }),
     ).toBeVisible();
-    await expect(sidebar.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
+    await expect(inspector.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
 
     await visitorContext.close();
     await operatorContext.close();
@@ -220,13 +219,14 @@ test.describe("visitor identity + context", () => {
 
     await pageViewResponse;
 
-    const sidebar = operator.locator("aside");
+    const inspector = customerInspector(operator);
+    await expect(inspector).toBeVisible({ timeout: 30_000 });
     // Current context URL + recent page-view history can both contain the path.
-    await expect(sidebar.getByText(/\/pricing\?utm_source=e2e/).first()).toBeVisible({
+    await expect(inspector.getByText(/\/pricing\?utm_source=e2e/).first()).toBeVisible({
       timeout: 30_000,
     });
-    await expect(operator.getByText("access_token=secret")).toHaveCount(0);
-    await expect(operator.getByText("#frag")).toHaveCount(0);
+    await expect(inspector.getByText("access_token=secret")).toHaveCount(0);
+    await expect(inspector.getByText("#frag")).toHaveCount(0);
 
     await visitorContext.close();
     await operatorContext.close();
@@ -401,9 +401,13 @@ test.describe("visitor identity + context", () => {
     await viewer.goto(`${APP_URL}/app/acme-support/inbox`);
     await waitForOperatorInboxRealtimeReady(viewer);
     await openOperatorConversation(viewer, marker);
-    await expect(
-      viewer.locator("aside").getByRole("heading", { name: "Visitor", exact: true }),
-    ).toBeVisible();
+    const inspector = customerInspector(viewer);
+    await expect(inspector).toBeVisible({ timeout: 30_000 });
+    await expect(inspector.getByRole("heading", { name: "Visitor", exact: true })).toBeVisible();
+    await expect(inspector.getByTestId("inspector-public-id")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(inspector.getByTestId("inspector-public-id")).toContainText(/^vis_[a-f0-9]{32}$/);
     await expect(viewer.getByRole("button", { name: "Save visitor" })).toHaveCount(0);
 
     await visitorContext.close();
@@ -571,18 +575,19 @@ test.describe("visitor identity + context", () => {
     await openOperatorConversation(operator, attachMarker);
     await waitForOperatorThreadRealtimeReady(operator);
 
-    const sidebar = operator.locator("main aside");
+    const inspector = customerInspector(operator);
+    await expect(inspector).toBeVisible({ timeout: 30_000 });
     await expect(
-      sidebar.getByRole("heading", { name: "Current context", exact: true }),
+      inspector.getByRole("heading", { name: "Current context", exact: true }),
     ).toBeVisible();
 
-    const sidebarText = await sidebar.innerText();
-    expect(sidebarText).not.toContain(secret);
-    expect(sidebarText).not.toContain("access_token");
-    expect(sidebarText).not.toContain("code=");
-    expect(sidebarText).not.toMatch(/[#?]token=/i);
-    expect(sidebarText).toMatch(/\/checkout/);
-    expect(sidebarText).toContain("utm_source=e2e");
+    const inspectorText = await inspector.innerText();
+    expect(inspectorText).not.toContain(secret);
+    expect(inspectorText).not.toContain("access_token");
+    expect(inspectorText).not.toContain("code=");
+    expect(inspectorText).not.toMatch(/[#?]token=/i);
+    expect(inspectorText).toMatch(/\/checkout/);
+    expect(inspectorText).toContain("utm_source=e2e");
 
     await visitorContext.close();
     await operatorContext.close();

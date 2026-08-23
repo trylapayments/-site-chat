@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   AGENT_EMAIL,
   APP_URL,
+  assignmentHeader,
   loginAs,
   loginOperator,
   openOperatorConversation,
@@ -55,14 +56,14 @@ async function closeNotificationPanel(page: Page) {
 }
 
 async function waitForAssignmentMutation(page: Page, successPattern: RegExp) {
-  const panel = page.getByTestId("assignment-panel");
+  const panel = assignmentHeader(page);
   await expect(panel)
     .toHaveAttribute("data-pending", "true", { timeout: 5_000 })
     .catch(() => undefined);
   await expect(panel).toHaveAttribute("data-pending", "false", {
     timeout: 30_000,
   });
-  await expect(page.getByTestId("assignment-live")).toHaveText(successPattern, {
+  await expect(panel.getByTestId("assignment-live")).toHaveText(successPattern, {
     timeout: 15_000,
   });
 }
@@ -110,13 +111,13 @@ test.describe("operator notifications", () => {
     // Assign conversation to agent → assignment notification.
     await openOperatorConversation(owner, marker);
     await waitForOperatorThreadRealtimeReady(owner);
-    await expect(owner.getByTestId("assignment-panel")).toBeVisible({
+    await expect(assignmentHeader(owner)).toBeVisible({
       timeout: 30_000,
     });
 
-    await owner.getByTestId("assignment-open-picker").click();
-    await expect(owner.getByTestId("assignment-picker")).toBeVisible();
-    await owner
+    await assignmentHeader(owner).getByTestId("assignment-open-picker").click();
+    await expect(assignmentHeader(owner).getByTestId("assignment-picker")).toBeVisible();
+    await assignmentHeader(owner)
       .locator('[data-testid^="assignment-member-"]')
       .filter({ hasText: AGENT_EMAIL })
       .click();

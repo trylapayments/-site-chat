@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   APP_URL,
+  conversationThread,
   loginOperator,
   openOperatorConversation,
   openWidget,
@@ -164,7 +165,9 @@ test.describe("attachments", () => {
     await prepareOperatorInbox(operator);
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
-    await expect(operator.getByText(marker)).toBeVisible({ timeout: 30_000 });
+    await expect(conversationThread(operator).getByRole("article").getByText(marker)).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(operator.getByTestId("operator-attachment-image").locator("img")).toBeVisible({
       timeout: 60_000,
     });
@@ -200,7 +203,9 @@ test.describe("attachments", () => {
     await expect(operator.getByTestId("operator-attachment-image").locator("img")).toBeVisible({
       timeout: 60_000,
     });
-    await expect(operator.getByText(replyMarker)).toBeVisible({ timeout: 30_000 });
+    await expect(
+      conversationThread(operator).getByRole("article").getByText(replyMarker),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(operator.getByTestId("operator-upload-retry")).toHaveCount(0);
     await expect(operator.getByTestId("operator-upload-status")).toHaveCount(0);
     // Composer is cleared after success, so Send stays disabled until new input.

@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   APP_URL,
+  conversationThread,
   loginAs,
   loginOperator,
   openOperatorConversation,
@@ -107,7 +108,9 @@ test.describe("global search", () => {
 
     await expect(operator).toHaveURL(/\/inbox\/[0-9a-f-]+/, { timeout: 60_000 });
     await waitForOperatorThreadRealtimeReady(operator);
-    await expect(operator.getByText(marker)).toBeVisible({ timeout: 30_000 });
+    await expect(conversationThread(operator).getByRole("article").getByText(marker)).toBeVisible({
+      timeout: 30_000,
+    });
 
     await visitorContext.close();
     await operatorContext.close();
@@ -375,7 +378,9 @@ test.describe("global search", () => {
       timeout: 60_000,
     });
     await waitForOperatorThreadRealtimeReady(operator);
-    await expect(operator.getByText(targetBody).first()).toBeVisible({
+    await expect(
+      conversationThread(operator).getByRole("article").getByText(targetBody),
+    ).toBeVisible({
       timeout: 60_000,
     });
     const messageParam = new URL(operator.url()).searchParams.get("message");

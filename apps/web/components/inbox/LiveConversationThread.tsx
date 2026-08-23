@@ -320,7 +320,10 @@ export function LiveConversationThread({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      data-testid="conversation-thread"
+    >
       <span
         data-testid="thread-realtime-ready"
         data-realtime-state={connectionState}

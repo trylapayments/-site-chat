@@ -70,15 +70,20 @@ function initialsFromLabel(label: string): string {
 function MetaRow({
   label,
   value,
+  testId,
 }: {
   label: string;
   value: string | null | undefined;
+  testId?: string;
 }) {
   if (!value) {
     return null;
   }
   return (
-    <div className="flex items-start justify-between gap-3 py-1.5">
+    <div
+      className="flex items-start justify-between gap-3 py-1.5"
+      data-testid={testId}
+    >
       <dt className="text-inbox-muted shrink-0 text-[12px]">{label}</dt>
       <dd className="min-w-0 text-right text-[12.5px] font-medium leading-snug break-all text-neutral-800">
         {value}
@@ -296,6 +301,7 @@ export function ConversationSidebar({
               type="button"
               role="tab"
               aria-selected={active}
+              data-testid={`inspector-${item.id}-tab`}
               onClick={() => {
                 setTab(item.id);
               }}
@@ -314,7 +320,10 @@ export function ConversationSidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-1">
         {tab === "details" ? (
-          <div className="divide-y divide-zinc-100">
+          <div
+            className="divide-y divide-zinc-100"
+            data-testid="inspector-details"
+          >
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Visitor
@@ -439,7 +448,11 @@ export function ConversationSidebar({
                   />
                   <MetaRow label="Phone" value={serverIdentity.phone} />
                   {publicId ? (
-                    <MetaRow label="Public ID" value={publicId} />
+                    <MetaRow
+                      label="Public ID"
+                      value={publicId}
+                      testId="inspector-public-id"
+                    />
                   ) : null}
                 </dl>
               )}
@@ -633,7 +646,10 @@ export function ConversationSidebar({
             </section>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-100">
+          <div
+            className="divide-y divide-zinc-100"
+            data-testid="inspector-activity"
+          >
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Activity

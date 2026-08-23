@@ -21,12 +21,10 @@ type Tab = "messages" | "notes";
 
 function ModeTabs({
   tab,
-  canManageNotes,
   onChange,
   testIds = false,
 }: {
   tab: Tab;
-  canManageNotes: boolean;
   onChange: (next: Tab) => void;
   /** Playwright locators must be unique; both tab panels stay mounted. */
   testIds?: boolean;
@@ -71,7 +69,6 @@ function ModeTabs({
           tab === "notes"
             ? "text-amber-800"
             : "text-inbox-muted hover:text-neutral-800",
-          !canManageNotes && "opacity-60",
         )}
         onClick={() => {
           onChange("notes");
@@ -132,23 +129,18 @@ export function ConversationMainPanel({
   const focusMessageId = searchParams.get("message");
   const focusNoteId = searchParams.get("noteId") ?? searchParams.get("note");
   const initialTab: Tab =
-    searchParams.get("tab") === "notes" && canManageNotes
-      ? "notes"
-      : "messages";
+    searchParams.get("tab") === "notes" ? "notes" : "messages";
   const [tab, setTab] = useState<Tab>(initialTab);
 
   useEffect(() => {
-    if (searchParams.get("tab") === "notes" && canManageNotes) {
+    if (searchParams.get("tab") === "notes") {
       setTab("notes");
     } else if (focusMessageId) {
       setTab("messages");
     }
-  }, [canManageNotes, focusMessageId, searchParams]);
+  }, [focusMessageId, searchParams]);
 
   const onTabChange = (next: Tab) => {
-    if (next === "notes" && !canManageNotes) {
-      return;
-    }
     setTab(next);
   };
 
@@ -181,7 +173,6 @@ export function ConversationMainPanel({
           composerAccessory={
             <ModeTabs
               tab={tab}
-              canManageNotes={canManageNotes}
               onChange={onTabChange}
               testIds={tab === "messages"}
             />
@@ -207,12 +198,7 @@ export function ConversationMainPanel({
             focusNoteId={focusNoteId}
           />
         </div>
-        <ModeTabs
-          tab={tab}
-          canManageNotes={canManageNotes}
-          onChange={onTabChange}
-          testIds={tab === "notes"}
-        />
+        <ModeTabs tab={tab} onChange={onTabChange} testIds={tab === "notes"} />
       </div>
     </div>
   );

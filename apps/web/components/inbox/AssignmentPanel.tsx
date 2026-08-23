@@ -263,7 +263,11 @@ export function AssignmentPanel({
     <section
       className={variant === "header" ? "relative min-w-0" : "space-y-3"}
       aria-labelledby="assignment-heading"
-      data-testid="assignment-panel"
+      data-testid={
+        variant === "header"
+          ? "assignment-panel-header"
+          : "assignment-panel-inspector"
+      }
       data-pending={busy ? "true" : "false"}
       data-assignee-id={assignee?.member_id ?? ""}
       data-assignment-version={String(assignmentVersion)}
