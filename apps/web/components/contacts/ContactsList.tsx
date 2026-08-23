@@ -6,6 +6,7 @@ import {
   type ListContactsResult,
 } from "@site-chat/shared";
 import Link from "next/link";
+import type { Route } from "next";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
@@ -29,7 +30,7 @@ function buildListHref(
   contactId: string,
   q: string | null,
   tag: string | null,
-): string {
+): Route {
   const params = new URLSearchParams();
   if (q?.trim()) {
     params.set("q", q.trim());
