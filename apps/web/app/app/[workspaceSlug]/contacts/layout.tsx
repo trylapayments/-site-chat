@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * Contacts layout owns the persistent list column (Inbox-parity workspace).
  * Search/tag filters come from the URL and are applied client-side via
- * listContactsAction (layouts cannot read searchParams in the App Router).
+ * browser `list_contacts` RPC (layouts cannot read searchParams in the App Router).
  */
 export default async function ContactsLayout({
   children,

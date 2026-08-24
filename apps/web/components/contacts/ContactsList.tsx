@@ -17,6 +17,19 @@ import {
   formatContactListTime,
   initialsFromLabel,
 } from "@/components/contacts/contact-display";
+import {
+  applyContactsFilterResult,
+  applyContactsLoadMoreResult,
+  buildContactsFilterKey,
+  bumpContactsListGeneration,
+  clearContactsListCache,
+  contactsFilterHasActiveFilters,
+  contactsListCacheKey,
+  readContactsListCache,
+  seedContactsListCache,
+  subscribeContactsListCache,
+  type ContactsListSnapshot,
+} from "@/components/contacts/contacts-list-state";
 import { ContactTagChip } from "@/components/crm/ContactTagsEditor";
 import { Button } from "@/components/ui/button";
 import { toAppRoute } from "@/lib/auth/redirect";
@@ -56,6 +69,18 @@ async function loadContactsPage(
   return fetchContacts(supabase, workspaceId, query);
 }
 
+function snapshotToState(snapshot: ContactsListSnapshot): {
+  items: ContactListItem[];
+  nextBefore: ListContactsResult["next_before"];
+  hasMore: boolean;
+} {
+  return {
+    items: snapshot.items,
+    nextBefore: snapshot.nextBefore,
+    hasMore: snapshot.hasMore,
+  };
+}
+
 export function ContactsList({
   workspaceId,
   workspaceSlug,
@@ -75,30 +100,134 @@ export function ContactsList({
     typeof params.contactId === "string" ? params.contactId : null;
   const q = searchParams.get("q") ?? "";
   const tagId = searchParams.get("tag") ?? "";
+  const filterKey = buildContactsFilterKey(q, tagId);
+  const cacheKey = contactsListCacheKey(workspaceId, filterKey);
 
-  const [items, setItems] = useState(initialItems);
-  const [nextBefore, setNextBefore] = useState(initialNextBefore);
-  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [items, setItems] = useState<ContactListItem[]>(() => {
+    const existing = readContactsListCache(cacheKey);
+    if (existing) {
+      return existing.items;
+    }
+    // Layout SSR seeds the unfiltered first page only — never write that into
+    // a filtered cache key or search would flash stale unfiltered rows.
+    if (!contactsFilterHasActiveFilters(q, tagId)) {
+      return seedContactsListCache(cacheKey, {
+        items: initialItems,
+        nextBefore: initialNextBefore,
+        hasMore: initialHasMore,
+      }).items;
+    }
+    return [];
+  });
+  const [nextBefore, setNextBefore] = useState(() => {
+    const existing = readContactsListCache(cacheKey);
+    if (existing) {
+      return existing.nextBefore;
+    }
+    return contactsFilterHasActiveFilters(q, tagId) ? null : initialNextBefore;
+  });
+  const [hasMore, setHasMore] = useState(() => {
+    const existing = readContactsListCache(cacheKey);
+    if (existing) {
+      return existing.hasMore;
+    }
+    return contactsFilterHasActiveFilters(q, tagId) ? false : initialHasMore;
+  });
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const filterKey = `${q}|${tagId}`;
-  const skipInitialUnfilteredFetch = useRef(!(q.trim() || tagId));
+  /** Absolute times until mounted — avoids hydration #418 from Date.now(). */
+  const [nowMs, setNowMs] = useState<number | undefined>(undefined);
 
-  // Layout SSR seeds the unfiltered first page. Refetch when filters change
-  // (or when filters clear) without wiping Load-more progress on parent re-renders.
+  /** Last filter this instance committed; remount starts null and re-syncs. */
+  const committedFilterKeyRef = useRef<string | null>(null);
+  const filterKeyRef = useRef(filterKey);
+  filterKeyRef.current = filterKey;
+  const cacheKeyRef = useRef(cacheKey);
+  cacheKeyRef.current = cacheKey;
+  const nextBeforeRef = useRef(nextBefore);
+  nextBeforeRef.current = nextBefore;
+  const isPendingRef = useRef(isPending);
+  isPendingRef.current = isPending;
+  const isRefreshingRef = useRef(isRefreshing);
+  isRefreshingRef.current = isRefreshing;
+
+  const applyLocalSnapshot = (snapshot: ContactsListSnapshot) => {
+    const next = snapshotToState(snapshot);
+    setItems(next.items);
+    setNextBefore(next.nextBefore);
+    setHasMore(next.hasMore);
+  };
+
   useEffect(() => {
-    const controller = { cancelled: false };
-    const hasFilters = Boolean(q.trim() || tagId);
+    setNowMs(Date.now());
+  }, []);
 
-    if (skipInitialUnfilteredFetch.current && !hasFilters) {
-      skipInitialUnfilteredFetch.current = false;
+  // Stay in sync when Load more / filter RPC completes after a remount.
+  useEffect(() => {
+    return subscribeContactsListCache(cacheKey, (snapshot) => {
+      applyLocalSnapshot(snapshot);
+      setIsPending(false);
+      setIsRefreshing(false);
+    });
+  }, [cacheKey]);
+
+  // Own list resets when filters change. Same filter + remount must NOT refetch
+  // or clobber Load more progress (module cache + subscription own the data).
+  useEffect(() => {
+    const hasFilters = contactsFilterHasActiveFilters(q, tagId);
+
+    if (committedFilterKeyRef.current === filterKey) {
       return;
     }
-    skipInitialUnfilteredFetch.current = false;
+
+    const previousFilter = committedFilterKeyRef.current;
+    committedFilterKeyRef.current = filterKey;
+
+    const cached = readContactsListCache(cacheKey);
+    if (cached) {
+      applyLocalSnapshot(cached);
+    }
+
+    // New component instance: trust module cache / unfiltered SSR seed.
+    // Do not refetch — that race is what wiped Load more back to 50.
+    if (previousFilter === null) {
+      if (cached) {
+        return;
+      }
+      if (!hasFilters) {
+        seedContactsListCache(cacheKey, {
+          items: initialItems,
+          nextBefore: initialNextBefore,
+          hasMore: initialHasMore,
+        });
+        return;
+      }
+      // Filtered URL with no cache yet — fall through to fetch.
+    }
+
+    // Intentional filter change: drop the previous filter's cache entry.
+    if (previousFilter !== null && previousFilter !== filterKey) {
+      clearContactsListCache(contactsListCacheKey(workspaceId, previousFilter));
+    }
+
+    // Ensure this filter key has a cache row, then bump generation so any
+    // in-flight Load more for a prior generation cannot append.
+    seedContactsListCache(cacheKey, {
+      items: [],
+      nextBefore: null,
+      hasMore: false,
+    });
+    const generation = bumpContactsListGeneration(cacheKey);
+    const pending = readContactsListCache(cacheKey);
+    if (pending) {
+      applyLocalSnapshot(pending);
+    }
 
     setIsRefreshing(true);
     setError(null);
+    setIsPending(false);
+
     void (async () => {
       try {
         const result = await loadContactsPage(workspaceId, {
@@ -106,27 +235,92 @@ export function ContactsList({
           q: q.trim() || undefined,
           tag_ids: tagId ? [tagId] : undefined,
         });
-        if (controller.cancelled) {
+        const applied = applyContactsFilterResult(cacheKey, {
+          generation,
+          result,
+        });
+        if (!applied) {
           return;
         }
-        setItems(result.items);
-        setNextBefore(result.next_before);
-        setHasMore(result.has_more);
+        // Subscription updates React state; also apply locally for snappiness.
+        applyLocalSnapshot(applied);
       } catch {
-        if (!controller.cancelled) {
+        const current = readContactsListCache(cacheKey);
+        if (current?.generation === generation) {
           setError(messages.contactsError);
         }
       } finally {
-        if (!controller.cancelled) {
+        const current = readContactsListCache(cacheKey);
+        if (current?.generation === generation) {
           setIsRefreshing(false);
         }
       }
     })();
+  }, [
+    filterKey,
+    workspaceId,
+    q,
+    tagId,
+    cacheKey,
+    initialItems,
+    initialNextBefore,
+    initialHasMore,
+  ]);
 
-    return () => {
-      controller.cancelled = true;
-    };
-  }, [filterKey, workspaceId, q, tagId]);
+  const handleLoadMore = () => {
+    const cursor = nextBeforeRef.current;
+    if (!cursor || isPendingRef.current || isRefreshingRef.current) {
+      return;
+    }
+
+    const activeCacheKey = cacheKeyRef.current;
+    const snapshot = readContactsListCache(activeCacheKey);
+    if (!snapshot?.nextBefore) {
+      return;
+    }
+    const generation = snapshot.generation;
+    const requestedFilterKey = filterKeyRef.current;
+
+    setError(null);
+    setIsPending(true);
+
+    void (async () => {
+      try {
+        const result = await loadContactsPage(workspaceId, {
+          limit: 50,
+          q: q.trim() || undefined,
+          tag_ids: tagId ? [tagId] : undefined,
+          before: cursor,
+        });
+        if (filterKeyRef.current !== requestedFilterKey) {
+          return;
+        }
+        const applied = applyContactsLoadMoreResult(activeCacheKey, {
+          generation,
+          cursor,
+          result,
+        });
+        if (!applied) {
+          return;
+        }
+        applyLocalSnapshot(applied);
+      } catch {
+        if (filterKeyRef.current === requestedFilterKey) {
+          const current = readContactsListCache(activeCacheKey);
+          if (current?.generation === generation) {
+            setError(messages.contactsError);
+          }
+        }
+      } finally {
+        if (filterKeyRef.current === requestedFilterKey) {
+          const current = readContactsListCache(activeCacheKey);
+          if (current?.generation === generation) {
+            setIsPending(false);
+          }
+        }
+      }
+    })();
+  };
 
   return (
     <div
@@ -267,7 +461,7 @@ export function ContactsList({
                   role="cell"
                   className="text-inbox-muted hidden text-right text-[12px] tabular-nums 2xl:block"
                 >
-                  {formatContactListTime(contact.last_seen_at)}
+                  {formatContactListTime(contact.last_seen_at, nowMs)}
                 </div>
 
                 <div className="text-inbox-muted flex items-center justify-between gap-3 text-[12px] 2xl:hidden">
@@ -277,7 +471,7 @@ export function ContactsList({
                       .join(" · ") || "—"}
                   </span>
                   <time className="shrink-0 tabular-nums">
-                    {formatContactListTime(contact.last_seen_at)}
+                    {formatContactListTime(contact.last_seen_at, nowMs)}
                   </time>
                 </div>
               </Link>
@@ -295,37 +489,7 @@ export function ContactsList({
             data-testid="contacts-load-more"
             className="border-inbox-border h-8 w-full text-[13px]"
             disabled={isPending || isRefreshing || !nextBefore}
-            onClick={() => {
-              if (!nextBefore || isPending) {
-                return;
-              }
-              const cursor = nextBefore;
-              setError(null);
-              setIsPending(true);
-              void (async () => {
-                try {
-                  const result = await loadContactsPage(workspaceId, {
-                    limit: 50,
-                    q: q.trim() || undefined,
-                    tag_ids: tagId ? [tagId] : undefined,
-                    before: cursor,
-                  });
-                  setItems((current) => {
-                    const seen = new Set(current.map((item) => item.id));
-                    const appended = result.items.filter(
-                      (item) => !seen.has(item.id),
-                    );
-                    return [...current, ...appended];
-                  });
-                  setNextBefore(result.next_before);
-                  setHasMore(result.has_more);
-                } catch {
-                  setError(messages.contactsError);
-                } finally {
-                  setIsPending(false);
-                }
-              })();
-            }}
+            onClick={handleLoadMore}
           >
             {isPending
               ? messages.contactsLoadingMore

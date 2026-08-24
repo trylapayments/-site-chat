@@ -27,8 +27,21 @@ export function initialsFromLabel(label: string): string {
   return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
 }
 
+function formatContactListAbsoluteDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * Relative last-seen label. Pass `nowMs` only after client mount so SSR and the
+ * first client render match (avoids React hydration error #418).
+ */
 export function formatContactListTime(
   value: string | null | undefined,
+  nowMs?: number,
 ): string {
   if (!value) {
     return "—";
@@ -37,7 +50,10 @@ export function formatContactListTime(
   if (Number.isNaN(date.getTime())) {
     return "—";
   }
-  const diffMs = Date.now() - date.getTime();
+  if (nowMs === undefined) {
+    return formatContactListAbsoluteDate(date);
+  }
+  const diffMs = nowMs - date.getTime();
   const minutes = Math.max(0, Math.floor(diffMs / 60_000));
   if (minutes < 1) {
     return "now";
@@ -53,11 +69,7 @@ export function formatContactListTime(
   if (days < 7) {
     return `${String(days)}d`;
   }
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  return formatContactListAbsoluteDate(date);
 }
 
 export function formatContactDateTime(

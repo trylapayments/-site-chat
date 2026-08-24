@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       "lib/**/*.test.ts",
       "lib/**/*.integration.test.ts",
+      "components/contacts/**/*.test.ts",
       "app/widget/embed/**/*.test.ts",
       "app/widget/embed/**/*.test.tsx",
       "app/api/v1/widget/realtime-token/**/*.test.ts",
