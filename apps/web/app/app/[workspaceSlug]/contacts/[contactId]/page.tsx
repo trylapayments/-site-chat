@@ -1,20 +1,36 @@
-import { can, crmMessagesEn } from "@site-chat/shared";
-import Link from "next/link";
+import { can, type ConversationListItem } from "@site-chat/shared";
 import { notFound } from "next/navigation";
 
 import { ContactProfilePanel } from "@/components/crm/ContactProfilePanel";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { toAppRoute } from "@/lib/auth/redirect";
 import { requireCrmWorkspace } from "@/lib/crm/guards";
 import {
   fetchCompanies,
   fetchContactProfile,
   fetchContactTags,
 } from "@/lib/crm/queries";
-import { workspaceContactsPath } from "@/lib/dashboard/routes";
+import { fetchConversations } from "@/lib/inbox/queries";
 import { createClient } from "@/lib/supabase/server";
 
-const messages = crmMessagesEn;
+async function fetchRelatedConversations(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  contactId: string,
+  searchHint: string | null,
+): Promise<ConversationListItem[]> {
+  if (!searchHint) {
+    return [];
+  }
+  try {
+    const result = await fetchConversations(supabase, workspaceId, {
+      page: 1,
+      pageSize: 10,
+      q: searchHint,
+    });
+    return result.items.filter((item) => item.contact?.id === contactId);
+  } catch {
+    return [];
+  }
+}
 
 export default async function ContactProfilePage({
   params,
@@ -36,34 +52,28 @@ export default async function ContactProfilePage({
     notFound();
   }
 
-  const [tags, companies] = await Promise.all([
+  const searchHint = profile.email?.trim() || profile.name?.trim() || null;
+
+  const [tags, companies, conversations] = await Promise.all([
     fetchContactTags(supabase, workspace.workspace_id, {}),
     fetchCompanies(supabase, workspace.workspace_id, { limit: 100 }),
+    fetchRelatedConversations(
+      supabase,
+      workspace.workspace_id,
+      profile.id,
+      searchHint,
+    ),
   ]);
 
-  const title =
-    profile.name?.trim() ||
-    profile.email?.trim() ||
-    profile.public_id ||
-    messages.profileTitle;
-
   return (
-    <div className="space-y-6">
-      <PageHeader title={title} description={messages.profileTitle} />
-      <Link
-        href={toAppRoute(workspaceContactsPath(workspaceSlug))}
-        className="text-primary text-sm font-medium hover:underline"
-      >
-        {messages.backToContacts}
-      </Link>
-      <ContactProfilePanel
-        workspaceId={workspace.workspace_id}
-        workspaceSlug={workspaceSlug}
-        profile={profile}
-        availableTags={tags.items}
-        companies={companies.items}
-        canEdit={can(workspace.role, "update_visitor_profile")}
-      />
-    </div>
+    <ContactProfilePanel
+      workspaceId={workspace.workspace_id}
+      workspaceSlug={workspaceSlug}
+      profile={profile}
+      availableTags={tags.items}
+      companies={companies.items}
+      conversations={conversations}
+      canEdit={can(workspace.role, "update_visitor_profile")}
+    />
   );
 }

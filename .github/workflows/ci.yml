@@ -214,6 +214,20 @@ jobs:
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           AI_ALLOW_MOCK_PROVIDER: "true"
 
+      # Prove Contacts Load more is stable on first attempt (no CI retries).
+      # The same assertion previously failed twice and only passed on retry #2.
+      - name: Contacts Load more soak (retries off)
+        run: >
+          pnpm exec playwright test
+          -c e2e/playwright.config.ts
+          visitor/visitor-profile-crm.spec.ts
+          -g "contacts list Load more paginates past 50"
+          --retries=0
+          --repeat-each=10
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4

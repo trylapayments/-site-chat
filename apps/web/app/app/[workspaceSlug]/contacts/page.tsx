@@ -1,87 +1,21 @@
-import { can, crmMessagesEn } from "@site-chat/shared";
 import { Users } from "lucide-react";
-import Link from "next/link";
 
-import { ContactsList } from "@/components/contacts/ContactsList";
-import { ContactsSearchForm } from "@/components/contacts/ContactsSearchForm";
-import { EmptyState } from "@/components/dashboard/EmptyState";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { toAppRoute } from "@/lib/auth/redirect";
-import { requireCrmWorkspace } from "@/lib/crm/guards";
-import { fetchContactTags, fetchContacts } from "@/lib/crm/queries";
-import { workspaceNavPath } from "@/lib/dashboard/routes";
-import { createClient } from "@/lib/supabase/server";
-
-const messages = crmMessagesEn;
-
-export default async function ContactsPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ workspaceSlug: string }>;
-  searchParams: Promise<{ q?: string; tag?: string }>;
-}) {
-  const { workspaceSlug } = await params;
-  const { q, tag } = await searchParams;
-  const { workspace } = await requireCrmWorkspace(workspaceSlug);
-  const supabase = await createClient();
-
-  const [contacts, tags] = await Promise.all([
-    fetchContacts(supabase, workspace.workspace_id, {
-      q: q?.trim() || undefined,
-      tag_ids: tag ? [tag] : undefined,
-      limit: 50,
-    }),
-    fetchContactTags(supabase, workspace.workspace_id, {}),
-  ]);
-
-  const canView = can(workspace.role, "view_contact_profile");
-
+export default function ContactsPage() {
   return (
-    <div className="space-y-8" data-testid="contacts-page">
-      <PageHeader
-        title={messages.contactsPageTitle}
-        description={messages.contactsPageDescription}
-      />
-
-      {canView ? (
-        <ContactsSearchForm
-          workspaceSlug={workspaceSlug}
-          initialQuery={q ?? ""}
-          tags={tags.items}
-          selectedTagId={tag ?? ""}
-        />
-      ) : null}
-
-      {contacts.items.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title={
-            q || tag ? messages.contactsSearchEmpty : messages.contactsEmpty
-          }
-          description={
-            q || tag
-              ? messages.contactsSearchEmpty
-              : "Contacts are created when visitors identify themselves during chat."
-          }
-        />
-      ) : (
-        <ContactsList
-          workspaceSlug={workspaceSlug}
-          initialItems={contacts.items}
-          initialNextBefore={contacts.next_before}
-          initialHasMore={contacts.has_more}
-          q={q}
-          tagId={tag}
-        />
-      )}
-
-      <Link
-        href={toAppRoute(workspaceNavPath(workspaceSlug, "inbox"))}
-        className="text-primary text-sm font-medium hover:underline"
-      >
-        {messages.openInbox}
-      </Link>
+    <div
+      className="bg-inbox-surface flex h-full min-h-0 flex-1 flex-col items-center justify-center px-8 text-center"
+      data-testid="contacts-empty-selection"
+    >
+      <div className="bg-brand-soft text-brand mb-4 flex size-14 items-center justify-center rounded-2xl">
+        <Users className="size-7" strokeWidth={1.75} aria-hidden="true" />
+      </div>
+      <h2 className="text-base font-semibold text-neutral-900">
+        Select a contact
+      </h2>
+      <p className="text-inbox-muted mt-1.5 max-w-sm text-sm leading-relaxed">
+        Choose a customer from the list to review identity, CRM fields, recent
+        conversations, and activity.
+      </p>
     </div>
   );
 }

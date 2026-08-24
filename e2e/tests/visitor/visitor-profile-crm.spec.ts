@@ -266,16 +266,75 @@ test.describe("visitor profile / CRM-lite", () => {
 
     const list = page.getByTestId("contacts-list");
     await expect(list).toBeVisible({ timeout: 30_000 });
-    const initialCount = await list.locator("li").count();
-    expect(initialCount).toBeLessThanOrEqual(50);
-    expect(initialCount).toBeGreaterThan(0);
+    const rows = list.locator("[data-contact-id]");
+    await expect.poll(async () => rows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
 
+    const initialCount = await rows.count();
+    expect(initialCount).toBeLessThanOrEqual(50);
+    // Seeded workspace has >50 contacts; first page must be full when Load more shows.
     const loadMore = page.getByTestId("contacts-load-more");
     await expect(loadMore).toBeVisible({ timeout: 30_000 });
+    expect(initialCount).toBe(50);
+
+    const firstPageIds = await rows.evaluateAll((nodes) =>
+      nodes
+        .map((node) => node.getAttribute("data-contact-id"))
+        .filter((id): id is string => Boolean(id)),
+    );
+    expect(new Set(firstPageIds).size).toBe(firstPageIds.length);
+
     await loadMore.click();
     await expect
-      .poll(async () => list.locator("li").count(), { timeout: 30_000 })
-      .toBeGreaterThan(initialCount);
+      .poll(async () => rows.count(), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(50);
+
+    const afterIds = await rows.evaluateAll((nodes) =>
+      nodes
+        .map((node) => node.getAttribute("data-contact-id"))
+        .filter((id): id is string => Boolean(id)),
+    );
+    expect(afterIds.length).toBeGreaterThan(50);
+    expect(new Set(afterIds).size).toBe(afterIds.length);
+    // Keyset append keeps page-1 prefix order stable.
+    expect(afterIds.slice(0, firstPageIds.length)).toEqual(firstPageIds);
+
+    // Further Load more (if any) must not introduce duplicate ids.
+    if (await loadMore.isVisible()) {
+      await expect(loadMore).toBeEnabled({ timeout: 10_000 });
+      await loadMore.click();
+      await expect
+        .poll(async () => rows.count(), { timeout: 30_000 })
+        .toBeGreaterThan(afterIds.length);
+      const thirdIds = await rows.evaluateAll((nodes) =>
+        nodes
+          .map((node) => node.getAttribute("data-contact-id"))
+          .filter((id): id is string => Boolean(id)),
+      );
+      expect(new Set(thirdIds).size).toBe(thirdIds.length);
+      expect(thirdIds.slice(0, afterIds.length)).toEqual(afterIds);
+    }
+
+    // Search resets pagination intentionally (back to a filtered first page).
+    await page.goto(`${CONTACTS_URL}?q=${encodeURIComponent(SEEDED_CONTACT_NAME)}`);
+    await expect(page.getByTestId("contacts-page")).toBeVisible({
+      timeout: 60_000,
+    });
+    const filtered = page.getByTestId("contacts-list");
+    await expect
+      .poll(async () => filtered.locator("[data-contact-id]").count(), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    await expect
+      .poll(async () => filtered.locator("[data-contact-id]").count(), {
+        timeout: 30_000,
+      })
+      .toBeLessThanOrEqual(50);
+    await expect(filtered.getByRole("link", { name: SEEDED_CONTACT_NAME }).first()).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test("inbox sidebar links to full contact profile", async ({ page }) => {
