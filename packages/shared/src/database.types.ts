@@ -2544,10 +2544,7 @@ export type Database = {
         Args: { p_query?: Json; p_workspace_id: string }
         Returns: Json
       }
-      list_workspace_team: {
-        Args: { p_workspace_id: string }
-        Returns: Json
-      }
+      list_workspace_team: { Args: { p_workspace_id: string }; Returns: Json }
       mark_all_notifications_read: {
         Args: { p_workspace_id: string }
         Returns: Json
