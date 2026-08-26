@@ -95,14 +95,37 @@ export function TeamShell({
     memberIdToUpdate: string,
     role: MemberRole,
   ): Promise<boolean> {
+    if (busyId !== null) {
+      return false;
+    }
+    const previous = team.members.find(
+      (item) => item.member_id === memberIdToUpdate,
+    );
+    if (!previous || previous.role === role) {
+      return true;
+    }
     setBusyId(memberIdToUpdate);
     setActionError(null);
+    setTeam((current) => ({
+      ...current,
+      members: current.members.map((item) =>
+        item.member_id === memberIdToUpdate ? { ...item, role } : item,
+      ),
+    }));
     const result = await updateWorkspaceMemberRoleAction(workspaceSlug, {
       memberId: memberIdToUpdate,
       role,
     });
     setBusyId(null);
     if (!result.success) {
+      setTeam((current) => ({
+        ...current,
+        members: current.members.map((item) =>
+          item.member_id === memberIdToUpdate
+            ? { ...item, role: previous.role }
+            : item,
+        ),
+      }));
       setActionError(result.message);
       dashboardToast.error(result.message);
       return false;

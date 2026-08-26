@@ -19,13 +19,16 @@ test.describe("team workspace", () => {
     await expect(page.getByTestId("team-page")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
     await expect(page.getByTestId("team-table")).toBeVisible();
-    await expect(page.getByText("owner@local.test").first()).toBeVisible();
-    await expect(page.getByText("admin@local.test").first()).toBeVisible();
-    await expect(page.getByText("agent@local.test").first()).toBeVisible();
-    await expect(page.getByText("viewer@local.test").first()).toBeVisible();
-    await expect(page.getByText("invitee@local.test").first()).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "owner@local.test" })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "admin@local.test" })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "agent@local.test" })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "viewer@local.test" })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "invitee@local.test" })).toBeVisible();
     await expect(page.getByText("Invited").first()).toBeVisible();
     await expect(page.getByTestId("team-invite-button")).toBeVisible();
+    await expect(
+      page.getByRole("row").filter({ hasText: "owner@local.test" }).getByRole("combobox"),
+    ).toHaveCount(0);
   });
 
   test("owner can create and cancel a pending invitation", async ({ page }) => {
@@ -38,15 +41,17 @@ test.describe("team workspace", () => {
     });
     await page.getByTestId("team-invite-button").click();
     await expect(page.getByTestId("team-invite-sheet")).toBeVisible();
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Role").selectOption("agent");
+    await page.getByTestId("team-invite-form").getByLabel("Email").fill(email);
+    await page.getByTestId("team-invite-form").getByLabel("Role").selectOption("agent");
     await page.getByRole("button", { name: "Create invitation" }).click();
-    await expect(page.getByText("Invitation created")).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page.getByTestId("team-invite-sheet").getByText("Invitation created")).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    );
     await expect(page.getByRole("button", { name: "Copy invite link" })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByText(email).first()).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: email })).toBeVisible();
 
     await page
       .getByRole("row")
@@ -91,5 +96,31 @@ test.describe("team workspace", () => {
     await expect(page.getByText("Only another owner can change this membership.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Deactivate" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Remove from workspace" })).toHaveCount(0);
+  });
+
+  test("owner can change a non-owner role and restore it", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginOperator(page);
+    await page.goto(TEAM_URL);
+    const row = page.getByRole("row").filter({ hasText: VIEWER_EMAIL });
+    const roleSelect = row.getByRole("combobox");
+    await expect(roleSelect).toBeVisible({ timeout: 30_000 });
+    if ((await roleSelect.inputValue()) !== "viewer") {
+      await roleSelect.selectOption("viewer");
+      await expect(page.getByText("Role updated").first()).toBeVisible({
+        timeout: 30_000,
+      });
+    }
+    await expect(roleSelect).toHaveValue("viewer");
+    await roleSelect.selectOption("agent");
+    await expect(page.getByText("Role updated").first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(roleSelect).toHaveValue("agent");
+    await roleSelect.selectOption("viewer");
+    await expect(page.getByText("Role updated").first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(roleSelect).toHaveValue("viewer");
   });
 });
