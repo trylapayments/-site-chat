@@ -13,7 +13,7 @@ import {
 } from "@site-chat/shared";
 import { UserCog, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { ConfirmDialog } from "@/components/dashboard/actions/ConfirmDialog";
 import { GlobalSearch } from "@/components/dashboard/global-search/GlobalSearch";
@@ -32,6 +32,10 @@ import {
 } from "@/lib/team/actions";
 
 const messages = teamMessagesEn;
+
+type TeamDetail =
+  | { kind: "member"; member: TeamMember }
+  | { kind: "invitation"; invitation: TeamInvitation };
 
 export function TeamShell({
   workspaceId,
@@ -54,9 +58,10 @@ export function TeamShell({
   const canManage = canManageWorkspaceMembers(callerRole);
   const [team, setTeam] = useState(initialTeam);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
-  const [selectedInvitation, setSelectedInvitation] =
-    useState<TeamInvitation | null>(null);
+  const [detail, setDetail] = useState<TeamDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const mutationLockRef = useRef(false);
+  const refreshGenRef = useRef(0);
   const [confirm, setConfirm] = useState<
     | { type: "deactivate"; member: TeamMember }
     | { type: "remove"; member: TeamMember }
@@ -80,7 +85,11 @@ export function TeamShell({
       : interpolateTeamCount(messages.memberCountMany, team.members.length);
 
   async function refreshTeam(): Promise<ListWorkspaceTeamResult | null> {
+    const gen = ++refreshGenRef.current;
     const result = await listWorkspaceTeamAction(workspaceSlug);
+    if (gen !== refreshGenRef.current) {
+      return null;
+    }
     if (!result.success) {
       setPageError(result.message);
       return null;
@@ -95,7 +104,7 @@ export function TeamShell({
     memberIdToUpdate: string,
     role: MemberRole,
   ): Promise<boolean> {
-    if (busyId !== null) {
+    if (mutationLockRef.current) {
       return false;
     }
     const previous = team.members.find(
@@ -104,6 +113,7 @@ export function TeamShell({
     if (!previous || previous.role === role) {
       return true;
     }
+    mutationLockRef.current = true;
     setBusyId(memberIdToUpdate);
     setActionError(null);
     setTeam((current) => ({
@@ -112,33 +122,44 @@ export function TeamShell({
         item.member_id === memberIdToUpdate ? { ...item, role } : item,
       ),
     }));
-    const result = await updateWorkspaceMemberRoleAction(workspaceSlug, {
-      memberId: memberIdToUpdate,
-      role,
-    });
-    setBusyId(null);
-    if (!result.success) {
-      setTeam((current) => ({
-        ...current,
-        members: current.members.map((item) =>
-          item.member_id === memberIdToUpdate
-            ? { ...item, role: previous.role }
-            : item,
-        ),
-      }));
-      setActionError(result.message);
-      dashboardToast.error(result.message);
-      return false;
+    try {
+      const result = await updateWorkspaceMemberRoleAction(workspaceSlug, {
+        memberId: memberIdToUpdate,
+        role,
+      });
+      if (!result.success) {
+        setTeam((current) => ({
+          ...current,
+          members: current.members.map((item) =>
+            item.member_id === memberIdToUpdate
+              ? { ...item, role: previous.role }
+              : item,
+          ),
+        }));
+        setActionError(result.message);
+        dashboardToast.error(result.message);
+        return false;
+      }
+      dashboardToast.success(messages.roleUpdated);
+      const next = await refreshTeam();
+      if (next) {
+        const updated = next.members.find(
+          (item) => item.member_id === memberIdToUpdate,
+        );
+        if (updated) {
+          setDetail((current) =>
+            current?.kind === "member" &&
+            current.member.member_id === memberIdToUpdate
+              ? { kind: "member", member: updated }
+              : current,
+          );
+        }
+      }
+      return true;
+    } finally {
+      mutationLockRef.current = false;
+      setBusyId(null);
     }
-    dashboardToast.success(messages.roleUpdated);
-    const next = await refreshTeam();
-    if (next) {
-      setSelectedMember(
-        next.members.find((item) => item.member_id === memberIdToUpdate) ??
-          null,
-      );
-    }
-    return true;
   }
 
   async function handleDeactivate(memberIdToUpdate: string): Promise<boolean> {
@@ -192,7 +213,9 @@ export function TeamShell({
     return true;
   }
 
-  const detailOpen = selectedMember !== null || selectedInvitation !== null;
+  const selectedMember = detail?.kind === "member" ? detail.member : null;
+  const selectedInvitation =
+    detail?.kind === "invitation" ? detail.invitation : null;
 
   return (
     <div
@@ -277,13 +300,13 @@ export function TeamShell({
             busyMemberId={busyId}
             onOpenMember={(member) => {
               setActionError(null);
-              setSelectedInvitation(null);
-              setSelectedMember(member);
+              setDetail({ kind: "member", member });
+              setDetailOpen(true);
             }}
             onOpenInvitation={(invitation) => {
               setActionError(null);
-              setSelectedMember(null);
-              setSelectedInvitation(invitation);
+              setDetail({ kind: "invitation", invitation });
+              setDetailOpen(true);
             }}
             onChangeRole={(id, role) => {
               void handleRoleChange(id, role);
@@ -315,9 +338,8 @@ export function TeamShell({
       <TeamMemberSheet
         open={detailOpen}
         onOpenChange={(open) => {
+          setDetailOpen(open);
           if (!open) {
-            setSelectedMember(null);
-            setSelectedInvitation(null);
             setActionError(null);
           }
         }}

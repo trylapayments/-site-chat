@@ -29,6 +29,19 @@ test.describe("team workspace", () => {
     await expect(
       page.getByRole("row").filter({ hasText: "owner@local.test" }).getByRole("combobox"),
     ).toHaveCount(0);
+
+    await page
+      .getByRole("row")
+      .filter({ hasText: "invitee@local.test" })
+      .getByRole("button")
+      .first()
+      .click();
+    await expect(page.getByTestId("team-member-sheet")).toBeVisible();
+    await expect(
+      page.getByTestId("team-member-sheet").getByText("invitee@local.test"),
+    ).toBeVisible();
+    await expect(page.getByTestId("team-member-sheet").getByText("Unknown member")).toHaveCount(0);
+    await page.keyboard.press("Escape");
   });
 
   test("owner can create and cancel a pending invitation", async ({ page }) => {
@@ -105,22 +118,28 @@ test.describe("team workspace", () => {
     const row = page.getByRole("row").filter({ hasText: VIEWER_EMAIL });
     const roleSelect = row.getByRole("combobox");
     await expect(roleSelect).toBeVisible({ timeout: 30_000 });
-    if ((await roleSelect.inputValue()) !== "viewer") {
-      await roleSelect.selectOption("viewer");
-      await expect(page.getByText("Role updated").first()).toBeVisible({
-        timeout: 30_000,
-      });
+
+    async function setRole(role: "agent" | "viewer") {
+      await expect(roleSelect).toBeEnabled();
+      if ((await roleSelect.inputValue()) === role) {
+        return;
+      }
+      await roleSelect.selectOption(role);
+      await expect
+        .poll(
+          async () => {
+            const enabled = await roleSelect.isEnabled();
+            const value = await roleSelect.inputValue();
+            return enabled && value === role;
+          },
+          { timeout: 30_000 },
+        )
+        .toBe(true);
     }
-    await expect(roleSelect).toHaveValue("viewer");
-    await roleSelect.selectOption("agent");
-    await expect(page.getByText("Role updated").first()).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(roleSelect).toHaveValue("agent");
-    await roleSelect.selectOption("viewer");
-    await expect(page.getByText("Role updated").first()).toBeVisible({
-      timeout: 30_000,
-    });
+
+    await setRole("viewer");
+    await setRole("agent");
+    await setRole("viewer");
     await expect(roleSelect).toHaveValue("viewer");
   });
 });
