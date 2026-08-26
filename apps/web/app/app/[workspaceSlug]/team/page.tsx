@@ -1,4 +1,5 @@
-import { can, type ListWorkspaceTeamResult } from "@site-chat/shared";
+import { can } from "@site-chat/shared";
+import type { ListWorkspaceTeamResult } from "@site-chat/shared/team";
 
 import { TeamShell } from "@/components/team/TeamShell";
 import { requireUser } from "@/lib/auth/session";

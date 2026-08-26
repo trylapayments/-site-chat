@@ -10,7 +10,7 @@ import {
   type MemberRole,
   type TeamInvitation,
   type TeamMember,
-} from "@site-chat/shared";
+} from "@site-chat/shared/team";
 import { UserCog, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";

@@ -11,7 +11,7 @@ import {
   workspaceMemberIdInputSchema,
   type CreateWorkspaceInvitationResult,
   type ListWorkspaceTeamResult,
-} from "@site-chat/shared";
+} from "@site-chat/shared/team";
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/lib/auth/session";

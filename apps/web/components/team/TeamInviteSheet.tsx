@@ -5,7 +5,7 @@ import {
   teamMessagesEn,
   type InviteRole,
   type MemberRole,
-} from "@site-chat/shared";
+} from "@site-chat/shared/team";
 import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
 
 import { Button } from "@/components/ui/button";

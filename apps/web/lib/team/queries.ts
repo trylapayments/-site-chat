@@ -12,7 +12,7 @@ import {
   type RevokeWorkspaceInvitationInput,
   type UpdateWorkspaceMemberRoleInput,
   type WorkspaceMemberIdInput,
-} from "@site-chat/shared";
+} from "@site-chat/shared/team";
 
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 import { callPublicRpc, parseRpcResult } from "@/lib/workspace/rpc";

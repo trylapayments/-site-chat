@@ -2,7 +2,7 @@ import {
   teamMessagesEn,
   type MemberRole,
   type TeamMemberStatus,
-} from "@site-chat/shared";
+} from "@site-chat/shared/team";
 
 const messages = teamMessagesEn;
 

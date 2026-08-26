@@ -14,7 +14,7 @@ import {
   type TeamInvitation,
   type TeamMember,
   type TeamTableRow,
-} from "@site-chat/shared";
+} from "@site-chat/shared/team";
 import { MoreHorizontal } from "lucide-react";
 
 import { ActionMenu } from "@/components/dashboard/actions/ActionMenu";

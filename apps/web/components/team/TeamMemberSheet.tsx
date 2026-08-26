@@ -15,7 +15,7 @@ import {
   type MemberRole,
   type TeamInvitation,
   type TeamMember,
-} from "@site-chat/shared";
+} from "@site-chat/shared/team";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/dashboard/actions/ConfirmDialog";

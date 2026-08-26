@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { statusLabel } from "@/components/team/team-format";
-import type { TeamMemberStatus } from "@site-chat/shared";
+import type { TeamMemberStatus } from "@site-chat/shared/team";
 
 export function TeamStatusBadge({
   status,
