@@ -1,20 +1,49 @@
-import { UserCog } from "lucide-react";
+import { can, type ListWorkspaceTeamResult } from "@site-chat/shared";
 
-import { EmptyState } from "@/components/dashboard/EmptyState";
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { TeamShell } from "@/components/team/TeamShell";
+import { requireUser } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { requireTeamWorkspace } from "@/lib/team/guards";
+import { fetchWorkspaceTeam } from "@/lib/team/queries";
 
-export default function TeamPage() {
+export default async function TeamPage({
+  params,
+}: {
+  params: Promise<{ workspaceSlug: string }>;
+}) {
+  const { workspaceSlug } = await params;
+  const { workspace } = await requireTeamWorkspace(workspaceSlug);
+  const supabase = await createClient();
+  const { user } = await requireUser(supabase);
+
+  let memberId = "";
+  if (user) {
+    const { data: memberRow } = await supabase
+      .from("workspace_members")
+      .select("id")
+      .eq("workspace_id", workspace.workspace_id)
+      .eq("user_id", user.id)
+      .maybeSingle<{ id: string }>();
+    memberId = memberRow?.id ?? "";
+  }
+
+  let team: ListWorkspaceTeamResult = { members: [], invitations: [] };
+  let loadError = false;
+  try {
+    team = await fetchWorkspaceTeam(supabase, workspace.workspace_id);
+  } catch {
+    loadError = true;
+  }
+
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Team"
-        description="Manage agents and roles for this workspace."
-      />
-      <EmptyState
-        icon={UserCog}
-        title="Team management coming soon"
-        description="You will be able to invite agents and manage roles here in a later release."
-      />
-    </div>
+    <TeamShell
+      workspaceId={workspace.workspace_id}
+      workspaceSlug={workspaceSlug}
+      memberId={memberId}
+      callerRole={workspace.role}
+      canSearchNotes={can(workspace.role, "manage_internal_notes")}
+      initialTeam={team}
+      loadError={loadError}
+    />
   );
 }

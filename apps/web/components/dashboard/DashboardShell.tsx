@@ -33,13 +33,15 @@ export function DashboardShell({
   const canSearchNotes = can(role, "manage_internal_notes");
   const inboxBase = `/app/${slug}/inbox`;
   const contactsBase = `/app/${slug}/contacts`;
+  const teamBase = `/app/${slug}/team`;
   const isInbox =
     pathname === inboxBase || pathname.startsWith(`${inboxBase}/`);
   const isContacts =
     pathname === contactsBase || pathname.startsWith(`${contactsBase}/`);
-  // Contacts inherits Inbox chrome (GlobalSidebar + full-height canvas) only.
-  // Inbox layout/visuals remain unchanged.
-  const useOperatorWorkspaceChrome = isInbox || isContacts;
+  const isTeam = pathname === teamBase || pathname.startsWith(`${teamBase}/`);
+  // Team inherits Inbox chrome (GlobalSidebar + full-height canvas) only.
+  // Inbox and Contacts layout/visuals remain unchanged.
+  const useOperatorWorkspaceChrome = isInbox || isContacts || isTeam;
 
   if (useOperatorWorkspaceChrome) {
     return (

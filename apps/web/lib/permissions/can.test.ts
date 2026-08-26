@@ -93,4 +93,18 @@ describe("can", () => {
     expect(can("agent", "view_widget_studio")).toBe(true);
     expect(can("viewer", "view_widget_studio")).toBe(true);
   });
+
+  it("allows all roles to view workspace members", () => {
+    expect(can("owner", "view_workspace_members")).toBe(true);
+    expect(can("admin", "view_workspace_members")).toBe(true);
+    expect(can("agent", "view_workspace_members")).toBe(true);
+    expect(can("viewer", "view_workspace_members")).toBe(true);
+  });
+
+  it("restricts manage_workspace_members to owner and admin", () => {
+    expect(can("owner", "manage_workspace_members")).toBe(true);
+    expect(can("admin", "manage_workspace_members")).toBe(true);
+    expect(can("agent", "manage_workspace_members")).toBe(false);
+    expect(can("viewer", "manage_workspace_members")).toBe(false);
+  });
 });
