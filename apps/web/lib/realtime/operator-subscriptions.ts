@@ -13,21 +13,6 @@ export type RealtimeConnectionListener = (
     "connecting" | "connected" | "reconnecting" | "disconnected" | "failed",
 ) => void;
 
-async function applyOperatorRealtimeAuth(
-  supabase: OperatorSupabaseClient,
-): Promise<string | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    return null;
-  }
-
-  await supabase.realtime.setAuth(session.access_token);
-  return session.access_token;
-}
-
 type OperatorBinding = {
   event: "INSERT" | "UPDATE" | "DELETE";
   schema: string;
@@ -49,12 +34,27 @@ function subscribeWithOperatorAuth(input: {
     : never = "connecting";
   let channel: RealtimeChannel | null = null;
   let active = true;
+  const isActive = () => active;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let retryAttempt = 0;
   let channelEpoch = 0;
   let appliedAuthToken: string | null = null;
+  let startQueue: Promise<void> = Promise.resolve();
 
   input.onConnectionChange?.(currentStatus);
+
+  function isLiveSameToken(token: string): boolean {
+    return (
+      appliedAuthToken === token &&
+      channel !== null &&
+      (currentStatus === "connected" || currentStatus === "connecting")
+    );
+  }
+
+  function enqueueStart() {
+    const run = () => startSubscription();
+    startQueue = startQueue.then(run, run);
+  }
 
   function clearRetryTimer() {
     if (retryTimer !== null) {
@@ -64,40 +64,46 @@ function subscribeWithOperatorAuth(input: {
   }
 
   function scheduleResubscribe() {
-    if (!active || retryTimer !== null) {
+    if (!isActive() || retryTimer !== null) {
       return;
     }
     const delayMs = Math.min(1_000 * 2 ** retryAttempt, 15_000);
     retryAttempt += 1;
     retryTimer = setTimeout(() => {
       retryTimer = null;
-      if (active) {
-        void startSubscription();
+      if (isActive()) {
+        enqueueStart();
       }
     }, delayMs);
   }
 
   async function startSubscription() {
     clearRetryTimer();
-    const token = await applyOperatorRealtimeAuth(input.supabase);
-    if (!active) {
+    const {
+      data: { session },
+    } = await input.supabase.auth.getSession();
+    if (!isActive()) {
       return;
     }
 
     // postgres_changes is RLS-filtered; subscribing before setAuth reports
     // SUBSCRIBED but delivers no rows. Wait for onAuthStateChange instead.
+    const token = session?.access_token ?? null;
     if (!token) {
       return;
     }
 
-    // Same token + live/joining channel: setAuth is enough. INITIAL_SESSION /
-    // TOKEN_REFRESHED must not orphan SUBSCRIBED or flip connected→reconnecting
-    // (that retriggers list refetch + router.refresh and jerks a idle Inbox).
-    if (
-      appliedAuthToken === token &&
-      channel &&
-      (currentStatus === "connected" || currentStatus === "connecting")
-    ) {
+    // Same token + live/joining channel: do not replace and do not setAuth
+    // again. A second setAuth can abort an in-flight postgres_changes join
+    // and leave the UI stuck at connecting (assignment/receipts E2E).
+    // INITIAL_SESSION / TOKEN_REFRESHED must not orphan SUBSCRIBED or flip
+    // connected→reconnecting (that jerks an idle Inbox via router.refresh).
+    if (isLiveSameToken(token)) {
+      return;
+    }
+
+    await input.supabase.realtime.setAuth(token);
+    if (!isActive()) {
       return;
     }
 
@@ -139,7 +145,7 @@ function subscribeWithOperatorAuth(input: {
     }
 
     channel = nextChannel.subscribe((status) => {
-      if (!active || epoch !== channelEpoch) {
+      if (!isActive() || epoch !== channelEpoch) {
         return;
       }
 
@@ -181,7 +187,7 @@ function subscribeWithOperatorAuth(input: {
     });
   }
 
-  void startSubscription();
+  enqueueStart();
 
   const {
     data: { subscription: authSubscription },
@@ -190,15 +196,12 @@ function subscribeWithOperatorAuth(input: {
       return;
     }
 
-    void (async () => {
-      await input.supabase.realtime.setAuth(session.access_token);
-      if (!active) {
-        return;
-      }
-      // Resubscribe after auth so CDC bindings are authorized. setAuth alone
-      // does not retrofit an already-joined postgres_changes channel.
-      void startSubscription();
-    })();
+    // Do not setAuth here. A second setAuth while postgres_changes is still
+    // joining can abort the handshake and leave status stuck at "connecting".
+    // startSubscription applies auth and no-ops when the token is unchanged.
+    if (!isLiveSameToken(session.access_token)) {
+      enqueueStart();
+    }
   });
 
   return () => {

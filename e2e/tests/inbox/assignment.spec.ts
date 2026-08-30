@@ -192,13 +192,14 @@ test.describe("conversation assignment & queues", () => {
     const staleVersion = await assignmentHeader(operatorB).getAttribute("data-assignment-version");
     expect(staleVersion).toBeTruthy();
 
-    // Keep operator B on a stale assignment_version by blocking RSC refreshes
-    // while still allowing server actions (POST + next-action).
+    // Keep operator B on a stale assignment_version by blocking RSC refreshes.
+    // Next 15 router.refresh() is POST; still allow server actions (next-action).
     await operatorB.route("**/app/**", async (route) => {
       const request = route.request();
       const headers = request.headers();
+      const isServerAction = headers["next-action"] !== undefined;
       const isRscRefresh =
-        request.method() === "GET" &&
+        !isServerAction &&
         (headers["rsc"] === "1" ||
           headers["next-router-state-tree"] !== undefined ||
           request.url().includes("_rsc"));

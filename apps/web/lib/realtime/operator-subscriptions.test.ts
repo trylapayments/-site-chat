@@ -160,6 +160,7 @@ describe("subscribeOperatorWorkspaceInbox auth lifecycle", () => {
 
     expect(supabase.channel.mock.calls.length).toBe(createsBeforeAuth);
     expect(channel.subscribeCount).toBe(1);
+    expect(supabase.realtime.setAuth).toHaveBeenCalledTimes(1);
     expect(statuses.filter((status) => status === "reconnecting")).toHaveLength(
       0,
     );
@@ -208,10 +209,50 @@ describe("subscribeOperatorWorkspaceInbox auth lifecycle", () => {
 
     expect(channel.subscribeCount).toBe(1);
     expect(supabase.channel.mock.calls.length).toBe(createsAfterConnect);
+    expect(supabase.realtime.setAuth).toHaveBeenCalledTimes(1);
     expect(statuses.filter((status) => status === "reconnecting")).toHaveLength(
       0,
     );
     expect(statuses.at(-1)).toBe("connected");
+
+    unsubscribe();
+  });
+
+  it("resubscribes when the access token changes", async () => {
+    const supabase = createMockSupabase({ accessToken: "token-old" });
+    createClientMock.mockReturnValue(supabase);
+
+    const statuses: string[] = [];
+    const unsubscribe = subscribeOperatorWorkspaceInbox({
+      workspaceId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      memberId: "11111111-2222-3333-4444-555555555555",
+      onMessageInsert: vi.fn(),
+      onConversationChange: vi.fn(),
+      onConnectionChange: (status) => {
+        statuses.push(status);
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(statuses).toContain("connected");
+    });
+    expect(supabase.channel).toHaveBeenCalledTimes(1);
+
+    supabase.auth.getSession.mockResolvedValue({
+      data: {
+        session: { access_token: "token-new" },
+      },
+    });
+
+    for (const listener of supabase.__authListeners) {
+      listener("TOKEN_REFRESHED", { access_token: "token-new" });
+    }
+
+    await vi.waitFor(() => {
+      expect(supabase.channel).toHaveBeenCalledTimes(2);
+    });
+    expect(statuses).toContain("reconnecting");
+    expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
 
     unsubscribe();
   });
