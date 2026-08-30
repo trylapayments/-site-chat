@@ -23,6 +23,8 @@ export function VisitorSidebarLiveRefresh({
   contactId?: string | null;
 }) {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export function VisitorSidebarLiveRefresh({
       }
       refreshTimerRef.current = setTimeout(() => {
         refreshTimerRef.current = null;
-        router.refresh();
+        routerRef.current.refresh();
       }, 250);
     };
 
@@ -58,7 +60,7 @@ export function VisitorSidebarLiveRefresh({
         refreshTimerRef.current = null;
       }
     };
-  }, [workspaceId, visitorSessionId, contactId, router]);
+  }, [workspaceId, visitorSessionId, contactId]);
 
   return null;
 }

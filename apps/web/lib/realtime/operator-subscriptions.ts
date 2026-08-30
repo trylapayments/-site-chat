@@ -15,17 +15,17 @@ export type RealtimeConnectionListener = (
 
 async function applyOperatorRealtimeAuth(
   supabase: OperatorSupabaseClient,
-): Promise<boolean> {
+): Promise<string | null> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    return false;
+    return null;
   }
 
   await supabase.realtime.setAuth(session.access_token);
-  return true;
+  return session.access_token;
 }
 
 type OperatorBinding = {
@@ -52,6 +52,7 @@ function subscribeWithOperatorAuth(input: {
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let retryAttempt = 0;
   let channelEpoch = 0;
+  let appliedAuthToken: string | null = null;
 
   input.onConnectionChange?.(currentStatus);
 
@@ -78,16 +79,29 @@ function subscribeWithOperatorAuth(input: {
 
   async function startSubscription() {
     clearRetryTimer();
-    const authed = await applyOperatorRealtimeAuth(input.supabase);
+    const token = await applyOperatorRealtimeAuth(input.supabase);
     if (!active) {
       return;
     }
 
     // postgres_changes is RLS-filtered; subscribing before setAuth reports
     // SUBSCRIBED but delivers no rows. Wait for onAuthStateChange instead.
-    if (!authed) {
+    if (!token) {
       return;
     }
+
+    // Same token + live/joining channel: setAuth is enough. INITIAL_SESSION /
+    // TOKEN_REFRESHED must not orphan SUBSCRIBED or flip connected→reconnecting
+    // (that retriggers list refetch + router.refresh and jerks a idle Inbox).
+    if (
+      appliedAuthToken === token &&
+      channel &&
+      (currentStatus === "connected" || currentStatus === "connecting")
+    ) {
+      return;
+    }
+
+    appliedAuthToken = token;
 
     if (channel) {
       const previous = channel;
