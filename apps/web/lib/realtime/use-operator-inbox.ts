@@ -119,6 +119,9 @@ export function useLiveInboxList(input: {
     } catch {
       // Keep the last good list; a later CDC event or reconnect will retry.
     }
+    // queryKey is the list-scope identity; the body reads queryRef so filter
+    // changes still produce a new callback and the connected effect refetches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- queryKey identity
   }, [input.workspaceId, queryKey]);
 
   const scheduleRefresh = useCallback(() => {
