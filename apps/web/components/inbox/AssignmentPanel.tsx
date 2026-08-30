@@ -53,6 +53,8 @@ export function AssignmentPanel({
   variant?: "default" | "header";
 }) {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   // Explicit busy flag — do not use useTransition here. router.refresh() inside
   // a transition keeps isPending true until RSC refetch completes, which can
   // strand the panel disabled after a successful mutation.
@@ -93,7 +95,7 @@ export function AssignmentPanel({
         }
         timer = setTimeout(() => {
           timer = null;
-          router.refresh();
+          routerRef.current.refresh();
         }, 250);
       },
     });
@@ -103,7 +105,7 @@ export function AssignmentPanel({
         clearTimeout(timer);
       }
     };
-  }, [conversationId, router, workspaceId]);
+  }, [conversationId, workspaceId]);
 
   useEffect(() => {
     if (pickerOpen) {
@@ -133,9 +135,9 @@ export function AssignmentPanel({
   ) {
     setAssignee(result.conversation.assigned_to);
     setAssignmentVersion(result.conversation.assignment_version ?? 0);
-    if (result.changed) {
-      setStatusMessage(successMessage);
-    }
+    setStatusMessage(
+      result.changed ? successMessage : messages.conflictRefresh,
+    );
     router.refresh();
   }
 
