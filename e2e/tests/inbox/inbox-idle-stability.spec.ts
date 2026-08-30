@@ -90,13 +90,13 @@ test("inbox stays idle-stable after selecting a conversation", async ({ page }) 
   expect(
     traffic.listConversations,
     `idle list_conversations=${String(traffic.listConversations)}`,
-  ).toBeLessThanOrEqual(2);
+  ).toBeLessThanOrEqual(1);
   expect(
     traffic.conversationRefresh,
     `idle conversation RSC refresh=${String(traffic.conversationRefresh)}`,
-  ).toBeLessThanOrEqual(3);
+  ).toBeLessThanOrEqual(2);
   expect(
     traffic.unreadTotal,
     `idle get_inbox_unread_total=${String(traffic.unreadTotal)}`,
-  ).toBeLessThanOrEqual(2);
+  ).toBeLessThanOrEqual(1);
 });
