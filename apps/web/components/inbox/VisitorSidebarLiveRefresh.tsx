@@ -38,6 +38,7 @@ export function VisitorSidebarLiveRefresh({
       }, 250);
     };
 
+    let seenConnected = false;
     const unsubscribe = subscribeOperatorVisitorContext({
       workspaceId,
       visitorSessionId,
@@ -46,9 +47,13 @@ export function VisitorSidebarLiveRefresh({
         scheduleRefresh();
       },
       onConnectionChange: (status) => {
-        // Catch up on any context changes missed while disconnected.
+        // First SUBSCRIBED is the mount handshake — SSR already has context.
+        // Refresh only after a later reconnect so idle Inbox does not RSC-churn.
         if (status === "connected") {
-          scheduleRefresh();
+          if (seenConnected) {
+            scheduleRefresh();
+          }
+          seenConnected = true;
         }
       },
     });

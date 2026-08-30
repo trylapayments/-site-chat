@@ -74,6 +74,10 @@ test("inbox stays idle-stable after selecting a conversation", async ({ page }) 
   const realtime = page.getByTestId("inbox-realtime-ready");
   await expect(realtime).toHaveAttribute("data-realtime-state", "connected");
 
+  // Allow mount catch-up (mark-read / first SUBSCRIBED) to finish before
+  // measuring idle traffic. The regression is a continuous refresh loop.
+  await page.waitForTimeout(2_000);
+
   const traffic = await countIdleTraffic(page, IDLE_MS);
 
   await expect(realtime).toHaveAttribute("data-realtime-state", "connected");
