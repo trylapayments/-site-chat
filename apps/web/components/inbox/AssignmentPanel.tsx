@@ -135,9 +135,9 @@ export function AssignmentPanel({
   ) {
     setAssignee(result.conversation.assigned_to);
     setAssignmentVersion(result.conversation.assignment_version ?? 0);
-    if (result.changed) {
-      setStatusMessage(successMessage);
-    }
+    setStatusMessage(
+      result.changed ? successMessage : messages.conflictRefresh,
+    );
     router.refresh();
   }
 
