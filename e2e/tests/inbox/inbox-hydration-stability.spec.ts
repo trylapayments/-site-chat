@@ -16,8 +16,13 @@ function attachHydrationGuards(page: Page) {
   const errors: string[] = [];
 
   page.on("console", (message: ConsoleMessage) => {
-    if (message.type() === "error" && HYDRATION_ERROR.test(message.text())) {
-      errors.push(`console:${message.text()}`);
+    // Next/React may emit hydration mismatches as error or warning depending
+    // on build mode; fail on either when the message matches known patterns.
+    if (
+      (message.type() === "error" || message.type() === "warning") &&
+      HYDRATION_ERROR.test(message.text())
+    ) {
+      errors.push(`console:${message.type()}:${message.text()}`);
     }
   });
 
