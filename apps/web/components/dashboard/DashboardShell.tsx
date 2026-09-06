@@ -33,19 +33,27 @@ export function DashboardShell({
   const canSearchNotes = can(role, "manage_internal_notes");
   const inboxBase = `/app/${slug}/inbox`;
   const contactsBase = `/app/${slug}/contacts`;
+  const teamBase = `/app/${slug}/team`;
   const isInbox =
     pathname === inboxBase || pathname.startsWith(`${inboxBase}/`);
   const isContacts =
     pathname === contactsBase || pathname.startsWith(`${contactsBase}/`);
-  // Contacts inherits Inbox chrome (GlobalSidebar + full-height canvas) only.
-  // Inbox layout/visuals remain unchanged.
-  const useOperatorWorkspaceChrome = isInbox || isContacts;
+  const isTeam = pathname === teamBase || pathname.startsWith(`${teamBase}/`);
+  // Team inherits Inbox chrome (GlobalSidebar + full-height canvas) only.
+  // Inbox and Contacts layout/visuals remain unchanged.
+  const useOperatorWorkspaceChrome = isInbox || isContacts || isTeam;
 
   if (useOperatorWorkspaceChrome) {
+    // h-svh (small viewport) — not h-dvh. Safari's dynamic viewport tracks
+    // the URL/toolbar chrome; nesting that under /app min-height:100vh made a
+    // document scrollbar appear/disappear and shift the whole 3-column page.
     return (
-      <div className="bg-inbox-canvas flex h-dvh overflow-hidden">
+      <div
+        className="bg-inbox-canvas flex h-svh overflow-hidden"
+        data-testid="dashboard-operator-shell"
+      >
         <div className="hidden lg:flex">
-          <Suspense fallback={<div className="bg-inbox-nav w-[220px]" />}>
+          <Suspense fallback={<div className="bg-inbox-nav w-[232px]" />}>
             <GlobalSidebar
               workspaceName={workspaceName}
               slug={slug}

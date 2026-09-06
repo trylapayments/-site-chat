@@ -131,21 +131,28 @@ test.describe("internal notes + mentions", () => {
         agentA.getByTestId("internal-note-item").filter({ hasText: edited }),
       ).toHaveCount(0, { timeout: 30_000 });
     }
-    // Peer catch-up: CDC soft-delete can be missed under load; tab flip + reload
-    // force list reconcile against durable deleted_at.
+    // Peer catch-up: CDC soft-delete can be missed under load; tab flip, full
+    // reload, then conversation re-entry force list reconcile on deleted_at.
+    const peerDeletedNote = agentB.getByTestId("internal-note-item").filter({ hasText: edited });
     await agentB.getByTestId("conversation-tab-messages").click();
     await agentB.getByTestId("conversation-tab-notes").click();
     try {
-      await expect(
-        agentB.getByTestId("internal-note-item").filter({ hasText: edited }),
-      ).toHaveCount(0, { timeout: 20_000 });
+      await expect(peerDeletedNote).toHaveCount(0, { timeout: 20_000 });
     } catch {
       await agentB.reload();
       await waitForOperatorThreadRealtimeReady(agentB);
       await agentB.getByTestId("conversation-tab-notes").click();
-      await expect(
-        agentB.getByTestId("internal-note-item").filter({ hasText: edited }),
-      ).toHaveCount(0, { timeout: 30_000 });
+      try {
+        await expect(peerDeletedNote).toHaveCount(0, { timeout: 20_000 });
+      } catch {
+        const peerUrl = agentB.url();
+        await agentB.goto(`${APP_URL}/app/acme-support/inbox`);
+        await waitForOperatorInboxRealtimeReady(agentB);
+        await agentB.goto(peerUrl);
+        await waitForOperatorThreadRealtimeReady(agentB);
+        await agentB.getByTestId("conversation-tab-notes").click();
+        await expect(peerDeletedNote).toHaveCount(0, { timeout: 30_000 });
+      }
     }
 
     await visitorContext.close();

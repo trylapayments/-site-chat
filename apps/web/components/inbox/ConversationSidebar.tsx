@@ -31,6 +31,7 @@ import {
 } from "@/lib/inbox/actions";
 import {
   formatConversationContactLabel,
+  formatInboxDateTime,
   formatRelativeTime,
 } from "@/lib/inbox/search-params";
 import { cn } from "@/lib/utils";
@@ -38,21 +39,6 @@ import { cn } from "@/lib/utils";
 const crmMessages = crmMessagesEn;
 
 type InspectorTab = "details" | "activity";
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) {
-    return "—";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-  return date.toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  });
-}
 
 function initialsFromLabel(label: string): string {
   const parts = label.trim().split(/\s+/).filter(Boolean);
@@ -594,13 +580,14 @@ export function ConversationSidebar({
               <dl className="mt-2">
                 <MetaRow
                   label="First seen"
-                  value={formatDateTime(
+                  value={formatInboxDateTime(
                     activity?.first_seen_at ?? visitor?.first_seen_at,
                   )}
                 />
                 <MetaRow
                   label="Last seen"
-                  value={formatDateTime(
+                  testId="inspector-last-seen"
+                  value={formatInboxDateTime(
                     activity?.last_seen_at ?? visitor?.last_seen_at,
                   )}
                 />
@@ -633,7 +620,7 @@ export function ConversationSidebar({
                         </p>
                       ) : null}
                       <p className="text-inbox-muted mt-1 text-[11px]">
-                        {formatDateTime(view.created_at)}
+                        {formatInboxDateTime(view.created_at)}
                       </p>
                     </li>
                   ))}
@@ -675,7 +662,7 @@ export function ConversationSidebar({
                         </p>
                       ) : null}
                       <p className="text-inbox-muted mt-1 text-[11px]">
-                        {formatDateTime(view.created_at)}
+                        {formatInboxDateTime(view.created_at)}
                       </p>
                     </li>
                   ))}

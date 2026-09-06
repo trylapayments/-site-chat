@@ -74,6 +74,17 @@ export function useLiveInboxList(input: {
     itemsRef.current = items;
   }, [items]);
 
+  const queryRef = useRef(input.query);
+  queryRef.current = input.query;
+  const statusFilterRef = useRef(statusFilter);
+  statusFilterRef.current = statusFilter;
+  const assignmentFilterRef = useRef(assignmentFilter);
+  assignmentFilterRef.current = assignmentFilter;
+  const sortRef = useRef(sort);
+  sortRef.current = sort;
+  const memberIdRef = useRef(input.memberId);
+  memberIdRef.current = input.memberId;
+
   const refreshList = useCallback(async () => {
     const generation = ++refreshGenerationRef.current;
     const itemsBeforeFetch = itemsRef.current;
@@ -82,7 +93,7 @@ export function useLiveInboxList(input: {
       const refreshed = await fetchConversations(
         supabase,
         input.workspaceId,
-        input.query,
+        queryRef.current,
       );
       if (generation !== refreshGenerationRef.current) {
         return;
@@ -103,12 +114,15 @@ export function useLiveInboxList(input: {
             byId.set(local.id, local);
           }
         }
-        return sortConversationItems([...byId.values()], sort);
+        return sortConversationItems([...byId.values()], sortRef.current);
       });
     } catch {
       // Keep the last good list; a later CDC event or reconnect will retry.
     }
-  }, [input.query, input.workspaceId, sort]);
+    // queryKey is the list-scope identity; the body reads queryRef so filter
+    // changes still produce a new callback and the connected effect refetches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- queryKey identity
+  }, [input.workspaceId, queryKey]);
 
   const scheduleRefresh = useCallback(() => {
     if (refreshTimerRef.current !== null) {
@@ -118,6 +132,11 @@ export function useLiveInboxList(input: {
       void refreshList();
     }, 250);
   }, [refreshList]);
+
+  const refreshListRef = useRef(refreshList);
+  refreshListRef.current = refreshList;
+  const scheduleRefreshRef = useRef(scheduleRefresh);
+  scheduleRefreshRef.current = scheduleRefresh;
 
   /** Gates optimistic unread +1 when mark-read CDC arrives before message INSERT. */
   const lastReadByConversationRef = useRef(new Map<string, number>());
@@ -173,28 +192,28 @@ export function useLiveInboxList(input: {
             has_unread: nextUnread > 0,
           });
           const matches = conversationMatchesFilters(next, {
-            status: statusFilter,
-            assignment: assignmentFilter,
-            memberId: input.memberId,
+            status: statusFilterRef.current,
+            assignment: assignmentFilterRef.current,
+            memberId: memberIdRef.current,
           });
           if (!matches) {
             return current.filter((item) => item.id !== next.id);
           }
           return sortConversationItems(
-            upsertConversationListItem(current, next, sort),
-            sort,
+            upsertConversationListItem(current, next, sortRef.current),
+            sortRef.current,
           );
         });
 
         if (!existing) {
           // Authoritative catch-up for contact/assignee enrichment.
-          void refreshList();
+          void refreshListRef.current();
         }
       },
       onConversationChange: (raw) => {
         const parsed = operatorConversationChangeSchema.safeParse(raw);
         if (!parsed.success) {
-          scheduleRefresh();
+          scheduleRefreshRef.current();
           return;
         }
 
@@ -210,9 +229,9 @@ export function useLiveInboxList(input: {
             currentExisting ?? conversationListItemFromChange(parsed.data);
           const patched = patchConversationListItem(base, parsed.data);
           const matches = conversationMatchesFilters(patched, {
-            status: statusFilter,
-            assignment: assignmentFilter,
-            memberId: input.memberId,
+            status: statusFilterRef.current,
+            assignment: assignmentFilterRef.current,
+            memberId: memberIdRef.current,
           });
 
           if (!matches) {
@@ -220,17 +239,17 @@ export function useLiveInboxList(input: {
           }
 
           return sortConversationItems(
-            upsertConversationListItem(current, patched, sort),
-            sort,
+            upsertConversationListItem(current, patched, sortRef.current),
+            sortRef.current,
           );
         });
 
         if (!existing) {
-          void refreshList();
+          void refreshListRef.current();
         } else if (assignmentNeedsEnrichmentRefresh(existing, parsed.data)) {
           // Assignee UUID changed — refresh for display_label enrichment and
           // keep Mine/Unassigned queues consistent without polling.
-          scheduleRefresh();
+          scheduleRefreshRef.current();
         }
       },
       onMemberReadChange: (raw) => {
@@ -261,25 +280,18 @@ export function useLiveInboxList(input: {
           });
 
           return sortConversationItems(
-            upsertConversationListItem(current, next, sort),
-            sort,
+            upsertConversationListItem(current, next, sortRef.current),
+            sortRef.current,
           );
         });
       },
     });
 
     return unsubscribe;
-    // queryKey captures list-scope fields; avoid resubscribing on object identity churn.
-  }, [
-    assignmentFilter,
-    input.memberId,
-    input.workspaceId,
-    queryKey,
-    refreshList,
-    scheduleRefresh,
-    sort,
-    statusFilter,
-  ]);
+    // Workspace + member only. Filter/sort/query object identity and refresh
+    // callbacks must not tear down postgres_changes (Team chrome prefetch and
+    // router.refresh() churn searchParams / function identity while idle).
+  }, [input.memberId, input.workspaceId]);
 
   useOnlineStatus((online) => {
     if (online) {

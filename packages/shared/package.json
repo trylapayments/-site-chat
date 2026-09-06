@@ -12,6 +12,10 @@
     "./env": {
       "types": "./dist/env/index.d.ts",
       "default": "./dist/env/index.js"
+    },
+    "./team": {
+      "types": "./dist/team/index.d.ts",
+      "default": "./dist/team/index.js"
     }
   },
   "scripts": {

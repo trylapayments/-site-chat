@@ -23,6 +23,8 @@ export function VisitorSidebarLiveRefresh({
   contactId?: string | null;
 }) {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -32,10 +34,11 @@ export function VisitorSidebarLiveRefresh({
       }
       refreshTimerRef.current = setTimeout(() => {
         refreshTimerRef.current = null;
-        router.refresh();
+        routerRef.current.refresh();
       }, 250);
     };
 
+    let seenConnected = false;
     const unsubscribe = subscribeOperatorVisitorContext({
       workspaceId,
       visitorSessionId,
@@ -44,9 +47,13 @@ export function VisitorSidebarLiveRefresh({
         scheduleRefresh();
       },
       onConnectionChange: (status) => {
-        // Catch up on any context changes missed while disconnected.
+        // First SUBSCRIBED is the mount handshake — SSR already has context.
+        // Refresh only after a later reconnect so idle Inbox does not RSC-churn.
         if (status === "connected") {
-          scheduleRefresh();
+          if (seenConnected) {
+            scheduleRefresh();
+          }
+          seenConnected = true;
         }
       },
     });
@@ -58,7 +65,7 @@ export function VisitorSidebarLiveRefresh({
         refreshTimerRef.current = null;
       }
     };
-  }, [workspaceId, visitorSessionId, contactId, router]);
+  }, [workspaceId, visitorSessionId, contactId]);
 
   return null;
 }

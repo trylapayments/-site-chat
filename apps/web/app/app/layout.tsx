@@ -50,5 +50,5 @@ export default async function AppLayout({
     redirect(toAppRoute(recoveryGate.destination));
   }
 
-  return <div className="bg-background min-h-screen">{children}</div>;
+  return <div className="bg-background">{children}</div>;
 }

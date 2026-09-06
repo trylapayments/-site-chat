@@ -132,7 +132,17 @@ export async function openInspectorActivity(page: Page) {
 export async function openOperatorConversation(page: Page, previewText: string) {
   await ensureOperatorDesktopWorkspace(page);
   const row = page.getByRole("row").filter({ hasText: previewText });
-  await expect(row).toBeVisible({ timeout: 60_000 });
+  // Prefer waiting for the live list row (covers freshly created widget
+  // conversations). Only fall back to ?q= when the row is absent after that —
+  // e.g. a seeded conversation pushed off page 1 after a long local suite.
+  // Searching immediately races new messages that are not indexed yet.
+  try {
+    await expect(row).toBeVisible({ timeout: 20_000 });
+  } catch {
+    await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox?q=${encodeURIComponent(previewText)}`);
+    await waitForOperatorInboxRealtimeReady(page);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+  }
   const href = await row.getByRole("link").first().getAttribute("href");
   if (!href) {
     throw new Error(`Conversation link missing for preview: ${previewText}`);
