@@ -132,6 +132,11 @@ export async function openInspectorActivity(page: Page) {
 export async function openOperatorConversation(page: Page, previewText: string) {
   await ensureOperatorDesktopWorkspace(page);
   const row = page.getByRole("row").filter({ hasText: previewText });
+  // After long suites the seeded row can leave page 1; search scopes the list.
+  if (!(await row.isVisible().catch(() => false))) {
+    await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox?q=${encodeURIComponent(previewText)}`);
+    await waitForOperatorInboxRealtimeReady(page);
+  }
   await expect(row).toBeVisible({ timeout: 60_000 });
   const href = await row.getByRole("link").first().getAttribute("href");
   if (!href) {
