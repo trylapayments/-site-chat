@@ -44,10 +44,16 @@ export function DashboardShell({
   const useOperatorWorkspaceChrome = isInbox || isContacts || isTeam;
 
   if (useOperatorWorkspaceChrome) {
+    // h-svh (small viewport) — not h-dvh. Safari's dynamic viewport tracks
+    // the URL/toolbar chrome; nesting that under /app min-height:100vh made a
+    // document scrollbar appear/disappear and shift the whole 3-column page.
     return (
-      <div className="bg-inbox-canvas flex h-dvh overflow-hidden">
+      <div
+        className="bg-inbox-canvas flex h-svh overflow-hidden"
+        data-testid="dashboard-operator-shell"
+      >
         <div className="hidden lg:flex">
-          <Suspense fallback={<div className="bg-inbox-nav w-[220px]" />}>
+          <Suspense fallback={<div className="bg-inbox-nav w-[232px]" />}>
             <GlobalSidebar
               workspaceName={workspaceName}
               slug={slug}
