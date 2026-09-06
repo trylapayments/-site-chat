@@ -58,12 +58,18 @@ test("inbox conversation hydrates without date-formatting mismatches", async ({ 
   const selectedId = await selected.getAttribute("data-conversation-id");
   expect(selectedId).toBeTruthy();
 
-  const lastSeen = page.getByTestId("inspector-last-seen");
-  if ((await lastSeen.count()) > 0) {
-    const text = (await lastSeen.textContent())?.trim() ?? "";
-    expect(text.length).toBeGreaterThan(0);
-    expect(text).not.toMatch(/\bat\b/);
+  // Details → Activity "Last seen" uses formatInboxDateTime. SSR and the first
+  // client paint must match byte-for-byte (no ICU " at " glue).
+  const detailsTab = page.getByTestId("inspector-details-tab");
+  if (await detailsTab.isVisible()) {
+    await detailsTab.click();
   }
+  const lastSeen = page.getByTestId("inspector-last-seen");
+  await expect(lastSeen).toBeVisible();
+  const text = (await lastSeen.textContent())?.trim() ?? "";
+  expect(text.length).toBeGreaterThan(0);
+  expect(text).not.toMatch(/\bat\b/);
+  expect(text).toMatch(/^(—|[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M)$/);
 
   // Allow hydration + first paint to finish before asserting console silence.
   await page.waitForTimeout(2_000);
