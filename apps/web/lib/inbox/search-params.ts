@@ -91,6 +91,22 @@ export const INBOX_ACTIVITY_DATE_TIME_ZONE = "UTC";
 /** App-owned separator; avoids engine-specific Intl date-time glue ("at" vs ", "). */
 export const INBOX_ACTIVITY_DATE_TIME_SEPARATOR = ", ";
 
+function formatInboxTimePart(date: Date): string {
+  return new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: INBOX_ACTIVITY_DATE_TIME_ZONE,
+  }).format(date);
+}
+
+/**
+ * Compact absolute timestamp (no year) for thread/list rows.
+ *
+ * Date and time are formatted separately, then joined with
+ * {@link INBOX_ACTIVITY_DATE_TIME_SEPARATOR}. Never use `dateStyle`+`timeStyle`
+ * (or a single `toLocaleString`) — Node ICU emits "at" while Safari emits ", ".
+ */
 export function formatRelativeTime(value: string | null): string {
   if (!value) {
     return "—";
@@ -101,21 +117,35 @@ export function formatRelativeTime(value: string | null): string {
     return "—";
   }
 
-  // Format date and time separately, then join with our literal separator.
-  // A single Intl.DateTimeFormat().format() call uses engine/ICU glue that
-  // differs between Node SSR ("Aug 5 at 10:43 PM") and browsers ("Aug 5, 10:43 PM").
   const datePart = new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
     month: "short",
     day: "numeric",
     timeZone: INBOX_ACTIVITY_DATE_TIME_ZONE,
   }).format(date);
 
-  const timePart = new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
+  return `${datePart}${INBOX_ACTIVITY_DATE_TIME_SEPARATOR}${formatInboxTimePart(date)}`;
+}
+
+/**
+ * Full absolute timestamp (with year) for inspector / CRM "Last seen" fields.
+ * Same SSR/client contract as {@link formatRelativeTime}.
+ */
+export function formatInboxDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  const datePart = new Intl.DateTimeFormat(INBOX_ACTIVITY_DATE_LOCALE, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
     timeZone: INBOX_ACTIVITY_DATE_TIME_ZONE,
   }).format(date);
 
-  return `${datePart}${INBOX_ACTIVITY_DATE_TIME_SEPARATOR}${timePart}`;
+  return `${datePart}${INBOX_ACTIVITY_DATE_TIME_SEPARATOR}${formatInboxTimePart(date)}`;
 }
