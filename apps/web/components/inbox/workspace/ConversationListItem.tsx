@@ -3,6 +3,7 @@
 import type { ConversationListItem } from "@site-chat/shared";
 import { Paperclip } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { toAppRoute } from "@/lib/auth/redirect";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
@@ -21,8 +22,19 @@ function initialsFromLabel(label: string): string {
   return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
 }
 
-/** Short relative clock for dense inbox rows (list-only; not used in SSR thread). */
-function formatListTime(value: string | null): string {
+function formatListAbsoluteDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * Dense list clock. Omit `nowMs` on SSR / first client paint so hydration
+ * matches; pass client `Date.now()` only after mount.
+ */
+function formatListTime(value: string | null, nowMs?: number): string {
   if (!value) {
     return "—";
   }
@@ -30,7 +42,10 @@ function formatListTime(value: string | null): string {
   if (Number.isNaN(date.getTime())) {
     return "—";
   }
-  const diffMs = Date.now() - date.getTime();
+  if (nowMs === undefined) {
+    return formatListAbsoluteDate(date);
+  }
+  const diffMs = nowMs - date.getTime();
   const minutes = Math.max(0, Math.floor(diffMs / 60_000));
   if (minutes < 1) {
     return "now";
@@ -46,11 +61,7 @@ function formatListTime(value: string | null): string {
   if (days < 7) {
     return `${String(days)}d`;
   }
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  return formatListAbsoluteDate(date);
 }
 
 function StatusPill({ status }: { status: ConversationListItem["status"] }) {
@@ -82,6 +93,11 @@ export function ConversationListItemRow({
   selected: boolean;
   listQueryString: string;
 }) {
+  const [nowMs, setNowMs] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    setNowMs(Date.now());
+  }, []);
+
   const label = formatConversationContactLabel(conversation.contact);
   const href = toAppRoute(
     listQueryString
@@ -150,7 +166,7 @@ export function ConversationListItemRow({
                 {label}
               </p>
               <time className="text-inbox-muted shrink-0 pt-0.5 text-[12px] tabular-nums">
-                {formatListTime(conversation.last_message_at)}
+                {formatListTime(conversation.last_message_at, nowMs)}
               </time>
             </div>
 

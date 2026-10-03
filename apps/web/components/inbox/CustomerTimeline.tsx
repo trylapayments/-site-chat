@@ -16,23 +16,12 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { listCustomerTimelineAction } from "@/lib/inbox/actions";
+import { formatInboxDateTime } from "@/lib/inbox/search-params";
 import { subscribeOperatorCustomerTimeline } from "@/lib/realtime/operator-subscriptions";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { workspaceNavPath } from "@/lib/dashboard/routes";
 
 const messages = customerTimelineMessagesEn;
-
-function formatTimelineTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-  return date.toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  });
-}
 
 function eventIconLabel(
   eventType: CustomerTimelineEvent["event_type"],
@@ -395,7 +384,7 @@ export function CustomerTimeline({
                     ) : null}
                     <p className="text-muted-foreground text-xs">
                       <time dateTime={event.occurred_at}>
-                        {formatTimelineTimestamp(event.occurred_at)}
+                        {formatInboxDateTime(event.occurred_at)}
                       </time>
                     </p>
                     {showConversationLink && event.conversation_id ? (

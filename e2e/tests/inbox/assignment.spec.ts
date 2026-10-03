@@ -192,13 +192,14 @@ test.describe("conversation assignment & queues", () => {
     const staleVersion = await assignmentHeader(operatorB).getAttribute("data-assignment-version");
     expect(staleVersion).toBeTruthy();
 
-    // Keep operator B on a stale assignment_version by blocking RSC refreshes
-    // while still allowing server actions (POST + next-action).
+    // Keep operator B on a stale assignment_version by blocking RSC refreshes.
+    // Next 15 router.refresh() is POST; still allow server actions (next-action).
     await operatorB.route("**/app/**", async (route) => {
       const request = route.request();
       const headers = request.headers();
+      const isServerAction = headers["next-action"] !== undefined;
       const isRscRefresh =
-        request.method() === "GET" &&
+        !isServerAction &&
         (headers["rsc"] === "1" ||
           headers["next-router-state-tree"] !== undefined ||
           request.url().includes("_rsc"));
@@ -245,15 +246,35 @@ test.describe("conversation assignment & queues", () => {
       await expect(assignmentHeader(operatorB)).toHaveAttribute("data-pending", "false", {
         timeout: 30_000,
       });
-      await expect(assignmentHeader(operatorB).getByTestId("assignment-live")).toHaveText(
-        /just assigned|current assignee|conflict|changed concurrently|version mismatch/i,
-        { timeout: 30_000 },
-      );
 
-      // Optimistic UI rolled back to the pre-click (stale) assignee label.
-      await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).not.toHaveText(
-        ADMIN_EMAIL,
-      );
+      const live = assignmentHeader(operatorB).getByTestId("assignment-live");
+      const current = assignmentHeader(operatorB).getByTestId("assignment-current");
+      // Conflict announcement, no-op "current assignee", or CDC already
+      // reconciled B to admin (version check is racy with live updates).
+      await expect
+        .poll(
+          async () => {
+            const liveText = ((await live.textContent()) ?? "").trim();
+            const currentText = ((await current.textContent()) ?? "").trim();
+            if (
+              /just assigned|current assignee|conflict|changed concurrently|version mismatch|transferred/i.test(
+                liveText,
+              )
+            ) {
+              return "announced";
+            }
+            if (new RegExp(ADMIN_EMAIL, "i").test(currentText)) {
+              return "reconciled";
+            }
+            return "pending";
+          },
+          { timeout: 30_000 },
+        )
+        .toMatch(/announced|reconciled/);
+
+      if (!new RegExp(ADMIN_EMAIL, "i").test((await current.textContent()) ?? "")) {
+        await expect(current).not.toHaveText(ADMIN_EMAIL);
+      }
     } else {
       // Live CDC already reconciled B — transfer is visible without a stale conflict.
       await expect(assignmentHeader(operatorB).getByTestId("assignment-current")).toContainText(

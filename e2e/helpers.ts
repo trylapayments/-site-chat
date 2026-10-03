@@ -131,19 +131,24 @@ export async function openInspectorActivity(page: Page) {
 
 export async function openOperatorConversation(page: Page, previewText: string) {
   await ensureOperatorDesktopWorkspace(page);
-  // Inbox is paginated (25 rows by default); older seeded conversations can
-  // move off page one as other tests create traffic. Use the real server-side
-  // list search, resetting pagination while retaining the caller's filters.
-  const inboxUrl = new URL(page.url());
-  inboxUrl.pathname = inboxUrl.pathname.replace(/(\/inbox)(?:\/.*)?$/, "$1");
-  inboxUrl.searchParams.set("q", previewText);
-  inboxUrl.searchParams.delete("page");
-  await page.goto(inboxUrl.toString());
   const row = page
     .getByTestId("inbox-conversation-list")
     .getByRole("row")
     .filter({ hasText: previewText });
-  await expect(row).toBeVisible({ timeout: 60_000 });
+  // Fresh widget traffic may still be arriving in the live list. Older seeded
+  // conversations can be beyond page one: search on the server as a fallback.
+  try {
+    await expect(row).toBeVisible({ timeout: 20_000 });
+  } catch {
+    const inboxUrl = new URL(page.url());
+    inboxUrl.pathname = inboxUrl.pathname.replace(/(\/inbox)(?:\/.*)?$/, "$1");
+    inboxUrl.searchParams.set("q", previewText);
+    inboxUrl.searchParams.delete("page");
+    await page.goto(inboxUrl.toString());
+    await waitForOperatorInboxRealtimeReady(page);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+  }
+
   const href = await row.getByRole("link").first().getAttribute("href");
   if (!href) {
     throw new Error(`Conversation link missing for preview: ${previewText}`);

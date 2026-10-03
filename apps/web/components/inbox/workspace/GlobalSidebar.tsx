@@ -187,6 +187,7 @@ export function GlobalSidebar({
             <Link
               key={item.id}
               href={toAppRoute(item.href)}
+              prefetch={item.id === "team" ? false : undefined}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",

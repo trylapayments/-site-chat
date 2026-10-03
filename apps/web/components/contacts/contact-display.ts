@@ -1,5 +1,7 @@
 import type { ContactListItem, ContactProfile } from "@site-chat/shared";
 
+import { formatInboxDateTime } from "@/lib/inbox/search-params";
+
 export function contactDisplayLabel(
   contact: Pick<
     ContactListItem | ContactProfile,
@@ -75,18 +77,7 @@ export function formatContactListTime(
 export function formatContactDateTime(
   value: string | null | undefined,
 ): string {
-  if (!value) {
-    return "—";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-  return date.toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  });
+  return formatInboxDateTime(value);
 }
 
 export function contactLocationLabel(

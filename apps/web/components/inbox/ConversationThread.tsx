@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { markConversationReadAction } from "@/lib/inbox/actions";
+import { formatRelativeTime } from "@/lib/inbox/search-params";
 
 export function MarkConversationRead({
   workspaceSlug,
@@ -71,12 +72,7 @@ export function MessageList({ messages }: { messages: MessageItem[] }) {
           <header className="mb-1 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{message.sender_label}</span>
             <time className="text-muted-foreground text-xs">
-              {new Intl.DateTimeFormat(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-              }).format(new Date(message.created_at))}
+              {formatRelativeTime(message.created_at)}
             </time>
           </header>
           <p className="text-sm whitespace-pre-wrap">{message.body}</p>

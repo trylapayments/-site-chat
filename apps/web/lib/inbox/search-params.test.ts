@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatConversationContactLabel,
+  formatInboxDateTime,
   formatRelativeTime,
   INBOX_ACTIVITY_DATE_LOCALE,
   INBOX_ACTIVITY_DATE_TIME_SEPARATOR,
@@ -77,5 +78,38 @@ describe("formatRelativeTime", () => {
     expect(formatted).toBe(
       `Aug 5${INBOX_ACTIVITY_DATE_TIME_SEPARATOR}10:43 PM`,
     );
+  });
+});
+
+describe("formatInboxDateTime", () => {
+  it("returns an em dash for null, undefined, or invalid timestamps", () => {
+    expect(formatInboxDateTime(null)).toBe("—");
+    expect(formatInboxDateTime(undefined)).toBe("—");
+    expect(formatInboxDateTime("not-a-date")).toBe("—");
+  });
+
+  it("matches the Safari screenshot timestamp byte-for-byte (no Node 'at' glue)", () => {
+    // ConversationSidebar MetaRow "Last seen" — Node dateStyle+timeStyle used
+    // to emit "Aug 30, 2026 at 2:11 PM"; Safari emitted "Aug 30, 2026, 2:11 PM".
+    expect(formatInboxDateTime("2026-08-30T14:11:00.000Z")).toBe(
+      "Aug 30, 2026, 2:11 PM",
+    );
+    expect(formatInboxDateTime("2026-08-30T14:11:00.000Z")).not.toContain(
+      " at ",
+    );
+  });
+
+  it("stays stable regardless of engine dateStyle+timeStyle glue", () => {
+    const iso = "2026-08-30T14:11:00.000Z";
+    // dateStyle+timeStyle glue varies by ICU (Node may emit "at" or ", ").
+    // Our formatter must not depend on that combined call.
+    const engineCombined = new Date(iso).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "UTC",
+    });
+    expect(typeof engineCombined).toBe("string");
+    expect(formatInboxDateTime(iso)).toBe("Aug 30, 2026, 2:11 PM");
+    expect(formatInboxDateTime(iso)).not.toMatch(/\bat\b/);
   });
 });
