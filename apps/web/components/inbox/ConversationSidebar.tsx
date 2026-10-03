@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
-import { VisitorSidebarLiveRefresh } from "@/components/inbox/VisitorSidebarLiveRefresh";
+import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { CustomerTimeline } from "@/components/inbox/CustomerTimeline";
 import { ContactTagChip } from "@/components/crm/ContactTagsEditor";
 import { Button } from "@/components/ui/button";
@@ -100,7 +100,7 @@ export function ConversationSidebar({
   workspaceId,
   workspaceSlug,
   conversationId,
-  conversation,
+  conversation: initialConversation,
   members,
   memberId,
   canAssign,
@@ -119,6 +119,10 @@ export function ConversationSidebar({
   canUpdateVisitor: boolean;
   contactTags?: ContactTagSummary[];
 }) {
+  const visitorContext = useConversationVisitorContext();
+  const conversation = visitorContext
+    ? { ...initialConversation, ...visitorContext.snapshot }
+    : initialConversation;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -202,11 +206,11 @@ export function ConversationSidebar({
       className="bg-inbox-panel flex h-full min-h-0 w-full flex-col overflow-hidden"
       data-testid="customer-inspector"
     >
-      <VisitorSidebarLiveRefresh
-        workspaceId={workspaceId}
-        visitorSessionId={conversation.visitor_session_id}
-        contactId={conversation.contact?.id ?? null}
-      />
+      {visitorContext?.error ? (
+        <p role="alert" className="px-4 py-2 text-sm text-red-700">
+          {visitorContext.error}
+        </p>
+      ) : null}
 
       <div className="border-inbox-border/80 shrink-0 border-b px-4 pt-4 pb-3.5">
         <div className="flex items-start gap-3">
@@ -355,7 +359,7 @@ export function ConversationSidebar({
                           },
                           draft: submittedDraft,
                         });
-                        router.refresh();
+                        await visitorContext?.refresh();
                       } else {
                         setProfileError(result.message);
                       }

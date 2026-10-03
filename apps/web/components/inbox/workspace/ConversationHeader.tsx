@@ -9,6 +9,8 @@ import { MoreHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
+import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
+import { formatConversationContactLabel } from "@/lib/inbox/search-params";
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,12 +36,12 @@ function initialsFromLabel(label: string): string {
 }
 
 export function ConversationHeader({
-  contactLabel,
+  contactLabel: initialContactLabel,
   conversationId,
   status,
-  locationLabel,
-  deviceLabel,
-  pageTitle,
+  locationLabel: initialLocationLabel,
+  deviceLabel: initialDeviceLabel,
+  pageTitle: initialPageTitle,
   workspaceSlug,
   workspaceId,
   conversation,
@@ -62,6 +64,28 @@ export function ConversationHeader({
   canAssign: boolean;
   canUpdateStatus: boolean;
 }) {
+  const visitorContext = useConversationVisitorContext();
+  const context = visitorContext?.snapshot.visitor_context;
+  const contactLabel = visitorContext
+    ? formatConversationContactLabel(visitorContext.snapshot.contact)
+    : initialContactLabel;
+  const locationLabel = visitorContext
+    ? (context?.timezone ?? null)
+    : initialLocationLabel;
+  const deviceLabel = visitorContext
+    ? [
+        context?.device_type,
+        context?.browser_family
+          ? `${context.browser_family}${context.browser_version ? ` ${context.browser_version}` : ""}`
+          : null,
+        context?.os_family,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : initialDeviceLabel;
+  const pageTitle = visitorContext
+    ? (context?.current_title ?? null)
+    : initialPageTitle;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const meta = [locationLabel, deviceLabel, pageTitle]
