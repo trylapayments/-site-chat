@@ -17,7 +17,6 @@ export function MarkConversationRead({
   conversationId: string;
   throughSequence?: number;
 }) {
-  const router = useRouter();
   const [, startTransition] = useTransition();
   const markedRef = useRef(false);
 
@@ -28,23 +27,16 @@ export function MarkConversationRead({
     markedRef.current = true;
 
     startTransition(async () => {
-      const result = await markConversationReadAction(workspaceSlug, {
+      await markConversationReadAction(workspaceSlug, {
         conversationId,
         throughSequence,
       });
 
-      // Only refresh when a write occurred so reopening a read conversation
-      // stays write-free and avoids unnecessary RSC churn.
-      if (
-        result.success &&
-        result.data &&
-        "updated" in result.data &&
-        result.data.updated
-      ) {
-        router.refresh();
-      }
+      // Member-read CDC updates the live Inbox and unread total. A full RSC
+      // refresh here races hydration of the conversation Suspense boundary:
+      // its server markup can survive while the thread effects never start.
     });
-  }, [conversationId, router, throughSequence, workspaceSlug]);
+  }, [conversationId, throughSequence, workspaceSlug]);
 
   return null;
 }

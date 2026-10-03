@@ -208,6 +208,18 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Unread conversation startup soak (retries off)
+        run: >
+          pnpm exec playwright test
+          -c e2e/playwright.config.ts
+          realtime/attachments.spec.ts
+          -g "operator attach control is available in live thread"
+          --retries=0
+          --repeat-each=10
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
       - name: Run Playwright cross-origin realtime suite
         run: pnpm test:e2e --retries=0
         env:
