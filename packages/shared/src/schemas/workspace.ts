@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { widgetPublicKeySchema } from "./widget.js";
 
 const memberRoleSchema = z.enum(["owner", "admin", "agent", "viewer"]);
 
@@ -64,6 +65,7 @@ export const createWorkspaceResultSchema = z
     workspace_id: z.string().uuid(),
     slug: z.string(),
     name: z.string(),
+    widget_public_key: widgetPublicKeySchema,
   })
   .strict();
 
