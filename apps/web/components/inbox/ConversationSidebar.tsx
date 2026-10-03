@@ -373,9 +373,10 @@ export function ConversationSidebar({
                       value={identity.draft.name}
                       disabled={isPending}
                       onChange={(event) => {
+                        const value = event.currentTarget.value;
                         setIdentity((current) => ({
                           ...current,
-                          draft: { ...current.draft, name: event.target.value },
+                          draft: { ...current.draft, name: value },
                         }));
                       }}
                       maxLength={120}
@@ -390,11 +391,12 @@ export function ConversationSidebar({
                       value={identity.draft.email}
                       disabled={isPending}
                       onChange={(event) => {
+                        const value = event.currentTarget.value;
                         setIdentity((current) => ({
                           ...current,
                           draft: {
                             ...current.draft,
-                            email: event.target.value,
+                            email: value,
                           },
                         }));
                       }}
@@ -410,11 +412,12 @@ export function ConversationSidebar({
                       value={identity.draft.phone}
                       disabled={isPending}
                       onChange={(event) => {
+                        const value = event.currentTarget.value;
                         setIdentity((current) => ({
                           ...current,
                           draft: {
                             ...current.draft,
-                            phone: event.target.value,
+                            phone: value,
                           },
                         }));
                       }}
