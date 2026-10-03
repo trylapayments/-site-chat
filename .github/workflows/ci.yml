@@ -209,7 +209,19 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright cross-origin realtime suite
-        run: pnpm test:e2e
+        run: pnpm test:e2e --retries=0
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
+      - name: Visitor identify realtime soak (retries off)
+        run: >
+          pnpm exec playwright test
+          -c e2e/playwright.config.ts
+          visitor/identity-context.spec.ts
+          -g "SiteChat.identify updates operator sidebar live"
+          --retries=0
+          --repeat-each=10
         env:
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           AI_ALLOW_MOCK_PROVIDER: "true"

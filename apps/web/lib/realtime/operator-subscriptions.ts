@@ -36,6 +36,7 @@ function subscribeWithOperatorAuth(input: {
   let active = true;
   const isActive = () => active;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let joinTimer: ReturnType<typeof setTimeout> | null = null;
   let retryAttempt = 0;
   let channelEpoch = 0;
   let appliedAuthToken: string | null = null;
@@ -52,7 +53,14 @@ function subscribeWithOperatorAuth(input: {
   }
 
   function enqueueStart() {
-    const run = () => startSubscription();
+    const run = () =>
+      startSubscription().catch(() => {
+        if (!isActive()) return;
+        retireChannel();
+        currentStatus = "failed";
+        input.onConnectionChange?.(currentStatus);
+        scheduleResubscribe();
+      });
     startQueue = startQueue.then(run, run);
   }
 
@@ -61,6 +69,23 @@ function subscribeWithOperatorAuth(input: {
       clearTimeout(retryTimer);
       retryTimer = null;
     }
+  }
+
+  function clearJoinTimer() {
+    if (joinTimer !== null) {
+      clearTimeout(joinTimer);
+      joinTimer = null;
+    }
+  }
+
+  function retireChannel() {
+    clearJoinTimer();
+    // Invalidate callbacks before removal: CLOSED can fire during removal,
+    // and a late SUBSCRIBED must not mark a retired attempt as connected.
+    channelEpoch += 1;
+    const previous = channel;
+    channel = null;
+    if (previous) void input.supabase.removeChannel(previous);
   }
 
   function scheduleResubscribe() {
@@ -110,9 +135,7 @@ function subscribeWithOperatorAuth(input: {
     appliedAuthToken = token;
 
     if (channel) {
-      const previous = channel;
-      channel = null;
-      void input.supabase.removeChannel(previous);
+      retireChannel();
       // Surface a status transition so consumers refresh after auth-driven
       // resubscribe (React ignores setState of the same "connected" value).
       if (currentStatus === "connected") {
@@ -144,7 +167,18 @@ function subscribeWithOperatorAuth(input: {
       );
     }
 
-    channel = nextChannel.subscribe((status) => {
+    // SDK failures normally trigger recovery. Bound a silent join as well,
+    // without polling or replacing healthy subscriptions.
+    joinTimer = setTimeout(() => {
+      if (!isActive() || epoch !== channelEpoch) return;
+      retireChannel();
+      currentStatus = "failed";
+      input.onConnectionChange?.(currentStatus);
+      scheduleResubscribe();
+    }, 30_000);
+
+    channel = nextChannel;
+    nextChannel.subscribe((status) => {
       if (!isActive() || epoch !== channelEpoch) {
         return;
       }
@@ -155,11 +189,7 @@ function subscribeWithOperatorAuth(input: {
         status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
         status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT
       ) {
-        const failed = channel;
-        channel = null;
-        if (failed) {
-          void input.supabase.removeChannel(failed);
-        }
+        retireChannel();
         if (next !== currentStatus) {
           currentStatus = next;
           input.onConnectionChange?.(next);
@@ -169,7 +199,7 @@ function subscribeWithOperatorAuth(input: {
       }
 
       if (status === REALTIME_SUBSCRIBE_STATES.CLOSED) {
-        channel = null;
+        retireChannel();
         if (next !== currentStatus) {
           currentStatus = next;
           input.onConnectionChange?.(next);
@@ -179,6 +209,7 @@ function subscribeWithOperatorAuth(input: {
       }
 
       // Remaining subscribe callback status is SUBSCRIBED.
+      clearJoinTimer();
       retryAttempt = 0;
       if (next !== currentStatus) {
         currentStatus = next;
@@ -207,13 +238,8 @@ function subscribeWithOperatorAuth(input: {
   return () => {
     active = false;
     clearRetryTimer();
-    channelEpoch += 1;
+    retireChannel();
     authSubscription.unsubscribe();
-    if (channel) {
-      const current = channel;
-      channel = null;
-      void input.supabase.removeChannel(current);
-    }
   };
 }
 

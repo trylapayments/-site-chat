@@ -110,6 +110,7 @@ vi.mock("@/lib/supabase/client", () => ({
 
 describe("subscribeOperatorWorkspaceInbox auth lifecycle", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -215,6 +216,87 @@ describe("subscribeOperatorWorkspaceInbox auth lifecycle", () => {
     );
     expect(statuses.at(-1)).toBe("connected");
 
+    unsubscribe();
+  });
+
+  function subscribeForRecovery(statuses: string[]) {
+    return subscribeOperatorWorkspaceInbox({
+      workspaceId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      memberId: "11111111-2222-3333-4444-555555555555",
+      onMessageInsert: vi.fn(),
+      onConversationChange: vi.fn(),
+      onConnectionChange: (status) => statuses.push(status),
+    });
+  }
+
+  it("recovers a silent join and ignores callbacks from the retired attempt", async () => {
+    vi.useFakeTimers();
+    const supabase = createMockSupabase({ deferSubscribed: true });
+    createClientMock.mockReturnValue(supabase);
+    const statuses: string[] = [];
+    const unsubscribe = subscribeForRecovery(statuses);
+    await vi.advanceTimersByTimeAsync(0);
+    const first = supabase.__channels[0];
+    if (!first) throw new Error("expected initial channel");
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(statuses.at(-1)).toBe("failed");
+    expect(supabase.removeChannel).toHaveBeenCalledWith(first);
+    first.emitSubscribed();
+    expect(statuses.at(-1)).toBe("failed");
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(supabase.channel).toHaveBeenCalledTimes(2);
+    const replacement = supabase.__channels[0];
+    if (!replacement) throw new Error("expected replacement channel");
+    replacement.emitSubscribed();
+    expect(statuses.at(-1)).toBe("connected");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(supabase.channel).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
+
+  it("does not recycle a healthy connection when its join deadline passes", async () => {
+    vi.useFakeTimers();
+    const supabase = createMockSupabase();
+    createClientMock.mockReturnValue(supabase);
+    const statuses: string[] = [];
+    const unsubscribe = subscribeForRecovery(statuses);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(statuses.at(-1)).toBe("connected");
+    expect(supabase.channel).toHaveBeenCalledTimes(1);
+    expect(supabase.removeChannel).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it("cancels silent-join recovery when the component is unmounted", async () => {
+    vi.useFakeTimers();
+    const supabase = createMockSupabase({ deferSubscribed: true });
+    createClientMock.mockReturnValue(supabase);
+    const statuses: string[] = [];
+    const unsubscribe = subscribeForRecovery(statuses);
+    await vi.advanceTimersByTimeAsync(0);
+    unsubscribe();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(statuses).toEqual(["connecting"]);
+    expect(supabase.channel).toHaveBeenCalledTimes(1);
+    expect(supabase.removeChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries when reading the auth session rejects instead of leaving a rejected queue", async () => {
+    vi.useFakeTimers();
+    const supabase = createMockSupabase();
+    supabase.auth.getSession.mockRejectedValueOnce(
+      new Error("temporary auth failure"),
+    );
+    createClientMock.mockReturnValue(supabase);
+    const statuses: string[] = [];
+    const unsubscribe = subscribeForRecovery(statuses);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(statuses.at(-1)).toBe("failed");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(statuses.at(-1)).toBe("connected");
+    expect(supabase.auth.getSession).toHaveBeenCalledTimes(2);
     unsubscribe();
   });
 
