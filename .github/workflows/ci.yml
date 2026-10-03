@@ -208,12 +208,12 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Unread conversation startup soak (retries off)
+      - name: Unread conversation and file selection soak (retries off)
         run: >
           pnpm exec playwright test
           -c e2e/playwright.config.ts
           realtime/attachments.spec.ts
-          -g "operator attach control is available in live thread"
+          -g "operator attach control is available in live thread|operator image attachment arrives live for visitor"
           --retries=0
           --repeat-each=10
         env:

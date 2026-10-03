@@ -697,10 +697,9 @@ function LiveReplyComposer({
       }}
       onDrop={(event) => {
         event.preventDefault();
-        if (event.dataTransfer.files.length > 0) {
-          setPendingFiles((current) =>
-            [...current, ...Array.from(event.dataTransfer.files)].slice(0, 10),
-          );
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length > 0) {
+          setPendingFiles((current) => [...current, ...files].slice(0, 10));
         }
       }}
       onSubmit={(event) => {
@@ -974,12 +973,14 @@ function LiveReplyComposer({
         data-testid="operator-file-input"
         accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
         onChange={(event) => {
-          const selected = event.target.files;
-          if (selected) {
+          // Capture before resetting the input: React may run the updater
+          // later, after the browser has cleared its FileList.
+          const selected = Array.from(event.currentTarget.files ?? []);
+          if (selected.length > 0) {
             setPendingFiles((current) =>
-              [...current, ...Array.from(selected)].slice(0, 10),
+              [...current, ...selected].slice(0, 10),
             );
-            event.target.value = "";
+            event.currentTarget.value = "";
           }
         }}
       />
