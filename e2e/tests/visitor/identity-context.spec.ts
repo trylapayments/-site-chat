@@ -166,12 +166,23 @@ test.describe("visitor identity + context", () => {
     await nameInput.fill("Operator Edited");
     await emailInput.fill(editedEmail);
     await phoneInput.fill("+1 555 0100");
-    await operator.getByRole("button", { name: "Save visitor" }).click();
+    const inspector = customerInspector(operator);
+    const form = inspector.getByTestId("visitor-identity-form");
+    // Input values are drafts. Earlier repeats also leave the same name in
+    // other Inbox rows, so neither proves this visitor's write has completed.
+    await expect(form).toHaveAttribute("data-pending", "false");
+    await form.getByRole("button", { name: "Save visitor" }).click();
+    await expect(form).toHaveAttribute("data-pending", "true", {
+      timeout: 5_000,
+    });
+    await expect(form).toHaveAttribute("data-pending", "false", {
+      timeout: 45_000,
+    });
 
     await expect(nameInput).toHaveValue("Operator Edited", { timeout: 30_000 });
     await expect(emailInput).toHaveValue(editedEmail);
     await expect(phoneInput).toHaveValue("+1 555 0100");
-    await expect(operator.getByText("Operator Edited").first()).toBeVisible();
+    await expect(inspector.getByText("Operator Edited", { exact: true })).toBeVisible();
 
     await operator.reload();
     await waitForOperatorThreadRealtimeReady(operator);

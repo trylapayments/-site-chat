@@ -321,6 +321,8 @@ export function ConversationSidebar({
               {canUpdateVisitor ? (
                 <form
                   className="mt-3 space-y-3"
+                  data-testid="visitor-identity-form"
+                  data-pending={isPending ? "true" : "false"}
                   onSubmit={(event) => {
                     event.preventDefault();
                     setProfileError(null);
