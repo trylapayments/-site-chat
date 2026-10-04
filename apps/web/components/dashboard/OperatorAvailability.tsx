@@ -83,6 +83,21 @@ export function OperatorAvailability({ slug }: { slug: string }) {
     mutating.current = true;
     revision.current += 1;
     setPending(true);
+    const previous = snapshotRef.current;
+    if (previous) {
+      const optimistic = {
+        ...previous,
+        idleTimeoutMinutes:
+          input.idleTimeoutMinutes ?? previous.idleTimeoutMinutes,
+      };
+      if (input.status !== undefined) {
+        optimistic.selectedStatus = input.status;
+        optimistic.status = input.status;
+        optimistic.autoAway = false;
+      }
+      snapshotRef.current = optimistic;
+      setSnapshot(optimistic);
+    }
     try {
       const next = await updateOperatorAvailability(slug, {
         ...input,
@@ -92,6 +107,8 @@ export function OperatorAvailability({ slug }: { slug: string }) {
       setSnapshot(next);
       setError(null);
     } catch {
+      snapshotRef.current = previous;
+      setSnapshot(previous);
       setError("Could not save status. Please try again.");
     } finally {
       revision.current += 1;

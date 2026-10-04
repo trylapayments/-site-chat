@@ -84,7 +84,7 @@ export function MobileNav({
               workspace.workspace_id === currentWorkspaceId &&
               workspace.role !== "viewer",
           ) ? (
-            <OperatorAvailability slug={slug} />
+            <OperatorAvailability key={slug} slug={slug} />
           ) : null}
           <UserMenu email={email} />
         </div>

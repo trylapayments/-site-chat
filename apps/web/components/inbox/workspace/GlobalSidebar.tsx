@@ -252,7 +252,7 @@ export function GlobalSidebar({
               workspace.workspace_id === workspaceId &&
               workspace.role !== "viewer",
           ) ? (
-            <OperatorAvailability slug={slug} />
+            <OperatorAvailability key={slug} slug={slug} />
           ) : null}
           <UserMenu email={email} />
         </div>
