@@ -51,6 +51,7 @@ export type NotificationEmailProcessorDeps = {
     subject: string;
     from: string;
     appUrl: string;
+    idempotencyKey: string;
   }) => Promise<NotificationEmailSendResult>;
 };
 
@@ -119,6 +120,7 @@ async function sendViaResend(input: {
   subject: string;
   from: string;
   appUrl: string;
+  idempotencyKey: string;
 }): Promise<NotificationEmailSendResult> {
   const body = [
     input.subject,
@@ -132,9 +134,11 @@ async function sendViaResend(input: {
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: {
         Authorization: `Bearer ${input.apiKey}`,
         "Content-Type": "application/json",
+        "Idempotency-Key": input.idempotencyKey,
       },
       body: JSON.stringify({
         from: input.from,
@@ -177,7 +181,7 @@ function defaultDeps(supabase: ServiceClient): NotificationEmailProcessorDeps {
 
 /**
  * Process claimable notification email outbox rows.
- * Claim happens before any provider call. Missing Resend config → skipped (not sent).
+ * Claim happens before any provider call. Missing Resend config leaves the queue untouched.
  */
 export async function processNotificationEmailOutbox(options?: {
   limit?: number;
@@ -209,7 +213,6 @@ export async function processNotificationEmailOutbox(options?: {
     process.env.NEXT_PUBLIC_APP_URL ??
     "http://localhost:3000";
 
-  const claimed = await deps.claim(limit);
   const result: ProcessNotificationEmailResult = {
     processed: 0,
     sent: 0,
@@ -217,20 +220,12 @@ export async function processNotificationEmailOutbox(options?: {
     failed: 0,
   };
 
+  if (!apiKey) return result;
+
+  const claimed = await deps.claim(limit);
+
   for (const row of claimed) {
     result.processed += 1;
-
-    if (!apiKey) {
-      const ok = await deps.finalize({
-        id: row.id,
-        status: "skipped",
-        lastError: "RESEND_API_KEY missing",
-      });
-      if (ok) {
-        result.skipped += 1;
-      }
-      continue;
-    }
 
     const sendResult = await deps.send({
       apiKey,
@@ -238,6 +233,7 @@ export async function processNotificationEmailOutbox(options?: {
       subject: row.subject,
       from: fromEmail,
       appUrl,
+      idempotencyKey: `mill-notification/${row.id}`,
     });
 
     if (sendResult.ok) {

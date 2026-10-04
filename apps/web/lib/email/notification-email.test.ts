@@ -55,6 +55,11 @@ describe("processNotificationEmailOutbox", () => {
     ]);
 
     expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: `mill-notification/${row.id}`,
+      }),
+    );
     expect(a.sent + b.sent).toBe(1);
     expect(a.processed + b.processed).toBe(1);
   });
@@ -81,7 +86,7 @@ describe("processNotificationEmailOutbox", () => {
     );
   });
 
-  it("missing Resend config skips and never marks sent", async () => {
+  it("missing Resend config leaves notifications queued for later delivery", async () => {
     const finalize = vi.fn(() => Promise.resolve(true));
     const send = vi.fn(() =>
       Promise.resolve({ ok: false as const, error: "unused" }),
@@ -98,13 +103,9 @@ describe("processNotificationEmailOutbox", () => {
     });
 
     expect(send).not.toHaveBeenCalled();
-    expect(result.skipped).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(result.processed).toBe(0);
     expect(result.sent).toBe(0);
-    expect(finalize).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "skipped",
-        lastError: "RESEND_API_KEY missing",
-      }),
-    );
+    expect(finalize).not.toHaveBeenCalled();
   });
 });

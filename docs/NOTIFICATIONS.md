@@ -19,7 +19,7 @@ v1 delivers:
 - Realtime INSERT/UPDATE (no polling) + reconnect catch-up
 - Optional **browser Notification API** and **sound** (muted by default; tab-elected side effects)
 - Per-member **preferences** (in-app / browser / sound / email / DND)
-- **Email outbox** with claim-before-send state machine; delivery skips when `RESEND_API_KEY` is unset
+- **Email outbox** with claim-before-send state machine; queue remains pending when `RESEND_API_KEY` is unset
 
 ---
 
@@ -221,3 +221,24 @@ SECURITY DEFINER functions use `SET search_path = ''`.
 - Concurrent preference edits are last-write-wins
 - Billing notification types are reserved, not emitted
 - Crash after provider accept but before DB `sent` may duplicate email without provider idempotency
+
+## Managed delivery activation
+
+The server-only worker is `POST /api/internal/notification-emails`. It requires a
+random `NOTIFICATION_EMAIL_CRON_SECRET` (at least 32 characters) in the Bearer
+authorization header. It fails closed until the secret, `RESEND_API_KEY`, and
+`RESEND_FROM_EMAIL` are configured. Each call claims up to five rows. The
+provider request times out after ten seconds and uses the outbox UUID as a
+Resend idempotency key (provider deduplication is retained for 24 hours).
+Missing provider configuration leaves rows pending rather than losing them.
+
+Activation still requires a verified sending domain, a domain-scoped sending
+key stored as a server secret, and a cloud scheduler. The endpoint alone does
+not schedule delivery. Use Supabase Cron with pg_net and Vault for the bearer
+secret; keep scheduler URLs/secrets out of committed SQL and do not use a
+service-role key as the scheduler credential. Before activation, review the
+staging backlog and exclude synthetic/test recipients from a real delivery
+test. Verify acceptance and delivery with an explicitly selected test address.
+
+Sources: [Resend idempotency](https://resend.com/docs/dashboard/emails/idempotency-keys),
+[Supabase scheduling](https://supabase.com/docs/guides/functions/schedule-functions).
