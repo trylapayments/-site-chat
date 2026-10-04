@@ -7,9 +7,13 @@ export function OperatorAvailability({ slug }: { slug: string }) {
   const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const revision = useRef(0);
+  const mutating = useRef(false);
   useEffect(() => {
     let active = true;
+    let refreshing = false;
     async function refresh() {
+      if (refreshing || mutating.current) return;
+      refreshing = true;
       const started = revision.current;
       try {
         const current = await syncOperatorAvailability(slug);
@@ -20,6 +24,7 @@ export function OperatorAvailability({ slug }: { slug: string }) {
       } catch {
         if (active) setError("Status unavailable. Retrying…");
       } finally {
+        refreshing = false;
         if (active && started === revision.current) setPending(false);
       }
     }
@@ -57,6 +62,7 @@ export function OperatorAvailability({ slug }: { slug: string }) {
           onChange={(event) => {
             const next = event.target.value as OperatorStatus;
             void (async () => {
+              mutating.current = true;
               revision.current += 1;
               setPending(true);
               try {
@@ -65,6 +71,8 @@ export function OperatorAvailability({ slug }: { slug: string }) {
               } catch {
                 setError("Could not save status. Please try again.");
               } finally {
+                revision.current += 1;
+                mutating.current = false;
                 setPending(false);
               }
             })();
