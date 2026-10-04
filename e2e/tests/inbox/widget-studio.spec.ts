@@ -333,7 +333,7 @@ test.describe.serial("Widget Studio", () => {
     );
   });
 
-  test("uploads a verified PNG logo into the draft", async ({ page }) => {
+  test("uploads and removes branding images from the saved draft", async ({ page }) => {
     await openOwnerStudio(page);
     // 16×16 PNG (meets WIDGET_ASSET_LIMITS.minWidth/minHeight)
     const png = Buffer.from(
@@ -352,6 +352,30 @@ test.describe.serial("Widget Studio", () => {
     await expect(outcome).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId("widget-studio-error")).toHaveCount(0);
     await expect(page.getByTestId("widget-studio-notice")).toContainText("Asset uploaded");
+    await page.getByTestId("widget-studio-asset-agent_avatar").setInputFiles({
+      name: "avatar.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
+    await expect(page.getByTestId("widget-studio-remove-agent_avatar")).toBeVisible({
+      timeout: 60_000,
+    });
+    await page.getByTestId("widget-studio-save-draft").click();
+    await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+    await page.reload();
+    for (const section of await page.getByTestId("widget-studio-advanced-section").all()) {
+      await section.locator("summary").click();
+    }
+    for (const kind of ["logo", "agent_avatar"]) {
+      await page.getByTestId(`widget-studio-remove-${kind}`).click();
+      await expect(page.getByTestId(`widget-studio-remove-${kind}`)).toHaveCount(0);
+    }
+    await page.getByTestId("widget-studio-save-draft").click();
+    await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("widget-studio-manager")).toBeVisible();
+    await expect(page.getByTestId("widget-studio-remove-logo")).toHaveCount(0);
+    await expect(page.getByTestId("widget-studio-remove-agent_avatar")).toHaveCount(0);
   });
 
   test("forces powered-by branding on production without white-label entitlement", async ({

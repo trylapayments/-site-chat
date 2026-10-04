@@ -528,6 +528,12 @@ export function WidgetStudioManager({
   }
 
   function assetControl(kind: WidgetAssetKind, label: string): ReactNode {
+    const field =
+      kind === "logo"
+        ? "logoAssetId"
+        : kind === "launcher_icon"
+          ? "launcherIconAssetId"
+          : "agentAvatarAssetId";
     return (
       <div className="space-y-1">
         <Label htmlFor={`studio-asset-${kind}`}>{label}</Label>
@@ -545,6 +551,27 @@ export function WidgetStudioManager({
             }
           }}
         />
+        {draft[field] ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid={`widget-studio-remove-${kind}`}
+            disabled={disabled}
+            onClick={() => {
+              updateDraft({
+                [field]: null,
+                ...(kind === "launcher_icon" ? { launcherIcon: "chat" } : {}),
+              });
+              setAssetUrls((current) => ({ ...current, [kind]: undefined }));
+              setNotice(
+                `${label} removed from the draft. Publish to update your widget.`,
+              );
+            }}
+          >
+            Remove {label.toLowerCase()}
+          </Button>
+        ) : null}
         <p className="text-muted-foreground text-xs">
           PNG, JPEG, or WebP. Maximum 512 KB and 1024 × 1024.
         </p>
