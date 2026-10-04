@@ -164,7 +164,7 @@ export function GlobalSidebar({
           className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-bold tracking-wide text-white"
           aria-hidden="true"
         >
-          SC
+          M
         </div>
         <div className="min-w-0">
           <p className="truncate text-[15px] font-semibold tracking-tight">
