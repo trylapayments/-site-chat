@@ -5,7 +5,8 @@ import {
   type ConversationDetail,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
-import { MoreHorizontal } from "lucide-react";
+import { ArrowLeft, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
@@ -110,8 +111,15 @@ export function ConversationHeader({
   }
 
   return (
-    <header className="border-inbox-border/80 flex shrink-0 items-center justify-between gap-4 border-b bg-inbox-panel px-5 py-3">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="border-inbox-border/80 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-inbox-panel px-3 py-2 md:flex-nowrap md:gap-4 md:px-5 md:py-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
+        <Link
+          href={`/app/${workspaceSlug}/inbox`}
+          aria-label="Back to conversations"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-inbox-surface lg:hidden"
+        >
+          <ArrowLeft className="size-5" aria-hidden="true" />
+        </Link>
         <div
           className="bg-brand/10 text-brand flex size-10 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold"
           aria-hidden="true"
@@ -152,7 +160,7 @@ export function ConversationHeader({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 md:w-auto md:flex-nowrap">
         <AssignmentPanel
           workspaceId={workspaceId}
           workspaceSlug={workspaceSlug}

@@ -56,7 +56,7 @@ export function MobileNav({
           <Menu className="size-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 p-0">
+      <SheetContent side="left" className="w-72 overflow-y-auto p-0">
         <SheetHeader className="border-border border-b px-4 py-4 text-left">
           <SheetTitle className="text-base">Mill</SheetTitle>
           {sectionLabel ? (

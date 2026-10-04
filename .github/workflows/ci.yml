@@ -208,6 +208,12 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Mobile Inbox reply smoke (retries off)
+        run: pnpm exec playwright test -c e2e/playwright.config.ts inbox/mobile-inbox.spec.ts --retries=0
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
       - name: Visitor identity and page context soak (retries off)
         run: >
           pnpm exec playwright test

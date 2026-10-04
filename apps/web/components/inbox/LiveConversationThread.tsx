@@ -352,7 +352,7 @@ export function LiveConversationThread({
           void catchUp();
         }}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-5">
         <MessageList
           workspaceId={workspaceId}
           messages={messages}
@@ -691,7 +691,7 @@ function LiveReplyComposer({
 
   return (
     <form
-      className="bg-inbox-panel shrink-0 px-5 py-2.5"
+      className="bg-inbox-panel shrink-0 px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] md:px-5"
       onDragOver={(event) => {
         event.preventDefault();
       }}
@@ -1064,7 +1064,7 @@ function LiveReplyComposer({
             maxLength={4000}
             placeholder="Write a reply..."
             disabled={isPending}
-            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-neutral-400"
+            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-base leading-relaxed md:text-[14px] outline-none placeholder:text-neutral-400"
           />
         </div>
         <div className="border-inbox-border/80 flex items-center justify-between gap-2 border-t px-2.5 py-1.5">

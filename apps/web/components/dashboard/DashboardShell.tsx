@@ -3,7 +3,7 @@
 import type { AccessibleWorkspace, MemberRole } from "@site-chat/shared";
 import { can } from "@site-chat/shared";
 import { usePathname } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState, type CSSProperties } from "react";
 
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardTopBar } from "@/components/dashboard/DashboardTopBar";
@@ -30,6 +30,24 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [mobileHeight, setMobileHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const update = () => {
+      setMobileHeight(
+        window.innerWidth < 1024
+          ? (viewport?.height ?? window.innerHeight)
+          : null,
+      );
+    };
+    update();
+    window.addEventListener("resize", update);
+    viewport?.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      viewport?.removeEventListener("resize", update);
+    };
+  }, []);
   const canSearchNotes = can(role, "manage_internal_notes");
   const inboxBase = `/app/${slug}/inbox`;
   const contactsBase = `/app/${slug}/contacts`;
@@ -49,7 +67,14 @@ export function DashboardShell({
     // document scrollbar appear/disappear and shift the whole 3-column page.
     return (
       <div
-        className="bg-inbox-canvas flex h-svh overflow-hidden"
+        className="bg-inbox-canvas flex h-[var(--operator-mobile-height,100svh)] overflow-hidden lg:h-svh"
+        style={
+          mobileHeight === null
+            ? undefined
+            : ({
+                "--operator-mobile-height": `${String(mobileHeight)}px`,
+              } as CSSProperties)
+        }
         data-testid="dashboard-operator-shell"
       >
         <div className="hidden lg:flex">
