@@ -287,7 +287,7 @@ export function WidgetStudioPreview({
                   className="text-muted-foreground border-t py-1 text-center text-xs"
                   data-testid="widget-studio-preview-powered-by"
                 >
-                  Powered by Site Chat
+                  Powered by Mill
                 </p>
               ) : null}
             </div>

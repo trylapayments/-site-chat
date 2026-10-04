@@ -57,7 +57,7 @@ export function MobileNav({
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0">
         <SheetHeader className="border-border border-b px-4 py-4 text-left">
-          <SheetTitle className="text-base">Site Chat</SheetTitle>
+          <SheetTitle className="text-base">Mill</SheetTitle>
           {sectionLabel ? (
             <p className="text-muted-foreground text-sm">{sectionLabel}</p>
           ) : null}

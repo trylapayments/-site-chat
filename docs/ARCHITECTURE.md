@@ -1,4 +1,4 @@
-# Site Chat — System Architecture
+# Mill — System Architecture
 
 **Version:** 1.3  
 **Status:** Foundation  
@@ -8,7 +8,7 @@
 
 ## 1. Architecture Overview
 
-Site Chat is a multi-tenant SaaS platform composed of four primary runtime surfaces:
+Mill is a multi-tenant SaaS platform composed of four primary runtime surfaces:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -94,7 +94,7 @@ The **workspace** is the tenant. Every tenant-scoped table includes a `workspace
 
 ### 3.2 Isolation Strategy
 
-Site Chat uses **shared database, shared schema** with row-level isolation:
+Mill uses **shared database, shared schema** with row-level isolation:
 
 - All tenant tables have `workspace_id NOT NULL`.
 - RLS policies on every tenant table enforce `workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = auth.uid())`.
@@ -187,7 +187,7 @@ Monorepo tooling (Turborepo or pnpm workspaces) is recommended from the start to
 
 ### 5.1 Style and Versioning
 
-Site Chat uses **REST** over Next.js Route Handlers with URL-based versioning (`/api/v1/...`). REST is chosen for long-term maintainability: easy to document (OpenAPI), debug, and integrate without coupling clients to a specific RPC framework.
+Mill uses **REST** over Next.js Route Handlers with URL-based versioning (`/api/v1/...`). REST is chosen for long-term maintainability: easy to document (OpenAPI), debug, and integrate without coupling clients to a specific RPC framework.
 
 GraphQL and tRPC are explicitly not used in v1 to reduce long-term surface area.
 

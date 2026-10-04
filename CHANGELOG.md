@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Site Chat are documented in this file.
+All notable changes to Mill are documented in this file.
 
 ## Unreleased
 

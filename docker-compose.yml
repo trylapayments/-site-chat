@@ -1,4 +1,4 @@
-# Site Chat — Development Docker Compose
+# Mill — Development Docker Compose
 # Usage: docker compose up
 
 services:

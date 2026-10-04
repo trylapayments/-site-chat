@@ -893,11 +893,11 @@ export function WidgetStudioManager({
             <div data-testid="widget-studio-powered-by">
               <ToggleControl
                 id="studio-powered-by"
-                label="Remove Site Chat branding"
+                label="Remove Mill branding"
                 description={
                   canHideBranding
                     ? "White-label customization is included for this workspace."
-                    : "Available with white-label access. Site Chat branding stays visible on your website."
+                    : "Available with white-label access. Mill branding stays visible on your website."
                 }
                 checked={canHideBranding && !draft.showPoweredBy}
                 disabled={disabled || !canHideBranding}

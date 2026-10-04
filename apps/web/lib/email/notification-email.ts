@@ -123,7 +123,7 @@ async function sendViaResend(input: {
   const body = [
     input.subject,
     "",
-    "Open Site Chat to review this notification.",
+    "Open Mill to review this notification.",
     input.appUrl,
     "",
     "You received this because email notifications are enabled for your account.",
@@ -203,7 +203,7 @@ export async function processNotificationEmailOutbox(options?: {
   const fromEmail =
     options?.fromEmail ??
     process.env.RESEND_FROM_EMAIL ??
-    "Site Chat <notifications@mail.sitechat.app>";
+    "Mill <notifications@notify.mill.chat>";
   const appUrl =
     options?.appUrl ??
     process.env.NEXT_PUBLIC_APP_URL ??

@@ -15,7 +15,7 @@ export const messages_nl: WidgetMessages = {
   loadError: "Chat kan niet worden geladen.",
   sessionError: "Sessie verlopen. Laad de pagina opnieuw.",
   sendError: "Bericht kon niet worden verzonden.",
-  poweredBy: "Powered by Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Jij",
   agentLabel: "Medewerker",
   systemLabel: "Systeem",

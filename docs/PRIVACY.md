@@ -1,4 +1,4 @@
-# Site Chat — Visitor Privacy
+# Mill — Visitor Privacy
 
 **Version:** 1.2 (security-hardened)  
 **Status:** Foundation  
@@ -10,7 +10,7 @@ Related: [VISITOR-IDENTITY.md](./VISITOR-IDENTITY.md), [DATA-RETENTION.md](./DAT
 
 ## 1. Purpose
 
-This document summarizes how Site Chat handles **visitor personal data** collected through the embeddable widget and related APIs. Workspace customers are typically the data controller for their visitors; Site Chat acts as a processor for that messaging and identity data.
+This document summarizes how Mill handles **visitor personal data** collected through the embeddable widget and related APIs. Workspace customers are typically the data controller for their visitors; Mill acts as a processor for that messaging and identity data.
 
 This is an engineering architecture note, not legal advice. Customer-facing terms and a DPA are covered under product/legal launch materials.
 
@@ -58,18 +58,18 @@ These responses do **not** include visitor identity, operator email, workspace m
 
 Brand files are stored in a private workspace-scoped bucket. Publishing an asset reference makes its signed representation visible to visitors on allowed embed origins for the URL lifetime, so customers should treat logos/copy as public and avoid unnecessary personal data. Agent avatars may identify a workspace member and should be uploaded only with an appropriate workplace basis. Original filenames and storage keys are not part of the public DTO.
 
-Site Chat does not fetch arbitrary customer-supplied remote asset URLs. This avoids turning widget bootstrap into a third-party tracking or server-side fetch channel. See [WIDGET-STUDIO.md](./WIDGET-STUDIO.md).
+Mill does not fetch arbitrary customer-supplied remote asset URLs. This avoids turning widget bootstrap into a third-party tracking or server-side fetch channel. See [WIDGET-STUDIO.md](./WIDGET-STUDIO.md).
 
 ---
 
 ## 4. Fingerprinting and tracking stance
 
-Site Chat does **not** implement browser fingerprinting for visitor recognition. Continuity uses:
+Mill does **not** implement browser fingerprinting for visitor recognition. Continuity uses:
 
 1. Server-issued session token (opaque, hashed at rest — `visitor_sessions.session_token_hash`)
 2. A separate opaque **continuity credential** for resuming the same contact across sessions (§4a)
 
-`public_id` (`vis_…`) is stored in widget storage too, but only for **display** — it is never checked by any resume/bind logic. Host sites remain responsible for their own analytics scripts. Site Chat’s embed must not add canvas/audio fingerprint libraries or third-party trackers for identity.
+`public_id` (`vis_…`) is stored in widget storage too, but only for **display** — it is never checked by any resume/bind logic. Host sites remain responsible for their own analytics scripts. Mill’s embed must not add canvas/audio fingerprint libraries or third-party trackers for identity.
 
 ### 4a. `public_id` vs continuity token
 
@@ -107,7 +107,7 @@ Historical design notes that mentioned clear-text IP with a 90-day nulling job a
 
 ## 6. URL privacy policy
 
-Full page URLs, landing URLs, and referrers frequently carry query-string secrets that a host site didn't intend to leak into a third-party widget (session tokens, one-time links, tracking identifiers, sometimes even auth codes). Site Chat stores a **redacted** form by default, enforced by an allowlist sanitizer applied on every write (both in the shared TypeScript helper and again in the database, for defense in depth):
+Full page URLs, landing URLs, and referrers frequently carry query-string secrets that a host site didn't intend to leak into a third-party widget (session tokens, one-time links, tracking identifiers, sometimes even auth codes). Mill stores a **redacted** form by default, enforced by an allowlist sanitizer applied on every write (both in the shared TypeScript helper and again in the database, for defense in depth):
 
 - **Kept:** origin (`scheme://host[:port]`) + `pathname`, plus only these five query params if present: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`.
 - **Stripped:** the URL fragment (`#...`) is discarded entirely before any parsing. Every other query parameter is dropped — this is an **allowlist**, not a blacklist of "known-bad" params.
@@ -125,7 +125,7 @@ Customers typically rely on one or more of:
 - **Consent** where required by local law for cookies/storage or marketing use of chat data
 - **Legal obligation** for retention or disclosure in limited cases
 
-Site Chat provides technical controls (isolation, export/delete paths, retention settings) so customers can meet their obligations. Exact lawful basis is determined by the customer’s counsel and jurisdiction.
+Mill provides technical controls (isolation, export/delete paths, retention settings) so customers can meet their obligations. Exact lawful basis is determined by the customer’s counsel and jurisdiction.
 
 ---
 

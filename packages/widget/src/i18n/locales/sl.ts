@@ -15,7 +15,7 @@ export const messages_sl: WidgetMessages = {
   loadError: "Klepeta ni mogoče naložiti.",
   sessionError: "Seja je potekla. Osvežite stran.",
   sendError: "Pošiljanje sporočila ni uspelo.",
-  poweredBy: "Omogoča Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Vi",
   agentLabel: "Svetovalec",
   systemLabel: "Sistem",

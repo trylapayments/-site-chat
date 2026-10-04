@@ -15,7 +15,7 @@ export const messages_lv: WidgetMessages = {
   loadError: "Neizdevās ielādēt čatu.",
   sessionError: "Sesija beigusies. Pārlādējiet lapu.",
   sendError: "Ziņojumu neizdevās nosūtīt.",
-  poweredBy: "Darbina Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Jūs",
   agentLabel: "Aģents",
   systemLabel: "Sistēma",

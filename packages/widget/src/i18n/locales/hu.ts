@@ -15,7 +15,7 @@ export const messages_hu: WidgetMessages = {
   loadError: "A chat nem tölthető be.",
   sessionError: "A munkamenet lejárt. Töltse újra az oldalt.",
   sendError: "Az üzenet küldése sikertelen.",
-  poweredBy: "A Site Chat támogatásával",
+  poweredBy: "Powered by Mill",
   youLabel: "Ön",
   agentLabel: "Ügyintéző",
   systemLabel: "Rendszer",

@@ -15,7 +15,7 @@ export const messages_uk: WidgetMessages = {
   loadError: "Не вдалося завантажити чат.",
   sessionError: "Сеанс закінчився. Оновіть сторінку.",
   sendError: "Не вдалося надіслати повідомлення.",
-  poweredBy: "Працює на Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Ви",
   agentLabel: "Оператор",
   systemLabel: "Система",

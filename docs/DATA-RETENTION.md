@@ -1,4 +1,4 @@
-# Site Chat — Data Retention (Visitor Identity Context)
+# Mill — Data Retention (Visitor Identity Context)
 
 **Version:** 1.0  
 **Status:** Foundation (architecture; purge jobs future)  

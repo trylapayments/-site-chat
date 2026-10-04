@@ -242,7 +242,7 @@ test.describe("visitor identity + context", () => {
     expect(stored.continuityToken).toMatch(/^[A-Za-z0-9_-]{20,128}$/);
 
     await visitor.reload();
-    await expect(visitor.locator('iframe[title="Site Chat"]')).toBeAttached({
+    await expect(visitor.locator('iframe[title="Mill"]')).toBeAttached({
       timeout: 60_000,
     });
     const frame = widgetFrameLocator(visitor);
@@ -436,7 +436,7 @@ test.describe("visitor identity + context", () => {
 
     // Suggested reply panel may be disabled; assert thread composer still works.
     await expect(operator.getByPlaceholder("Write a reply...")).toBeVisible();
-    await expect(visitor.locator('iframe[title="Site Chat"]')).toBeAttached();
+    await expect(visitor.locator('iframe[title="Mill"]')).toBeAttached();
 
     await visitorContext.close();
     await operatorContext.close();
@@ -453,7 +453,7 @@ test.describe("visitor identity + context", () => {
     await visitor.goto(`${HOST_URL}/?utm_source=docs&utm_medium=referral&utm_campaign=visitor`, {
       referer: "https://referrer.example/landing",
     });
-    await expect(visitor.locator('iframe[title="Site Chat"]')).toBeAttached({
+    await expect(visitor.locator('iframe[title="Mill"]')).toBeAttached({
       timeout: 60_000,
     });
     const frame = widgetFrameLocator(visitor);

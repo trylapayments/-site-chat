@@ -157,7 +157,7 @@ const forbiddenLiterals = [
   '"Reconnecting',
   '"Unable to load chat',
   '"Message failed to send',
-  '"Powered by Site Chat"',
+  '"Powered by Mill"',
   '"Start a conversation"',
 ];
 for (const literal of forbiddenLiterals) {

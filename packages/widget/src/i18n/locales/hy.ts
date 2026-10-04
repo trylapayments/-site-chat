@@ -15,7 +15,7 @@ export const messages_hy: WidgetMessages = {
   loadError: "Չհաջողվեց բեռնել չաթը։",
   sessionError: "Նիստը սպառվել է։ Թարմացրեք էջը։",
   sendError: "Հաղորդագրությունը չուղարկվեց։",
-  poweredBy: "Աշխատում է Site Chat-ով",
+  poweredBy: "Powered by Mill",
   youLabel: "Դուք",
   agentLabel: "Գործակալ",
   systemLabel: "Համակարգ",

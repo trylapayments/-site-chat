@@ -168,7 +168,7 @@ export function GlobalSidebar({
         </div>
         <div className="min-w-0">
           <p className="truncate text-[15px] font-semibold tracking-tight">
-            Site Chat
+            Mill
           </p>
           <p className="text-inbox-nav-muted truncate text-[12px]">
             {workspaceName}

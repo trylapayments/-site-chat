@@ -15,7 +15,7 @@ export const messages_ru: WidgetMessages = {
   loadError: "Не удалось загрузить чат.",
   sessionError: "Сессия истекла. Обновите страницу.",
   sendError: "Не удалось отправить сообщение.",
-  poweredBy: "Работает на Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Вы",
   agentLabel: "Оператор",
   systemLabel: "Система",

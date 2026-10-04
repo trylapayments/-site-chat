@@ -15,7 +15,7 @@ export const messages_en: WidgetMessages = {
   loadError: "Unable to load chat.",
   sessionError: "Session expired. Please reload the page.",
   sendError: "Message failed to send.",
-  poweredBy: "Powered by Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "You",
   agentLabel: "Agent",
   systemLabel: "System",

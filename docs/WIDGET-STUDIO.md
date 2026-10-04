@@ -1,4 +1,4 @@
-# Site Chat — Widget Studio
+# Mill — Widget Studio
 
 **Version:** 1.0  
 **Status:** Implemented foundation  

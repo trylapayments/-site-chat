@@ -15,7 +15,7 @@ export const messages_es: WidgetMessages = {
   loadError: "No se pudo cargar el chat.",
   sessionError: "La sesión expiró. Recarga la página.",
   sendError: "No se pudo enviar el mensaje.",
-  poweredBy: "Con la tecnología de Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Tú",
   agentLabel: "Agente",
   systemLabel: "Sistema",

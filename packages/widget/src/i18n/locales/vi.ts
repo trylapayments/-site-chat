@@ -15,7 +15,7 @@ export const messages_vi: WidgetMessages = {
   loadError: "Không thể tải trò chuyện.",
   sessionError: "Phiên đã hết hạn. Vui lòng tải lại trang.",
   sendError: "Gửi tin nhắn thất bại.",
-  poweredBy: "Được cung cấp bởi Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Bạn",
   agentLabel: "Nhân viên",
   systemLabel: "Hệ thống",

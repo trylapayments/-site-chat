@@ -18,7 +18,7 @@ export function SignupForm() {
   return (
     <AuthShell
       title="Create your account"
-      description="Start using Site Chat with email and password."
+      description="Start using Mill with email and password."
       footer={
         <>
           Already have an account? <AuthLink href="/login">Sign in</AuthLink>

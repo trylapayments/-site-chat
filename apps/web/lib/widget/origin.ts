@@ -62,7 +62,7 @@ export function getRequestOrigin(request: Request): string | null {
  *
  * Allowed when Origin is present:
  * 1. `parentOrigin` from the embed token (host page / CORS callers)
- * 2. The Site Chat widget API origin (`request.url`) — the embed iframe is
+ * 2. The Mill widget API origin (`request.url`) — the embed iframe is
  *    hosted on the app origin and issues same-origin fetches from there.
  *    Comparing only to parentOrigin incorrectly blocks all iframe API calls.
  *

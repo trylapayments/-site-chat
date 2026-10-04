@@ -15,7 +15,7 @@ export const messages_is: WidgetMessages = {
   loadError: "Ekki tókst að hlaða spjallinu.",
   sessionError: "Lotan rann út. Endurhlaðið síðuna.",
   sendError: "Mistókst að senda skilaboð.",
-  poweredBy: "Keyrt af Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Þú",
   agentLabel: "Fulltrúi",
   systemLabel: "Kerfi",

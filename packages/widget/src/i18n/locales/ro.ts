@@ -15,7 +15,7 @@ export const messages_ro: WidgetMessages = {
   loadError: "Chatul nu a putut fi încărcat.",
   sessionError: "Sesiunea a expirat. Reîncarcă pagina.",
   sendError: "Trimiterea mesajului a eșuat.",
-  poweredBy: "Powered by Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Tu",
   agentLabel: "Agent",
   systemLabel: "Sistem",

@@ -15,7 +15,7 @@ export const messages_zh_TW: WidgetMessages = {
   loadError: "無法載入聊天。",
   sessionError: "工作階段已過期。請重新載入頁面。",
   sendError: "訊息傳送失敗。",
-  poweredBy: "由 Site Chat 提供技術",
+  poweredBy: "Powered by Mill",
   youLabel: "您",
   agentLabel: "客服",
   systemLabel: "系統",

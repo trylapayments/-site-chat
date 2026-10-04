@@ -15,7 +15,7 @@ export const messages_az: WidgetMessages = {
   loadError: "Çatı yükləmək mümkün olmadı.",
   sessionError: "Sessiya bitdi. Səhifəni yeniləyin.",
   sendError: "Mesaj göndərilmədi.",
-  poweredBy: "Site Chat tərəfindən təmin edilir",
+  poweredBy: "Powered by Mill",
   youLabel: "Siz",
   agentLabel: "Agent",
   systemLabel: "Sistem",

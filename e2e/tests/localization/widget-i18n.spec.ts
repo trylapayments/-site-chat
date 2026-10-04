@@ -87,7 +87,7 @@ async function openWidgetWithLocale(page: import("@playwright/test").Page, fixtu
   await loaderLoaded;
   expect((await bootstrapResponse).status()).toBe(200);
 
-  await expect(page.locator('iframe[title="Site Chat"]')).toBeAttached({ timeout: 10_000 });
+  await expect(page.locator('iframe[title="Mill"]')).toBeAttached({ timeout: 10_000 });
 
   const launcher = frame.getByRole("button", { name: fixture.openLabel });
   await expect(launcher).toBeVisible({ timeout: 60_000 });

@@ -2,7 +2,7 @@
 
 **Status:** Accepted (amended 2026-08-10 — security hardening)  
 **Date:** 2026-08-10  
-**Deciders:** Site Chat Engineering  
+**Deciders:** Mill Engineering<br>
 **Supersedes:** None (complements ADR-001)
 
 ---

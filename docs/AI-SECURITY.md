@@ -1,4 +1,4 @@
-# Site Chat — AI Security Review
+# Mill — AI Security Review
 
 **Status:** Reviewed for Suggested Replies foundation  
 **Last updated:** 2026-08-10

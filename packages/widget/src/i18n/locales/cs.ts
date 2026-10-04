@@ -15,7 +15,7 @@ export const messages_cs: WidgetMessages = {
   loadError: "Chat se nepodařilo načíst.",
   sessionError: "Relace vypršela. Obnovte stránku.",
   sendError: "Zprávu se nepodařilo odeslat.",
-  poweredBy: "Běží na Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Vy",
   agentLabel: "Operátor",
   systemLabel: "Systém",

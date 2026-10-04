@@ -28,7 +28,7 @@ export async function loginOperator(page: Page) {
 }
 
 function widgetFrame(page: Page): FrameLocator {
-  return page.frameLocator('iframe[title="Site Chat"]');
+  return page.frameLocator('iframe[title="Mill"]');
 }
 
 function isBootstrapRequest(url: string, method: string) {
@@ -77,7 +77,7 @@ export async function openWidget(page: Page) {
   const bootstrap = await bootstrapResponse;
   expect(bootstrap.status(), `widget bootstrap failed with HTTP ${bootstrap.status()}`).toBe(200);
 
-  await expect(page.locator('iframe[title="Site Chat"]')).toBeAttached({
+  await expect(page.locator('iframe[title="Mill"]')).toBeAttached({
     timeout: 10_000,
   });
 

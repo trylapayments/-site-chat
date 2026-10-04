@@ -15,7 +15,7 @@ export const messages_kk: WidgetMessages = {
   loadError: "Чатты жүктеу мүмкін болмады.",
   sessionError: "Сеанс аяқталды. Бетті жаңартыңыз.",
   sendError: "Хабарлама жіберілмеді.",
-  poweredBy: "Site Chat негізінде",
+  poweredBy: "Powered by Mill",
   youLabel: "Сіз",
   agentLabel: "Оператор",
   systemLabel: "Жүйе",

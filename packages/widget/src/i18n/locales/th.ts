@@ -15,7 +15,7 @@ export const messages_th: WidgetMessages = {
   loadError: "ไม่สามารถโหลดแชทได้",
   sessionError: "เซสชันหมดอายุ โปรดโหลดหน้าใหม่",
   sendError: "ส่งข้อความไม่สำเร็จ",
-  poweredBy: "ขับเคลื่อนโดย Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "คุณ",
   agentLabel: "เจ้าหน้าที่",
   systemLabel: "ระบบ",

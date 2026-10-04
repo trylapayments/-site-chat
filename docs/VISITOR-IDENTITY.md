@@ -1,4 +1,4 @@
-# Site Chat — Visitor Identity + Context
+# Mill — Visitor Identity + Context
 
 **Version:** 1.1 (security-hardened)  
 **Status:** Foundation  
@@ -16,7 +16,7 @@ Related: [PRIVACY.md](./PRIVACY.md), [DATA-RETENTION.md](./DATA-RETENTION.md), [
 
 ## 1. Overview
 
-Site Chat separates **who the visitor is** from **which browser session they are in** and **which conversation they are chatting in**. This document describes the identity model shipped as the visitor identity + context foundation.
+Mill separates **who the visitor is** from **which browser session they are in** and **which conversation they are chatting in**. This document describes the identity model shipped as the visitor identity + context foundation.
 
 | Concept | Table | Lifetime | Purpose |
 |---------|-------|----------|---------|
@@ -122,7 +122,7 @@ Every URL persisted by the visitor identity system (`visitor_sessions.current_ur
 
 **Write paths covered:** session create/resume, page-view recording, visitor message send, attachment initiate (`widget_ensure_conversation_for_attachments`), and attachment complete (`finalize_visitor_attachment_message`). Message send and attachment paths only **backfill** `visitor_sessions.current_url` / `referrer` when those fields are still NULL — they must not overwrite a newer page-view context with stale client `pageUrl`.
 
-**Consequence:** any secret, session id, auth code, tracking token, or PII a host page happens to put in a query string or fragment (e.g. `?token=...`, `#access_token=...`) is **never stored** by Site Chat, on the session, on the page-view trail, on the conversation source/referrer, or anywhere else. The operator dashboard cannot leak such values because they never reach the database — there is no redaction step to forget in the UI layer.
+**Consequence:** any secret, session id, auth code, tracking token, or PII a host page happens to put in a query string or fragment (e.g. `?token=...`, `#access_token=...`) is **never stored** by Mill, on the session, on the page-view trail, on the conversation source/referrer, or anywhere else. The operator dashboard cannot leak such values because they never reach the database — there is no redaction step to forget in the UI layer.
 
 This policy applies uniformly to `current_url`, `initial_url`, `landing_url`, `referrer`, every `visitor_page_views` row, and widget-sourced `conversations.source_url` / `conversations.referrer`.
 
@@ -290,7 +290,7 @@ Every widget mutation endpoint (`POST /api/v1/widget/session`, `/identify`, `/pa
 
 - If the request carries a browser `Origin` header, it **must** match either:
   1. the `parentOrigin` bound to the embed token (host-page / CORS callers), or
-  2. the Site Chat widget API origin (`request.url`) — the embed iframe is hosted on the app origin and issues same-origin fetches from there.
+  2. the Mill widget API origin (`request.url`) — the embed iframe is hosted on the app origin and issues same-origin fetches from there.
   A third-party Origin matching neither is rejected with `403 FORBIDDEN` (`requestOriginMatchesEmbed` in `apps/web/lib/widget/origin.ts`). This catches an embed token issued for one site being replayed from another, without blocking legitimate iframe API calls.
 - Requests with **no** `Origin` header (some non-browser or same-origin-navigation cases) are allowed through this specific check — they still must carry a valid embed token and session, checked separately. Origin validation is defense in depth on top of, not a replacement for, embed-token + session-token verification.
 - In development/test, a same-origin `localhost`/`127.0.0.1` fallback derived from `Referer` is permitted; this path is disabled outside `NODE_ENV=development|test`.

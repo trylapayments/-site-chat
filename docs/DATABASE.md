@@ -1,4 +1,4 @@
-# Site Chat — Database Design
+# Mill — Database Design
 
 **Version:** 1.2  
 **Status:** Foundation  
@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-Site Chat uses PostgreSQL 15+ hosted on Supabase. The database is the single source of truth for all application state. Supabase Realtime, Storage, and Auth integrate directly with PostgreSQL roles and Row Level Security (RLS).
+Mill uses PostgreSQL 15+ hosted on Supabase. The database is the single source of truth for all application state. Supabase Realtime, Storage, and Auth integrate directly with PostgreSQL roles and Row Level Security (RLS).
 
 ### 1.1 Design Principles
 

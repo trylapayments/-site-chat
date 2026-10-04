@@ -4,7 +4,7 @@
  * Translator notes:
  * - agentLabel: human support agent (not AI / bot)
  * - youLabel: visitor self-reference in message meta
- * - poweredBy: keep product name "Site Chat" untranslated
+ * - poweredBy: keep product name "Mill" untranslated
  * - chatPanelLabel: accessible name for the chat panel region
  * - agentTyping: use {{name}} (agentLabel or safe display name)
  * - visitorTyping: reserved for parity / future visitor-facing copy

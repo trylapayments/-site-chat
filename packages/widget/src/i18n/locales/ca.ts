@@ -15,7 +15,7 @@ export const messages_ca: WidgetMessages = {
   loadError: "No s’ha pogut carregar el xat.",
   sessionError: "La sessió ha caducat. Torneu a carregar la pàgina.",
   sendError: "No s’ha pogut enviar el missatge.",
-  poweredBy: "Amb tecnologia de Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Vós",
   agentLabel: "Agent",
   systemLabel: "Sistema",

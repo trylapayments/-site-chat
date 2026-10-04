@@ -15,7 +15,7 @@ export const messages_ar: WidgetMessages = {
   loadError: "تعذر تحميل المحادثة.",
   sessionError: "انتهت الجلسة. يرجى إعادة تحميل الصفحة.",
   sendError: "فشل إرسال الرسالة.",
-  poweredBy: "مدعوم من Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "أنت",
   agentLabel: "الوكيل",
   systemLabel: "النظام",

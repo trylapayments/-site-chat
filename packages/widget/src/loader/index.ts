@@ -282,7 +282,7 @@ function createIframe(
 ): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
   iframe.src = buildEmbedIframeSrc(widgetHost, parentOrigin);
-  iframe.title = "Site Chat";
+  iframe.title = "Mill";
   iframe.setAttribute("aria-hidden", "false");
   iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
   iframe.style.position = "fixed";
@@ -545,13 +545,13 @@ function mount() {
       return;
     }
 
-    console.warn("[Site Chat] Loader must be executed from a script tag.");
+    console.warn("[Mill] Loader must be executed from a script tag.");
     return;
   }
 
   const widgetPublicKey = getWidgetPublicKey(script);
   if (!widgetPublicKey) {
-    console.warn("[Site Chat] Missing data-widget-key attribute.");
+    console.warn("[Mill] Missing data-widget-key attribute.");
     return;
   }
 
@@ -595,7 +595,7 @@ function mount() {
     })
     .catch(() => {
       teardownLoader();
-      console.warn("[Site Chat] Failed to initialize widget.");
+      console.warn("[Mill] Failed to initialize widget.");
     });
 
   const onMessage = (event: MessageEvent) => {
@@ -654,7 +654,7 @@ function mount() {
           postPageMessage(true);
         })
         .catch(() => {
-          console.warn("[Site Chat] Failed to refresh embed token.");
+          console.warn("[Mill] Failed to refresh embed token.");
         });
     }
   };

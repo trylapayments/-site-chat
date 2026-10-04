@@ -1,4 +1,4 @@
-# Site Chat — AI Architecture
+# Mill — AI Architecture
 
 **Status:** Active  
 **Last updated:** 2026-08-10
@@ -7,9 +7,9 @@
 
 ## 1. Purpose
 
-This document describes the reusable AI foundation introduced for Site Chat and the first product surface built on it: **operator Suggested Replies**.
+This document describes the reusable AI foundation introduced for Mill and the first product surface built on it: **operator Suggested Replies**.
 
-Site Chat is a commercial multi-tenant messaging product. AI must be:
+Mill is a commercial multi-tenant messaging product. AI must be:
 
 - Workspace-scoped and fail-closed
 - Provider-swappable without rewriting product features

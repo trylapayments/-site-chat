@@ -15,7 +15,7 @@ export const messages_sr: WidgetMessages = {
   loadError: "Није могуће учитати ћаскање.",
   sessionError: "Сесија је истекла. Освежите страницу.",
   sendError: "Слање поруке није успело.",
-  poweredBy: "Покреће Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Ви",
   agentLabel: "Агент",
   systemLabel: "Систем",

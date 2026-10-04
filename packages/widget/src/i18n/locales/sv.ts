@@ -15,7 +15,7 @@ export const messages_sv: WidgetMessages = {
   loadError: "Kunde inte läsa in chatten.",
   sessionError: "Sessionen har gått ut. Ladda om sidan.",
   sendError: "Meddelandet kunde inte skickas.",
-  poweredBy: "Drivs av Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Du",
   agentLabel: "Agent",
   systemLabel: "System",

@@ -15,7 +15,7 @@ export const messages_da: WidgetMessages = {
   loadError: "Kan ikke indlæse chatten.",
   sessionError: "Sessionen er udløbet. Genindlæs siden.",
   sendError: "Beskeden kunne ikke sendes.",
-  poweredBy: "Drevet af Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Dig",
   agentLabel: "Agent",
   systemLabel: "System",

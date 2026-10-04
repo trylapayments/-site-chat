@@ -15,7 +15,7 @@ export const messages_et: WidgetMessages = {
   loadError: "Vestlust ei õnnestunud laadida.",
   sessionError: "Seanss aegus. Laadige leht uuesti.",
   sendError: "Sõnumi saatmine ebaõnnestus.",
-  poweredBy: "Töötab Site Chatiga",
+  poweredBy: "Powered by Mill",
   youLabel: "Teie",
   agentLabel: "Agent",
   systemLabel: "Süsteem",

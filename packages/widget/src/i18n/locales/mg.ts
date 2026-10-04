@@ -15,7 +15,7 @@ export const messages_mg: WidgetMessages = {
   loadError: "Tsy afaka ampidirina ny chat.",
   sessionError: "Lany daty ny session. Avereno ampidirina ny pejy.",
   sendError: "Tsy nahomby ny fandefasana hafatra.",
-  poweredBy: "Ampandehanin'ny Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Ianao",
   agentLabel: "Mpikarakara",
   systemLabel: "Rafitra",

@@ -15,7 +15,7 @@ export const messages_nn: WidgetMessages = {
   loadError: "Kan ikkje laste chatten.",
   sessionError: "Økta er utgått. Last sida på nytt.",
   sendError: "Meldinga kunne ikkje sendast.",
-  poweredBy: "Driven av Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Deg",
   agentLabel: "Agent",
   systemLabel: "System",

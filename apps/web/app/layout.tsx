@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Site Chat",
+  title: "Mill",
   description: "Customer messaging platform for websites",
 };
 
