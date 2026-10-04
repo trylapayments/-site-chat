@@ -1,11 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const { auth, context, member, from, write, read } = vi.hoisted(() => ({
+const { auth, context, member, from, write, read, update } = vi.hoisted(() => ({
   auth: vi.fn(),
   context: vi.fn(),
   member: vi.fn(),
   from: vi.fn(),
   write: vi.fn(),
   read: vi.fn(),
+  update: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => ({
@@ -40,15 +41,23 @@ beforeEach(() => {
   });
   member.mockResolvedValue({ data: { id: "member-a" }, error: null });
   const query = {
-    update: vi.fn(() => query),
+    update,
     eq: vi.fn(() => query),
     select: vi.fn(() => query),
-    maybeSingle: read,
+    single: read,
     upsert: write,
   };
   from.mockReturnValue(query);
+  update.mockReturnValue(query);
   write.mockResolvedValue({ error: null });
-  read.mockResolvedValue({ data: { status: "away" }, error: null });
+  read.mockResolvedValue({
+    data: {
+      status: "away",
+      last_activity_at: new Date().toISOString(),
+      idle_timeout_minutes: 5,
+    },
+    error: null,
+  });
 });
 it("does not write for a signed-out user or a different workspace", async () => {
   await expect(
@@ -82,14 +91,39 @@ it("rejects inactive membership and viewers before writing", async () => {
   ).rejects.toThrow("permission");
   expect(from).not.toHaveBeenCalled();
 });
-it("writes only the authenticated member and keeps heartbeats from overwriting another tab's choice", async () => {
+it("writes only the authenticated member and keeps refreshes from overwriting another tab's choice", async () => {
+  read.mockResolvedValue({
+    data: {
+      status: "available",
+      last_activity_at: new Date().toISOString(),
+      idle_timeout_minutes: 5,
+    },
+    error: null,
+  });
   expect(await syncOperatorAvailability("workspace-a", "available")).toBe(
     "available",
   );
   expect(write).toHaveBeenCalledWith(
-    expect.objectContaining({ member_id: "member-a", status: "available" }),
+    { member_id: "member-a" },
+    { onConflict: "member_id", ignoreDuplicates: true },
   );
-  write.mockClear();
+  expect(update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      status: "available",
+    }),
+  );
+  expect(update.mock.calls[0]?.[0]).toHaveProperty("last_activity_at");
+  update.mockClear();
+  read.mockResolvedValue({
+    data: {
+      status: "away",
+      last_activity_at: new Date().toISOString(),
+      idle_timeout_minutes: 5,
+    },
+    error: null,
+  });
   expect(await syncOperatorAvailability("workspace-a")).toBe("away");
-  expect(write).not.toHaveBeenCalled();
+  expect(update.mock.calls[0]?.[0]).toHaveProperty("last_seen_at");
+  expect(update.mock.calls[0]?.[0]).not.toHaveProperty("status");
+  expect(update.mock.calls[0]?.[0]).not.toHaveProperty("last_activity_at");
 });

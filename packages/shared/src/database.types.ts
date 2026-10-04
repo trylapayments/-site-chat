@@ -1776,16 +1776,22 @@ export type Database = {
       }
       operator_availability: {
         Row: {
+          idle_timeout_minutes: number
+          last_activity_at: string
           last_seen_at: string
           member_id: string
           status: string
         }
         Insert: {
+          idle_timeout_minutes?: number
+          last_activity_at?: string
           last_seen_at?: string
           member_id: string
           status?: string
         }
         Update: {
+          idle_timeout_minutes?: number
+          last_activity_at?: string
           last_seen_at?: string
           member_id?: string
           status?: string

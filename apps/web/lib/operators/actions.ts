@@ -5,15 +5,28 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace/redirect.server";
 import { resolveWorkspaceBySlug } from "@/lib/workspace/guards";
-import type { OperatorStatus } from "./availability";
-export async function syncOperatorAvailability(
+import {
+  effectiveOperatorStatus,
+  type OperatorStatus,
+  type OperatorAvailabilitySnapshot,
+} from "./status";
+const updateSchema = z
+  .object({
+    status: z.enum(["available", "away", "offline"]).optional(),
+    idleTimeoutMinutes: z.number().int().min(0).max(120).optional(),
+    active: z.boolean().optional(),
+  })
+  .strict();
+
+export async function updateOperatorAvailability(
   slug: string,
-  requestedStatus?: OperatorStatus,
-) {
-  const parsed = z
-    .enum(["available", "away", "offline"])
-    .optional()
-    .parse(requestedStatus);
+  input: {
+    status?: OperatorStatus;
+    idleTimeoutMinutes?: number;
+    active?: boolean;
+  } = {},
+): Promise<OperatorAvailabilitySnapshot> {
+  const parsed = updateSchema.parse(input);
   const client = await createClient();
   const {
     data: { user },
@@ -32,24 +45,55 @@ export async function syncOperatorAvailability(
     .single<{ id: string }>();
   if (memberError) throw new Error("Workspace access denied.");
   const service = createServiceClient();
-  if (parsed !== undefined) {
-    const { error } = await service.from("operator_availability").upsert({
-      member_id: member.id,
-      status: parsed,
-      last_seen_at: new Date().toISOString(),
-    });
-    if (error) throw new Error("Unable to update your status.");
-    return parsed;
-  }
-  // Heartbeats never overwrite a choice made in another tab.
+  // Create a preference row without overwriting an existing manual choice.
+  const { error: initError } = await service
+    .from("operator_availability")
+    .upsert(
+      { member_id: member.id },
+      { onConflict: "member_id", ignoreDuplicates: true },
+    );
+  if (initError) throw new Error("Unable to load your status.");
+  const now = new Date().toISOString();
+  const patch: {
+    last_seen_at: string;
+    last_activity_at?: string;
+    status?: OperatorStatus;
+    idle_timeout_minutes?: number;
+  } = { last_seen_at: now };
+  if (parsed.status !== undefined) patch.status = parsed.status;
+  if (parsed.idleTimeoutMinutes !== undefined)
+    patch.idle_timeout_minutes = parsed.idleTimeoutMinutes;
+  if (parsed.active === true || parsed.status === "available")
+    patch.last_activity_at = now;
+  // Background refreshes never write status or reset the inactivity timer.
   const { data, error } = await service
     .from("operator_availability")
-    .update({ last_seen_at: new Date().toISOString() })
+    .update(patch)
     .eq("member_id", member.id)
-    .select("status")
-    .maybeSingle();
-  if (error) throw new Error("Unable to refresh your status.");
-  return z
-    .enum(["available", "away", "offline"])
-    .parse(data?.status ?? "offline");
+    .select("status, last_activity_at, idle_timeout_minutes")
+    .single();
+  if (error) throw new Error("Unable to update your status.");
+  const row = z
+    .object({
+      status: z.enum(["available", "away", "offline"]),
+      last_activity_at: z.string().datetime({ offset: true }),
+      idle_timeout_minutes: z.number().int().min(0).max(120),
+    })
+    .parse(data);
+  const status = effectiveOperatorStatus(row);
+  return {
+    status,
+    selectedStatus: row.status,
+    idleTimeoutMinutes: row.idle_timeout_minutes,
+    autoAway: row.status === "available" && status === "away",
+  };
+}
+
+/** Compatibility for already-open dashboards from the previous deployment. */
+export async function syncOperatorAvailability(
+  slug: string,
+  requestedStatus?: OperatorStatus,
+) {
+  return (await updateOperatorAvailability(slug, { status: requestedStatus }))
+    .status;
 }

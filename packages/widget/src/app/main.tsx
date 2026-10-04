@@ -434,7 +434,7 @@ function WidgetApp() {
         const { status } = await api.operatorAvailability(token);
         if (active) setWorkspaceStatus(status);
       } catch {
-        if (active) setWorkspaceStatus(null);
+        // A network interruption must not turn an available team offline.
       } finally {
         inFlight = false;
       }
