@@ -20,6 +20,9 @@ import {
   applyWidgetPreset,
   collectAppearanceContrastWarnings,
   isAppearanceDraftDirty,
+  defaultWidgetStudioEntitlements,
+  hasWidgetStudioFeature,
+  type WidgetStudioFeature,
   widgetAppearanceConfigSchema,
   widgetStudioMessagesEn,
   type WidgetAppearanceConfig,
@@ -65,11 +68,30 @@ type AssetUrls = Partial<
   Record<"logo" | "launcher_icon" | "agent_avatar", string>
 >;
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-4 rounded-lg border p-4">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+function Section({
+  title,
+  children,
+  advanced = false,
+}: {
+  title: string;
+  children: ReactNode;
+  advanced?: boolean;
+}) {
+  const fields = (
+    <div className="grid grid-cols-2 gap-4 [&>*]:col-span-2">{children}</div>
+  );
+  return advanced ? (
+    <details
+      className="group border-t pt-4"
+      data-testid="widget-studio-advanced-section"
+    >
+      <summary className="cursor-pointer text-sm font-medium">{title}</summary>
+      <div className="pt-4">{fields}</div>
+    </details>
+  ) : (
+    <section className="space-y-4 border-t pt-5">
+      <h2 className="text-sm font-medium">{title}</h2>
+      {fields}
     </section>
   );
 }
@@ -106,7 +128,10 @@ function SelectControl({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {option
+              .replaceAll("-", " ")
+              .replaceAll("_", " ")
+              .replace(/^./, (letter) => letter.toUpperCase())}
           </option>
         ))}
       </select>
@@ -278,10 +303,12 @@ export function WidgetStudioManager({
   workspaceSlug,
   initialState,
   canManage,
+  features = [...defaultWidgetStudioEntitlements().features],
 }: {
   workspaceSlug: string;
   initialState: WidgetStudioState;
   canManage: boolean;
+  features?: readonly WidgetStudioFeature[];
 }) {
   const [studioState, setStudioState] = useState(initialState);
   const [draft, setDraft] = useState(initialState.draft);
@@ -292,6 +319,10 @@ export function WidgetStudioManager({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const canHideBranding = hasWidgetStudioFeature(
+    { features: new Set(features) },
+    "hide_powered_by",
+  );
   const disabled = !canManage || isPending || assetPending !== null;
 
   const contrast = useMemo(
@@ -559,7 +590,7 @@ export function WidgetStudioManager({
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background p-4">
         <div>
           <p className="text-sm font-medium">
             {messages.versionLabel}: {studioState.publishedVersion}
@@ -639,53 +670,142 @@ export function WidgetStudioManager({
         </p>
       ) : null}
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold">Presets</h2>
-        <div className="flex flex-wrap gap-2">
-          {WIDGET_PRESET_DEFINITIONS.map((preset) => (
-            <Button
-              key={preset.id}
-              type="button"
-              size="sm"
-              variant={draft.presetId === preset.id ? "secondary" : "outline"}
-              title={preset.description}
-              disabled={disabled}
-              onClick={() => {
-                runPreset(preset.id);
-              }}
-            >
-              {preset.label}
-            </Button>
-          ))}
-        </div>
-      </section>
+      <div className="grid items-start overflow-clip rounded-xl border lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-5 p-5 lg:border-r">
+          <section className="space-y-2">
+            <h2 className="text-sm font-medium">Choose a style</h2>
+            <div className="flex flex-wrap gap-2">
+              {WIDGET_PRESET_DEFINITIONS.map((preset) => (
+                <Button
+                  key={preset.id}
+                  type="button"
+                  size="sm"
+                  variant={
+                    draft.presetId === preset.id ? "secondary" : "outline"
+                  }
+                  title={preset.description}
+                  disabled={disabled}
+                  onClick={() => {
+                    runPreset(preset.id);
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </section>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)]">
-        <div className="space-y-4">
-          <Section title={messages.sections.general}>
-            <SelectControl
-              id="studio-locale"
-              label="Default locale"
-              value={draft.locale ?? "en"}
-              options={WIDGET_LOCALE_CODES}
+          <Section title={messages.sections.colors}>
+            <ColorControl
+              id="studio-primary"
+              label="Primary"
+              value={draft.primaryColor}
+              testId="widget-studio-primary-color"
               disabled={disabled}
-              onChange={(value) => {
+              onChange={(primaryColor) => {
+                updateDraft({ primaryColor });
+              }}
+            />
+            <ColorControl
+              id="studio-accent"
+              label="Accent"
+              value={draft.accentColor}
+              disabled={disabled}
+              onChange={(accentColor) => {
+                updateDraft({ accentColor });
+              }}
+            />
+            <ColorControl
+              id="studio-background"
+              label="Background"
+              value={draft.backgroundColor}
+              disabled={disabled}
+              onChange={(backgroundColor) => {
+                updateDraft({ backgroundColor });
+              }}
+            />
+            <ColorControl
+              id="studio-text"
+              label="Text"
+              value={draft.textColor}
+              disabled={disabled}
+              onChange={(textColor) => {
+                updateDraft({ textColor });
+              }}
+            />
+            <ColorControl
+              id="studio-launcher-color"
+              label="Launcher"
+              value={draft.launcherColor}
+              disabled={disabled}
+              onChange={(launcherColor) => {
+                updateDraft({ launcherColor });
+              }}
+            />
+            {contrast.warnings.length > 0 ? (
+              <div className="border-destructive/40 bg-destructive/5 space-y-1 rounded-md border p-3 sm:col-span-2">
+                <h3 className="text-sm font-medium">
+                  {messages.contrastWarningTitle}
+                </h3>
+                <ul className="text-muted-foreground list-disc space-y-1 ps-4 text-xs">
+                  {contrast.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </Section>
+
+          <Section title={messages.sections.header}>
+            <SelectControl
+              id="studio-header-style"
+              label="Header style"
+              value={draft.headerStyle}
+              options={WIDGET_HEADER_STYLES}
+              disabled={disabled}
+              onChange={(headerStyle) => {
                 updateDraft({
-                  locale: value as WidgetAppearanceConfig["locale"],
+                  headerStyle:
+                    headerStyle as WidgetAppearanceConfig["headerStyle"],
                 });
               }}
             />
-            <NumberControl
-              id="studio-reopen-hours"
-              label="Conversation reopen window (hours)"
-              value={draft.reopenWindowHours}
-              min={1}
-              max={720}
-              disabled={disabled}
-              onChange={(reopenWindowHours) => {
-                updateDraft({ reopenWindowHours });
-              }}
-            />
+            <div className="space-y-1">
+              <Label htmlFor="studio-header-title">Title (English)</Label>
+              <Input
+                id="studio-header-title"
+                value={englishCopy(draft.headerTitle)}
+                maxLength={100}
+                disabled={disabled}
+                placeholder="Support team"
+                onChange={(event) => {
+                  updateDraft({
+                    headerTitle: updateEnglishCopy(
+                      draft.headerTitle,
+                      event.target.value,
+                    ),
+                  });
+                }}
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="studio-subtitle">Subtitle (English)</Label>
+              <Input
+                id="studio-subtitle"
+                value={englishCopy(draft.subtitle)}
+                maxLength={500}
+                disabled={disabled}
+                placeholder="Usually replies in a few minutes"
+                onChange={(event) => {
+                  updateDraft({
+                    subtitle: updateEnglishCopy(
+                      draft.subtitle,
+                      event.target.value,
+                    ),
+                  });
+                }}
+              />
+            </div>
           </Section>
 
           <Section title={messages.sections.launcher}>
@@ -767,7 +887,91 @@ export function WidgetStudioManager({
             {assetControl("launcher_icon", "Custom launcher icon")}
           </Section>
 
-          <Section title={messages.sections.chatWindow}>
+          <Section title={messages.sections.branding}>
+            {assetControl("logo", "Workspace logo")}
+            {assetControl("agent_avatar", "Agent avatar")}
+            <div data-testid="widget-studio-powered-by">
+              <ToggleControl
+                id="studio-powered-by"
+                label="Remove Site Chat branding"
+                description={
+                  canHideBranding
+                    ? "White-label customization is included for this workspace."
+                    : "Available with white-label access. Site Chat branding stays visible on your website."
+                }
+                checked={canHideBranding && !draft.showPoweredBy}
+                disabled={disabled || !canHideBranding}
+                onChange={(removeBranding) => {
+                  updateDraft({ showPoweredBy: !removeBranding });
+                }}
+              />
+            </div>
+          </Section>
+
+          <Section title={messages.sections.messages}>
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="studio-welcome">Welcome message (English)</Label>
+              <Input
+                id="studio-welcome"
+                value={englishCopy(draft.welcomeMessage)}
+                maxLength={500}
+                disabled={disabled}
+                placeholder="Hi! How can we help?"
+                onChange={(event) => {
+                  updateDraft({
+                    welcomeMessage: updateEnglishCopy(
+                      draft.welcomeMessage,
+                      event.target.value,
+                    ),
+                  });
+                }}
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="studio-placeholder">
+                Composer placeholder (English)
+              </Label>
+              <Input
+                id="studio-placeholder"
+                value={englishCopy(draft.placeholderText)}
+                maxLength={500}
+                disabled={disabled}
+                placeholder="Type a message…"
+                onChange={(event) => {
+                  updateDraft({
+                    placeholderText: updateEnglishCopy(
+                      draft.placeholderText,
+                      event.target.value,
+                    ),
+                  });
+                }}
+              />
+            </div>
+            <SelectControl
+              id="studio-send-style"
+              label="Send button"
+              value={draft.sendButtonStyle}
+              options={WIDGET_SEND_BUTTON_STYLES}
+              disabled={disabled}
+              onChange={(sendButtonStyle) => {
+                updateDraft({
+                  sendButtonStyle:
+                    sendButtonStyle as WidgetAppearanceConfig["sendButtonStyle"],
+                });
+              }}
+            />
+            <ToggleControl
+              id="studio-show-greeting"
+              label="Show greeting"
+              checked={draft.showGreeting}
+              disabled={disabled}
+              onChange={(showGreeting) => {
+                updateDraft({ showGreeting });
+              }}
+            />
+          </Section>
+
+          <Section title={messages.sections.chatWindow} advanced>
             <NumberControl
               id="studio-width"
               label="Width"
@@ -848,59 +1052,7 @@ export function WidgetStudioManager({
             />
           </Section>
 
-          <Section title={messages.sections.header}>
-            <SelectControl
-              id="studio-header-style"
-              label="Header style"
-              value={draft.headerStyle}
-              options={WIDGET_HEADER_STYLES}
-              disabled={disabled}
-              onChange={(headerStyle) => {
-                updateDraft({
-                  headerStyle:
-                    headerStyle as WidgetAppearanceConfig["headerStyle"],
-                });
-              }}
-            />
-            <div className="space-y-1">
-              <Label htmlFor="studio-header-title">Title (English)</Label>
-              <Input
-                id="studio-header-title"
-                value={englishCopy(draft.headerTitle)}
-                maxLength={100}
-                disabled={disabled}
-                placeholder="Support team"
-                onChange={(event) => {
-                  updateDraft({
-                    headerTitle: updateEnglishCopy(
-                      draft.headerTitle,
-                      event.target.value,
-                    ),
-                  });
-                }}
-              />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="studio-subtitle">Subtitle (English)</Label>
-              <Input
-                id="studio-subtitle"
-                value={englishCopy(draft.subtitle)}
-                maxLength={500}
-                disabled={disabled}
-                placeholder="Usually replies in a few minutes"
-                onChange={(event) => {
-                  updateDraft({
-                    subtitle: updateEnglishCopy(
-                      draft.subtitle,
-                      event.target.value,
-                    ),
-                  });
-                }}
-              />
-            </div>
-          </Section>
-
-          <Section title={messages.sections.typography}>
+          <Section title={messages.sections.typography} advanced>
             <SelectControl
               id="studio-font"
               label="Font family"
@@ -942,148 +1094,33 @@ export function WidgetStudioManager({
             />
           </Section>
 
-          <Section title={messages.sections.colors}>
-            <ColorControl
-              id="studio-primary"
-              label="Primary"
-              value={draft.primaryColor}
-              testId="widget-studio-primary-color"
-              disabled={disabled}
-              onChange={(primaryColor) => {
-                updateDraft({ primaryColor });
-              }}
-            />
-            <ColorControl
-              id="studio-accent"
-              label="Accent"
-              value={draft.accentColor}
-              disabled={disabled}
-              onChange={(accentColor) => {
-                updateDraft({ accentColor });
-              }}
-            />
-            <ColorControl
-              id="studio-background"
-              label="Background"
-              value={draft.backgroundColor}
-              disabled={disabled}
-              onChange={(backgroundColor) => {
-                updateDraft({ backgroundColor });
-              }}
-            />
-            <ColorControl
-              id="studio-text"
-              label="Text"
-              value={draft.textColor}
-              disabled={disabled}
-              onChange={(textColor) => {
-                updateDraft({ textColor });
-              }}
-            />
-            <ColorControl
-              id="studio-launcher-color"
-              label="Launcher"
-              value={draft.launcherColor}
-              disabled={disabled}
-              onChange={(launcherColor) => {
-                updateDraft({ launcherColor });
-              }}
-            />
-            {contrast.warnings.length > 0 ? (
-              <div className="border-destructive/40 bg-destructive/5 space-y-1 rounded-md border p-3 sm:col-span-2">
-                <h3 className="text-sm font-medium">
-                  {messages.contrastWarningTitle}
-                </h3>
-                <ul className="text-muted-foreground list-disc space-y-1 ps-4 text-xs">
-                  {contrast.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </Section>
-
-          <Section title={messages.sections.messages}>
-            <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="studio-welcome">Welcome message (English)</Label>
-              <Input
-                id="studio-welcome"
-                value={englishCopy(draft.welcomeMessage)}
-                maxLength={500}
-                disabled={disabled}
-                placeholder="Hi! How can we help?"
-                onChange={(event) => {
-                  updateDraft({
-                    welcomeMessage: updateEnglishCopy(
-                      draft.welcomeMessage,
-                      event.target.value,
-                    ),
-                  });
-                }}
-              />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="studio-placeholder">
-                Composer placeholder (English)
-              </Label>
-              <Input
-                id="studio-placeholder"
-                value={englishCopy(draft.placeholderText)}
-                maxLength={500}
-                disabled={disabled}
-                placeholder="Type a message…"
-                onChange={(event) => {
-                  updateDraft({
-                    placeholderText: updateEnglishCopy(
-                      draft.placeholderText,
-                      event.target.value,
-                    ),
-                  });
-                }}
-              />
-            </div>
+          <Section title={messages.sections.general} advanced>
             <SelectControl
-              id="studio-send-style"
-              label="Send button"
-              value={draft.sendButtonStyle}
-              options={WIDGET_SEND_BUTTON_STYLES}
+              id="studio-locale"
+              label="Default locale"
+              value={draft.locale ?? "en"}
+              options={WIDGET_LOCALE_CODES}
               disabled={disabled}
-              onChange={(sendButtonStyle) => {
+              onChange={(value) => {
                 updateDraft({
-                  sendButtonStyle:
-                    sendButtonStyle as WidgetAppearanceConfig["sendButtonStyle"],
+                  locale: value as WidgetAppearanceConfig["locale"],
                 });
               }}
             />
-            <ToggleControl
-              id="studio-show-greeting"
-              label="Show greeting"
-              checked={draft.showGreeting}
+            <NumberControl
+              id="studio-reopen-hours"
+              label="Conversation reopen window (hours)"
+              value={draft.reopenWindowHours}
+              min={1}
+              max={720}
               disabled={disabled}
-              onChange={(showGreeting) => {
-                updateDraft({ showGreeting });
+              onChange={(reopenWindowHours) => {
+                updateDraft({ reopenWindowHours });
               }}
             />
           </Section>
 
-          <Section title={messages.sections.branding}>
-            {assetControl("logo", "Workspace logo")}
-            {assetControl("agent_avatar", "Agent avatar")}
-            <div data-testid="widget-studio-powered-by">
-              <ToggleControl
-                id="studio-powered-by"
-                label="Show “Powered by Site Chat”"
-                description="Without the white-label entitlement, production always shows Site Chat branding."
-                checked={draft.showPoweredBy}
-                disabled={disabled}
-                onChange={(showPoweredBy) => {
-                  updateDraft({ showPoweredBy });
-                }}
-              />
-            </div>
-          </Section>
-
-          <Section title={messages.sections.behavior}>
+          <Section title={messages.sections.behavior} advanced>
             <div className="space-y-1">
               <Label htmlFor="studio-auto-open">Auto-open delay (ms)</Label>
               <Input
@@ -1133,7 +1170,7 @@ export function WidgetStudioManager({
             />
           </Section>
 
-          <Section title={messages.sections.mobile}>
+          <Section title={messages.sections.mobile} advanced>
             <SelectControl
               id="studio-mobile"
               label="Mobile behavior"
@@ -1149,7 +1186,7 @@ export function WidgetStudioManager({
             />
           </Section>
 
-          <Section title="Business hours (foundation)">
+          <Section title="Business hours (foundation)" advanced>
             <p
               className="bg-muted/50 text-muted-foreground rounded-md border px-3 py-2 text-sm sm:col-span-2"
               data-testid="widget-studio-business-hours-foundation"
@@ -1231,8 +1268,14 @@ export function WidgetStudioManager({
           </Section>
         </div>
 
-        <div className="xl:sticky xl:top-4">
-          <WidgetStudioPreview config={draft} assetUrls={assetUrls} />
+        <div className="bg-muted/30 min-w-0 p-5 lg:sticky lg:top-4">
+          <WidgetStudioPreview
+            config={{
+              ...draft,
+              showPoweredBy: !canHideBranding || draft.showPoweredBy,
+            }}
+            assetUrls={assetUrls}
+          />
         </div>
       </div>
     </div>

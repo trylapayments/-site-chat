@@ -72,6 +72,7 @@ export function WidgetStudioPreview({
 }) {
   const [viewport, setViewport] = useState<PreviewViewport>("desktop");
   const [rtl, setRtl] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const locale = rtl ? "he" : (config.locale ?? "en");
   const headerTitle = copyForLocale(
     config.headerTitle,
@@ -146,12 +147,12 @@ export function WidgetStudioPreview({
               setRtl((current) => !current);
             }}
           >
-            עברית RTL
+            Preview RTL
           </Button>
         </div>
       </div>
 
-      <div className="bg-muted/50 overflow-x-auto rounded-lg border p-3 sm:p-5">
+      <div className="bg-background rounded-xl border p-3 sm:p-4">
         <div
           className={`${VIEWPORT_CLASS[viewport]} bg-background relative mx-auto min-h-[600px] overflow-hidden rounded-md border transition-[max-width]`}
           style={variables}
@@ -163,7 +164,7 @@ export function WidgetStudioPreview({
           data-color-mode={config.colorMode}
         >
           <div className="text-muted-foreground p-4 text-xs">
-            {rtl ? "תצוגה מקדימה של האתר" : "Example website preview"}
+            {rtl ? "תצוגה מקדימה של האתר" : "Your website"}
           </div>
 
           <div
@@ -178,6 +179,7 @@ export function WidgetStudioPreview({
             <div
               className={`${SHADOW[config.shadowLevel]} ${FONT_SIZE[config.fontSizeScale]} flex w-full max-w-[420px] flex-col overflow-hidden border`}
               style={{
+                display: isOpen ? undefined : "none",
                 maxWidth: `${String(config.widgetWidth)}px`,
                 height: `${String(Math.min(config.widgetHeight, 460))}px`,
                 borderRadius: "var(--studio-radius)",
@@ -244,7 +246,7 @@ export function WidgetStudioPreview({
                     )
                   ) : null}
                   <p
-                    className="max-w-[80%] rounded-xl px-3 py-2"
+                    className="max-w-[80%] break-words rounded-xl px-3 py-2"
                     style={{
                       backgroundColor:
                         "color-mix(in srgb, var(--studio-primary) 12%, transparent)",
@@ -254,7 +256,7 @@ export function WidgetStudioPreview({
                   </p>
                 </div>
                 <p
-                  className="self-end rounded-xl px-3 py-2 text-white"
+                  className="self-end break-words rounded-xl px-3 py-2 text-white"
                   style={{ backgroundColor: "var(--studio-accent)" }}
                 >
                   {rtl ? "אשמח לקבל עזרה." : "I would like some help."}
@@ -282,7 +284,7 @@ export function WidgetStudioPreview({
               </footer>
               {config.showPoweredBy ? (
                 <p
-                  className="text-muted-foreground border-t py-1 text-center text-[10px]"
+                  className="text-muted-foreground border-t py-1 text-center text-xs"
                   data-testid="widget-studio-preview-powered-by"
                 >
                   Powered by Site Chat
@@ -296,7 +298,13 @@ export function WidgetStudioPreview({
                 LAUNCHER_SHAPE[config.launcherShape]
               } flex items-center justify-center text-white shadow-lg`}
               style={{ backgroundColor: "var(--studio-launcher)" }}
-              aria-label="Widget launcher preview"
+              aria-label={
+                isOpen ? "Close widget preview" : "Open widget preview"
+              }
+              aria-expanded={isOpen}
+              onClick={() => {
+                setIsOpen((current) => !current);
+              }}
               data-testid="widget-studio-preview-launcher"
             >
               {config.launcherIcon === "help" ? (

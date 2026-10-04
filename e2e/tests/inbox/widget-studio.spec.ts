@@ -34,6 +34,9 @@ async function openOwnerStudio(page: Page): Promise<void> {
   await expect(page.getByTestId("widget-studio-manager")).toBeVisible({
     timeout: 30_000,
   });
+  for (const section of await page.getByTestId("widget-studio-advanced-section").all()) {
+    await section.locator("summary").click();
+  }
 }
 
 async function openReadonlyStudio(page: Page, email: string): Promise<void> {
@@ -229,9 +232,44 @@ test.describe.serial("Widget Studio", () => {
     );
   });
 
+  test("opens and closes the widget preview without changing the draft", async ({ page }) => {
+    await openOwnerStudio(page);
+    const welcome = page
+      .getByTestId("widget-studio-preview")
+      .getByText("Hi! How can we help?", { exact: true });
+    const dirty = page.getByTestId("widget-studio-dirty-badge");
+    const before = await dirty.getAttribute("data-dirty");
+    await page.getByRole("button", { name: "Close widget preview", exact: true }).click();
+    await expect(welcome).toBeHidden();
+    await page.getByRole("button", { name: "Open widget preview", exact: true }).click();
+    await expect(welcome).toBeVisible();
+    await expect(dirty).toHaveAttribute("data-dirty", before!);
+  });
+
+  test("keeps the editor and preview usable on a narrow phone", async ({ page }, testInfo) => {
+    await openOwnerStudio(page);
+    await page.screenshot({
+      path: testInfo.outputPath("widget-studio-desktop.png"),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByTestId("widget-studio-viewport-phone").click();
+    await page.getByTestId("widget-studio-position").selectOption("bottom-left");
+    const launcher = page.getByTestId("widget-studio-preview-launcher");
+    await expect(launcher).toBeVisible();
+    const bounds = await launcher.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("widget-studio-phone.png"), fullPage: true });
+  });
+
   test("renders the Hebrew preview right-to-left", async ({ page }) => {
     await openOwnerStudio(page);
-    await page.getByRole("button", { name: "עברית RTL" }).click();
+    await page.getByRole("button", { name: "Preview RTL" }).click();
 
     await expect(page.getByTestId("widget-studio-preview-panel")).toHaveAttribute("dir", "rtl");
     await expect(page.getByTestId("widget-studio-preview")).toContainText("היי! איך אפשר לעזור?");
@@ -243,7 +281,7 @@ test.describe.serial("Widget Studio", () => {
     await page.getByLabel("Welcome message (English)").fill(customWelcome);
     await expect(page.getByTestId("widget-studio-preview")).toContainText(customWelcome);
 
-    await page.getByRole("button", { name: "עברית RTL" }).click();
+    await page.getByRole("button", { name: "Preview RTL" }).click();
     await expect(page.getByTestId("widget-studio-preview")).toContainText("היי! איך אפשר לעזור?");
     await expect(page.getByTestId("widget-studio-preview")).not.toContainText(customWelcome);
   });
@@ -314,7 +352,8 @@ test.describe.serial("Widget Studio", () => {
     page,
   }) => {
     await openOwnerStudio(page);
-    await page.locator("#studio-powered-by").uncheck();
+    await expect(page.locator("#studio-powered-by")).toBeDisabled();
+    await expect(page.getByTestId("widget-studio-preview-powered-by")).toBeVisible();
     await publishDraft(page);
 
     const visitorContext = await browser.newContext();
