@@ -79,6 +79,7 @@ import {
   resolveWidgetThemeColors,
   safeHexColor,
   widgetShadow,
+  widgetFloatingShadow,
 } from "./appearance";
 import { isNearBottom, scrollContainerToBottom, shouldAutoScroll } from "./scroll";
 
@@ -291,6 +292,12 @@ function WidgetApp() {
     active: false,
     displayName: null,
   });
+  const [workspaceStatus, setWorkspaceStatus] = useState<"available" | "away" | "offline" | null>(
+    null,
+  );
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [operatorsOnline, setOperatorsOnline] = useState(false);
   const [agentReceipts, setAgentReceipts] = useState<ReceiptCursors>(EMPTY_RECEIPTS);
   const [pendingFiles, setPendingFiles] = useState<SelectedLocalFile[]>([]);
@@ -415,6 +422,36 @@ function WidgetApp() {
 
   const readySessionToken = state.status === "ready" ? state.sessionToken : null;
   const readyEmbedToken = state.status === "ready" ? state.init.embedToken : null;
+  useEffect(() => {
+    if (!readyEmbedToken || !open) return;
+    const token = readyEmbedToken;
+    let active = true;
+    let inFlight = false;
+    async function refresh() {
+      if (inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const { status } = await api.operatorAvailability(token);
+        if (active) setWorkspaceStatus(status);
+      } catch {
+        if (active) setWorkspaceStatus(null);
+      } finally {
+        inFlight = false;
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const onVisibility = () => {
+      void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [api, readyEmbedToken, open]);
+
   const sessionTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -1141,7 +1178,10 @@ function WidgetApp() {
   const borderRadius = clampedPixels(config?.borderRadius, 16, 0, 32);
   const densityPadding = config?.density === "compact" ? "0.75rem" : "1rem";
   const messageGap = config?.density === "compact" ? "0.5rem" : "0.75rem";
-  const presenceFallback = operatorsOnline ? messagesCopy.online : messagesCopy.offline;
+  const effectiveStatus = workspaceStatus ?? (operatorsOnline ? "available" : "offline");
+  const available = effectiveStatus === "available";
+  const presenceFallback =
+    effectiveStatus === "away" ? "Away" : available ? messagesCopy.online : messagesCopy.offline;
   const headerTitle = resolveLocalizedCopy({
     copy: config?.headerTitle,
     locale,
@@ -1226,14 +1266,14 @@ function WidgetApp() {
             position: "fixed",
             bottom: `${String(launcherOffsetY + Math.max(0, (launcherSize - 44) / 2))}px`,
             ...greetingInsets,
-            width: "min(16.25rem, calc(100vw - 1rem))",
+            width: `min(16.25rem, calc(100vw - ${String(launcherOffsetX + launcherSize + 12 + 16)}px))`,
             minHeight: "2.75rem",
             padding: "0.7rem 0.85rem",
             border: `1px solid ${borderColor}`,
             borderRadius: `${String(Math.min(borderRadius, 14))}px`,
             background: backgroundColor,
             color: textColor,
-            boxShadow: widgetShadow(config.shadowLevel),
+            boxShadow: widgetFloatingShadow(config.shadowLevel),
             zIndex: 1,
           }}
         >
@@ -1262,7 +1302,7 @@ function WidgetApp() {
             background: launcherColor,
             color: contrastingTextColor(launcherColor),
             cursor: "pointer",
-            boxShadow: widgetShadow(config?.shadowLevel),
+            boxShadow: widgetFloatingShadow(config?.shadowLevel),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1328,7 +1368,7 @@ function WidgetApp() {
                 <div style={{ fontWeight: 650, overflowWrap: "anywhere" }}>{headerTitle}</div>
                 <div
                   data-testid="widget-operator-presence"
-                  data-presence={operatorsOnline ? "online" : "offline"}
+                  data-presence={effectiveStatus === "available" ? "online" : effectiveStatus}
                   style={{
                     fontSize: "0.78em",
                     opacity: 0.86,
@@ -1344,8 +1384,12 @@ function WidgetApp() {
                       width: "0.4rem",
                       height: "0.4rem",
                       borderRadius: "50%",
-                      background: operatorsOnline ? "#22C55E" : "currentColor",
-                      opacity: operatorsOnline ? 1 : 0.45,
+                      background: available
+                        ? "#22C55E"
+                        : effectiveStatus === "away"
+                          ? "#F59E0B"
+                          : "currentColor",
+                      opacity: effectiveStatus !== "offline" ? 1 : 0.45,
                       display: "inline-block",
                       flexShrink: 0,
                     }}
@@ -1732,7 +1776,6 @@ function WidgetApp() {
                 type="file"
                 multiple
                 accept={acceptAttributeForAttachments()}
-                capture="environment"
                 aria-label={messagesCopy.attachFilesLabel}
                 data-testid="widget-file-input"
                 style={{ display: "none" }}
@@ -1743,23 +1786,112 @@ function WidgetApp() {
                   }
                 }}
               />
-              <button
-                type="button"
-                data-testid="widget-attach-button"
-                aria-label={messagesCopy.attachLabel}
-                disabled={state.status !== "ready" || sending}
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                  border: `1px solid ${borderColor}`,
-                  background: backgroundColor,
-                  color: textColor,
-                  padding: "0.625rem 0.75rem",
-                  cursor: "pointer",
+              <input
+                ref={photoInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                aria-label="Photo library"
+                data-testid="widget-photo-input"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  if (event.target.files) {
+                    void addLocalFiles(event.target.files);
+                    event.target.value = "";
+                  }
                 }}
-              >
-                +
-              </button>
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                aria-label="Take photo"
+                data-testid="widget-camera-input"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  if (event.target.files) {
+                    void addLocalFiles(event.target.files);
+                    event.target.value = "";
+                  }
+                }}
+              />
+              <div style={{ position: "relative" }}>
+                {attachmentMenuOpen ? (
+                  <div
+                    role="menu"
+                    aria-label="Add attachment"
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") setAttachmentMenuOpen(false);
+                    }}
+                    style={{
+                      position: "absolute",
+                      bottom: "100%",
+                      marginBottom: "0.5rem",
+                      left: 0,
+                      minWidth: "10rem",
+                      border: `1px solid ${borderColor}`,
+                      borderRadius: "0.75rem",
+                      background: backgroundColor,
+                      color: textColor,
+                      padding: "0.25rem",
+                      boxShadow: widgetFloatingShadow(config?.shadowLevel),
+                      zIndex: 5,
+                    }}
+                  >
+                    {(
+                      [
+                        ["Photo library", photoInputRef],
+                        ["Take photo", cameraInputRef],
+                        ["Choose file", fileInputRef],
+                      ] as const
+                    ).map(([label, input]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          input.current?.click();
+                          setAttachmentMenuOpen(false);
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          padding: "0.7rem",
+                          textAlign: "start",
+                          border: 0,
+                          background: "transparent",
+                          color: "inherit",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  data-testid="widget-attach-button"
+                  aria-label={messagesCopy.attachLabel}
+                  disabled={state.status !== "ready" || sending}
+                  aria-haspopup="menu"
+                  aria-expanded={attachmentMenuOpen}
+                  onClick={() => {
+                    setAttachmentMenuOpen((current) => !current);
+                  }}
+                  style={{
+                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                    border: `1px solid ${borderColor}`,
+                    background: backgroundColor,
+                    color: textColor,
+                    padding: "0.625rem 0.75rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  +
+                </button>
+              </div>
               <textarea
                 className="sitechat-composer"
                 value={composer}
@@ -1896,7 +2028,7 @@ function WidgetApp() {
                   marginTop: "0.5rem",
                   fontSize: "0.75rem",
                   color: mutedColor,
-                  textAlign: "end",
+                  textAlign: "center",
                 }}
               >
                 {messagesCopy.poweredBy}

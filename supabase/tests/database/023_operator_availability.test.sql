@@ -1,0 +1,10 @@
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+SELECT plan(5);
+SELECT has_table('public', 'operator_availability', 'Availability table exists');
+SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.operator_availability'::regclass), 'RLS is enabled');
+SELECT ok(NOT has_table_privilege('anon', 'public.operator_availability', 'SELECT'), 'Visitors cannot read operator rows');
+SELECT ok(NOT has_table_privilege('authenticated', 'public.operator_availability', 'INSERT'), 'Operators cannot forge availability directly');
+SELECT ok(has_table_privilege('service_role', 'public.operator_availability', 'UPDATE'), 'Verified server actions can update availability');
+SELECT * FROM finish();
+ROLLBACK;

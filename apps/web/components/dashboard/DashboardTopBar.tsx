@@ -7,6 +7,7 @@ import type { AccessibleWorkspace } from "@site-chat/shared";
 import { GlobalSearch } from "@/components/dashboard/global-search/GlobalSearch";
 import { MobileNav } from "@/components/dashboard/MobileNav";
 import { NotificationBell } from "@/components/dashboard/notifications/NotificationBell";
+import { OperatorAvailability } from "@/components/dashboard/OperatorAvailability";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
 
@@ -53,6 +54,13 @@ export function DashboardTopBar({
             workspaceId={currentWorkspaceId}
             memberId={memberId}
           />
+        ) : null}
+        {workspaces.some(
+          (workspace) =>
+            workspace.workspace_id === currentWorkspaceId &&
+            workspace.role !== "viewer",
+        ) ? (
+          <OperatorAvailability slug={slug} />
         ) : null}
         <div className="hidden lg:block">
           <UserMenu email={email} />

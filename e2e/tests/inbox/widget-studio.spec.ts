@@ -285,7 +285,7 @@ test.describe.serial("Widget Studio", () => {
   test("previews English custom copy without replacing Hebrew defaults", async ({ page }) => {
     await openOwnerStudio(page);
     const customWelcome = `Welcome from Studio ${Date.now()}`;
-    await page.getByLabel("Welcome message (English)").fill(customWelcome);
+    await page.getByLabel("Greeting / welcome message (English)").fill(customWelcome);
     await expect(page.getByTestId("widget-studio-preview")).toContainText(customWelcome);
 
     await page.getByRole("button", { name: "Preview RTL" }).click();

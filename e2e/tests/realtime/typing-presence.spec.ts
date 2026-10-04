@@ -166,7 +166,7 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
     await expect(frame.getByTestId("widget-operator-presence")).toBeVisible();
     await expect(frame.getByTestId("widget-operator-presence")).toHaveAttribute(
       "data-presence",
-      /^(online|offline)$/,
+      /^(online|away|offline)$/,
     );
 
     // Panel is already open from openWidget — do not wait on "Open chat" again.

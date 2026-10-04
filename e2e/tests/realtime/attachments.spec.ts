@@ -34,6 +34,17 @@ test.describe("attachments", () => {
     const frame = widgetFrameLocator(visitor);
     const fileInput = frame.getByTestId("widget-file-input");
     await expect(frame.getByTestId("widget-attach-button")).toBeVisible();
+    await frame.getByTestId("widget-attach-button").click();
+    await expect(frame.getByRole("menuitem", { name: "Photo library" })).toBeVisible();
+    await expect(frame.getByRole("menuitem", { name: "Take photo" })).toBeVisible();
+    await expect(frame.getByRole("menuitem", { name: "Choose file" })).toBeVisible();
+    await expect(fileInput).not.toHaveAttribute("capture", /.+/);
+    await expect(frame.getByTestId("widget-photo-input")).not.toHaveAttribute("capture", /.+/);
+    await expect(frame.getByTestId("widget-camera-input")).toHaveAttribute(
+      "capture",
+      "environment",
+    );
+    await frame.getByTestId("widget-attach-button").click();
 
     await fileInput.setInputFiles(path.join(fixturesDir, "sample.png"));
     await expect(frame.getByTestId("pending-attachments")).toBeVisible({

@@ -281,8 +281,8 @@ describe("widget loader", () => {
 
     expect(iframe.style.left).toBe("0px");
     expect(iframe.style.right).toBe("auto");
-    expect(iframe.style.width).toBe("80px");
-    expect(iframe.style.height).toBe("76px");
+    expect(iframe.style.width).toBe("96px");
+    expect(iframe.style.height).toBe("92px");
 
     signalReady(mounted.iframeWindow);
     signalVisibility(mounted.iframeWindow, true);
@@ -290,6 +290,16 @@ describe("widget loader", () => {
     expect(iframe.style.left).toBe("0px");
     expect(iframe.style.width).toBe("404px");
     expect(iframe.style.height).toBe("656px");
+  });
+
+  it("keeps greeting shadow space and clamps the closed frame to narrow host viewports", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 320 });
+    const mounted = await mountLoader("wk_55555555555555555555555555555555", {
+      showGreeting: true,
+    });
+    activeLoader = mounted.loader;
+    expect(mounted.iframeElement.style.width).toBe("320px");
+    expect(mounted.iframeElement.style.height).toBe("88px");
   });
 
   it("expands a fullscreen mobile widget to the host viewport", async () => {

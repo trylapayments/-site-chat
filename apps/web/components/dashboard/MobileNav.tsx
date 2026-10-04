@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { AccessibleWorkspace } from "@site-chat/shared";
 
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
+import { OperatorAvailability } from "@/components/dashboard/OperatorAvailability";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,13 @@ export function MobileNav({
             }}
           />
           <Separator />
+          {workspaces.some(
+            (workspace) =>
+              workspace.workspace_id === currentWorkspaceId &&
+              workspace.role !== "viewer",
+          ) ? (
+            <OperatorAvailability slug={slug} />
+          ) : null}
           <UserMenu email={email} />
         </div>
       </SheetContent>

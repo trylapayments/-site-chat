@@ -1774,6 +1774,32 @@ export type Database = {
           },
         ]
       }
+      operator_availability: {
+        Row: {
+          last_seen_at: string
+          member_id: string
+          status: string
+        }
+        Insert: {
+          last_seen_at?: string
+          member_id: string
+          status?: string
+        }
+        Update: {
+          last_seen_at?: string
+          member_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_availability_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           created_at: string

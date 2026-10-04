@@ -911,7 +911,9 @@ export function WidgetStudioManager({
 
           <Section title={messages.sections.messages}>
             <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="studio-welcome">Welcome message (English)</Label>
+              <Label htmlFor="studio-welcome">
+                Greeting / welcome message (English)
+              </Label>
               <Input
                 id="studio-welcome"
                 value={englishCopy(draft.welcomeMessage)}
@@ -964,6 +966,7 @@ export function WidgetStudioManager({
             <ToggleControl
               id="studio-show-greeting"
               label="Show greeting"
+              description="Displays the greeting / welcome message next to the launcher when the chat is closed. Save and publish to update your website."
               checked={draft.showGreeting}
               disabled={disabled}
               onChange={(showGreeting) => {

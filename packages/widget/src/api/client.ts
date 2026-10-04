@@ -204,6 +204,18 @@ export type ApiError = {
 export class WidgetApiClient {
   constructor(private readonly apiBase: string) {}
 
+  async operatorAvailability(
+    embedToken: string,
+  ): Promise<{ status: "available" | "away" | "offline" }> {
+    const response = await fetch(new URL("/api/v1/widget/availability", this.apiBase), {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ embedToken }),
+    });
+    return this.parseResponse(response);
+  }
+
   async bootstrap(widgetPublicKey: string): Promise<BootstrapPayload> {
     const url = new URL("/api/v1/widget/bootstrap", this.apiBase);
     url.searchParams.set("key", widgetPublicKey);

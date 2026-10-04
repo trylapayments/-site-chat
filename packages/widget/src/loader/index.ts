@@ -14,6 +14,8 @@ const WIDGET_MOUNTED_KEY = "__siteChatWidgetMounted";
 const LOCATION_CHANGE_EVENT = "sitechat:locationchange";
 const SITECHAT_API_VERSION = "1";
 const MOBILE_FULLSCREEN_BREAKPOINT = 640;
+// Leave room for the compact launcher/greeting shadow inside the transparent frame.
+const CLOSED_FRAME_SHADOW_PADDING = 16;
 
 type WidgetFrameConfig = {
   hideLauncherWhenOpen: boolean;
@@ -83,12 +85,17 @@ function applyIframeLayout(iframe: HTMLIFrameElement, config: WidgetFrameConfig,
   }
 
   const closedWidth =
-    config.launcherOffsetX + config.launcherSize + (config.showGreeting ? 12 + 260 : 0);
+    config.launcherOffsetX +
+    config.launcherSize +
+    (config.showGreeting ? 12 + 260 : 0) +
+    CLOSED_FRAME_SHADOW_PADDING;
   const panelBottom =
     config.launcherOffsetY + (config.hideLauncherWhenOpen ? 0 : config.launcherSize + 12);
   const openHeight = Math.min(config.widgetHeight, config.widgetMaxHeight) + panelBottom + 8;
   const width = open ? config.widgetWidth + config.launcherOffsetX : closedWidth;
-  const height = open ? openHeight : config.launcherOffsetY + config.launcherSize;
+  const height = open
+    ? openHeight
+    : config.launcherOffsetY + config.launcherSize + CLOSED_FRAME_SHADOW_PADDING;
 
   iframe.style.width = `${String(Math.min(window.innerWidth, width))}px`;
   iframe.style.height = `${String(Math.min(window.innerHeight, height))}px`;

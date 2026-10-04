@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
+import { OperatorAvailability } from "@/components/dashboard/OperatorAvailability";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
 import { InboxUnreadBadge } from "@/components/inbox/InboxUnreadBadge";
@@ -246,6 +247,13 @@ export function GlobalSidebar({
           Settings
         </Link>
         <div className="px-1 pt-1 [&_button]:border-white/12 [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+          {workspaces.some(
+            (workspace) =>
+              workspace.workspace_id === workspaceId &&
+              workspace.role !== "viewer",
+          ) ? (
+            <OperatorAvailability slug={slug} />
+          ) : null}
           <UserMenu email={email} />
         </div>
       </div>

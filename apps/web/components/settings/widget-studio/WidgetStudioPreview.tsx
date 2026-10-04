@@ -292,11 +292,23 @@ export function WidgetStudioPreview({
               ) : null}
             </div>
 
+            {!isOpen && config.showGreeting ? (
+              <div
+                role="status"
+                className="max-w-[260px] rounded-xl border px-3 py-2 text-sm shadow-sm"
+                style={{
+                  backgroundColor: "var(--studio-background)",
+                  color: "var(--studio-text)",
+                }}
+              >
+                {welcome}
+              </div>
+            ) : null}
             <button
               type="button"
               className={`${LAUNCHER_SIZE[config.launcherSize]} ${
                 LAUNCHER_SHAPE[config.launcherShape]
-              } flex items-center justify-center text-white shadow-lg`}
+              } flex items-center justify-center text-white ${config.shadowLevel === "none" ? "shadow-none" : config.shadowLevel === "lg" ? "shadow-lg" : "shadow-sm"}`}
               style={{ backgroundColor: "var(--studio-launcher)" }}
               aria-label={
                 isOpen ? "Close widget preview" : "Open widget preview"
