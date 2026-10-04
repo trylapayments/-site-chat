@@ -114,7 +114,14 @@ test.describe.serial("Widget Studio", () => {
 
   test("updates the live preview before publish", async ({ page }) => {
     await openOwnerStudio(page);
-    await setPrimaryColor(page, PREVIEW_PRIMARY_COLOR);
+    // Color pickers commonly copy a bare hex code rather than including #.
+    const input = page.getByTestId("widget-studio-primary-color");
+    await input.fill(PREVIEW_PRIMARY_COLOR.slice(1).toLowerCase());
+    await expect(input).toHaveValue(PREVIEW_PRIMARY_COLOR);
+    await expect(page.getByTestId("widget-studio-preview-panel")).toHaveAttribute(
+      "data-primary-color",
+      PREVIEW_PRIMARY_COLOR,
+    );
 
     await expect(page.getByTestId("widget-studio-dirty-badge")).toHaveAttribute(
       "data-dirty",

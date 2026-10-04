@@ -263,11 +263,12 @@ function ColorControl({
           disabled={disabled}
           aria-label={`${label} hex`}
           onChange={(event) => {
-            const raw = event.target.value.trim().toUpperCase();
-            if (raw.length === 0) {
+            const text = event.target.value.trim().toUpperCase();
+            if (text.length === 0) {
               setHexText("#");
               return;
             }
+            const raw = text.startsWith("#") ? text : `#${text}`;
             if (!/^#[0-9A-F]{0,6}$/.test(raw)) {
               return;
             }
