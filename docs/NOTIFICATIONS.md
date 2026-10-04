@@ -242,3 +242,21 @@ test. Verify acceptance and delivery with an explicitly selected test address.
 
 Sources: [Resend idempotency](https://resend.com/docs/dashboard/emails/idempotency-keys),
 [Supabase scheduling](https://supabase.com/docs/guides/functions/schedule-functions).
+
+### Delivery-time checks
+
+The worker rechecks workspace/member activity, current account email, email
+category preferences, quiet hours, and notification read/removal state before
+calling Resend. Reserved test addresses and notifications older than 24 hours
+are skipped. Email links use the configured app origin and the workspace's
+conversation route; they contain no authentication tokens or message/note body.
+If in-app history was disabled, the email links to that workspace's Inbox.
+
+Provision the cloud scheduler with `scripts/configure-notification-email-cron.mjs`.
+Set `MILL_NOTIFICATION_CRON_SECRET_FILE` to a protected local file,
+`MILL_NOTIFICATION_WORKER_URL` to the HTTPS endpoint, and `SUPABASE_CLI` to the
+CLI path if needed. It operates on the linked project, saves the dispatch
+credential in Vault, and configures one named job (`mill-notification-emails`)
+every minute. Calls are made only while the outbox has eligible work. Running
+the script again updates the existing job and credential without duplicates.
+No Resend key is stored in Supabase or in the job command.
