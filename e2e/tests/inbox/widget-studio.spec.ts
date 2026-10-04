@@ -241,15 +241,17 @@ test.describe.serial("Widget Studio", () => {
 
   test("opens and closes the widget preview without changing the draft", async ({ page }) => {
     await openOwnerStudio(page);
-    const welcome = page
-      .getByTestId("widget-studio-preview")
-      .getByText("Hi! How can we help?", { exact: true });
+    const welcome = page.getByTestId("widget-studio-preview-welcome");
+    const greeting = page.getByTestId("widget-studio-preview-greeting");
     const dirty = page.getByTestId("widget-studio-dirty-badge");
     const before = await dirty.getAttribute("data-dirty");
     await page.getByRole("button", { name: "Close widget preview", exact: true }).click();
     await expect(welcome).toBeHidden();
+    await expect(greeting).toHaveText("Hi! How can we help?");
+    await expect(greeting).toBeVisible();
     await page.getByRole("button", { name: "Open widget preview", exact: true }).click();
     await expect(welcome).toBeVisible();
+    await expect(greeting).toHaveCount(0);
     await expect(dirty).toHaveAttribute("data-dirty", before!);
   });
 

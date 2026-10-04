@@ -246,6 +246,7 @@ export function WidgetStudioPreview({
                     )
                   ) : null}
                   <p
+                    data-testid="widget-studio-preview-welcome"
                     className="max-w-[80%] break-words rounded-xl px-3 py-2"
                     style={{
                       backgroundColor:
@@ -294,6 +295,7 @@ export function WidgetStudioPreview({
 
             {!isOpen && config.showGreeting ? (
               <div
+                data-testid="widget-studio-preview-greeting"
                 role="status"
                 className="max-w-[260px] rounded-xl border px-3 py-2 text-sm shadow-sm"
                 style={{
