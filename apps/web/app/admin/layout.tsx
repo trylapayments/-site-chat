@@ -44,7 +44,7 @@ export default async function PlatformLayout({
                 name: "Subscriptions",
                 Icon: Layers,
               },
-              { href: "/admin/plans", name: "Plans & AI", Icon: Tags },
+              { href: "/admin/plans", name: "Plans", Icon: Tags },
               { href: "/admin/billing", name: "Billing", Icon: ReceiptText },
               { href: "/admin/audit", name: "Audit log", Icon: History },
               { href: "/admin/team", name: "Team & roles", Icon: ShieldCheck },

@@ -35,6 +35,6 @@ access is explicitly identified and never presented as a paid or free plan.
 
 The canonical catalogue is `apps/web/lib/billing/plans.ts`, displayed internally at `/admin/plans`. USD prices per workspace per month, taxes excluded: Starter $29 / 3 operators; Essential $49 / 5; Growth $89 / 10; Business $199 / 20. Starter retains Mill branding; higher tiers allow removal. No permanent Free plan; 14-day trial without card. Annual prices are not configured.
 
-AI presentation separates Mill Assist (operator-reviewed suggestions) from the future Mill AI Agent. Planned Assist allowances: Starter optional packs, Essential 500, Growth 2,000, Business 5,000 suggestions per month; optional extra packs $10 / 1,000. AI Agent pricing remains a proposal: $49 / month including 100 resolutions, then $0.39 each. Validate resolution rules and costs before sale.
+AI is excluded from all chat plans. No included AI allowances or AI prices are approved. Separate AI options and pricing will be defined later, as requested by the user on 2026-10-05.
 
 This catalogue is informational: it does not create Chargebee items/subscriptions, charge customers, or enforce limits. Existing pilot entitlements remain unchanged. Catalogue design and prices were approved by the user on 2026-10-05.
