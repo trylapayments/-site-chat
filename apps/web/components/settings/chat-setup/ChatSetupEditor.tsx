@@ -316,8 +316,9 @@ export function ChatSetupEditor({
                 Show read receipts to visitors
               </label>
               <p className="text-muted-foreground text-sm">
-                Off by default. Visitors still see delivery confirmation, but
-                cannot see when an operator reads their messages.
+                Off by default. Visitors see one checkmark confirming their
+                message was sent. Enable this to show delivery and read
+                confirmation from operators.
               </p>
             </section>
             <section className="space-y-4 border-t pt-5">

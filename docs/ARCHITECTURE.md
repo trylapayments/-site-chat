@@ -653,7 +653,7 @@ Decisions are append-only. Superseded decisions are marked but not deleted.
 
 Chat setup stores `allOfflineBehavior`, `outsideHoursBehavior`, `workingHours` and `showReadReceipts` in versioned workspace chat settings. Legacy configurations default to accepting messages, no enforced schedule, and read visibility disabled. Working intervals use IANA local time (DST included), with an inclusive start and exclusive end. The availability endpoint evaluates the server clock and aggregate operator status; Away is distinct from Offline. The iframe polls while closed and sends an origin/source-validated availability message to its loader. Hiding removes visibility, pointer events and accessibility exposure while retaining the session and poller, so it can return without a page reload.
 
-Visitor read visibility controls the displayed receipt state, not internal unread counters or visitor-to-operator read tracking. Disabling it maps Seen to Delivered, including after settings change or reconnect. Workspace administrators configure the setting in Chat setup.
+Visitor read visibility controls the displayed receipt state, not internal unread counters or visitor-to-operator read tracking. Disabling it shows only Sent for confirmed visitor messages, including after settings change or reconnect. Peer delivery/read changes are hidden so opening an operator thread does not indirectly disclose that it was read. Workspace administrators configure the setting in Chat setup.
 
 The widget sandbox allows downloads but does not allow popups or top-level navigation. Document downloads use a scoped signed storage URL with attachment disposition and avoid a new-window target. E2E verifies actual PDF bytes and a subsequent reply in the same chat.
 

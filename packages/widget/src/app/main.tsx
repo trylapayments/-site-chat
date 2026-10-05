@@ -1613,8 +1613,8 @@ function WidgetApp() {
                     })
                   : null;
               const receiptStatus =
-                actualReceiptStatus === "seen" && engagement?.setup.showReadReceipts !== true
-                  ? "delivered"
+                actualReceiptStatus && engagement?.setup.showReadReceipts !== true
+                  ? "sent"
                   : actualReceiptStatus;
               const showAvatar =
                 message.senderType === "agent" && config?.showAgentAvatars !== false;

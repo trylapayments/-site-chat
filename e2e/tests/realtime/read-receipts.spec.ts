@@ -62,16 +62,16 @@ test.describe("PR 4D-3 read receipts and unread counters", () => {
       timeout: 30_000,
     });
 
-    // Visitor's own prior message should become delivered/seen after operator open
+    // Opening the operator thread must not disclose receipt changes while disabled.
     await expect(widgetFrame.getByTestId("message-receipt").first()).toHaveAttribute(
       "data-receipt",
-      /delivered|seen/,
+      "sent",
       { timeout: 30_000 },
     );
 
     // Read visibility is off by default, and can be changed for an existing chat.
     const receipts = widgetFrame.getByTestId("message-receipt").first();
-    await expect(receipts).toHaveAttribute("data-receipt", "delivered");
+    await expect(receipts).toHaveAttribute("data-receipt", "sent");
     await operator.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/settings/chat-setup`);
     const showRead = operator.getByRole("checkbox", {
       name: "Show read receipts to visitors",
@@ -85,7 +85,7 @@ test.describe("PR 4D-3 read receipts and unread counters", () => {
     await showRead.uncheck();
     await operator.getByRole("button", { name: "Save settings", exact: true }).click();
     await expect(operator.getByRole("status")).toHaveText("Settings saved.");
-    await expect(receipts).toHaveAttribute("data-receipt", "delivered", { timeout: 30000 });
+    await expect(receipts).toHaveAttribute("data-receipt", "sent", { timeout: 30000 });
     await openOperatorInbox(operator);
     await openOperatorConversation(operator, marker);
     await waitForOperatorThreadRealtimeReady(operator);
