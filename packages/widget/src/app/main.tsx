@@ -1530,7 +1530,7 @@ function WidgetApp() {
 
             {state.status === "ready" && !engagement ? (
               <p role="status">
-                {engagementError ? "Unable to load chat settings. Reconnecting…" : "Connecting…"}
+                {engagementError ? messagesCopy.loadError : messagesCopy.reconnectingLabel}
               </p>
             ) : null}
             {preChatRequired ? (
