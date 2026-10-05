@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 
 import {
   APP_URL,
@@ -274,5 +275,47 @@ test.describe("attachments", () => {
 
     await visitorContext.close();
     await operatorContext.close();
+  });
+  test("visitor actually downloads an operator PDF without leaving the chat", async ({
+    browser,
+  }) => {
+    const vc = await browser.newContext({ acceptDownloads: true });
+    const oc = await browser.newContext();
+    const visitor = await vc.newPage();
+    const operator = await oc.newPage();
+    try {
+      const marker = `operator-pdf-download-${Date.now()}`;
+      const fixture = path.join(fixturesDir, "sample.pdf");
+      await openWidget(visitor);
+      await sendWidgetMessage(visitor, marker);
+      await waitForWidgetRealtimeReady(visitor);
+      await prepareOperatorInbox(operator);
+      await openOperatorConversation(operator, marker);
+      await waitForOperatorThreadRealtimeReady(operator);
+      await operator.getByTestId("operator-file-input").setInputFiles(fixture);
+      await expect(operator.getByTestId("operator-pending-attachments")).toBeVisible();
+      await operatorReplyComposer(operator).fill(`Here is your PDF ${marker}`);
+      await operator.getByRole("button", { name: "Send reply", exact: true }).click();
+      const frame = widgetFrameLocator(visitor);
+      await expect(frame.getByTestId("attachment-document")).toBeVisible({ timeout: 60000 });
+      const downloadPromise = visitor.waitForEvent("download", { timeout: 10000 });
+      await frame.getByTestId("attachment-download").click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toBe("sample.pdf");
+      expect(await download.failure()).toBeNull();
+      const downloadedPath = await download.path();
+      expect(downloadedPath).not.toBeNull();
+      if (!downloadedPath) throw new Error("Download did not produce a file");
+      expect(await readFile(downloadedPath)).toEqual(await readFile(fixture));
+      await visitor.screenshot({ path: test.info().outputPath("visitor-pdf-downloaded.png") });
+      await expect(frame.getByPlaceholder("Type your message…")).toBeVisible();
+      await sendWidgetMessage(visitor, `Received the PDF ${marker}`);
+      await expect(
+        conversationThread(operator).getByText(`Received the PDF ${marker}`, { exact: true }),
+      ).toBeVisible();
+    } finally {
+      await vc.close();
+      await oc.close();
+    }
   });
 });

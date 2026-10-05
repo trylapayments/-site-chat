@@ -69,6 +69,27 @@ test.describe("PR 4D-3 read receipts and unread counters", () => {
       { timeout: 30_000 },
     );
 
+    // Read visibility is off by default, and can be changed for an existing chat.
+    const receipts = widgetFrame.getByTestId("message-receipt").first();
+    await expect(receipts).toHaveAttribute("data-receipt", "delivered");
+    await operator.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/settings/chat-setup`);
+    const showRead = operator.getByRole("checkbox", {
+      name: "Show read receipts to visitors",
+      exact: true,
+    });
+    await expect(showRead).not.toBeChecked();
+    await showRead.check();
+    await operator.getByRole("button", { name: "Save settings", exact: true }).click();
+    await expect(operator.getByRole("status")).toHaveText("Settings saved.");
+    await expect(receipts).toHaveAttribute("data-receipt", "seen", { timeout: 30000 });
+    await showRead.uncheck();
+    await operator.getByRole("button", { name: "Save settings", exact: true }).click();
+    await expect(operator.getByRole("status")).toHaveText("Settings saved.");
+    await expect(receipts).toHaveAttribute("data-receipt", "delivered", { timeout: 30000 });
+    await openOperatorInbox(operator);
+    await openOperatorConversation(operator, marker);
+    await waitForOperatorThreadRealtimeReady(operator);
+
     // Operator agent messages show visitor receipt ticks once visitor delivers
     await expect(operator.getByTestId("message-receipt").first()).toHaveAttribute(
       "data-receipt",

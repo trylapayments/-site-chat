@@ -437,7 +437,7 @@ function WidgetApp() {
   const readySessionToken = state.status === "ready" ? state.sessionToken : null;
   const readyEmbedToken = state.status === "ready" ? state.init.embedToken : null;
   useEffect(() => {
-    if (!readyEmbedToken || !open) return;
+    if (!readyEmbedToken) return;
     const token = readyEmbedToken;
     let active = true;
     let inFlight = false;
@@ -445,8 +445,12 @@ function WidgetApp() {
       if (inFlight || document.visibilityState === "hidden") return;
       inFlight = true;
       try {
-        const { status } = await api.operatorAvailability(token);
-        if (active) setWorkspaceStatus(status);
+        const { status, visible } = await api.operatorAvailability(token);
+        if (active) {
+          setWorkspaceStatus(status);
+          const origin = parentOriginRef.current;
+          if (origin) postToParent(origin, "sitechat:availability", { visible: visible !== false });
+        }
       } catch {
         // A network interruption must not turn an available team offline.
       } finally {
@@ -464,7 +468,7 @@ function WidgetApp() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [api, readyEmbedToken, open]);
+  }, [api, readyEmbedToken]);
 
   useEffect(() => {
     if (!readyEmbedToken || !readySessionToken) return;
@@ -1560,13 +1564,17 @@ function WidgetApp() {
                 : message.senderType === "agent"
                   ? messagesCopy.agentLabel
                   : messagesCopy.systemLabel;
-              const receiptStatus =
+              const actualReceiptStatus =
                 isVisitor && message.status !== "failed" && !message.isOptimistic
                   ? deriveMessageReceiptStatus({
                       sequenceNumber: message.sequenceNumber,
                       peer: agentReceipts,
                     })
                   : null;
+              const receiptStatus =
+                actualReceiptStatus === "seen" && engagement?.setup.showReadReceipts !== true
+                  ? "delivered"
+                  : actualReceiptStatus;
               const showAvatar =
                 message.senderType === "agent" && config?.showAgentAvatars !== false;
 

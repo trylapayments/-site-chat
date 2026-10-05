@@ -292,7 +292,6 @@ function DocumentAttachment({
       anchor.href = result.url;
       anchor.download = attachment.filename;
       anchor.rel = "noopener noreferrer";
-      anchor.target = "_blank";
       anchor.click();
     } finally {
       setBusy(false);

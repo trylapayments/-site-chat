@@ -303,6 +303,168 @@ export function ChatSetupEditor({
                 />
               </div>
             ))}
+            <section className="space-y-3 border-t pt-5">
+              <h2 className="text-lg font-semibold">Read receipts</h2>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={draft.showReadReceipts}
+                  onChange={(event) => {
+                    update({ showReadReceipts: event.target.checked });
+                  }}
+                />
+                Show read receipts to visitors
+              </label>
+              <p className="text-muted-foreground text-sm">
+                Off by default. Visitors still see delivery confirmation, but
+                cannot see when an operator reads their messages.
+              </p>
+            </section>
+            <section className="space-y-4 border-t pt-5">
+              <h2 className="text-lg font-semibold">
+                When the team is unavailable
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Let visitors leave a message, or hide the widget entirely. Away
+                operators do not count as Offline.
+              </p>
+              {(
+                [
+                  ["allOfflineBehavior", "When all operators are Offline"],
+                  ["outsideHoursBehavior", "Outside working hours"],
+                ] as const
+              ).map(([key, label]) => (
+                <div className="space-y-2" key={key}>
+                  <Label htmlFor={key}>{label}</Label>
+                  <select
+                    id={key}
+                    className="w-full rounded-md border bg-white p-2 text-sm"
+                    value={draft[key]}
+                    onChange={(event) => {
+                      update({ [key]: event.target.value });
+                    }}
+                  >
+                    <option value="message">
+                      Allow visitors to leave a message
+                    </option>
+                    <option value="hide">Hide the widget</option>
+                  </select>
+                </div>
+              ))}
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={draft.workingHours.enabled}
+                  onChange={(event) => {
+                    update({
+                      workingHours: {
+                        ...draft.workingHours,
+                        enabled: event.target.checked,
+                      },
+                    });
+                  }}
+                />
+                Use working hours
+              </label>
+              <div className="space-y-2">
+                <Label htmlFor="working-timezone">Timezone</Label>
+                <Input
+                  id="working-timezone"
+                  value={draft.workingHours.timezone}
+                  placeholder="America/New_York"
+                  onChange={(event) => {
+                    update({
+                      workingHours: {
+                        ...draft.workingHours,
+                        timezone: event.target.value,
+                      },
+                    });
+                  }}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Use an IANA timezone, such as America/New_York or
+                  America/Los_Angeles. Daylight saving time is handled
+                  automatically.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {[
+                  "Sunday",
+                  "Monday",
+                  "Tuesday",
+                  "Wednesday",
+                  "Thursday",
+                  "Friday",
+                  "Saturday",
+                ].map((day, index) => {
+                  const row = draft.workingHours.weekly.find(
+                    (entry) => entry.day === index,
+                  );
+                  const change = (next: typeof row) => {
+                    update({
+                      workingHours: {
+                        ...draft.workingHours,
+                        weekly: [
+                          ...draft.workingHours.weekly.filter(
+                            (entry) => entry.day !== index,
+                          ),
+                          ...(next ? [next] : []),
+                        ],
+                      },
+                    });
+                  };
+                  return (
+                    <div
+                      key={day}
+                      className="flex flex-wrap items-center gap-2"
+                    >
+                      <label className="flex w-32 items-center gap-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`${day} open`}
+                          checked={!!row}
+                          onChange={(event) => {
+                            change(
+                              event.target.checked
+                                ? { day: index, start: "09:00", end: "17:00" }
+                                : undefined,
+                            );
+                          }}
+                        />
+                        {day}
+                      </label>
+                      {row ? (
+                        <>
+                          <input
+                            type="time"
+                            aria-label={`${day} start`}
+                            className="rounded-md border p-2 text-sm"
+                            value={row.start}
+                            onChange={(event) => {
+                              change({ ...row, start: event.target.value });
+                            }}
+                          />
+                          <span>–</span>
+                          <input
+                            type="time"
+                            aria-label={`${day} end`}
+                            className="rounded-md border p-2 text-sm"
+                            value={row.end}
+                            onChange={(event) => {
+                              change({ ...row, end: event.target.value });
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">
+                          Closed
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
             {!valid.success ? (
               <p role="alert" className="text-destructive text-sm">
                 {valid.error.issues[0]?.message}

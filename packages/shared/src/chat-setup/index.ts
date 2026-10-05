@@ -23,9 +23,41 @@ export const preChatFieldSchema = z
         message: "Choices must be unique.",
       });
   });
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const workingHoursSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    timezone: z
+      .string()
+      .min(1)
+      .max(64)
+      .refine((value) => {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Choose a valid timezone.")
+      .default("America/New_York"),
+    weekly: z
+      .array(
+        z
+          .object({ day: z.number().int().min(0).max(6), start: timeSchema, end: timeSchema })
+          .strict()
+          .refine((row) => row.start < row.end, "End time must follow start time."),
+      )
+      .max(21)
+      .default([1, 2, 3, 4, 5].map((day) => ({ day, start: "09:00", end: "17:00" }))),
+  })
+  .strict();
 export const chatSetupSchema = z
   .object({
     enabled: z.boolean().default(false),
+    showReadReceipts: z.boolean().default(false),
+    allOfflineBehavior: z.enum(["message", "hide"]).default("message"),
+    outsideHoursBehavior: z.enum(["message", "hide"]).default("message"),
+    workingHours: workingHoursSchema.default({}),
     title: z.string().trim().min(1).max(150).default("Let's get you connected"),
     requireName: z.boolean().default(true),
     requireEmail: z.boolean().default(true),
@@ -118,4 +150,36 @@ export function validatePreChatSubmission(setup: ChatSetup, input: unknown) {
       }
     })
     .safeParse(input);
+}
+
+/** Half-open local-time intervals, evaluated with the configured IANA timezone. */
+export function isWithinWorkingHours(setup: ChatSetup, now = new Date()): boolean {
+  if (!setup.workingHours.enabled) return true;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: setup.workingHours.timezone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(part("weekday"));
+  const time = `${part("hour")}:${part("minute")}`;
+  return setup.workingHours.weekly.some(
+    (row) => row.day === day && row.start <= time && time < row.end,
+  );
+}
+export function evaluateWidgetAvailability(
+  setup: ChatSetup,
+  status: "available" | "away" | "offline",
+  now = new Date(),
+) {
+  const withinHours = isWithinWorkingHours(setup, now);
+  return {
+    status: withinHours ? status : ("offline" as const),
+    visible: !(
+      (!withinHours && setup.outsideHoursBehavior === "hide") ||
+      (status === "offline" && setup.allOfflineBehavior === "hide")
+    ),
+  };
 }

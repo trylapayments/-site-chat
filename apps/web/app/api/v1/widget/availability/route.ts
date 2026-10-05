@@ -1,3 +1,5 @@
+import { evaluateWidgetAvailability } from "@site-chat/shared";
+import { fetchChatSetup } from "@/lib/chat-setup/queries";
 import { z } from "zod";
 import { verifyEmbedContext } from "@/lib/widget/context";
 import { createRequestId } from "@/lib/widget/embed-token";
@@ -35,10 +37,17 @@ export async function POST(request: Request) {
         429,
         requestId,
       );
-    const status = await workspaceOperatorStatus(context.workspaceId);
+    const [status, setup] = await Promise.all([
+      workspaceOperatorStatus(context.workspaceId),
+      fetchChatSetup(context.workspaceId),
+    ]);
+    const availability = evaluateWidgetAvailability(setup.config, status);
     return widgetJsonSuccess(
-      z.object({ status: z.enum(["available", "away", "offline"]) }),
-      { status },
+      z.object({
+        status: z.enum(["available", "away", "offline"]),
+        visible: z.boolean(),
+      }),
+      availability,
       requestId,
       { headers: { "Cache-Control": "no-store" } },
     );

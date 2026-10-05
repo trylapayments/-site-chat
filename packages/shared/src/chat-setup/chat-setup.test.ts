@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatSetupSchema, validatePreChatSubmission } from "./index";
+import { chatSetupSchema, validatePreChatSubmission, evaluateWidgetAvailability } from "./index";
 const id = "11111111-1111-4111-8111-111111111111";
 const requestId = "22222222-2222-4222-8222-222222222222";
 const base = { requestId, name: "Visitor", email: "visitor@example.com", answers: {} };
@@ -54,5 +54,51 @@ describe("custom pre-chat fields", () => {
     expect(
       validatePreChatSubmission(chatSetupSchema.parse({ fields: [field] }), base).success,
     ).toBe(true);
+  });
+});
+
+describe("unavailable widget", () => {
+  it("keeps legacy settings visible and distinguishes Away from Offline", () => {
+    const setup = chatSetupSchema.parse({});
+    expect(evaluateWidgetAvailability(setup, "offline").visible).toBe(true);
+    setup.allOfflineBehavior = "hide";
+    expect(evaluateWidgetAvailability(setup, "offline").visible).toBe(false);
+    expect(evaluateWidgetAvailability(setup, "away").visible).toBe(true);
+  });
+  it("uses local hours with DST and excludes the closing boundary", () => {
+    const setup = chatSetupSchema.parse({
+      outsideHoursBehavior: "hide",
+      workingHours: {
+        enabled: true,
+        timezone: "America/New_York",
+        weekly: [{ day: 1, start: "09:00", end: "17:00" }],
+      },
+    });
+    expect(
+      evaluateWidgetAvailability(setup, "available", new Date("2026-07-06T13:00:00Z")),
+    ).toEqual({ status: "available", visible: true });
+    expect(
+      evaluateWidgetAvailability(setup, "available", new Date("2026-07-06T21:00:00Z")),
+    ).toEqual({ status: "offline", visible: false });
+    expect(
+      evaluateWidgetAvailability(setup, "available", new Date("2026-01-05T13:00:00Z")),
+    ).toEqual({ status: "offline", visible: false });
+    expect(
+      evaluateWidgetAvailability(setup, "available", new Date("2026-01-05T14:00:00Z")),
+    ).toEqual({ status: "available", visible: true });
+    setup.outsideHoursBehavior = "message";
+    expect(
+      evaluateWidgetAvailability(setup, "available", new Date("2026-07-05T13:00:00Z")),
+    ).toEqual({ status: "offline", visible: true });
+  });
+  it("rejects invalid timezone and reversed intervals", () => {
+    expect(chatSetupSchema.safeParse({ workingHours: { timezone: "invalid" } }).success).toBe(
+      false,
+    );
+    expect(
+      chatSetupSchema.safeParse({
+        workingHours: { weekly: [{ day: 1, start: "17:00", end: "09:00" }] },
+      }).success,
+    ).toBe(false);
   });
 });

@@ -241,7 +241,7 @@ export class WidgetApiClient {
 
   async operatorAvailability(
     embedToken: string,
-  ): Promise<{ status: "available" | "away" | "offline" }> {
+  ): Promise<{ status: "available" | "away" | "offline"; visible?: boolean }> {
     const response = await fetch(new URL("/api/v1/widget/availability", this.apiBase), {
       method: "POST",
       credentials: "omit",

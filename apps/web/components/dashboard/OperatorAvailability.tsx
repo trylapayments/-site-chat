@@ -1,4 +1,6 @@
 "use client";
+import { Popover } from "radix-ui";
+import { Settings2 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { updateOperatorAvailability } from "@/lib/operators/actions";
 import type {
@@ -6,7 +8,13 @@ import type {
   OperatorAvailabilitySnapshot,
 } from "@/lib/operators/status";
 
-export function OperatorAvailability({ slug }: { slug: string }) {
+export function OperatorAvailability({
+  slug,
+  compact = false,
+}: {
+  slug: string;
+  compact?: boolean;
+}) {
   const [snapshot, setSnapshot] = useState<OperatorAvailabilitySnapshot | null>(
     null,
   );
@@ -118,7 +126,7 @@ export function OperatorAvailability({ slug }: { slug: string }) {
   }
   const status = snapshot?.status;
   return (
-    <div className="relative space-y-1">
+    <div className={compact ? "flex items-center gap-1" : "relative space-y-1"}>
       <label className="flex items-center gap-2 text-xs">
         <span
           className="size-2 shrink-0 rounded-full"
@@ -162,38 +170,64 @@ export function OperatorAvailability({ slug }: { slug: string }) {
         </select>
       </label>
       {snapshot ? (
-        <details className="relative text-xs">
-          <summary className="cursor-pointer">
-            Auto-away:{" "}
-            {snapshot.idleTimeoutMinutes === 0
-              ? "off"
-              : `${String(snapshot.idleTimeoutMinutes)} min`}
-          </summary>
-          <div className="bg-popover text-popover-foreground absolute right-0 z-40 mt-1 w-56 space-y-2 rounded-md border p-3 shadow-md">
-            <label className="block">
-              After inactivity
-              <select
-                aria-label="Auto-away after inactivity"
-                className="mt-1 w-full rounded border bg-transparent px-2 py-1"
-                value={snapshot.idleTimeoutMinutes}
-                disabled={pending}
-                onChange={(event) => {
-                  void save({ idleTimeoutMinutes: Number(event.target.value) });
-                }}
-              >
-                {[0, 1, 2, 5, 10, 15, 30, 60].map((minutes) => (
-                  <option key={minutes} value={minutes}>
-                    {minutes === 0 ? "Never" : `${String(minutes)} minutes`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p>
-              Automatic Away clears when you return. Manual Away and Offline
-              stay until you change them.
-            </p>
-          </div>
-        </details>
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              aria-label="Auto-away settings"
+              className={
+                compact
+                  ? "rounded-md p-2 hover:bg-muted"
+                  : "mt-1 flex items-center gap-1 text-xs"
+              }
+            >
+              {compact ? (
+                <Settings2 className="size-4" />
+              ) : (
+                <>
+                  Auto-away:{" "}
+                  {snapshot.idleTimeoutMinutes === 0
+                    ? "off"
+                    : `${String(snapshot.idleTimeoutMinutes)} min`}
+                </>
+              )}
+            </button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              side="top"
+              align="end"
+              sideOffset={8}
+              collisionPadding={12}
+              className="bg-popover text-popover-foreground z-50 w-64 max-w-[calc(100vw-24px)] space-y-2 rounded-md border p-3 text-xs shadow-md"
+            >
+              <label className="block">
+                After inactivity
+                <select
+                  aria-label="Auto-away after inactivity"
+                  className="mt-1 w-full rounded border bg-transparent px-2 py-1"
+                  value={snapshot.idleTimeoutMinutes}
+                  disabled={pending}
+                  onChange={(event) => {
+                    void save({
+                      idleTimeoutMinutes: Number(event.target.value),
+                    });
+                  }}
+                >
+                  {[0, 1, 2, 5, 10, 15, 30, 60].map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {minutes === 0 ? "Never" : `${String(minutes)} minutes`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p>
+                Automatic Away clears when you return. Manual Away and Offline
+                stay until you change them.
+              </p>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       ) : null}
       {error ? (
         <p role="alert" className="text-xs text-red-500">

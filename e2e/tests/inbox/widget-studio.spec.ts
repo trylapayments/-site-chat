@@ -312,10 +312,12 @@ test.describe.serial("Widget Studio", () => {
     });
   });
 
-  test("marks business hours as foundation-only", async ({ page }) => {
+  test("links working hours to Chat setup", async ({ page }) => {
     await openOwnerStudio(page);
-    await expect(page.getByTestId("widget-studio-business-hours-foundation")).toBeVisible();
-    await expect(page.getByText("Business hours (foundation)", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("widget-studio-chat-setup-link")).toHaveAttribute(
+      "href",
+      `/app/${WORKSPACE_SLUG}/settings/chat-setup`,
+    );
   });
 
   test("rejects non-raster asset uploads", async ({ page }) => {

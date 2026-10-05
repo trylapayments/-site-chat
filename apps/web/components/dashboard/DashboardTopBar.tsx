@@ -60,7 +60,7 @@ export function DashboardTopBar({
             workspace.workspace_id === currentWorkspaceId &&
             workspace.role !== "viewer",
         ) ? (
-          <OperatorAvailability key={slug} slug={slug} />
+          <OperatorAvailability key={slug} slug={slug} compact />
         ) : null}
         <div className="hidden lg:block">
           <UserMenu email={email} />

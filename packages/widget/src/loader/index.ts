@@ -291,7 +291,7 @@ function createIframe(
   iframe.src = buildEmbedIframeSrc(widgetHost, parentOrigin);
   iframe.title = "Mill";
   iframe.setAttribute("aria-hidden", "false");
-  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-downloads");
   iframe.style.position = "fixed";
   iframe.style.bottom = "0";
   iframe.style.maxWidth = "100vw";
@@ -613,7 +613,7 @@ function mount() {
     const data = event.data as {
       source?: string;
       type?: string;
-      payload?: { open?: boolean; widgetPublicKey?: string };
+      payload?: { open?: boolean; visible?: boolean; widgetPublicKey?: string };
     };
     if (data.source !== "sitechat-embed") {
       return;
@@ -627,6 +627,13 @@ function mount() {
       }
       postPageMessage(true);
       flushIdentifyQueue();
+      return;
+    }
+
+    if (data.type === "sitechat:availability" && typeof data.payload?.visible === "boolean") {
+      activeIframe.style.visibility = data.payload.visible ? "visible" : "hidden";
+      activeIframe.style.pointerEvents = data.payload.visible ? "auto" : "none";
+      activeIframe.setAttribute("aria-hidden", String(!data.payload.visible));
       return;
     }
 

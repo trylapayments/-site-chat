@@ -188,3 +188,66 @@ test("standard invitation bypasses the pre-chat form and follows the visitor's c
     await vc.close();
   }
 });
+
+test("widget hides outside working hours and returns without reloading the site", async ({
+  browser,
+}) => {
+  const oc = await browser.newContext();
+  const vc = await browser.newContext();
+  const operator = await oc.newPage();
+  const visitor = await vc.newPage();
+  const settings = `${APP_URL}/app/${WORKSPACE_SLUG}/settings/chat-setup`;
+  const save = async () => {
+    await operator.getByRole("button", { name: "Save settings", exact: true }).click();
+    await expect(operator.getByRole("status")).toHaveText("Settings saved.");
+  };
+  try {
+    await loginOperator(operator);
+    await operator.goto(settings);
+    await operator.getByLabel("Outside working hours", { exact: true }).selectOption("hide");
+    await operator.getByRole("checkbox", { name: "Use working hours", exact: true }).check();
+    for (const day of [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ])
+      await operator.getByRole("checkbox", { name: `${day} open`, exact: true }).uncheck();
+    await save();
+    await visitor.goto("http://localhost:3001");
+    const iframe = visitor.locator('iframe[title="Mill"]');
+    await expect(iframe).toHaveAttribute("aria-hidden", "true", { timeout: 30000 });
+    await expect(iframe).toHaveCSS("visibility", "hidden");
+    await operator.getByRole("checkbox", { name: "Use working hours", exact: true }).uncheck();
+    await save();
+    await expect(iframe).toHaveAttribute("aria-hidden", "false", { timeout: 30000 });
+    await expect(
+      widgetFrameLocator(visitor).getByRole("button", { name: "Open chat", exact: true }),
+    ).toBeVisible();
+    await operator
+      .getByLabel("When all operators are Offline", { exact: true })
+      .selectOption("hide");
+    await save();
+    await operator.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
+    const availability = operator.getByRole("combobox", { name: "Your availability", exact: true });
+    await expect(availability).toBeEnabled();
+    await availability.selectOption("offline");
+    await expect(iframe).toHaveAttribute("aria-hidden", "true", { timeout: 30000 });
+    await availability.selectOption("away");
+    await expect(iframe).toHaveAttribute("aria-hidden", "false", { timeout: 30000 });
+  } finally {
+    await operator.goto(settings);
+    await operator
+      .getByLabel("When all operators are Offline", { exact: true })
+      .selectOption("message");
+    await operator.getByLabel("Outside working hours", { exact: true }).selectOption("message");
+    await operator.getByRole("checkbox", { name: "Use working hours", exact: true }).uncheck();
+    const saveButton = operator.getByRole("button", { name: "Save settings", exact: true });
+    if (await saveButton.isEnabled()) await save();
+    await oc.close();
+    await vc.close();
+  }
+});

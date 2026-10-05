@@ -44,7 +44,7 @@ test("auto-away is configurable and activity restores only automatic Away", asyn
     await operator.goto(`${APP_URL}/app/acme-support/inbox`);
     const availability = operator.getByRole("combobox", { name: "Your availability" });
     await expect(availability).toBeEnabled({ timeout: 15_000 });
-    await operator.locator("summary").filter({ hasText: "Auto-away:" }).click();
+    await operator.getByRole("button", { name: "Auto-away settings", exact: true }).click();
     const inactivity = operator.getByRole("combobox", { name: "Auto-away after inactivity" });
     await inactivity.selectOption("1");
     await expect(inactivity).toHaveValue("1");
@@ -71,7 +71,7 @@ test("auto-away is configurable and activity restores only automatic Away", asyn
       await expect(availability).toBeEnabled();
       const inactivity = operator.getByRole("combobox", { name: "Auto-away after inactivity" });
       if (!(await inactivity.isVisible()))
-        await operator.locator("summary").filter({ hasText: "Auto-away:" }).click();
+        await operator.getByRole("button", { name: "Auto-away settings", exact: true }).click();
       await inactivity.selectOption("5");
       await expect(inactivity).toHaveValue("5");
       await expect(availability).toBeEnabled();

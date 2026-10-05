@@ -126,6 +126,31 @@ function signalVisibility(iframeWindow: Window, open: boolean) {
 }
 
 describe("widget loader", () => {
+  it("accepts availability only from its own trusted iframe", async () => {
+    const { iframeWindow, iframeElement } = await mountLoader("public-key");
+    const signal = (origin: string, source: Window | null, visible: boolean) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin,
+          source,
+          data: { source: "sitechat-embed", type: "sitechat:availability", payload: { visible } },
+        }),
+      );
+    };
+    signal("https://evil.example.com", iframeWindow, false);
+    expect(iframeElement.getAttribute("aria-hidden")).toBe("false");
+    signal("https://app.example.com", window, false);
+    expect(iframeElement.getAttribute("aria-hidden")).toBe("false");
+    signal("https://app.example.com", iframeWindow, false);
+    expect(iframeElement.style.visibility).toBe("hidden");
+    expect(iframeElement.style.pointerEvents).toBe("none");
+    signal("https://app.example.com", iframeWindow, true);
+    expect(iframeElement.style.visibility).toBe("visible");
+    expect(iframeElement.getAttribute("sandbox")).toBe(
+      "allow-scripts allow-same-origin allow-forms allow-downloads",
+    );
+  });
+
   let activeLoader: LoaderModule | null = null;
 
   beforeEach(() => {

@@ -54,16 +54,6 @@ import {
 import { WidgetStudioPreview } from "./WidgetStudioPreview";
 
 const messages = widgetStudioMessagesEn;
-const DAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-] as const;
-
 type AssetUrls = Partial<
   Record<"logo" | "launcher_icon" | "agent_avatar", string>
 >;
@@ -578,33 +568,6 @@ export function WidgetStudioManager({
         </p>
       </div>
     );
-  }
-
-  function toggleBusinessDay(day: number, enabled: boolean): void {
-    const weekly = enabled
-      ? [
-          ...draft.businessHours.weekly,
-          { day, start: "09:00", end: "17:00" },
-        ].sort((a, b) => a.day - b.day)
-      : draft.businessHours.weekly.filter((entry) => entry.day !== day);
-    updateDraft({
-      businessHours: { ...draft.businessHours, weekly },
-    });
-  }
-
-  function updateBusinessDay(
-    day: number,
-    field: "start" | "end",
-    value: string,
-  ): void {
-    updateDraft({
-      businessHours: {
-        ...draft.businessHours,
-        weekly: draft.businessHours.weekly.map((entry) =>
-          entry.day === day ? { ...entry, [field]: value } : entry,
-        ),
-      },
-    });
   }
 
   return (
@@ -1218,85 +1181,18 @@ export function WidgetStudioManager({
             />
           </Section>
 
-          <Section title="Business hours (foundation)" advanced>
-            <p
-              className="bg-muted/50 text-muted-foreground rounded-md border px-3 py-2 text-sm sm:col-span-2"
-              data-testid="widget-studio-business-hours-foundation"
-            >
-              Scheduling is not live in the visitor widget yet. These foundation
-              settings are read-only and are not enforced for visitors.
+          <Section title="Working hours" advanced>
+            <p className="text-muted-foreground text-sm sm:col-span-2">
+              Configure your working schedule, offline behavior and visitor read
+              receipts in Chat setup.
             </p>
-            <ToggleControl
-              id="studio-business-enabled"
-              label="Business-hours messaging (not active)"
-              checked={draft.businessHours.enabled}
-              disabled
-              onChange={(enabled) => {
-                updateDraft({
-                  businessHours: { ...draft.businessHours, enabled },
-                });
-              }}
-            />
-            <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="studio-timezone">Timezone</Label>
-              <Input
-                id="studio-timezone"
-                value={draft.businessHours.timezone}
-                maxLength={64}
-                disabled
-                onChange={(event) => {
-                  updateDraft({
-                    businessHours: {
-                      ...draft.businessHours,
-                      timezone: event.target.value,
-                    },
-                  });
-                }}
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              {DAYS.map((label, day) => {
-                const row = draft.businessHours.weekly.find(
-                  (entry) => entry.day === day,
-                );
-                return (
-                  <div
-                    key={label}
-                    className="grid grid-cols-[minmax(90px,1fr)_1fr_1fr] items-center gap-2"
-                  >
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(row)}
-                        disabled
-                        onChange={(event) => {
-                          toggleBusinessDay(day, event.target.checked);
-                        }}
-                      />
-                      {label}
-                    </label>
-                    <Input
-                      type="time"
-                      aria-label={`${label} start`}
-                      value={row?.start ?? "09:00"}
-                      disabled
-                      onChange={(event) => {
-                        updateBusinessDay(day, "start", event.target.value);
-                      }}
-                    />
-                    <Input
-                      type="time"
-                      aria-label={`${label} end`}
-                      value={row?.end ?? "17:00"}
-                      disabled
-                      onChange={(event) => {
-                        updateBusinessDay(day, "end", event.target.value);
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            <a
+              className="text-primary text-sm underline"
+              href={`/app/${workspaceSlug}/settings/chat-setup`}
+              data-testid="widget-studio-chat-setup-link"
+            >
+              Open Chat setup
+            </a>
           </Section>
         </div>
 

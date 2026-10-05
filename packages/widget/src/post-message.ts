@@ -19,6 +19,7 @@ export const LOADER_MESSAGE_TYPES = [
 export const EMBED_MESSAGE_TYPES = [
   "sitechat:ready",
   "sitechat:visibility",
+  "sitechat:availability",
   "sitechat:refresh-embed",
 ] as const;
 
