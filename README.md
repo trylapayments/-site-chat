@@ -1,4 +1,4 @@
-# Site Chat
+# Mill
 
 Customer messaging platform for websites.
 

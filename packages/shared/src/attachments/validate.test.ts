@@ -100,3 +100,27 @@ describe("attachment validation", () => {
     }
   });
 });
+
+it("accepts recorded voice clips but caps them at 10 MB and verifies actual contents", () => {
+  expect(
+    validateAttachmentFileDraft({
+      filename: "voice.webm",
+      mimeType: "audio/webm;codecs=opus",
+      sizeBytes: 1024,
+    }).ok,
+  ).toBe(true);
+  expect(
+    validateAttachmentFileDraft({
+      filename: "voice.m4a",
+      mimeType: "audio/mp4",
+      sizeBytes: 10 * 1024 * 1024 + 1,
+    }).ok,
+  ).toBe(false);
+  expect(
+    validateMagicBytesAgainstDeclared({
+      bytes: new TextEncoder().encode("%PDF-fake"),
+      declaredMime: "audio/webm",
+      filename: "voice.webm",
+    }).ok,
+  ).toBe(false);
+});

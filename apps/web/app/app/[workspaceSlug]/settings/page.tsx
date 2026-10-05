@@ -1,10 +1,21 @@
+import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   cannedResponsesMessagesEn,
   crmMessagesEn,
   notificationsMessagesEn,
   widgetStudioMessagesEn,
 } from "@site-chat/shared";
-import { Bell, MessageSquareQuote, Palette, Tags } from "lucide-react";
+import {
+  Building2,
+  CreditCard,
+  Bell,
+  MessageSquareQuote,
+  Palette,
+  Tags,
+  UserRound,
+  Code2,
+  SlidersHorizontal,
+} from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -28,6 +39,7 @@ export default async function SettingsPage({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
+  const { workspace } = await requireInboxWorkspace(workspaceSlug);
 
   return (
     <div className="space-y-8" data-testid="settings-page">
@@ -37,6 +49,80 @@ export default async function SettingsPage({
       />
 
       <ul className="grid gap-4 sm:grid-cols-2">
+        <li>
+          <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/company`)}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <Building2 className="size-5" />
+            </span>
+            <span className="block text-sm font-medium">Company</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Manage your company name, address and contact information.
+            </span>
+          </Link>
+        </li>
+        {["owner", "admin"].includes(workspace.role) ? (
+          <li>
+            <Link
+              href={toAppRoute(`/app/${workspaceSlug}/billing`)}
+              className="block h-full rounded-lg border p-4"
+            >
+              <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                <CreditCard className="size-5" />
+              </span>
+              <span className="block text-sm font-medium">Billing</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Your plan, invoices and saved payment methods.
+              </span>
+            </Link>
+          </li>
+        ) : null}
+        <li>
+          <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/profile`)}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <UserRound className="size-5" aria-hidden="true" />
+            </span>
+            <span className="block text-sm font-medium">My profile</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Set the name and photo visitors see when you reply.
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/install`)}
+            className="block h-full rounded-lg border p-4"
+            data-testid="settings-link-install"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <Code2 className="size-5" aria-hidden="true" />
+            </span>
+            <span className="block text-sm font-medium">Install widget</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Copy your website code and manage allowed domains.
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={`/app/${workspaceSlug}/settings/chat-setup`}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <SlidersHorizontal className="size-5" aria-hidden="true" />
+            </span>
+            <span className="block text-sm font-medium">Chat setup</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Pre-chat forms, custom fields, waiting messages and chat
+              invitations.
+            </span>
+          </Link>
+        </li>
         <li>
           <Link
             href={toAppRoute(

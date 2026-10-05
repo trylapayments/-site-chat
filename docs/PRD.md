@@ -1,4 +1,4 @@
-# Site Chat — Product Requirements Document
+# Mill — Product Requirements Document
 
 **Version:** 1.0  
 **Status:** Foundation  
@@ -10,13 +10,13 @@
 
 ### 1.1 Vision
 
-Site Chat is a multi-tenant SaaS live chat platform that enables businesses to engage website visitors in real time. Operators manage conversations from a unified dashboard; visitors interact through an embeddable widget installed on customer websites.
+Mill is a multi-tenant SaaS live chat platform that enables businesses to engage website visitors in real time. Operators manage conversations from a unified dashboard; visitors interact through an embeddable widget installed on customer websites.
 
 The product is designed for long-term commercial operation: predictable pricing, reliable uptime, tenant isolation, and an operator experience that scales from solo founders to support teams of dozens.
 
 ### 1.2 Problem Statement
 
-Businesses lose leads and customer trust when website visitors cannot get immediate answers. Email and contact forms introduce delay. Enterprise live chat tools are expensive, complex, or poorly suited to small and mid-size teams. Site Chat fills the gap with a focused product: install a widget, assign agents, and start conversations without operational overhead.
+Businesses lose leads and customer trust when website visitors cannot get immediate answers. Email and contact forms introduce delay. Enterprise live chat tools are expensive, complex, or poorly suited to small and mid-size teams. Mill fills the gap with a focused product: install a widget, assign agents, and start conversations without operational overhead.
 
 ### 1.3 Target Customers
 
@@ -83,7 +83,7 @@ Roles are scoped to a **workspace**. A single user may belong to multiple worksp
 | View audit logs | ✓ | ✓ | — | ✓ |
 | Export data | ✓ | ✓ | — | — |
 
-Platform operators (Site Chat staff) use a separate internal admin surface not exposed to tenant users. That surface is out of MVP scope but reserved in the security model.
+Platform operators (Mill staff) use a separate internal admin surface not exposed to tenant users. That surface is out of MVP scope but reserved in the security model.
 
 ---
 
@@ -355,7 +355,7 @@ These items appear on the roadmap where appropriate.
 
 | Term | Definition |
 |------|------------|
-| Workspace | A tenant account representing one business customer of Site Chat |
+| Workspace | A tenant account representing one business customer of Mill |
 | Agent | A workspace member who handles conversations |
 | Visitor | An end user on a customer's website who interacts with the widget |
 | Conversation | A message thread between a visitor and agents |

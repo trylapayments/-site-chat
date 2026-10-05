@@ -7,6 +7,7 @@ import { toAppRoute } from "@/lib/auth/redirect";
 import { workspaceSettingsPath } from "@/lib/dashboard/routes";
 import { createClient } from "@/lib/supabase/server";
 import { requireWidgetStudioWorkspace } from "@/lib/widget-studio/guards";
+import { effectiveWidgetEntitlements } from "@/lib/platform-admin/access";
 import { fetchWidgetStudioState } from "@/lib/widget-studio/queries";
 
 const messages = widgetStudioMessagesEn;
@@ -37,6 +38,10 @@ export default async function WidgetStudioSettingsPage({
       <WidgetStudioManager
         workspaceSlug={workspaceSlug}
         initialState={state}
+        features={[
+          ...(await effectiveWidgetEntitlements(workspace.workspace_id))
+            .features,
+        ]}
         canManage={can(workspace.role, "manage_widget_studio")}
       />
     </div>

@@ -15,7 +15,7 @@ export const messages_bg: WidgetMessages = {
   loadError: "Чатът не може да се зареди.",
   sessionError: "Сесията изтече. Презаредете страницата.",
   sendError: "Съобщението не беше изпратено.",
-  poweredBy: "Работи с Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Вие",
   agentLabel: "Агент",
   systemLabel: "Система",

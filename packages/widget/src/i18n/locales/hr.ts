@@ -15,7 +15,7 @@ export const messages_hr: WidgetMessages = {
   loadError: "Nije moguće učitati chat.",
   sessionError: "Sesija je istekla. Ponovno učitajte stranicu.",
   sendError: "Slanje poruke nije uspjelo.",
-  poweredBy: "Pokreće Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Vi",
   agentLabel: "Agent",
   systemLabel: "Sustav",

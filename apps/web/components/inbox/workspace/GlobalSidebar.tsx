@@ -1,19 +1,28 @@
 "use client";
 
-import type { AccessibleWorkspace } from "@site-chat/shared";
+import { PlatformAdminLink } from "@/components/dashboard/PlatformAdminLink";
+
+import {
+  MILL_DIALOGUE_MARK,
+  type AccessibleWorkspace,
+} from "@site-chat/shared";
 import {
   Bookmark,
+  CreditCard,
+  ContactRound,
+  Radar,
+  CheckCheck,
   Inbox,
   LayoutDashboard,
   MessageSquareText,
   Settings,
   UserCog,
-  Users,
   UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
+import { OperatorAvailability } from "@/components/dashboard/OperatorAvailability";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
 import { InboxUnreadBadge } from "@/components/inbox/InboxUnreadBadge";
@@ -43,6 +52,13 @@ function buildInboxNav(slug: string): NavItem[] {
   const inbox = workspaceNavPath(slug, "inbox");
   return [
     {
+      id: "overview",
+      label: "Overview",
+      href: workspaceNavPath(slug, ""),
+      icon: LayoutDashboard,
+      match: "exact",
+    },
+    {
       id: "inbox",
       label: "Inbox",
       href: inbox,
@@ -61,17 +77,31 @@ function buildInboxNav(slug: string): NavItem[] {
     },
     {
       id: "mine",
-      label: "Mine",
+      label: "Assigned to me",
       href: `${inbox}?assignment=assigned_to_me`,
       icon: MessageSquareText,
       match: "assignment",
       assignment: "assigned_to_me",
     },
     {
+      id: "closed",
+      label: "Closed",
+      href: `${inbox}?status=closed`,
+      icon: CheckCheck,
+      match: "prefix",
+    },
+    {
+      id: "visitors",
+      label: "Visitors",
+      href: workspaceNavPath(slug, "visitors"),
+      icon: Radar,
+      match: "prefix",
+    },
+    {
       id: "contacts",
       label: "Contacts",
       href: workspaceNavPath(slug, "contacts"),
-      icon: Users,
+      icon: ContactRound,
       match: "prefix",
     },
     {
@@ -82,18 +112,18 @@ function buildInboxNav(slug: string): NavItem[] {
       match: "prefix",
     },
     {
+      id: "billing",
+      label: "Billing",
+      href: workspaceNavPath(slug, "billing"),
+      icon: CreditCard,
+      match: "prefix",
+    },
+    {
       id: "templates",
       label: "Templates",
       href: workspaceSettingsPath(slug, SETTINGS_SECTION_CANNED_RESPONSES),
       icon: Bookmark,
       match: "prefix",
-    },
-    {
-      id: "overview",
-      label: "Overview",
-      href: workspaceNavPath(slug, ""),
-      icon: LayoutDashboard,
-      match: "exact",
     },
   ];
 }
@@ -139,6 +169,7 @@ export function GlobalSidebar({
   memberId,
   workspaces,
   email,
+  canAdministerPlatform = false,
 }: {
   workspaceName: string;
   slug: string;
@@ -146,33 +177,42 @@ export function GlobalSidebar({
   memberId: string;
   workspaces: AccessibleWorkspace[];
   email: string;
+  canAdministerPlatform?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const assignment = searchParams.get("assignment");
-  const items = buildInboxNav(slug);
+  const items = buildInboxNav(slug).filter(
+    (item) =>
+      item.id !== "billing" ||
+      ["owner", "admin"].includes(
+        workspaces.find((w) => w.workspace_id === workspaceId)?.role ?? "",
+      ),
+  );
+  const closed = searchParams.get("status") === "closed";
   const settingsHref = toAppRoute(workspaceNavPath(slug, "settings"));
 
   return (
     <aside
-      className="bg-inbox-nav text-inbox-nav-foreground flex h-full w-[232px] shrink-0 flex-col"
+      className="mill-sidebar bg-inbox-nav border-inbox-nav-border border-r text-inbox-nav-foreground flex h-full w-[208px] shrink-0 flex-col"
       data-testid="inbox-global-sidebar"
       aria-label="Workspace"
     >
       <div className="border-inbox-nav-border flex items-center gap-3 border-b px-4 py-5">
-        <div
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-bold tracking-wide text-white"
-          aria-hidden="true"
-        >
-          SC
-        </div>
+        {/* Shared approved Mill mark; not a replacement initial. */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- inline brand asset */}
+        <img src={MILL_DIALOGUE_MARK} alt="" className="size-10 shrink-0" />
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-semibold tracking-tight">
-            Site Chat
+          <p className="truncate text-[24px] font-semibold tracking-tight">
+            Mill
           </p>
-          <p className="text-inbox-nav-muted truncate text-[12px]">
+          <Link
+            href={toAppRoute(`/app/${slug}/settings/company`)}
+            className="text-inbox-nav-muted block truncate text-[12px] hover:text-foreground hover:underline"
+            aria-label="Company details"
+          >
             {workspaceName}
-          </p>
+          </Link>
         </div>
       </div>
 
@@ -181,12 +221,19 @@ export function GlobalSidebar({
         aria-label="Main"
       >
         {items.map((item) => {
-          const active = isNavActive(item, pathname, assignment, slug);
+          const active =
+            item.id === "closed"
+              ? closed &&
+                pathname.startsWith(toAppRoute(workspaceNavPath(slug, "inbox")))
+              : !(item.match === "assignment" && closed) &&
+                isNavActive(item, pathname, assignment, slug);
           const Icon = item.icon;
           return (
             <Link
               key={item.id}
+              data-nav-item={item.id}
               href={toAppRoute(item.href)}
+              prefetch={item.id === "team" ? false : undefined}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
@@ -198,7 +245,7 @@ export function GlobalSidebar({
               <Icon
                 className={cn(
                   "size-[18px] shrink-0",
-                  active ? "text-brand-muted" : "opacity-75",
+                  active ? "text-white" : "text-brand",
                 )}
                 strokeWidth={1.75}
                 aria-hidden={true}
@@ -211,8 +258,8 @@ export function GlobalSidebar({
                   className={cn(
                     "ml-auto",
                     active
-                      ? "bg-brand/80 text-white"
-                      : "bg-brand/70 text-white",
+                      ? "bg-white/20 text-white"
+                      : "bg-brand-soft text-brand",
                   )}
                 />
               ) : null}
@@ -222,13 +269,14 @@ export function GlobalSidebar({
       </nav>
 
       <div className="border-inbox-nav-border mt-auto space-y-2 border-t px-2.5 py-3.5">
-        <div className="px-1 [&_button]:border-white/12 [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+        <div className="px-1 [&_button]:border-inbox-border [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
           <WorkspaceSwitcher
             workspaces={workspaces}
             currentWorkspaceId={workspaceId}
             currentPath={pathname}
           />
         </div>
+        {canAdministerPlatform ? <PlatformAdminLink /> : null}
         <Link
           href={settingsHref}
           className={cn(
@@ -244,7 +292,14 @@ export function GlobalSidebar({
           />
           Settings
         </Link>
-        <div className="px-1 pt-1 [&_button]:border-white/12 [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+        <div className="px-1 pt-1 [&_button]:border-inbox-border [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+          {workspaces.some(
+            (workspace) =>
+              workspace.workspace_id === workspaceId &&
+              workspace.role !== "viewer",
+          ) ? (
+            <OperatorAvailability key={slug} slug={slug} />
+          ) : null}
           <UserMenu email={email} />
         </div>
       </div>

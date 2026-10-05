@@ -27,7 +27,7 @@ export const WIDGET_FONT_FAMILY_STACKS: Record<WidgetFontFamily, string> = {
 export const WIDGET_LAUNCHER_ICONS = ["chat", "message", "help", "custom"] as const;
 export type WidgetLauncherIcon = (typeof WIDGET_LAUNCHER_ICONS)[number];
 
-export const WIDGET_LAUNCHER_SHAPES = ["circle", "rounded-square", "square"] as const;
+export const WIDGET_LAUNCHER_SHAPES = ["circle", "rounded-square", "square", "rectangle"] as const;
 export type WidgetLauncherShape = (typeof WIDGET_LAUNCHER_SHAPES)[number];
 
 export const WIDGET_LAUNCHER_SIZES = ["sm", "md", "lg"] as const;

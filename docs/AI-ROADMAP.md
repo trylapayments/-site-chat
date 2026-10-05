@@ -1,4 +1,4 @@
-# Site Chat — AI Roadmap
+# Mill — AI Roadmap
 
 **Status:** Planning  
 **Last updated:** 2026-08-10

@@ -1,28 +1,28 @@
 "use client";
 
 import type { ConversationListItem } from "@site-chat/shared";
+import { IdentityAvatar } from "@/components/dashboard/IdentityAvatar";
 import { Paperclip } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { toAppRoute } from "@/lib/auth/redirect";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
 import { cn } from "@/lib/utils";
 
-function initialsFromLabel(label: string): string {
-  const parts = label.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  const first = parts[0] ?? "";
-  if (parts.length === 1) {
-    return first.slice(0, 2).toUpperCase();
-  }
-  const second = parts[1] ?? "";
-  return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
+function formatListAbsoluteDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
-/** Short relative clock for dense inbox rows (list-only; not used in SSR thread). */
-function formatListTime(value: string | null): string {
+/**
+ * Dense list clock. Omit `nowMs` on SSR / first client paint so hydration
+ * matches; pass client `Date.now()` only after mount.
+ */
+function formatListTime(value: string | null, nowMs?: number): string {
   if (!value) {
     return "—";
   }
@@ -30,7 +30,10 @@ function formatListTime(value: string | null): string {
   if (Number.isNaN(date.getTime())) {
     return "—";
   }
-  const diffMs = Date.now() - date.getTime();
+  if (nowMs === undefined) {
+    return formatListAbsoluteDate(date);
+  }
+  const diffMs = nowMs - date.getTime();
   const minutes = Math.max(0, Math.floor(diffMs / 60_000));
   if (minutes < 1) {
     return "now";
@@ -46,11 +49,7 @@ function formatListTime(value: string | null): string {
   if (days < 7) {
     return `${String(days)}d`;
   }
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  return formatListAbsoluteDate(date);
 }
 
 function StatusPill({ status }: { status: ConversationListItem["status"] }) {
@@ -82,6 +81,11 @@ export function ConversationListItemRow({
   selected: boolean;
   listQueryString: string;
 }) {
+  const [nowMs, setNowMs] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    setNowMs(Date.now());
+  }, []);
+
   const label = formatConversationContactLabel(conversation.contact);
   const href = toAppRoute(
     listQueryString
@@ -100,7 +104,7 @@ export function ConversationListItemRow({
       data-selected={selected ? "true" : "false"}
       data-conversation-id={conversation.id}
       className={cn(
-        "group relative transition-colors",
+        "group relative border-b border-inbox-border/60 transition-colors",
         selected ? "bg-brand-soft" : "hover:bg-inbox-hover bg-transparent",
       )}
     >
@@ -116,12 +120,10 @@ export function ConversationListItemRow({
           className="flex gap-3.5 px-4 py-3.5 outline-none focus-visible:bg-brand-soft"
         >
           <div className="relative shrink-0 self-start pt-0.5">
-            <div
-              className="flex size-10 items-center justify-center rounded-full bg-neutral-200/80 text-[12px] font-semibold text-neutral-600"
-              aria-hidden="true"
-            >
-              {initialsFromLabel(label)}
-            </div>
+            <IdentityAvatar
+              label={label}
+              country={conversation.ip_country_code}
+            />
             {isPending ? (
               <span
                 className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full border-2 border-white bg-amber-400"
@@ -150,7 +152,7 @@ export function ConversationListItemRow({
                 {label}
               </p>
               <time className="text-inbox-muted shrink-0 pt-0.5 text-[12px] tabular-nums">
-                {formatListTime(conversation.last_message_at)}
+                {formatListTime(conversation.last_message_at, nowMs)}
               </time>
             </div>
 

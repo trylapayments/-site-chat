@@ -15,7 +15,7 @@ export const messages_fi: WidgetMessages = {
   loadError: "Chattia ei voitu ladata.",
   sessionError: "Istunto vanhentui. Lataa sivu uudelleen.",
   sendError: "Viestin lähetys epäonnistui.",
-  poweredBy: "Palvelun tarjoaa Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Sinä",
   agentLabel: "Asiakaspalvelija",
   systemLabel: "Järjestelmä",

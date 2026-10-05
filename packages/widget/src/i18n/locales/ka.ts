@@ -15,7 +15,7 @@ export const messages_ka: WidgetMessages = {
   loadError: "ჩატის ჩატვირთვა ვერ მოხერხდა.",
   sessionError: "სესია ამოიწურა. განაახლეთ გვერდი.",
   sendError: "შეტყობინების გაგზავნა ვერ მოხერხდა.",
-  poweredBy: "მუშაობს Site Chat-ზე",
+  poweredBy: "Powered by Mill",
   youLabel: "თქვენ",
   agentLabel: "აგენტი",
   systemLabel: "სისტემა",

@@ -15,7 +15,7 @@ export const messages_lt: WidgetMessages = {
   loadError: "Nepavyko įkelti pokalbio.",
   sessionError: "Sesija baigėsi. Perkraukite puslapį.",
   sendError: "Nepavyko išsiųsti žinutės.",
-  poweredBy: "Veikia su Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Jūs",
   agentLabel: "Agentas",
   systemLabel: "Sistema",

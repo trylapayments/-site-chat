@@ -1,3 +1,7 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
 import { Suspense } from "react";
 
 import type { ConversationListItem } from "@site-chat/shared";
@@ -27,12 +31,17 @@ export function InboxShell({
   loadError: boolean;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const hasConversation = pathname.startsWith(`/app/${workspaceSlug}/inbox/`);
   return (
     <div
       className="bg-inbox-canvas flex h-full min-h-0 w-full"
       data-testid="inbox-workspace-shell"
     >
-      <div className="border-inbox-border/60 flex w-[340px] shrink-0 flex-col border-r xl:w-[360px]">
+      <div
+        data-testid="inbox-queue-pane"
+        className={`border-inbox-border/60 w-full min-w-0 shrink-0 flex-col border-r lg:w-[288px] xl:w-[300px] ${hasConversation ? "hidden lg:flex" : "flex"}`}
+      >
         <div className="border-inbox-border flex shrink-0 items-center gap-2 border-b bg-inbox-panel px-3 py-2.5">
           <div className="min-w-0 flex-1">
             <GlobalSearch
@@ -50,9 +59,14 @@ export function InboxShell({
         </div>
 
         <div className="border-inbox-border shrink-0 space-y-3 border-b bg-inbox-panel px-4 pt-4 pb-3">
-          <h1 className="text-[18px] font-semibold tracking-tight text-neutral-950">
-            Inbox
-          </h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-[18px] font-semibold tracking-tight text-neutral-950">
+              Inbox
+            </h1>
+            <span className="rounded-md bg-brand-soft px-2 py-1 text-xs font-medium text-brand">
+              Website chat
+            </span>
+          </div>
           <Suspense fallback={null}>
             <InboxListSearch />
           </Suspense>
@@ -89,7 +103,11 @@ export function InboxShell({
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1">{children}</div>
+      <div
+        className={`min-h-0 min-w-0 flex-1 ${hasConversation ? "flex" : "hidden lg:flex"}`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

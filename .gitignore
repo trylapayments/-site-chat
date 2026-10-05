@@ -46,3 +46,7 @@ playwright/.cache/
 # Supabase
 supabase/.branches/
 supabase/.temp/
+
+# AWS staging secrets and downloaded backend runtime
+infra/aws/runtime/
+.env*

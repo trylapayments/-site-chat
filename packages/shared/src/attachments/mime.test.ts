@@ -56,3 +56,14 @@ describe("attachment mime registry", () => {
     expect(detectMimeFromMagicBytes(plain, "data.csv")).toBe("text/csv");
   });
 });
+
+it("recognizes the recording formats used by Chrome and Safari without allowing active files", () => {
+  expect(detectMimeFromMagicBytes(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]))).toBe("audio/webm");
+  expect(
+    detectMimeFromMagicBytes(new Uint8Array([0, 0, 0, 20, 102, 116, 121, 112, 77, 52, 65, 32])),
+  ).toBe("audio/mp4");
+  expect(detectMimeFromMagicBytes(new TextEncoder().encode("RIFF0000WAVE"))).toBe("audio/wav");
+  expect(
+    detectMimeFromMagicBytes(new TextEncoder().encode("<script>alert(1)</script>"), "voice.webm"),
+  ).toBeNull();
+});

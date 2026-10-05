@@ -352,10 +352,9 @@ export async function updateVisitorProfileAction(
       patch,
     );
 
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // Visitor/contact CDC and the caller's targeted RPC catch-up update the UI.
+    // Route invalidation can hold this action's response behind a streaming
+    // Inbox render and race the simultaneous CDC refresh.
     return { success: true };
   } catch (error) {
     return mapActionError(error);

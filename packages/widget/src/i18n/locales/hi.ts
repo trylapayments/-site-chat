@@ -15,7 +15,7 @@ export const messages_hi: WidgetMessages = {
   loadError: "चैट लोड नहीं हो सकी।",
   sessionError: "सत्र समाप्त हो गया। कृपया पेज फिर से लोड करें।",
   sendError: "संदेश भेजने में विफल।",
-  poweredBy: "Site Chat द्वारा संचालित",
+  poweredBy: "Powered by Mill",
   youLabel: "आप",
   agentLabel: "एजेंट",
   systemLabel: "सिस्टम",

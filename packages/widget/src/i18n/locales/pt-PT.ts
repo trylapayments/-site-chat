@@ -15,7 +15,7 @@ export const messages_pt_PT: WidgetMessages = {
   loadError: "Não foi possível carregar o chat.",
   sessionError: "Sessão expirada. Recarregue a página.",
   sendError: "Falha ao enviar a mensagem.",
-  poweredBy: "Powered by Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Tu",
   agentLabel: "Agente",
   systemLabel: "Sistema",

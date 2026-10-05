@@ -1,4 +1,4 @@
-# Site Chat — Security Model
+# Mill — Security Model
 
 **Version:** 1.2  
 **Status:** Foundation  
@@ -8,7 +8,7 @@
 
 ## 1. Security Overview
 
-Site Chat handles business communications between companies and their website visitors. A security failure — cross-tenant data exposure, unauthorized message access, or billing manipulation — would destroy customer trust and create legal liability. Security is designed into every layer, not added as an afterthought.
+Mill handles business communications between companies and their website visitors. A security failure — cross-tenant data exposure, unauthorized message access, or billing manipulation — would destroy customer trust and create legal liability. Security is designed into every layer, not added as an afterthought.
 
 ### 1.1 Security Objectives
 
@@ -451,7 +451,7 @@ Audit logs viewable by Owner, Admin, and Viewer roles. Agents cannot view audit 
 
 ### 10.3 Personal Data Handling
 
-Site Chat processes personal data on behalf of workspace customers (data processors under GDPR):
+Mill processes personal data on behalf of workspace customers (data processors under GDPR):
 
 | Data | Subject | Retention |
 |------|---------|-----------|
@@ -476,7 +476,7 @@ A DPA template will be provided to Business tier customers. MVP launch includes 
 
 ### 11.1 Stripe Integration Security
 
-- Stripe Checkout and Customer Portal handle all payment data. Site Chat never stores card numbers, CVV, or bank details.
+- Stripe Checkout and Customer Portal handle all payment data. Mill never stores card numbers, CVV, or bank details.
 - PCI compliance scope: SAQ A (Stripe handles card data).
 - Webhook endpoint validates Stripe signature on every request.
 - Webhook events deduplicated via `stripe_webhook_events` table.
@@ -568,3 +568,20 @@ If any server secret is compromised:
 - Quarterly dependency audit.
 - Annual penetration test once SOC 2 preparation begins.
 - Security review required for all PRs touching auth, RLS, widget, or billing code.
+
+### Website installation domain controls
+
+Settings → Install widget exposes only the public widget key and loader snippet.
+Owners/admins approve or block exact hostnames; agents/viewers can view and copy
+installation code. Server Actions resolve active membership for the requested
+workspace and never accept a caller-provided workspace ID. The existing
+`allowed_domains.verified` flag represents approval for embedding, not DNS
+ownership proof. Domain changes are reversible; blocking marks the row inactive.
+
+Production bootstrap and authenticated widget HTTP requests validate the
+approved parent hostname. Missing/unknown origins and lookalike suffixes are
+rejected; apex and www hosts require separate approvals. Development localhost
+exceptions do not apply in production. This stops a copied loader on an
+unapproved browser origin; an Origin header is not cryptographic authentication
+of arbitrary non-browser clients. Existing rate limits and scoped session/token
+checks remain necessary.

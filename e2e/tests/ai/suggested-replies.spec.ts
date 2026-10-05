@@ -238,10 +238,7 @@ test.describe("AI suggested replies", () => {
       timeout: 30_000,
     });
     await expect(
-      visitorPage
-        .frameLocator('iframe[title="Site Chat"]')
-        .getByRole("article")
-        .getByText(manualReply),
+      visitorPage.frameLocator('iframe[title="Mill"]').getByRole("article").getByText(manualReply),
     ).toBeVisible({ timeout: 30_000 });
 
     await visitorContext.close();

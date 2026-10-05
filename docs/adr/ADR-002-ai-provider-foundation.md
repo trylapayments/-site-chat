@@ -5,7 +5,7 @@
 
 ## Context
 
-Site Chat needs an AI capability that can survive provider changes, per-workspace configuration, billing metering, and future features (summaries, RAG, agents) without rewriting product code. The first customer-facing feature is operator Suggested Replies.
+Mill needs an AI capability that can survive provider changes, per-workspace configuration, billing metering, and future features (summaries, RAG, agents) without rewriting product code. The first customer-facing feature is operator Suggested Replies.
 
 Constraints:
 

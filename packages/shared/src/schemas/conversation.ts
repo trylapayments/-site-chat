@@ -48,6 +48,11 @@ export const conversationListItemSchema = z
     id: z.string().uuid(),
     status: conversationStatusSchema,
     channel_type: channelTypeSchema,
+    ip_country_code: z
+      .string()
+      .regex(/^[A-Z]{2}$/)
+      .nullable()
+      .optional(),
     assigned_to: assigneeSchema,
     contact: contactSummarySchema,
     last_message_at: z.string().nullable(),
@@ -88,6 +93,12 @@ export const conversationDetailSchema = z
     id: z.string().uuid(),
     status: conversationStatusSchema,
     channel_type: channelTypeSchema,
+    visitor_ip: z.string().nullable().optional(),
+    ip_country_code: z
+      .string()
+      .regex(/^[A-Z]{2}$/)
+      .nullable()
+      .optional(),
     assigned_to: assigneeSchema,
     /** When the current assignee was set; null when unassigned. */
     assigned_at: z.string().nullable().optional(),

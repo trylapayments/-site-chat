@@ -5,10 +5,15 @@ import {
   type ConversationDetail,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
-import { MoreHorizontal } from "lucide-react";
+import { IdentityAvatar } from "@/components/dashboard/IdentityAvatar";
+import { ArrowLeft, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
+import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
+import { formatConversationContactLabel } from "@/lib/inbox/search-params";
+import { MobileConversationDetails } from "@/components/inbox/ConversationEngagement";
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,26 +25,13 @@ import {
 import { updateConversationStatusAction } from "@/lib/inbox/actions";
 import { cn } from "@/lib/utils";
 
-function initialsFromLabel(label: string): string {
-  const parts = label.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  const first = parts[0] ?? "";
-  if (parts.length === 1) {
-    return first.slice(0, 2).toUpperCase();
-  }
-  const second = parts[1] ?? "";
-  return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
-}
-
 export function ConversationHeader({
-  contactLabel,
+  contactLabel: initialContactLabel,
   conversationId,
   status,
-  locationLabel,
-  deviceLabel,
-  pageTitle,
+  locationLabel: initialLocationLabel,
+  deviceLabel: initialDeviceLabel,
+  pageTitle: initialPageTitle,
   workspaceSlug,
   workspaceId,
   conversation,
@@ -62,6 +54,28 @@ export function ConversationHeader({
   canAssign: boolean;
   canUpdateStatus: boolean;
 }) {
+  const visitorContext = useConversationVisitorContext();
+  const context = visitorContext?.snapshot.visitor_context;
+  const contactLabel = visitorContext
+    ? formatConversationContactLabel(visitorContext.snapshot.contact)
+    : initialContactLabel;
+  const locationLabel = visitorContext
+    ? (context?.timezone ?? null)
+    : initialLocationLabel;
+  const deviceLabel = visitorContext
+    ? [
+        context?.device_type,
+        context?.browser_family
+          ? `${context.browser_family}${context.browser_version ? ` ${context.browser_version}` : ""}`
+          : null,
+        context?.os_family,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : initialDeviceLabel;
+  const pageTitle = visitorContext
+    ? (context?.current_title ?? null)
+    : initialPageTitle;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const meta = [locationLabel, deviceLabel, pageTitle]
@@ -86,15 +100,20 @@ export function ConversationHeader({
   }
 
   return (
-    <header className="border-inbox-border/80 flex shrink-0 items-center justify-between gap-4 border-b bg-inbox-panel px-5 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <div
-          className="bg-brand/10 text-brand flex size-10 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold"
-          aria-hidden="true"
+    <header className="border-inbox-border/80 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-inbox-panel px-3 py-2 md:flex-nowrap md:gap-4 md:px-5 md:py-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
+        <Link
+          href={`/app/${workspaceSlug}/inbox`}
+          aria-label="Back to conversations"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-inbox-surface lg:hidden"
         >
-          {initialsFromLabel(contactLabel)}
-        </div>
-        <div className="min-w-0">
+          <ArrowLeft className="size-5" aria-hidden="true" />
+        </Link>
+        <IdentityAvatar
+          label={contactLabel}
+          country={conversation.ip_country_code}
+        />
+        <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-[16px] font-semibold tracking-tight text-neutral-950">
               {contactLabel}
@@ -126,9 +145,14 @@ export function ConversationHeader({
             {meta || "No visitor context yet"}
           </p>
         </div>
+        <MobileConversationDetails
+          slug={workspaceSlug}
+          conversationId={conversationId}
+          initialIp={conversation.visitor_ip}
+        />
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 md:w-auto md:flex-nowrap">
         <AssignmentPanel
           workspaceId={workspaceId}
           workspaceSlug={workspaceSlug}

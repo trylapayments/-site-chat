@@ -15,7 +15,7 @@ export const messages_ko: WidgetMessages = {
   loadError: "채팅을 불러올 수 없습니다.",
   sessionError: "세션이 만료되었습니다. 페이지를 새로고침하세요.",
   sendError: "메시지 전송에 실패했습니다.",
-  poweredBy: "Powered by Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "나",
   agentLabel: "상담원",
   systemLabel: "시스템",

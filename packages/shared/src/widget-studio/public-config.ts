@@ -69,6 +69,22 @@ export const widgetPublicAppearanceSchema = z
     launcherColor: widgetHexColorSchema,
 
     launcherIcon: z.enum(WIDGET_LAUNCHER_ICONS),
+    launcherText: z.string().trim().min(1).max(40).default("Online chat"),
+    launcherWidth: z.number().int().min(120).max(320).default(180),
+    mobileLauncher: z
+      .object({
+        launcherShape: z.enum(WIDGET_LAUNCHER_SHAPES),
+        launcherSize: z.enum(WIDGET_LAUNCHER_SIZES),
+        launcherText: z.string().trim().min(1).max(40),
+        launcherWidth: z.number().int().min(120).max(320),
+        launcherColor: widgetHexColorSchema,
+        launcherPosition: z.enum(WIDGET_POSITIONS),
+        launcherOffsetX: z.number().int().min(0).max(120),
+        launcherOffsetY: z.number().int().min(0).max(120),
+      })
+      .strict()
+      .nullable()
+      .default(null),
     launcherShape: z.enum(WIDGET_LAUNCHER_SHAPES),
     launcherSize: z.enum(WIDGET_LAUNCHER_SIZES),
     position: z.enum(WIDGET_POSITIONS),
@@ -277,6 +293,9 @@ export function mapAppearanceToPublicConfig(
     launcherColor: config.launcherColor,
 
     launcherIcon: config.launcherIcon,
+    launcherText: config.launcherText,
+    launcherWidth: config.launcherWidth,
+    mobileLauncher: config.mobileLauncher,
     launcherShape: config.launcherShape,
     launcherSize: config.launcherSize,
     position: config.launcherPosition,

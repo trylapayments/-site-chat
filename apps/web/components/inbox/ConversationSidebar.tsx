@@ -12,12 +12,19 @@ import {
   type VisitorIdentityValues,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
+import {
+  IdentityAvatar,
+  CountryFlag,
+} from "@/components/dashboard/IdentityAvatar";
+import { UserRound, MessagesSquare, Globe, Activity } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { ConversationFollowUp } from "@/components/inbox/ConversationFollowUp";
+import { ConversationEngagement } from "@/components/inbox/ConversationEngagement";
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
-import { VisitorSidebarLiveRefresh } from "@/components/inbox/VisitorSidebarLiveRefresh";
+import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { CustomerTimeline } from "@/components/inbox/CustomerTimeline";
 import { ContactTagChip } from "@/components/crm/ContactTagsEditor";
 import { Button } from "@/components/ui/button";
@@ -31,6 +38,7 @@ import {
 } from "@/lib/inbox/actions";
 import {
   formatConversationContactLabel,
+  formatInboxDateTime,
   formatRelativeTime,
 } from "@/lib/inbox/search-params";
 import { cn } from "@/lib/utils";
@@ -38,34 +46,6 @@ import { cn } from "@/lib/utils";
 const crmMessages = crmMessagesEn;
 
 type InspectorTab = "details" | "activity";
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) {
-    return "—";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-  return date.toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  });
-}
-
-function initialsFromLabel(label: string): string {
-  const parts = label.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  const first = parts[0] ?? "";
-  if (parts.length === 1) {
-    return first.slice(0, 2).toUpperCase();
-  }
-  const second = parts[1] ?? "";
-  return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
-}
 
 function MetaRow({
   label,
@@ -114,7 +94,7 @@ export function ConversationSidebar({
   workspaceId,
   workspaceSlug,
   conversationId,
-  conversation,
+  conversation: initialConversation,
   members,
   memberId,
   canAssign,
@@ -133,6 +113,10 @@ export function ConversationSidebar({
   canUpdateVisitor: boolean;
   contactTags?: ContactTagSummary[];
 }) {
+  const visitorContext = useConversationVisitorContext();
+  const conversation = visitorContext
+    ? { ...initialConversation, ...visitorContext.snapshot }
+    : initialConversation;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -216,26 +200,26 @@ export function ConversationSidebar({
       className="bg-inbox-panel flex h-full min-h-0 w-full flex-col overflow-hidden"
       data-testid="customer-inspector"
     >
-      <VisitorSidebarLiveRefresh
-        workspaceId={workspaceId}
-        visitorSessionId={conversation.visitor_session_id}
-        contactId={conversation.contact?.id ?? null}
-      />
+      {visitorContext?.error ? (
+        <p role="alert" className="px-4 py-2 text-sm text-red-700">
+          {visitorContext.error}
+        </p>
+      ) : null}
 
       <div className="border-inbox-border/80 shrink-0 border-b px-4 pt-4 pb-3.5">
         <div className="flex items-start gap-3">
-          <div
-            className="bg-brand/10 text-brand flex size-11 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold tracking-wide"
-            aria-hidden="true"
-          >
-            {initialsFromLabel(contactLabel)}
-          </div>
+          <IdentityAvatar
+            label={contactLabel}
+            country={conversation.ip_country_code}
+            className="size-12"
+          />
           <div className="min-w-0 flex-1 pt-0.5">
             <p className="truncate text-[15px] font-semibold tracking-tight text-neutral-950">
               {contactLabel}
             </p>
             {locationLabel ? (
               <p className="text-inbox-muted mt-1 truncate text-[12.5px]">
+                <CountryFlag code={conversation.ip_country_code} />{" "}
                 {locationLabel}
               </p>
             ) : null}
@@ -324,13 +308,29 @@ export function ConversationSidebar({
             className="divide-y divide-zinc-100"
             data-testid="inspector-details"
           >
+            <ConversationEngagement
+              slug={workspaceSlug}
+              conversationId={conversationId}
+              initialIp={conversation.visitor_ip}
+            />
+            <ConversationFollowUp
+              slug={workspaceSlug}
+              conversationId={conversationId}
+              email={conversation.contact?.email}
+            />
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <UserRound
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Visitor
               </h2>
               {canUpdateVisitor ? (
                 <form
                   className="mt-3 space-y-3"
+                  data-testid="visitor-identity-form"
+                  data-pending={isPending ? "true" : "false"}
                   onSubmit={(event) => {
                     event.preventDefault();
                     setProfileError(null);
@@ -369,7 +369,7 @@ export function ConversationSidebar({
                           },
                           draft: submittedDraft,
                         });
-                        router.refresh();
+                        await visitorContext?.refresh();
                       } else {
                         setProfileError(result.message);
                       }
@@ -383,9 +383,10 @@ export function ConversationSidebar({
                       value={identity.draft.name}
                       disabled={isPending}
                       onChange={(event) => {
+                        const value = event.currentTarget.value;
                         setIdentity((current) => ({
                           ...current,
-                          draft: { ...current.draft, name: event.target.value },
+                          draft: { ...current.draft, name: value },
                         }));
                       }}
                       maxLength={120}
@@ -400,11 +401,12 @@ export function ConversationSidebar({
                       value={identity.draft.email}
                       disabled={isPending}
                       onChange={(event) => {
+                        const value = event.currentTarget.value;
                         setIdentity((current) => ({
                           ...current,
                           draft: {
                             ...current.draft,
-                            email: event.target.value,
+                            email: value,
                           },
                         }));
                       }}
@@ -420,11 +422,12 @@ export function ConversationSidebar({
                       value={identity.draft.phone}
                       disabled={isPending}
                       onChange={(event) => {
+                        const value = event.currentTarget.value;
                         setIdentity((current) => ({
                           ...current,
                           draft: {
                             ...current.draft,
-                            phone: event.target.value,
+                            phone: value,
                           },
                         }));
                       }}
@@ -460,6 +463,10 @@ export function ConversationSidebar({
 
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <MessagesSquare
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Conversation
               </h2>
               <dl className="mt-2">
@@ -538,6 +545,10 @@ export function ConversationSidebar({
 
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <Globe
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Current context
               </h2>
               <div className="mt-2 space-y-0.5">
@@ -589,18 +600,23 @@ export function ConversationSidebar({
 
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <Activity
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Activity
               </h2>
               <dl className="mt-2">
                 <MetaRow
                   label="First seen"
-                  value={formatDateTime(
+                  value={formatInboxDateTime(
                     activity?.first_seen_at ?? visitor?.first_seen_at,
                   )}
                 />
                 <MetaRow
                   label="Last seen"
-                  value={formatDateTime(
+                  testId="inspector-last-seen"
+                  value={formatInboxDateTime(
                     activity?.last_seen_at ?? visitor?.last_seen_at,
                   )}
                 />
@@ -633,7 +649,7 @@ export function ConversationSidebar({
                         </p>
                       ) : null}
                       <p className="text-inbox-muted mt-1 text-[11px]">
-                        {formatDateTime(view.created_at)}
+                        {formatInboxDateTime(view.created_at)}
                       </p>
                     </li>
                   ))}
@@ -652,6 +668,10 @@ export function ConversationSidebar({
           >
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <Activity
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Activity
               </h2>
               <p className="text-inbox-muted mt-2 text-[13px]">
@@ -675,7 +695,7 @@ export function ConversationSidebar({
                         </p>
                       ) : null}
                       <p className="text-inbox-muted mt-1 text-[11px]">
-                        {formatDateTime(view.created_at)}
+                        {formatInboxDateTime(view.created_at)}
                       </p>
                     </li>
                   ))}

@@ -15,7 +15,7 @@ export const messages_pl: WidgetMessages = {
   loadError: "Nie udało się wczytać czatu.",
   sessionError: "Sesja wygasła. Odśwież stronę.",
   sendError: "Nie udało się wysłać wiadomości.",
-  poweredBy: "Powered by Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Ty",
   agentLabel: "Konsultant",
   systemLabel: "System",

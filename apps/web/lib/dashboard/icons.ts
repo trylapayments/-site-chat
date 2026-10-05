@@ -1,4 +1,5 @@
 import {
+  CreditCard,
   Inbox,
   LayoutDashboard,
   Settings,
@@ -11,6 +12,7 @@ import type { DashboardNavIconKey } from "@/lib/dashboard/routes";
 
 export const DASHBOARD_NAV_ICONS: Record<DashboardNavIconKey, LucideIcon> = {
   LayoutDashboard,
+  CreditCard,
   Inbox,
   Users,
   UserCog,

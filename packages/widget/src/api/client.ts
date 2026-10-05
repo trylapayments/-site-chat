@@ -1,4 +1,4 @@
-import type { WidgetLocale } from "@site-chat/shared";
+import type { ChatSetup, PreChatSubmission, WidgetLocale } from "@site-chat/shared";
 
 export const WIDGET_EMBED_TOKEN_HEADER = "X-SiteChat-Embed-Token";
 
@@ -42,7 +42,19 @@ export type WidgetPublicConfig = {
   launcherColor: string;
 
   launcherIcon: "chat" | "message" | "help" | "custom";
-  launcherShape: "circle" | "rounded-square" | "square";
+  launcherShape: "circle" | "rounded-square" | "square" | "rectangle";
+  launcherText: string;
+  launcherWidth: number;
+  mobileLauncher: null | {
+    launcherShape: WidgetPublicConfig["launcherShape"];
+    launcherSize: WidgetPublicConfig["launcherSize"];
+    launcherText: string;
+    launcherWidth: number;
+    launcherColor: string;
+    launcherPosition: "bottom-right" | "bottom-left";
+    launcherOffsetX: number;
+    launcherOffsetY: number;
+  };
   launcherSize: "sm" | "md" | "lg";
   position: "bottom-right" | "bottom-left";
   launcherOffsetX: number;
@@ -203,6 +215,74 @@ export type ApiError = {
 
 export class WidgetApiClient {
   constructor(private readonly apiBase: string) {}
+
+  async engagement(
+    embedToken: string,
+    sessionToken: string,
+  ): Promise<{
+    setup: ChatSetup;
+    version: number;
+    hasConversation: boolean;
+    conversationId: string | null;
+    conversationStatus: "open" | "pending" | "resolved" | "closed" | null;
+    rating: { score: number; comment: string } | null;
+    messageAgents: Record<string, { name: string; avatarUrl: string | null }>;
+    formSubmitted: boolean;
+    operatorInitiated: boolean;
+  }> {
+    const response = await fetch(new URL("/api/v1/widget/engagement", this.apiBase), {
+      headers: { Authorization: `Bearer ${sessionToken}`, [WIDGET_EMBED_TOKEN_HEADER]: embedToken },
+      credentials: "omit",
+      cache: "no-store",
+    });
+    return this.parseResponse(response);
+  }
+  async conversationAction(
+    embedToken: string,
+    sessionToken: string,
+    input: unknown,
+  ): Promise<{ score?: number; comment?: string; sent?: boolean }> {
+    const response = await fetch(new URL("/api/v1/widget/conversation", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        [WIDGET_EMBED_TOKEN_HEADER]: embedToken,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify(input),
+    });
+    return this.parseResponse(response);
+  }
+  async submitPreChat(
+    embedToken: string,
+    sessionToken: string,
+    submission: PreChatSubmission,
+  ): Promise<{ submitted: boolean; hasConversation: boolean }> {
+    const response = await fetch(new URL("/api/v1/widget/engagement", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        [WIDGET_EMBED_TOKEN_HEADER]: embedToken,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify(submission),
+    });
+    return this.parseResponse(response);
+  }
+
+  async operatorAvailability(
+    embedToken: string,
+  ): Promise<{ status: "available" | "away" | "offline"; visible?: boolean }> {
+    const response = await fetch(new URL("/api/v1/widget/availability", this.apiBase), {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ embedToken }),
+    });
+    return this.parseResponse(response);
+  }
 
   async bootstrap(widgetPublicKey: string): Promise<BootstrapPayload> {
     const url = new URL("/api/v1/widget/bootstrap", this.apiBase);

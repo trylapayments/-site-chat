@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-08-11  
-**Deciders:** Site Chat Engineering  
+**Deciders:** Mill Engineering<br>
 **Supersedes:** None (complements ADR-001, ADR-003)
 
 ---

@@ -29,7 +29,7 @@ export function LoginForm({
   return (
     <AuthShell
       title="Sign in"
-      description="Access your Site Chat workspace."
+      description="Access your Mill workspace."
       footer={
         <>
           Don&apos;t have an account?{" "}

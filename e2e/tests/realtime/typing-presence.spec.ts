@@ -112,10 +112,10 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
 
     // Second tab same visitor context → shared iframe-origin localStorage session
     await tab2.goto(HOST_URL);
-    await expect(tab2.locator('iframe[title="Site Chat"]')).toBeAttached({
+    await expect(tab2.locator('iframe[title="Mill"]')).toBeAttached({
       timeout: 60_000,
     });
-    const frame2 = tab2.frameLocator('iframe[title="Site Chat"]');
+    const frame2 = tab2.frameLocator('iframe[title="Mill"]');
     await expect(frame2.getByRole("button", { name: "Open chat" })).toBeVisible({
       timeout: 60_000,
     });
@@ -166,7 +166,7 @@ test.describe("PR 4D-2 typing indicators and presence", () => {
     await expect(frame.getByTestId("widget-operator-presence")).toBeVisible();
     await expect(frame.getByTestId("widget-operator-presence")).toHaveAttribute(
       "data-presence",
-      /^(online|offline)$/,
+      /^(online|away|offline)$/,
     );
 
     // Panel is already open from openWidget — do not wait on "Open chat" again.

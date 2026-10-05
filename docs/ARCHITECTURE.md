@@ -1,4 +1,4 @@
-# Site Chat — System Architecture
+# Mill — System Architecture
 
 **Version:** 1.3  
 **Status:** Foundation  
@@ -8,7 +8,7 @@
 
 ## 1. Architecture Overview
 
-Site Chat is a multi-tenant SaaS platform composed of four primary runtime surfaces:
+Mill is a multi-tenant SaaS platform composed of four primary runtime surfaces:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -94,7 +94,7 @@ The **workspace** is the tenant. Every tenant-scoped table includes a `workspace
 
 ### 3.2 Isolation Strategy
 
-Site Chat uses **shared database, shared schema** with row-level isolation:
+Mill uses **shared database, shared schema** with row-level isolation:
 
 - All tenant tables have `workspace_id NOT NULL`.
 - RLS policies on every tenant table enforce `workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = auth.uid())`.
@@ -187,7 +187,7 @@ Monorepo tooling (Turborepo or pnpm workspaces) is recommended from the start to
 
 ### 5.1 Style and Versioning
 
-Site Chat uses **REST** over Next.js Route Handlers with URL-based versioning (`/api/v1/...`). REST is chosen for long-term maintainability: easy to document (OpenAPI), debug, and integrate without coupling clients to a specific RPC framework.
+Mill uses **REST** over Next.js Route Handlers with URL-based versioning (`/api/v1/...`). REST is chosen for long-term maintainability: easy to document (OpenAPI), debug, and integrate without coupling clients to a specific RPC framework.
 
 GraphQL and tRPC are explicitly not used in v1 to reduce long-term surface area.
 
@@ -648,3 +648,13 @@ Detailed security controls are documented in [SECURITY.md](./SECURITY.md). Archi
 | 2026-08-19 | Widget Studio draft/published snapshots + monotonic version | Safe preview, atomic production promotion, explicit public cache boundary | See ADR-009 |
 
 Decisions are append-only. Superseded decisions are marked but not deleted.
+
+### Widget availability and visitor read visibility
+
+Chat setup stores `allOfflineBehavior`, `outsideHoursBehavior`, `workingHours` and `showReadReceipts` in versioned workspace chat settings. Legacy configurations default to accepting messages, no enforced schedule, and read visibility disabled. Working intervals use IANA local time (DST included), with an inclusive start and exclusive end. The availability endpoint evaluates the server clock and aggregate operator status; Away is distinct from Offline. The iframe polls while closed and sends an origin/source-validated availability message to its loader. Hiding removes visibility, pointer events and accessibility exposure while retaining the session and poller, so it can return without a page reload.
+
+Visitor read visibility controls the displayed receipt state, not internal unread counters or visitor-to-operator read tracking. Disabling it shows only Sent for confirmed visitor messages, including after settings change or reconnect. Peer delivery/read changes are hidden so opening an operator thread does not indirectly disclose that it was read. Workspace administrators configure the setting in Chat setup.
+
+The widget sandbox allows downloads but does not allow popups or top-level navigation. Document downloads use a scoped signed storage URL with attachment disposition and avoid a new-window target. E2E verifies actual PDF bytes and a subsequent reply in the same chat.
+
+Embed access is renewed thirty seconds before its five-minute expiry, with retries after network failures and a focus check after background suspension. A trusted renewal replaces the embed token/config while preserving the visitor session, history and composer draft. The download E2E advertises a short expiry to exercise renewal before verifying PDF bytes.

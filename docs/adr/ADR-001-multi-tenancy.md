@@ -2,14 +2,14 @@
 
 **Status:** Accepted  
 **Date:** 2026-07-30  
-**Deciders:** Site Chat Engineering  
+**Deciders:** Mill Engineering<br>
 **Supersedes:** None (first ADR)
 
 ---
 
 ## Context
 
-Site Chat is a multi-tenant SaaS live chat platform. Each paying customer operates within an isolated **workspace** where agents manage conversations with website visitors through an embeddable widget. The platform must support thousands of workspaces on shared infrastructure while guaranteeing that no tenant can read, modify, or infer another tenant's data.
+Mill is a multi-tenant SaaS live chat platform. Each paying customer operates within an isolated **workspace** where agents manage conversations with website visitors through an embeddable widget. The platform must support thousands of workspaces on shared infrastructure while guaranteeing that no tenant can read, modify, or infer another tenant's data.
 
 This decision is needed now because multi-tenancy is the foundational architectural choice that affects every subsequent design: database schema, authentication, authorization, realtime messaging, file storage, billing, audit logging, and future channel integrations. Changing tenancy models after launch would require a costly migration and risk data integrity. The first ADR establishes the long-term boundary before application code is written.
 
@@ -35,7 +35,7 @@ This decision is needed now because multi-tenancy is the foundational architectu
 
 ## Decision
 
-Site Chat adopts a **shared PostgreSQL database, shared schema, row-level tenant isolation** model. The **workspace** is the tenant. Every tenant-scoped entity carries a `workspace_id` foreign key, and Supabase Row Level Security (RLS) policies enforce access boundaries for authenticated operators, visitor sessions, and background jobs.
+Mill adopts a **shared PostgreSQL database, shared schema, row-level tenant isolation** model. The **workspace** is the tenant. Every tenant-scoped entity carries a `workspace_id` foreign key, and Supabase Row Level Security (RLS) policies enforce access boundaries for authenticated operators, visitor sessions, and background jobs.
 
 ### Shared PostgreSQL Database
 
@@ -200,7 +200,7 @@ All tenants share one database but each workspace receives a dedicated PostgreSQ
 | RLS | Policies must be replicated per schema or managed dynamically |
 | Connection pooling | Simpler than database-per-tenant but search-path must be set per connection |
 
-**Rejected because:** Schema-per-tenant combines the migration burden of multi-database with weaker isolation than database-per-tenant. Supabase's tooling (RLS, Realtime, Storage policies, Auth integration) is optimized for a shared public schema. Dynamic schema management conflicts with Supabase migration workflows and CI/CD pipelines. No meaningful advantage over shared-schema RLS for Site Chat's threat model.
+**Rejected because:** Schema-per-tenant combines the migration burden of multi-database with weaker isolation than database-per-tenant. Supabase's tooling (RLS, Realtime, Storage policies, Auth integration) is optimized for a shared public schema. Dynamic schema management conflicts with Supabase migration workflows and CI/CD pipelines. No meaningful advantage over shared-schema RLS for Mill's threat model.
 
 ### Comparison Summary
 
@@ -214,7 +214,7 @@ All tenants share one database but each workspace receives a dedicated PostgreSQ
 | Provisioning speed | Instant | Seconds | Minutes+ |
 | Scale to 10K tenants | Proven pattern | Unwieldy | Impractical |
 
-Shared schema with RLS is the industry-standard approach for B2B SaaS at Site Chat's target scale, used successfully by products with comparable isolation requirements.
+Shared schema with RLS is the industry-standard approach for B2B SaaS at Mill's target scale, used successfully by products with comparable isolation requirements.
 
 ---
 
@@ -288,4 +288,4 @@ A workspace may serve chat widgets on multiple domains and websites. The existin
 
 | Date | Change | Author |
 |------|--------|--------|
-| 2026-07-30 | Initial ADR accepted | Site Chat Engineering |
+| 2026-07-30 | Initial ADR accepted | Mill Engineering |

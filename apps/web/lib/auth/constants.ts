@@ -14,7 +14,7 @@ export const AUTH_ROUTES = {
 } as const;
 
 /** Relative path prefixes allowed for post-auth redirects. */
-export const SAFE_REDIRECT_PREFIXES = ["/app/", "/invite/"] as const;
+export const SAFE_REDIRECT_PREFIXES = ["/app/", "/invite/", "/admin/"] as const;
 
 export const SAFE_REDIRECT_FALLBACK = AUTH_ROUTES.app;
 

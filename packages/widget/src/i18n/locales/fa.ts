@@ -15,7 +15,7 @@ export const messages_fa: WidgetMessages = {
   loadError: "بارگذاری گفتگو ممکن نشد.",
   sessionError: "نشست منقضی شد. لطفاً صفحه را دوباره بارگذاری کنید.",
   sendError: "ارسال پیام ناموفق بود.",
-  poweredBy: "قدرت‌گرفته از Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "شما",
   agentLabel: "پشتیبان",
   systemLabel: "سیستم",

@@ -15,7 +15,7 @@ export const messages_he: WidgetMessages = {
   loadError: "לא ניתן לטעון את הצ׳אט.",
   sessionError: "תוקף הסשן פג. נא לרענן את הדף.",
   sendError: "שליחת ההודעה נכשלה.",
-  poweredBy: "מופעל על ידי Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "אתם",
   agentLabel: "נציג",
   systemLabel: "מערכת",

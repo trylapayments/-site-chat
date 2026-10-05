@@ -14,12 +14,15 @@ const WIDGET_MOUNTED_KEY = "__siteChatWidgetMounted";
 const LOCATION_CHANGE_EVENT = "sitechat:locationchange";
 const SITECHAT_API_VERSION = "1";
 const MOBILE_FULLSCREEN_BREAKPOINT = 640;
+// Leave room for the compact launcher/greeting shadow inside the transparent frame.
+const CLOSED_FRAME_SHADOW_PADDING = 16;
 
 type WidgetFrameConfig = {
   hideLauncherWhenOpen: boolean;
   launcherOffsetX: number;
   launcherOffsetY: number;
   launcherSize: number;
+  launcherWidth: number;
   mobileBehavior: "responsive" | "fullscreen";
   position: "bottom-right" | "bottom-left";
   showGreeting: boolean;
@@ -33,6 +36,7 @@ const DEFAULT_FRAME_CONFIG: WidgetFrameConfig = {
   launcherOffsetX: 16,
   launcherOffsetY: 16,
   launcherSize: 56,
+  launcherWidth: 56,
   mobileBehavior: "responsive",
   position: "bottom-right",
   showGreeting: false,
@@ -51,13 +55,26 @@ function readWidgetFrameConfig(value: unknown): WidgetFrameConfig {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return DEFAULT_FRAME_CONFIG;
   }
-  const config = value as Record<string, unknown>;
+  const base = value as Record<string, unknown>;
+  const mobile = base.mobileLauncher;
+  const config =
+    window.innerWidth <= 640 && mobile && typeof mobile === "object" && !Array.isArray(mobile)
+      ? {
+          ...base,
+          ...(mobile as Record<string, unknown>),
+          position: (mobile as Record<string, unknown>).launcherPosition,
+        }
+      : base;
   const launcherSize = config.launcherSize === "sm" ? 48 : config.launcherSize === "lg" ? 64 : 56;
   return {
     hideLauncherWhenOpen: config.hideLauncherWhenOpen === true,
     launcherOffsetX: clampedNumber(config.launcherOffsetX, 16, 0, 120),
     launcherOffsetY: clampedNumber(config.launcherOffsetY, 16, 0, 120),
     launcherSize,
+    launcherWidth:
+      config.launcherShape === "rectangle"
+        ? clampedNumber(config.launcherWidth, 180, 120, 320)
+        : launcherSize,
     mobileBehavior: config.mobileBehavior === "fullscreen" ? "fullscreen" : "responsive",
     position: config.position === "bottom-left" ? "bottom-left" : "bottom-right",
     showGreeting: config.showGreeting === true,
@@ -83,12 +100,17 @@ function applyIframeLayout(iframe: HTMLIFrameElement, config: WidgetFrameConfig,
   }
 
   const closedWidth =
-    config.launcherOffsetX + config.launcherSize + (config.showGreeting ? 12 + 260 : 0);
+    config.launcherOffsetX +
+    config.launcherWidth +
+    (config.showGreeting ? 12 + 260 : 0) +
+    CLOSED_FRAME_SHADOW_PADDING;
   const panelBottom =
     config.launcherOffsetY + (config.hideLauncherWhenOpen ? 0 : config.launcherSize + 12);
   const openHeight = Math.min(config.widgetHeight, config.widgetMaxHeight) + panelBottom + 8;
   const width = open ? config.widgetWidth + config.launcherOffsetX : closedWidth;
-  const height = open ? openHeight : config.launcherOffsetY + config.launcherSize;
+  const height = open
+    ? openHeight
+    : config.launcherOffsetY + config.launcherSize + CLOSED_FRAME_SHADOW_PADDING;
 
   iframe.style.width = `${String(Math.min(window.innerWidth, width))}px`;
   iframe.style.height = `${String(Math.min(window.innerHeight, height))}px`;
@@ -218,6 +240,7 @@ type LoaderInitMessage = {
     embedToken: string;
     embedTokenExpiresAt: string;
     parentOrigin: string;
+    hostViewportWidth: number;
     pageUrl: string;
     pageTitle: string;
     referrer: string;
@@ -250,6 +273,7 @@ type LoaderWindow = Window & {
 type HistoryMethod = typeof history.pushState;
 
 let activeIframe: HTMLIFrameElement | null = null;
+let activeAppearanceConfig: unknown = null;
 let pendingInitPayload: LoaderInitMessage["payload"] | null = null;
 let widgetHostOrigin: string | null = null;
 let iframeReady = false;
@@ -282,9 +306,13 @@ function createIframe(
 ): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
   iframe.src = buildEmbedIframeSrc(widgetHost, parentOrigin);
-  iframe.title = "Site Chat";
+  iframe.title = "Mill";
+  iframe.setAttribute("allow", `microphone ${widgetHost}`);
   iframe.setAttribute("aria-hidden", "false");
-  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+  iframe.setAttribute(
+    "sandbox",
+    "allow-scripts allow-same-origin allow-forms allow-downloads allow-popups allow-popups-to-escape-sandbox",
+  );
   iframe.style.position = "fixed";
   iframe.style.bottom = "0";
   iframe.style.maxWidth = "100vw";
@@ -545,13 +573,13 @@ function mount() {
       return;
     }
 
-    console.warn("[Site Chat] Loader must be executed from a script tag.");
+    console.warn("[Mill] Loader must be executed from a script tag.");
     return;
   }
 
   const widgetPublicKey = getWidgetPublicKey(script);
   if (!widgetPublicKey) {
-    console.warn("[Site Chat] Missing data-widget-key attribute.");
+    console.warn("[Mill] Missing data-widget-key attribute.");
     return;
   }
 
@@ -565,7 +593,8 @@ function mount() {
   void bootstrap(widgetHost, widgetPublicKey)
     .then((data) => {
       const page = currentPagePayload();
-      activeFrameConfig = readWidgetFrameConfig(data.config);
+      activeAppearanceConfig = data.config;
+      activeFrameConfig = readWidgetFrameConfig(activeAppearanceConfig);
       widgetOpen = false;
       const iframe = createIframe(widgetHost, window.location.origin, activeFrameConfig);
       activeIframe = iframe;
@@ -575,6 +604,7 @@ function mount() {
         embedToken: data.embedToken,
         embedTokenExpiresAt: data.embedTokenExpiresAt,
         parentOrigin: window.location.origin,
+        hostViewportWidth: window.innerWidth,
         pageUrl: page.url,
         pageTitle: page.title,
         referrer: page.referrer,
@@ -584,7 +614,17 @@ function mount() {
 
       const onResize = () => {
         if (activeIframe) {
+          activeFrameConfig = readWidgetFrameConfig(activeAppearanceConfig);
+          if (pendingInitPayload) pendingInitPayload.hostViewportWidth = window.innerWidth;
           applyIframeLayout(activeIframe, activeFrameConfig, widgetOpen);
+          activeIframe.contentWindow?.postMessage(
+            {
+              source: MESSAGE_SOURCE,
+              type: "sitechat:viewport",
+              payload: { width: window.innerWidth },
+            },
+            widgetHost,
+          );
         }
       };
       window.addEventListener("resize", onResize);
@@ -595,7 +635,7 @@ function mount() {
     })
     .catch(() => {
       teardownLoader();
-      console.warn("[Site Chat] Failed to initialize widget.");
+      console.warn("[Mill] Failed to initialize widget.");
     });
 
   const onMessage = (event: MessageEvent) => {
@@ -606,7 +646,7 @@ function mount() {
     const data = event.data as {
       source?: string;
       type?: string;
-      payload?: { open?: boolean; widgetPublicKey?: string };
+      payload?: { open?: boolean; visible?: boolean; widgetPublicKey?: string };
     };
     if (data.source !== "sitechat-embed") {
       return;
@@ -620,6 +660,13 @@ function mount() {
       }
       postPageMessage(true);
       flushIdentifyQueue();
+      return;
+    }
+
+    if (data.type === "sitechat:availability" && typeof data.payload?.visible === "boolean") {
+      activeIframe.style.visibility = data.payload.visible ? "visible" : "hidden";
+      activeIframe.style.pointerEvents = data.payload.visible ? "auto" : "none";
+      activeIframe.setAttribute("aria-hidden", String(!data.payload.visible));
       return;
     }
 
@@ -638,8 +685,17 @@ function mount() {
             return;
           }
 
-          activeFrameConfig = readWidgetFrameConfig(boot.config);
+          activeAppearanceConfig = boot.config;
+          activeFrameConfig = readWidgetFrameConfig(activeAppearanceConfig);
           applyIframeLayout(activeIframe, activeFrameConfig, widgetOpen);
+          activeIframe.contentWindow.postMessage(
+            {
+              source: MESSAGE_SOURCE,
+              type: "sitechat:viewport",
+              payload: { width: window.innerWidth },
+            },
+            widgetHost,
+          );
           const page = currentPagePayload();
           postInitMessage(activeIframe, widgetHost, {
             widgetPublicKey: boot.widgetPublicKey,
@@ -647,6 +703,7 @@ function mount() {
             embedToken: boot.embedToken,
             embedTokenExpiresAt: boot.embedTokenExpiresAt,
             parentOrigin: window.location.origin,
+            hostViewportWidth: window.innerWidth,
             pageUrl: page.url,
             pageTitle: page.title,
             referrer: page.referrer,
@@ -654,7 +711,7 @@ function mount() {
           postPageMessage(true);
         })
         .catch(() => {
-          console.warn("[Site Chat] Failed to refresh embed token.");
+          console.warn("[Mill] Failed to refresh embed token.");
         });
     }
   };

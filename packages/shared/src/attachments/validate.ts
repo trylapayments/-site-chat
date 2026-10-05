@@ -139,7 +139,11 @@ export function validateAttachmentFileDraft(
     };
   }
 
-  const maxBytes = kind === "image" ? resolved.imageMaxBytes : resolved.documentMaxBytes;
+  const maxBytes = mimeType.startsWith("audio/")
+    ? 10 * 1024 * 1024
+    : kind === "image"
+      ? resolved.imageMaxBytes
+      : resolved.documentMaxBytes;
   if (draft.sizeBytes > maxBytes) {
     return {
       ok: false,

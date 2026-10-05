@@ -11,6 +11,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { InternalNotesPanel } from "@/components/inbox/InternalNotesPanel";
 import { LiveConversationThread } from "@/components/inbox/LiveConversationThread";
 import { cn } from "@/lib/utils";
@@ -125,6 +126,7 @@ export function ConversationMainPanel({
   canUseCannedResponses: boolean;
   aiSuggestedRepliesEnabled?: boolean;
 }) {
+  const visitorContext = useConversationVisitorContext();
   const searchParams = useSearchParams();
   const focusMessageId = searchParams.get("message");
   const focusNoteId = searchParams.get("noteId") ?? searchParams.get("note");
@@ -164,8 +166,16 @@ export function ConversationMainPanel({
           initialMessages={initialMessages}
           initialVisitorReceipts={initialVisitorReceipts}
           initialCannedResponses={initialCannedResponses}
-          visitorName={visitorName}
-          visitorEmail={visitorEmail}
+          visitorName={
+            visitorContext
+              ? (visitorContext.snapshot.contact?.name ?? null)
+              : visitorName
+          }
+          visitorEmail={
+            visitorContext
+              ? (visitorContext.snapshot.contact?.email ?? null)
+              : visitorEmail
+          }
           canSend={canSend}
           canUseCannedResponses={canUseCannedResponses}
           aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}

@@ -140,3 +140,154 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* The operator product shares one palette across Inbox, CRM and settings.
+   Keep these tokens scoped so the public widget and authentication pages retain
+   their independently configured appearance. */
+.mill-operator {
+  --primary: #1761df;
+  --primary-foreground: #fff;
+  --ring: #1761df;
+  --accent: #eaf3ff;
+  --accent-foreground: #1554bf;
+  --brand: #1761df;
+  --brand-foreground: #fff;
+  --brand-soft: #eaf3ff;
+  --brand-muted: #1761df;
+  --inbox-bubble-visitor: #fff;
+  --inbox-bubble-agent: #1761df;
+  --inbox-canvas: #f7f6f2;
+  --inbox-panel: #fff;
+  --inbox-surface: #fff;
+  --inbox-border: #e5e4de;
+  --inbox-muted: #777b7d;
+  --inbox-hover: #f0f1ed;
+  --inbox-nav: #fff;
+  --inbox-nav-foreground: #283134;
+  --inbox-nav-muted: #777b7d;
+  --inbox-nav-border: #e5e4de;
+  --inbox-nav-hover: #f0f1ed;
+  --inbox-nav-active: #1761df;
+  color: #283134;
+}
+.mill-operator .mill-page > div {
+  max-width: 1280px;
+  margin-inline: auto;
+}
+.mill-sidebar nav a {
+  font-size: 13px;
+  padding-block: 10px;
+}
+.mill-sidebar nav a:focus-visible {
+  outline: 2px solid #1761df;
+  outline-offset: 2px;
+}
+.mill-sidebar nav a[data-nav-item="unassigned"],
+.mill-sidebar nav a[data-nav-item="mine"],
+.mill-sidebar nav a[data-nav-item="closed"] {
+  margin-left: 10px;
+}
+.mill-sidebar nav a[data-nav-item="visitors"] {
+  margin-top: 18px;
+}
+.mill-operator [data-testid="settings-page"] ul > li > a {
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #14283804;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.mill-operator [data-testid="settings-page"] ul > li > a:hover {
+  border-color: #aecafb;
+  box-shadow: 0 4px 16px #1761df0a;
+}
+.mill-operator [data-testid="settings-page"] ul > li > a > span[aria-hidden] {
+  background: #eaf3ff;
+  color: #1761df;
+}
+.mill-operator [data-testid="customer-inspector"] > div:nth-of-type(1) {
+  background: #f4f8ff;
+}
+.mill-operator [data-testid="customer-inspector"] h2 {
+  color: #50647d;
+  letter-spacing: 0.04em;
+}
+.mill-operator [data-testid="inspector-details"] > section,
+.mill-operator [data-testid="inspector-details"] > div {
+  border-color: #e4ebf3;
+}
+.mill-operator [data-testid="inspector-details-tab"][aria-selected="true"],
+.mill-operator [data-testid="inspector-activity-tab"][aria-selected="true"] {
+  background: #eaf3ff;
+  color: #1761df;
+}
+.mill-operator .mill-agent-bubble {
+  color: #fff;
+}
+.mill-operator .mill-agent-bubble > header span,
+.mill-operator .mill-agent-bubble > header time,
+.mill-operator .mill-agent-bubble > p:not(.text-destructive),
+.mill-operator .mill-agent-bubble [data-testid="message-receipt"],
+.mill-operator .mill-agent-bubble [data-testid="message-receipt"] > span {
+  color: #fff;
+}
+.mill-operator .mill-agent-bubble > header {
+  opacity: 0.82;
+}
+.mill-operator .mill-message-composer {
+  border-radius: 12px;
+  border-color: #cbdbf3;
+  box-shadow: 0 3px 14px #1761df08;
+}
+.mill-operator [data-testid="visitors-page"] tbody tr:hover {
+  background: #f2f7ff;
+}
+.mill-operator [data-testid="visitors-page"] tbody tr[aria-selected="true"] {
+  background: #eaf3ff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mill-operator * {
+    transition: none !important;
+  }
+}
+
+.mill-operator .mill-agent-bubble [data-testid="operator-attachment-document"] {
+  color: #182c3d;
+}
+
+.mill-operator [data-testid="settings-page"] ul > li > a {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.mill-operator [data-testid="settings-page"] ul > li > a > span[aria-hidden] {
+  margin-bottom: 16px;
+}
+
+/* Quiet surfaces keep the Mill blue reserved for interactive emphasis. */
+.mill-operator [data-testid="overview-page"] > div:first-child p:first-child {
+  color: #747976;
+}
+.mill-operator [data-testid="overview-page"] > div:nth-child(2) > a {
+  box-shadow: none;
+  border-radius: 10px;
+}
+.mill-operator [data-testid="overview-page"] > div:nth-child(2) > a > span {
+  background: #efeee8;
+  color: #59615b;
+}
+.mill-operator [data-testid="overview-page"] .text-3xl {
+  color: #283134;
+}
+.mill-operator [data-testid="overview-page"] h2 svg,
+.mill-operator [data-testid="overview-page"] a > svg,
+.mill-operator .mill-sidebar nav a:not([aria-current="page"]) svg {
+  color: #747b77;
+}
+.mill-operator [data-testid="overview-page"] .bg-brand-soft {
+  background: #eff2ec;
+  color: #53614f;
+}

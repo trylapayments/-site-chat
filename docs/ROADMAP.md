@@ -1,4 +1,4 @@
-# Site Chat — Product Roadmap
+# Mill — Product Roadmap
 
 **Version:** 1.2  
 **Status:** Foundation  
@@ -8,9 +8,9 @@
 
 ## 1. Roadmap Overview
 
-This document defines the phased delivery plan for Site Chat from foundation through general availability and beyond. Phases are sequenced by dependency and customer value, not calendar dates. Each phase has explicit entry criteria, deliverables, and exit criteria.
+This document defines the phased delivery plan for Mill from foundation through general availability and beyond. Phases are sequenced by dependency and customer value, not calendar dates. Each phase has explicit entry criteria, deliverables, and exit criteria.
 
-Site Chat is a commercial product intended for decade-long maintenance. The roadmap balances speed to market with architectural decisions that avoid costly rewrites.
+Mill is a commercial product intended for decade-long maintenance. The roadmap balances speed to market with architectural decisions that avoid costly rewrites.
 
 ---
 
@@ -305,7 +305,7 @@ Between Phase 5 completion and GA:
 
 ### 6.3 Versioning
 
-Site Chat uses semantic versioning for API (`/api/v1/`) and application releases:
+Mill uses semantic versioning for API (`/api/v1/`) and application releases:
 - **Major:** Breaking API changes, schema migrations requiring customer action.
 - **Minor:** New features, backward-compatible API additions.
 - **Patch:** Bug fixes, security patches.

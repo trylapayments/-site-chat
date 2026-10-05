@@ -1,0 +1,10 @@
+BEGIN;
+SELECT plan(6);
+SELECT ok(has_table_privilege('service_role', 'public.workspace_members', 'SELECT'), 'Email worker can recheck recipient membership');
+SELECT ok(has_table_privilege('service_role', 'public.notification_preferences', 'SELECT'), 'Email worker can recheck preferences');
+SELECT ok(has_table_privilege('service_role', 'public.notifications', 'SELECT'), 'Email worker can recheck notification context');
+SELECT ok(NOT has_table_privilege('anon', 'public.workspace_members', 'SELECT'), 'Visitors cannot read operator membership');
+SELECT ok(NOT has_table_privilege('anon', 'public.notification_preferences', 'SELECT'), 'Visitors cannot read operator preferences');
+SELECT ok(NOT has_table_privilege('anon', 'public.notifications', 'SELECT'), 'Visitors cannot read operator notifications');
+SELECT * FROM finish();
+ROLLBACK;

@@ -6,6 +6,7 @@ export default defineConfig({
     environment: "node",
     include: [
       "lib/**/*.test.ts",
+      "app/api/internal/**/*.test.ts",
       "lib/**/*.integration.test.ts",
       "components/contacts/**/*.test.ts",
       "app/widget/embed/**/*.test.ts",

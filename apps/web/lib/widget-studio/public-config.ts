@@ -7,7 +7,6 @@ import {
   defaultWidgetStudioEntitlements,
   isWidgetAssetStorageKeyForWorkspace,
   mapAppearanceToPublicConfig,
-  resolveWidgetStudioEntitlements,
   widgetAppearanceConfigSchema,
   widgetConfigSigningBucket,
   widgetPublicAppearanceSchema,
@@ -19,6 +18,8 @@ import {
 
 import { createSupabaseObjectStorage } from "@/lib/storage/supabase-object-storage";
 import { createServiceClient } from "@/lib/supabase/service";
+
+import { effectiveWidgetEntitlements } from "@/lib/platform-admin/access";
 
 type AssetTarget = {
   id: string;
@@ -38,11 +39,7 @@ export async function enrichWidgetPublicAppearance(input: {
 }): Promise<WidgetPublicAppearance> {
   const entitlements =
     input.entitlements ??
-    resolveWidgetStudioEntitlements({
-      // Until billing ships, defaults grant studio features except
-      // hide_powered_by / custom_domain. Tests pass restricted grants.
-      grantedFeatures: null,
-    });
+    (await effectiveWidgetEntitlements(input.workspaceId));
 
   const supabase = createServiceClient();
   const { data: configRow, error: configError } = await supabase

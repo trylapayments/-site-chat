@@ -17,6 +17,13 @@ const SHADOWS: Record<WidgetPublicConfig["shadowLevel"], string> = {
   lg: "0 28px 64px rgba(0, 0, 0, 0.24)",
 };
 
+const FLOATING_SHADOWS: Record<WidgetPublicConfig["shadowLevel"], string> = {
+  none: "none",
+  sm: "0 1px 4px rgba(0, 0, 0, 0.10)",
+  md: "0 2px 8px rgba(0, 0, 0, 0.12)",
+  lg: "0 4px 12px rgba(0, 0, 0, 0.16)",
+};
+
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 const SYSTEM_DARK_BACKGROUND = "#0F172A";
 const SYSTEM_DARK_TEXT = "#F8FAFC";
@@ -108,11 +115,16 @@ export function launcherSizePixels(size: WidgetPublicConfig["launcherSize"] | un
 }
 
 export function launcherRadius(shape: WidgetPublicConfig["launcherShape"] | undefined): string {
+  if (shape === "rectangle") return "10px";
   return shape === "square" ? "0.375rem" : shape === "rounded-square" ? "28%" : "50%";
 }
 
 export function widgetShadow(level: WidgetPublicConfig["shadowLevel"] | undefined): string {
   return SHADOWS[level ?? "md"];
+}
+
+export function widgetFloatingShadow(level: WidgetPublicConfig["shadowLevel"] | undefined): string {
+  return FLOATING_SHADOWS[level ?? "md"];
 }
 
 export function clampedPixels(

@@ -15,7 +15,7 @@ export const messages_zh_CN: WidgetMessages = {
   loadError: "无法加载聊天。",
   sessionError: "会话已过期。请刷新页面。",
   sendError: "消息发送失败。",
-  poweredBy: "由 Site Chat 提供支持",
+  poweredBy: "Powered by Mill",
   youLabel: "您",
   agentLabel: "客服",
   systemLabel: "系统",

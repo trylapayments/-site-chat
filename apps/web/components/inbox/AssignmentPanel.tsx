@@ -19,6 +19,7 @@ import {
   takeConversationAction,
   unassignConversationAction,
 } from "@/lib/inbox/actions";
+import { conversationChangeNeedsDetailRefresh } from "@/lib/inbox/conversation-detail-refresh";
 import { subscribeOperatorConversation } from "@/lib/realtime/operator-subscriptions";
 
 const messages = assignmentMessagesEn;
@@ -53,6 +54,10 @@ export function AssignmentPanel({
   variant?: "default" | "header";
 }) {
   const router = useRouter();
+  const conversationRef = useRef(conversation);
+  conversationRef.current = conversation;
+  const routerRef = useRef(router);
+  routerRef.current = router;
   // Explicit busy flag — do not use useTransition here. router.refresh() inside
   // a transition keeps isPending true until RSC refetch completes, which can
   // strand the panel disabled after a successful mutation.
@@ -79,21 +84,27 @@ export function AssignmentPanel({
     conversation.assignment_version,
   ]);
 
-  // Live assignee updates from CDC. Debounced refresh avoids stacking with
-  // visitor sidebar refreshes on the same page.
+  // Only assignment/status CDC requires an SSR refresh. Profile edits and
+  // messages also update the conversation row; refreshing for them races the
+  // visitor form action and needlessly reloads the live thread.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = subscribeOperatorConversation({
       workspaceId,
       conversationId,
       onMessageInsert: () => {},
-      onConversationChange: () => {
+      onConversationChange: (raw) => {
+        if (
+          !conversationChangeNeedsDetailRefresh(conversationRef.current, raw)
+        ) {
+          return;
+        }
         if (timer) {
           return;
         }
         timer = setTimeout(() => {
           timer = null;
-          router.refresh();
+          routerRef.current.refresh();
         }, 250);
       },
     });
@@ -103,7 +114,7 @@ export function AssignmentPanel({
         clearTimeout(timer);
       }
     };
-  }, [conversationId, router, workspaceId]);
+  }, [conversationId, workspaceId]);
 
   useEffect(() => {
     if (pickerOpen) {
@@ -133,9 +144,9 @@ export function AssignmentPanel({
   ) {
     setAssignee(result.conversation.assigned_to);
     setAssignmentVersion(result.conversation.assignment_version ?? 0);
-    if (result.changed) {
-      setStatusMessage(successMessage);
-    }
+    setStatusMessage(
+      result.changed ? successMessage : messages.conflictRefresh,
+    );
     router.refresh();
   }
 

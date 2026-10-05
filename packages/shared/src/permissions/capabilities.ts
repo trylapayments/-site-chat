@@ -16,6 +16,10 @@ export const DASHBOARD_CAPABILITIES = [
   "manage_widget_studio",
   /** Any member may view published preview metadata in Studio (read-only). */
   "view_widget_studio",
+  /** Any active member may list workspace members (mirrors workspace_members SELECT). */
+  "view_workspace_members",
+  /** Owner/admin: invite, role change, deactivate, remove (mirrors member RPCs). */
+  "manage_workspace_members",
 ] as const;
 
 export type DashboardCapability = (typeof DASHBOARD_CAPABILITIES)[number];
@@ -41,6 +45,10 @@ const CAPABILITY_MATRIX: Record<DashboardCapability, readonly MemberRole[]> = {
   manage_widget_studio: ["owner", "admin"],
   // Agents/viewers can open Studio in read-only mode (no draft mutation).
   view_widget_studio: ["owner", "admin", "agent", "viewer"],
+  // T9: agents (and other members) can list members; invitations remain owner/admin.
+  view_workspace_members: ["owner", "admin", "agent", "viewer"],
+  // create/revoke invitation, role change, deactivate, remove.
+  manage_workspace_members: ["owner", "admin"],
 };
 
 export function rolesForCapability(capability: DashboardCapability): readonly MemberRole[] {

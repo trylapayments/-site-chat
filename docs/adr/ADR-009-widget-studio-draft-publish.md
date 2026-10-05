@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-08-19  
-**Deciders:** Site Chat Engineering  
+**Deciders:** Mill Engineering<br>
 **Supersedes:** The use of `workspaces.settings_json.widget` as the primary widget appearance store
 
 ---

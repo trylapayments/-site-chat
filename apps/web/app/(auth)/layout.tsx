@@ -9,7 +9,7 @@ export default function AuthLayout({
     <div>
       <div className="absolute top-4 left-4">
         <Link href="/" className="text-sm font-semibold">
-          Site Chat
+          Mill
         </Link>
       </div>
       {children}

@@ -352,7 +352,7 @@ export function LiveConversationThread({
           void catchUp();
         }}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-5">
         <MessageList
           workspaceId={workspaceId}
           messages={messages}
@@ -517,8 +517,8 @@ function MessageList({
             <article
               className={
                 isVisitor
-                  ? "ml-auto flex w-full max-w-[min(100%,36rem)] flex-row-reverse gap-2.5"
-                  : "mr-auto flex w-full max-w-[min(100%,36rem)] gap-2.5"
+                  ? "mr-auto flex w-full max-w-[min(100%,36rem)] gap-2.5"
+                  : "ml-auto flex w-full max-w-[min(100%,36rem)] flex-row-reverse gap-2.5"
               }
               data-sequence={message.sequenceNumber}
               data-message-id={message.id}
@@ -542,8 +542,8 @@ function MessageList({
               <div
                 className={
                   isVisitor
-                    ? `min-w-0 flex-1 rounded-xl rounded-br-md bg-inbox-bubble-visitor px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
-                    : `min-w-0 flex-1 rounded-xl rounded-bl-md border border-zinc-200/60 bg-inbox-bubble-agent px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
+                    ? `min-w-0 flex-1 rounded-xl rounded-bl-md border border-inbox-border bg-inbox-bubble-visitor px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
+                    : `mill-agent-bubble min-w-0 flex-1 rounded-xl rounded-br-md bg-inbox-bubble-agent px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
                 }
               >
                 <header className="mb-1 flex items-center justify-between gap-3">
@@ -691,16 +691,15 @@ function LiveReplyComposer({
 
   return (
     <form
-      className="bg-inbox-panel shrink-0 px-5 py-2.5"
+      className="bg-inbox-panel shrink-0 px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] md:px-5"
       onDragOver={(event) => {
         event.preventDefault();
       }}
       onDrop={(event) => {
         event.preventDefault();
-        if (event.dataTransfer.files.length > 0) {
-          setPendingFiles((current) =>
-            [...current, ...Array.from(event.dataTransfer.files)].slice(0, 10),
-          );
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length > 0) {
+          setPendingFiles((current) => [...current, ...files].slice(0, 10));
         }
       }}
       onSubmit={(event) => {
@@ -974,12 +973,14 @@ function LiveReplyComposer({
         data-testid="operator-file-input"
         accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
         onChange={(event) => {
-          const selected = event.target.files;
-          if (selected) {
+          // Capture before resetting the input: React may run the updater
+          // later, after the browser has cleared its FileList.
+          const selected = Array.from(event.currentTarget.files ?? []);
+          if (selected.length > 0) {
             setPendingFiles((current) =>
-              [...current, ...Array.from(selected)].slice(0, 10),
+              [...current, ...selected].slice(0, 10),
             );
-            event.target.value = "";
+            event.currentTarget.value = "";
           }
         }}
       />
@@ -1019,7 +1020,7 @@ function LiveReplyComposer({
           {uploadProgress}
         </p>
       ) : null}
-      <div className="border-inbox-border/90 bg-inbox-surface focus-within:ring-brand/20 rounded-lg border focus-within:ring-1">
+      <div className="mill-message-composer border-inbox-border/90 bg-inbox-surface focus-within:ring-brand/20 rounded-lg border focus-within:ring-1">
         <div className="relative">
           {canned.query !== null ? (
             <CannedSlashMenu
@@ -1063,7 +1064,7 @@ function LiveReplyComposer({
             maxLength={4000}
             placeholder="Write a reply..."
             disabled={isPending}
-            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-neutral-400"
+            className="w-full resize-none bg-transparent px-3.5 py-2.5 text-base leading-relaxed md:text-[14px] outline-none placeholder:text-neutral-400"
           />
         </div>
         <div className="border-inbox-border/80 flex items-center justify-between gap-2 border-t px-2.5 py-1.5">

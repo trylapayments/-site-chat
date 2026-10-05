@@ -15,7 +15,7 @@ export const messages_el: WidgetMessages = {
   loadError: "Αδυναμία φόρτωσης της συνομιλίας.",
   sessionError: "Η συνεδρία έληξε. Ανανεώστε τη σελίδα.",
   sendError: "Η αποστολή του μηνύματος απέτυχε.",
-  poweredBy: "Με την υποστήριξη του Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Εσείς",
   agentLabel: "Σύμβουλος",
   systemLabel: "Σύστημα",

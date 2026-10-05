@@ -171,6 +171,7 @@ export class WidgetRealtimeTransport {
     embedToken: string;
     sessionToken: string;
     initialMessages: MessageView[];
+    hasConversation?: boolean;
     initialAgentReceipts?: ReceiptCursors;
     initialVisitorReceipts?: ReceiptCursors;
   }) {
@@ -191,7 +192,13 @@ export class WidgetRealtimeTransport {
 
     this.callbacks.onMessages(this.messages);
 
-    if (input.initialMessages.length > 0) {
+    if (input.hasConversation && input.initialMessages.length === 0) {
+      const generation = this.subscribeGeneration;
+      await this.catchUp(input);
+      if (generation !== this.subscribeGeneration) return;
+    }
+
+    if (this.messages.length > 0 || input.hasConversation) {
       await this.ensureSubscription(input.embedToken, input.sessionToken);
       // Delivered may advance while the tab is hidden; never auto-mark read here.
       this.markDeliveredThrough(maxAgentMessageSequence(this.messages));

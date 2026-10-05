@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 
 import {
   APP_URL,
@@ -34,6 +35,17 @@ test.describe("attachments", () => {
     const frame = widgetFrameLocator(visitor);
     const fileInput = frame.getByTestId("widget-file-input");
     await expect(frame.getByTestId("widget-attach-button")).toBeVisible();
+    await frame.getByTestId("widget-attach-button").click();
+    await expect(frame.getByRole("menuitem", { name: "Photo library" })).toBeVisible();
+    await expect(frame.getByRole("menuitem", { name: "Take photo" })).toBeVisible();
+    await expect(frame.getByRole("menuitem", { name: "Choose file" })).toBeVisible();
+    await expect(fileInput).not.toHaveAttribute("capture", /.+/);
+    await expect(frame.getByTestId("widget-photo-input")).not.toHaveAttribute("capture", /.+/);
+    await expect(frame.getByTestId("widget-camera-input")).toHaveAttribute(
+      "capture",
+      "environment",
+    );
+    await frame.getByTestId("widget-attach-button").click();
 
     await fileInput.setInputFiles(path.join(fixturesDir, "sample.png"));
     await expect(frame.getByTestId("pending-attachments")).toBeVisible({
@@ -263,5 +275,59 @@ test.describe("attachments", () => {
 
     await visitorContext.close();
     await operatorContext.close();
+  });
+  test("visitor actually downloads an operator PDF without leaving the chat", async ({
+    browser,
+  }) => {
+    const vc = await browser.newContext({ acceptDownloads: true });
+    const oc = await browser.newContext();
+    const visitor = await vc.newPage();
+    const operator = await oc.newPage();
+    try {
+      let bootstraps = 0;
+      await visitor.route("**/api/v1/widget/bootstrap?*", async (route) => {
+        const response = await route.fetch();
+        const body = (await response.json()) as { data: { embedTokenExpiresAt: string } };
+        bootstraps += 1;
+        if (bootstraps === 1)
+          body.data.embedTokenExpiresAt = new Date(Date.now() + 35000).toISOString();
+        await route.fulfill({ response, json: body });
+      });
+      const marker = `operator-pdf-download-${Date.now()}`;
+      const fixture = path.join(fixturesDir, "sample.pdf");
+      await openWidget(visitor);
+      await sendWidgetMessage(visitor, marker);
+      await waitForWidgetRealtimeReady(visitor);
+      await widgetComposer(visitor).fill("Keep this draft during access renewal");
+      await expect.poll(() => bootstraps, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
+      await expect(widgetComposer(visitor)).toHaveValue("Keep this draft during access renewal");
+      await prepareOperatorInbox(operator);
+      await openOperatorConversation(operator, marker);
+      await waitForOperatorThreadRealtimeReady(operator);
+      await operator.getByTestId("operator-file-input").setInputFiles(fixture);
+      await expect(operator.getByTestId("operator-pending-attachments")).toBeVisible();
+      await operatorReplyComposer(operator).fill(`Here is your PDF ${marker}`);
+      await operator.getByRole("button", { name: "Send reply", exact: true }).click();
+      const frame = widgetFrameLocator(visitor);
+      await expect(frame.getByTestId("attachment-document")).toBeVisible({ timeout: 60000 });
+      const downloadPromise = visitor.waitForEvent("download", { timeout: 10000 });
+      await frame.getByTestId("attachment-download").click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toBe("sample.pdf");
+      expect(await download.failure()).toBeNull();
+      const downloadedPath = await download.path();
+      expect(downloadedPath).not.toBeNull();
+      if (!downloadedPath) throw new Error("Download did not produce a file");
+      expect(await readFile(downloadedPath)).toEqual(await readFile(fixture));
+      await visitor.screenshot({ path: test.info().outputPath("visitor-pdf-downloaded.png") });
+      await expect(frame.getByPlaceholder("Type your message…")).toBeVisible();
+      await sendWidgetMessage(visitor, `Received the PDF ${marker}`);
+      await expect(
+        conversationThread(operator).getByText(`Received the PDF ${marker}`, { exact: true }),
+      ).toBeVisible();
+    } finally {
+      await vc.close();
+      await oc.close();
+    }
   });
 });

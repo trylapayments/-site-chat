@@ -15,7 +15,7 @@ export const messages_id: WidgetMessages = {
   loadError: "Tidak dapat memuat chat.",
   sessionError: "Sesi berakhir. Muat ulang halaman.",
   sendError: "Pesan gagal dikirim.",
-  poweredBy: "Didukung oleh Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "Anda",
   agentLabel: "Agen",
   systemLabel: "Sistem",

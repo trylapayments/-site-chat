@@ -15,7 +15,7 @@ export const messages_tr: WidgetMessages = {
   loadError: "Sohbet yüklenemedi.",
   sessionError: "Oturum süresi doldu. Lütfen sayfayı yenileyin.",
   sendError: "Mesaj gönderilemedi.",
-  poweredBy: "Site Chat tarafından desteklenmektedir",
+  poweredBy: "Powered by Mill",
   youLabel: "Siz",
   agentLabel: "Temsilci",
   systemLabel: "Sistem",

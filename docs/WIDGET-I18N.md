@@ -29,7 +29,7 @@ Dictionary **key completeness** is enforced by `i18n:check` (every locale has ev
 
 Do **not** describe machine-assisted dictionaries as “human-complete translations.” Prefer native-speaker review for customer-facing production of lower-resource locales.
 
-Legitimate English loanwords in some locales (`Send`, `Agent`, `System`, `Chat`, `Online`/`Offline`) and brand-preserving `poweredBy` lines that keep “Site Chat” are intentional, not missing translations.
+Legitimate English loanwords in some locales (`Send`, `Agent`, `System`, `Chat`, `Online`/`Offline`) and brand-preserving `poweredBy` lines that keep “Mill” are intentional, not missing translations.
 
 `agentTyping` uses a `{{name}}` placeholder filled with a safe display name when available, otherwise the localized `agentLabel`. Presence strings are intentionally subtle and must not imply an immediate reply.
 
@@ -139,7 +139,7 @@ Invalid stored locales are normalized to English at the SQL and Zod boundaries. 
 
 Preserve interpolation placeholders exactly. `agentTyping` requires `{{name}}` (filled with a safe display name or localized `agentLabel`). The checker enforces placeholder parity against English.
 
-Do not translate brand name **Site Chat** or visitor/agent message bodies. Workspace greeting text is configuration, not dictionary copy.
+Do not translate brand name **Mill** or visitor/agent message bodies. Workspace greeting text is configuration, not dictionary copy.
 
 ---
 

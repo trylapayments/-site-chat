@@ -1,3 +1,4 @@
+import { fetchChatSetup } from "@/lib/chat-setup/queries";
 import "server-only";
 
 import {
@@ -118,6 +119,9 @@ export async function initiateVisitorUploads(
   if (!batch.ok) {
     throw new AttachmentValidationError(batch.error.code, batch.error.message);
   }
+
+  if (batch.value.some((file) => file.mimeType.startsWith("audio/")))
+    await assertVisitorVoiceEnabled(input.workspaceId);
 
   const { conversationId, visitorSessionId } =
     await resolveVisitorConversationContext({
@@ -370,6 +374,18 @@ export async function completeVisitorUploads(
     },
     deps,
   );
+
+  if (
+    prepared.attachmentRows.some(
+      (row) =>
+        row &&
+        typeof row === "object" &&
+        !Array.isArray(row) &&
+        typeof row.mime_type === "string" &&
+        row.mime_type.startsWith("audio/"),
+    )
+  )
+    await assertVisitorVoiceEnabled(input.workspaceId);
 
   const { data, error } = await supabase.rpc(
     "finalize_visitor_attachment_message",
@@ -811,4 +827,13 @@ export class AttachmentValidationError extends Error {
     this.name = "AttachmentValidationError";
     this.code = code;
   }
+}
+
+async function assertVisitorVoiceEnabled(workspaceId: string) {
+  const setup = await fetchChatSetup(workspaceId);
+  if (!setup.config.voiceMessagesEnabled)
+    throw new AttachmentValidationError(
+      "VOICE_DISABLED",
+      "Voice messages are disabled for this chat.",
+    );
 }

@@ -15,7 +15,7 @@ export const messages_ja: WidgetMessages = {
   loadError: "チャットを読み込めません。",
   sessionError: "セッションの期限が切れました。ページを再読み込みしてください。",
   sendError: "メッセージを送信できませんでした。",
-  poweredBy: "Powered by Site Chat",
+  poweredBy: "Powered by Mill",
   youLabel: "あなた",
   agentLabel: "担当者",
   systemLabel: "システム",
