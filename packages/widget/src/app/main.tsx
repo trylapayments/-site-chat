@@ -256,7 +256,7 @@ function LauncherGlyph({
       height="52%"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.4"
+      strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -2304,7 +2304,7 @@ function WidgetApp() {
                     lineHeight: "1.4",
                   }}
                 >
-                  <span>Powered by</span>
+                  <span style={{ color: "#59636f" }}>Powered by</span>
                   <img
                     src={MILL_DIALOGUE_MARK}
                     alt=""

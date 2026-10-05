@@ -299,7 +299,7 @@ export function WidgetStudioPreview({
                     aria-label="Powered by Mill"
                     className="inline-flex items-center gap-1.5 no-underline"
                   >
-                    <span>Powered by</span>
+                    <span style={{ color: "#59636f" }}>Powered by</span>
                     {/* Inline public SVG keeps the preview identical to the embeddable widget. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -368,7 +368,7 @@ export function WidgetStudioPreview({
                   className="size-1/2"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2.4"
+                  strokeWidth="2.2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
