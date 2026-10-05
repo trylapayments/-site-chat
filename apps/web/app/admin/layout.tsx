@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   Building2,
   Layers,
+  Tags,
   ReceiptText,
   History,
   ShieldCheck,
@@ -43,6 +44,7 @@ export default async function PlatformLayout({
                 name: "Subscriptions",
                 Icon: Layers,
               },
+              { href: "/admin/plans", name: "Plans & AI", Icon: Tags },
               { href: "/admin/billing", name: "Billing", Icon: ReceiptText },
               { href: "/admin/audit", name: "Audit log", Icon: History },
               { href: "/admin/team", name: "Team & roles", Icon: ShieldCheck },
