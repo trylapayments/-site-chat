@@ -53,6 +53,22 @@ import {
 
 import { WidgetStudioPreview } from "./WidgetStudioPreview";
 
+function mobileLauncherDefaults(
+  draft: WidgetAppearanceConfig,
+): NonNullable<WidgetAppearanceConfig["mobileLauncher"]> {
+  return (
+    draft.mobileLauncher ?? {
+      launcherShape: draft.launcherShape,
+      launcherSize: draft.launcherSize,
+      launcherText: draft.launcherText,
+      launcherWidth: draft.launcherWidth,
+      launcherColor: draft.launcherColor,
+      launcherPosition: draft.launcherPosition,
+      launcherOffsetX: draft.launcherOffsetX,
+      launcherOffsetY: draft.launcherOffsetY,
+    }
+  );
+}
 const messages = widgetStudioMessagesEn;
 type AssetUrls = Partial<
   Record<"logo" | "launcher_icon" | "agent_avatar", string>
@@ -824,6 +840,33 @@ export function WidgetStudioManager({
                 });
               }}
             />
+            {draft.launcherShape === "rectangle" ? (
+              <>
+                <div>
+                  <Label htmlFor="studio-launcher-text">Button label</Label>
+                  <Input
+                    id="studio-launcher-text"
+                    value={draft.launcherText}
+                    maxLength={40}
+                    disabled={disabled}
+                    onChange={(e) => {
+                      updateDraft({ launcherText: e.target.value });
+                    }}
+                  />
+                </div>
+                <NumberControl
+                  id="studio-launcher-width"
+                  label="Button width"
+                  value={draft.launcherWidth}
+                  min={120}
+                  max={320}
+                  disabled={disabled}
+                  onChange={(launcherWidth) => {
+                    updateDraft({ launcherWidth });
+                  }}
+                />
+              </>
+            ) : null}
             <SelectControl
               id="studio-launcher-size"
               label="Size"
@@ -1163,6 +1206,175 @@ export function WidgetStudioManager({
           </Section>
 
           <Section title={messages.sections.mobile} advanced>
+            <ToggleControl
+              id="studio-mobile-launcher"
+              label="Use different launcher on mobile"
+              checked={draft.mobileLauncher !== null}
+              disabled={disabled}
+              onChange={(enabled) => {
+                updateDraft({
+                  mobileLauncher: enabled
+                    ? {
+                        launcherShape: draft.launcherShape,
+                        launcherSize: draft.launcherSize,
+                        launcherText: draft.launcherText,
+                        launcherWidth: draft.launcherWidth,
+                        launcherColor: draft.launcherColor,
+                        launcherPosition: draft.launcherPosition,
+                        launcherOffsetX: draft.launcherOffsetX,
+                        launcherOffsetY: draft.launcherOffsetY,
+                      }
+                    : null,
+                });
+              }}
+            />
+            {draft.mobileLauncher ? (
+              <>
+                <SelectControl
+                  id="studio-mobile-shape"
+                  label="Mobile shape"
+                  value={draft.mobileLauncher.launcherShape}
+                  options={WIDGET_LAUNCHER_SHAPES}
+                  disabled={disabled}
+                  onChange={(value) => {
+                    updateDraft({
+                      mobileLauncher: {
+                        ...mobileLauncherDefaults(draft),
+                        launcherShape:
+                          value as WidgetAppearanceConfig["launcherShape"],
+                      },
+                    });
+                  }}
+                />
+                <SelectControl
+                  id="studio-mobile-size"
+                  label="Mobile size"
+                  value={draft.mobileLauncher.launcherSize}
+                  options={WIDGET_LAUNCHER_SIZES}
+                  disabled={disabled}
+                  onChange={(value) => {
+                    updateDraft({
+                      mobileLauncher: {
+                        ...mobileLauncherDefaults(draft),
+                        launcherSize:
+                          value as WidgetAppearanceConfig["launcherSize"],
+                      },
+                    });
+                  }}
+                />
+                <SelectControl
+                  id="studio-mobile-position"
+                  label="Mobile position"
+                  value={draft.mobileLauncher.launcherPosition}
+                  options={WIDGET_POSITIONS}
+                  disabled={disabled}
+                  onChange={(value) => {
+                    updateDraft({
+                      mobileLauncher: {
+                        ...mobileLauncherDefaults(draft),
+                        launcherPosition:
+                          value as WidgetAppearanceConfig["launcherPosition"],
+                      },
+                    });
+                  }}
+                />
+                <div>
+                  <Label htmlFor="studio-mobile-color">
+                    Mobile button color
+                  </Label>
+                  <Input
+                    id="studio-mobile-color"
+                    type="color"
+                    value={draft.mobileLauncher.launcherColor}
+                    disabled={disabled}
+                    onChange={(e) => {
+                      updateDraft({
+                        mobileLauncher: {
+                          ...mobileLauncherDefaults(draft),
+                          launcherColor: e.target.value,
+                        },
+                      });
+                    }}
+                  />
+                </div>
+                <NumberControl
+                  id="studio-mobile-x"
+                  label="Mobile horizontal offset"
+                  min={0}
+                  max={120}
+                  value={draft.mobileLauncher.launcherOffsetX}
+                  disabled={disabled}
+                  onChange={(launcherOffsetX) => {
+                    updateDraft({
+                      mobileLauncher: {
+                        ...mobileLauncherDefaults(draft),
+                        launcherOffsetX,
+                      },
+                    });
+                  }}
+                />
+                <NumberControl
+                  id="studio-mobile-y"
+                  label="Mobile vertical offset"
+                  min={0}
+                  max={120}
+                  value={draft.mobileLauncher.launcherOffsetY}
+                  disabled={disabled}
+                  onChange={(launcherOffsetY) => {
+                    updateDraft({
+                      mobileLauncher: {
+                        ...mobileLauncherDefaults(draft),
+                        launcherOffsetY,
+                      },
+                    });
+                  }}
+                />
+                {draft.mobileLauncher.launcherShape === "rectangle" ? (
+                  <>
+                    <div>
+                      <Label htmlFor="studio-mobile-text">
+                        Mobile button label
+                      </Label>
+                      <Input
+                        id="studio-mobile-text"
+                        value={draft.mobileLauncher.launcherText}
+                        maxLength={40}
+                        disabled={disabled}
+                        onChange={(e) => {
+                          updateDraft({
+                            mobileLauncher: {
+                              ...mobileLauncherDefaults(draft),
+                              launcherText: e.target.value,
+                            },
+                          });
+                        }}
+                      />
+                    </div>
+                    <NumberControl
+                      id="studio-mobile-width"
+                      label="Mobile button width"
+                      min={120}
+                      max={320}
+                      value={draft.mobileLauncher.launcherWidth}
+                      disabled={disabled}
+                      onChange={(launcherWidth) => {
+                        updateDraft({
+                          mobileLauncher: {
+                            ...mobileLauncherDefaults(draft),
+                            launcherWidth,
+                          },
+                        });
+                      }}
+                    />
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Mobile uses the desktop launcher settings.
+              </p>
+            )}
+
             <SelectControl
               id="studio-mobile"
               label="Mobile behavior"

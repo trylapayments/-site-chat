@@ -2336,6 +2336,35 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_billing_accounts: {
+        Row: {
+          created_at: string
+          mode: string
+          stripe_customer_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          mode: string
+          stripe_customer_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          mode?: string
+          stripe_customer_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_billing_accounts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_chat_settings: {
         Row: {
           config: Json
@@ -2358,6 +2387,32 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workspace_chat_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_company_profiles: {
+        Row: {
+          profile: Json
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          profile?: Json
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          profile?: Json
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_company_profiles_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: true
             referencedRelation: "workspaces"
@@ -2740,6 +2795,7 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: Json
       }
+      get_workspace_company: { Args: { p_workspace_id: string }; Returns: Json }
       global_search: {
         Args: { p_query?: Json; p_workspace_id: string }
         Returns: Json
@@ -3042,6 +3098,10 @@ export type Database = {
           p_patch?: Json
           p_workspace_id: string
         }
+        Returns: Json
+      }
+      update_workspace_company: {
+        Args: { p_profile: Json; p_workspace_id: string }
         Returns: Json
       }
       update_workspace_member_role: {

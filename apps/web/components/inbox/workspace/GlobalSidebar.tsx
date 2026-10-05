@@ -6,6 +6,7 @@ import {
 } from "@site-chat/shared";
 import {
   Bookmark,
+  CreditCard,
   ContactRound,
   Radar,
   CheckCheck,
@@ -109,6 +110,13 @@ function buildInboxNav(slug: string): NavItem[] {
       match: "prefix",
     },
     {
+      id: "billing",
+      label: "Billing",
+      href: workspaceNavPath(slug, "billing"),
+      icon: CreditCard,
+      match: "prefix",
+    },
+    {
       id: "templates",
       label: "Templates",
       href: workspaceSettingsPath(slug, SETTINGS_SECTION_CANNED_RESPONSES),
@@ -170,7 +178,13 @@ export function GlobalSidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const assignment = searchParams.get("assignment");
-  const items = buildInboxNav(slug);
+  const items = buildInboxNav(slug).filter(
+    (item) =>
+      item.id !== "billing" ||
+      ["owner", "admin"].includes(
+        workspaces.find((w) => w.workspace_id === workspaceId)?.role ?? "",
+      ),
+  );
   const closed = searchParams.get("status") === "closed";
   const settingsHref = toAppRoute(workspaceNavPath(slug, "settings"));
 
@@ -188,9 +202,13 @@ export function GlobalSidebar({
           <p className="truncate text-[24px] font-semibold tracking-tight">
             Mill
           </p>
-          <p className="text-inbox-nav-muted truncate text-[12px]">
+          <Link
+            href={toAppRoute(`/app/${slug}/settings/company`)}
+            className="text-inbox-nav-muted block truncate text-[12px] hover:text-foreground hover:underline"
+            aria-label="Company details"
+          >
             {workspaceName}
-          </p>
+          </Link>
         </div>
       </div>
 

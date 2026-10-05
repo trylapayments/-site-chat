@@ -1,4 +1,5 @@
 "use client";
+import { MillPoweredBy } from "@/components/brand/MillPoweredBy";
 import {
   chatSetupSchema,
   type ChatSetup,
@@ -23,9 +24,11 @@ export function ChatSetupEditor({
   initial,
   canManage,
   workspaceName,
+  showPoweredBy = true,
 }: {
   slug: string;
   workspaceName: string;
+  showPoweredBy?: boolean;
   initial: { config: ChatSetup; version: number };
   canManage: boolean;
 }) {
@@ -666,9 +669,11 @@ export function ChatSetupEditor({
                 {draft.waitingMessage}
               </p>
             </div>
-            <p className="pb-3 text-center text-xs text-muted-foreground">
-              Powered by Mill
-            </p>
+            {showPoweredBy ? (
+              <p className="pb-3 text-center text-xs">
+                <MillPoweredBy />
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

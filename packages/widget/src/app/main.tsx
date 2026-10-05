@@ -106,6 +106,7 @@ type PageContextState = {
 
 type InitPayload = BootstrapPayload & {
   parentOrigin: string;
+  hostViewportWidth?: number;
   pageUrl?: string;
   pageTitle?: string;
   referrer?: string;
@@ -398,8 +399,14 @@ function WidgetApp() {
     applyDocumentLocale(locale, direction);
   }, [locale, direction]);
 
-  const config: WidgetPublicConfig | null =
+  const [hostViewportWidth, setHostViewportWidth] = useState(1024);
+  const rawConfig: WidgetPublicConfig | null =
     state.status === "ready" ? state.init.config : (initRef.current?.config ?? null);
+  const mobileLauncher = hostViewportWidth <= 640 ? rawConfig?.mobileLauncher : null;
+  const config =
+    rawConfig && mobileLauncher
+      ? { ...rawConfig, ...mobileLauncher, position: mobileLauncher.launcherPosition }
+      : rawConfig;
 
   useEffect(() => {
     if (config?.colorMode !== "system") {
@@ -722,6 +729,11 @@ function WidgetApp() {
           return;
         }
         if (
+          typeof payload.hostViewportWidth === "number" &&
+          Number.isFinite(payload.hostViewportWidth)
+        )
+          setHostViewportWidth(payload.hostViewportWidth);
+        if (
           sessionTokenRef.current &&
           initRef.current?.widgetPublicKey === payload.widgetPublicKey &&
           initRef.current.parentOrigin === payload.parentOrigin
@@ -741,6 +753,12 @@ function WidgetApp() {
         return;
       }
 
+      if (data.type === "sitechat:viewport") {
+        const width = (data.payload as { width?: unknown } | undefined)?.width;
+        if (typeof width === "number" && Number.isFinite(width) && width > 0)
+          setHostViewportWidth(width);
+        return;
+      }
       if (data.type === "sitechat:page") {
         const page = data.payload as
           { url?: unknown; title?: unknown; referrer?: unknown } | undefined;
@@ -1285,8 +1303,12 @@ function WidgetApp() {
   const launcherOffsetX = clampedPixels(config?.launcherOffsetX, 16, 0, 120);
   const launcherOffsetY = clampedPixels(config?.launcherOffsetY, 16, 0, 120);
   const launcherSize = launcherSizePixels(config?.launcherSize);
+  const launcherWidth =
+    config?.launcherShape === "rectangle"
+      ? clampedPixels(config.launcherWidth, 180, 120, 320)
+      : launcherSize;
   const insets = positionInsets(position, launcherOffsetX);
-  const greetingInsets = positionInsets(position, launcherOffsetX + launcherSize + 12);
+  const greetingInsets = positionInsets(position, launcherOffsetX + launcherWidth + 12);
   const hideLauncherWhenOpen = config?.hideLauncherWhenOpen === true;
   const panelBottom = launcherOffsetY + (hideLauncherWhenOpen ? 0 : launcherSize + 12);
   const widgetWidth = clampedPixels(config?.widgetWidth, 380, 300, 480);
@@ -1383,7 +1405,7 @@ function WidgetApp() {
             position: "fixed",
             bottom: `${String(launcherOffsetY + Math.max(0, (launcherSize - 44) / 2))}px`,
             ...greetingInsets,
-            width: `min(16.25rem, calc(100vw - ${String(launcherOffsetX + launcherSize + 12 + 16)}px))`,
+            width: `min(16.25rem, calc(100vw - ${String(launcherOffsetX + launcherWidth + 12 + 16)}px))`,
             minHeight: "2.75rem",
             padding: "0.7rem 0.85rem",
             border: `1px solid ${borderColor}`,
@@ -1411,9 +1433,10 @@ function WidgetApp() {
             position: "fixed",
             bottom: `${String(launcherOffsetY)}px`,
             ...insets,
-            width: `${String(launcherSize)}px`,
+            width: `${String(launcherWidth)}px`,
             height: `${String(launcherSize)}px`,
-            padding: 0,
+            padding: config?.launcherShape === "rectangle" ? "0 16px" : 0,
+            gap: 10,
             borderRadius: launcherRadius(config?.launcherShape),
             border: "none",
             background: launcherColor,
@@ -1431,6 +1454,19 @@ function WidgetApp() {
             icon={config?.launcherIcon ?? "chat"}
             open={open}
           />
+          {config?.launcherShape === "rectangle" && !open ? (
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {config.launcherText || "Online chat"}
+            </span>
+          ) : null}
         </button>
       ) : null}
 

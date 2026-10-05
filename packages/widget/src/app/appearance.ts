@@ -115,6 +115,7 @@ export function launcherSizePixels(size: WidgetPublicConfig["launcherSize"] | un
 }
 
 export function launcherRadius(shape: WidgetPublicConfig["launcherShape"] | undefined): string {
+  if (shape === "rectangle") return "10px";
   return shape === "square" ? "0.375rem" : shape === "rounded-square" ? "28%" : "50%";
 }
 

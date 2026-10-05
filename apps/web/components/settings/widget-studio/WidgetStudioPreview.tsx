@@ -42,6 +42,7 @@ const LAUNCHER_SHAPE: Record<WidgetAppearanceConfig["launcherShape"], string> =
     circle: "rounded-full",
     "rounded-square": "rounded-xl",
     square: "rounded-none",
+    rectangle: "rounded-lg",
   };
 
 const FONT_SIZE: Record<WidgetAppearanceConfig["fontSizeScale"], string> = {
@@ -66,7 +67,7 @@ function copyForLocale(
 }
 
 export function WidgetStudioPreview({
-  config,
+  config: baseConfig,
   assetUrls = {},
 }: {
   config: WidgetAppearanceConfig;
@@ -75,6 +76,10 @@ export function WidgetStudioPreview({
   >;
 }) {
   const [viewport, setViewport] = useState<PreviewViewport>("desktop");
+  const config =
+    viewport !== "desktop" && baseConfig.mobileLauncher
+      ? { ...baseConfig, ...baseConfig.mobileLauncher }
+      : baseConfig;
   const [rtl, setRtl] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
   const locale = rtl ? "he" : (config.locale ?? "en");
@@ -341,7 +346,16 @@ export function WidgetStudioPreview({
               className={`${LAUNCHER_SIZE[config.launcherSize]} ${
                 LAUNCHER_SHAPE[config.launcherShape]
               } flex items-center justify-center text-white ${config.shadowLevel === "none" ? "shadow-none" : config.shadowLevel === "lg" ? "shadow-lg" : "shadow-sm"}`}
-              style={{ backgroundColor: "var(--studio-launcher)" }}
+              style={{
+                backgroundColor: "var(--studio-launcher)",
+                width:
+                  config.launcherShape === "rectangle"
+                    ? config.launcherWidth
+                    : undefined,
+                gap: 10,
+                padding:
+                  config.launcherShape === "rectangle" ? "0 16px" : undefined,
+              }}
               aria-label={
                 isOpen ? "Close widget preview" : "Open widget preview"
               }
@@ -365,7 +379,7 @@ export function WidgetStudioPreview({
                 <svg
                   aria-hidden="true"
                   viewBox="-1 -1 34 34"
-                  className="size-1/2"
+                  className="size-7 shrink-0"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.2"
@@ -376,6 +390,11 @@ export function WidgetStudioPreview({
                   <path d={MILL_DIALOGUE_FRONT_PATH} />
                 </svg>
               )}
+              {config.launcherShape === "rectangle" ? (
+                <span className="truncate text-sm font-semibold">
+                  {config.launcherText}
+                </span>
+              ) : null}
             </button>
           </div>
         </div>

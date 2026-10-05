@@ -1,3 +1,4 @@
+import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   cannedResponsesMessagesEn,
   crmMessagesEn,
@@ -5,6 +6,8 @@ import {
   widgetStudioMessagesEn,
 } from "@site-chat/shared";
 import {
+  Building2,
+  CreditCard,
   Bell,
   MessageSquareQuote,
   Palette,
@@ -36,6 +39,7 @@ export default async function SettingsPage({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
+  const { workspace } = await requireInboxWorkspace(workspaceSlug);
 
   return (
     <div className="space-y-8" data-testid="settings-page">
@@ -45,6 +49,36 @@ export default async function SettingsPage({
       />
 
       <ul className="grid gap-4 sm:grid-cols-2">
+        <li>
+          <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/company`)}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <Building2 className="size-5" />
+            </span>
+            <span className="block text-sm font-medium">Company</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Manage your company name, address and contact information.
+            </span>
+          </Link>
+        </li>
+        {["owner", "admin"].includes(workspace.role) ? (
+          <li>
+            <Link
+              href={toAppRoute(`/app/${workspaceSlug}/billing`)}
+              className="block h-full rounded-lg border p-4"
+            >
+              <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                <CreditCard className="size-5" />
+              </span>
+              <span className="block text-sm font-medium">Billing</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Your plan, invoices and saved payment methods.
+              </span>
+            </Link>
+          </li>
+        ) : null}
         <li>
           <Link
             href={toAppRoute(`/app/${workspaceSlug}/settings/profile`)}

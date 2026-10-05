@@ -42,7 +42,19 @@ export type WidgetPublicConfig = {
   launcherColor: string;
 
   launcherIcon: "chat" | "message" | "help" | "custom";
-  launcherShape: "circle" | "rounded-square" | "square";
+  launcherShape: "circle" | "rounded-square" | "square" | "rectangle";
+  launcherText: string;
+  launcherWidth: number;
+  mobileLauncher: null | {
+    launcherShape: WidgetPublicConfig["launcherShape"];
+    launcherSize: WidgetPublicConfig["launcherSize"];
+    launcherText: string;
+    launcherWidth: number;
+    launcherColor: string;
+    launcherPosition: "bottom-right" | "bottom-left";
+    launcherOffsetX: number;
+    launcherOffsetY: number;
+  };
   launcherSize: "sm" | "md" | "lg";
   position: "bottom-right" | "bottom-left";
   launcherOffsetX: number;

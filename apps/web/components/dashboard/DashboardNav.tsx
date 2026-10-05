@@ -7,13 +7,17 @@ export function DashboardNav({
   workspaceId,
   memberId,
   onNavigate,
+  canManageBilling = false,
 }: {
   slug: string;
   workspaceId: string;
   memberId: string;
   onNavigate?: () => void;
+  canManageBilling?: boolean;
 }) {
-  const items = buildDashboardNavItems(slug);
+  const items = buildDashboardNavItems(slug).filter(
+    (item) => item.id !== "billing" || canManageBilling,
+  );
 
   return (
     <nav aria-label="Main" className="space-y-1">

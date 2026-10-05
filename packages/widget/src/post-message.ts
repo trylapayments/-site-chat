@@ -14,6 +14,7 @@ export const LOADER_MESSAGE_TYPES = [
   "sitechat:init",
   "sitechat:page",
   "sitechat:identify",
+  "sitechat:viewport",
 ] as const;
 
 export const EMBED_MESSAGE_TYPES = [

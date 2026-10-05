@@ -59,7 +59,10 @@ export function MobileNav({
           <Menu className="size-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 overflow-y-auto p-0">
+      <SheetContent
+        side="left"
+        className="mill-operator w-72 overflow-y-auto p-0"
+      >
         <SheetHeader className="border-border border-b px-4 py-4 text-left">
           <SheetTitle className="flex items-center gap-3 text-xl">
             {/* eslint-disable-next-line @next/next/no-img-element -- inline brand asset */}
@@ -78,6 +81,11 @@ export function MobileNav({
           />
           <Separator />
           <DashboardNav
+            canManageBilling={workspaces.some(
+              (w) =>
+                w.workspace_id === currentWorkspaceId &&
+                ["owner", "admin"].includes(w.role),
+            )}
             slug={slug}
             workspaceId={currentWorkspaceId}
             memberId={memberId}
