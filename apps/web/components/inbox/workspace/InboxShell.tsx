@@ -99,7 +99,7 @@ export function InboxShell({
       </div>
 
       <div
-        className={`min-w-0 flex-1 ${hasConversation ? "flex" : "hidden lg:flex"}`}
+        className={`min-h-0 min-w-0 flex-1 ${hasConversation ? "flex" : "hidden lg:flex"}`}
       >
         {children}
       </div>

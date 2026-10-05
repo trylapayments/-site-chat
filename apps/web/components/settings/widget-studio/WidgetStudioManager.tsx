@@ -342,6 +342,7 @@ export function WidgetStudioManager({
     ],
   );
   const dirty = isAppearanceDraftDirty(draft, studioState.published);
+  const unsaved = isAppearanceDraftDirty(draft, studioState.draft);
   const validation = widgetAppearanceConfigSchema.safeParse(draft);
 
   function updateDraft(patch: Partial<WidgetAppearanceConfig>): void {
@@ -637,7 +638,7 @@ export function WidgetStudioManager({
             size="sm"
             variant="outline"
             data-testid="widget-studio-save-draft"
-            disabled={disabled || !dirty || !validation.success}
+            disabled={disabled || (!dirty && !unsaved) || !validation.success}
             onClick={runSave}
           >
             {messages.saveDraft}
@@ -656,7 +657,7 @@ export function WidgetStudioManager({
             size="sm"
             variant="outline"
             data-testid="widget-studio-discard"
-            disabled={disabled || !dirty}
+            disabled={disabled || (!dirty && !unsaved)}
             onClick={runDiscard}
           >
             {messages.discardDraft}

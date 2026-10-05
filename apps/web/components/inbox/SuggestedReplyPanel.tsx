@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 import {
   acceptSuggestionIntoComposer,
   sanitizePlainText,
@@ -251,11 +253,16 @@ export function SuggestedReplyPanel({
 
   return (
     <div
-      className="border-border mb-3 rounded-md border p-3"
+      className="border-border mb-2 max-h-[30svh] overflow-y-auto rounded-md border p-2 md:mb-3 md:p-3"
       data-testid="suggested-reply-panel"
       aria-labelledby={labelId}
     >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-2",
+          state.status !== "idle" && "mb-2",
+        )}
+      >
         <p id={labelId} className="text-sm font-medium">
           Suggested reply
         </p>
