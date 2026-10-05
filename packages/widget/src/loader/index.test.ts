@@ -147,7 +147,7 @@ describe("widget loader", () => {
     signal("https://app.example.com", iframeWindow, true);
     expect(iframeElement.style.visibility).toBe("visible");
     expect(iframeElement.getAttribute("sandbox")).toBe(
-      "allow-scripts allow-same-origin allow-forms allow-downloads",
+      "allow-scripts allow-same-origin allow-forms allow-downloads allow-popups allow-popups-to-escape-sandbox",
     );
   });
 

@@ -2,6 +2,10 @@ import { VisitorComposerTools } from "./VisitorComposerTools";
 import { PreChatForm } from "./PreChatForm";
 import { shouldShowWaitingAcknowledgement } from "./waiting";
 import {
+  MILL_DIALOGUE_REAR_PATH,
+  MILL_DIALOGUE_FRONT_PATH,
+  MILL_WEBSITE_URL,
+  MILL_DIALOGUE_MARK,
   createOptimisticMessage,
   deriveMessageReceiptStatus,
   maxSequenceNumber,
@@ -245,15 +249,19 @@ function LauncherGlyph({
   }
 
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" width="52%" height="52%">
-      <path
-        d="M4 5h16v12H8l-4 3V5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-      <path d="M8 10h8M8 13h5" fill="none" stroke="currentColor" strokeWidth="2" />
+    <svg
+      aria-hidden="true"
+      viewBox="-1 -1 34 34"
+      width="52%"
+      height="52%"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={MILL_DIALOGUE_REAR_PATH} />
+      <path d={MILL_DIALOGUE_FRONT_PATH} />
     </svg>
   );
 }
@@ -2282,7 +2290,38 @@ function WidgetApp() {
                   textAlign: "center",
                 }}
               >
-                {messagesCopy.poweredBy}
+                <a
+                  href={MILL_WEBSITE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={messagesCopy.poweredBy}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    color: "inherit",
+                    textDecoration: "none",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  <span>Powered by</span>
+                  <img
+                    src={MILL_DIALOGUE_MARK}
+                    alt=""
+                    width={18}
+                    height={18}
+                    style={{ display: "block", flexShrink: 0 }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: "Arial, Helvetica, sans-serif",
+                      fontWeight: 600,
+                      color: "#142838",
+                    }}
+                  >
+                    Mill
+                  </span>
+                </a>
               </div>
             ) : null}
           </footer>

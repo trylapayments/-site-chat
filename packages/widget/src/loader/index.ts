@@ -292,7 +292,10 @@ function createIframe(
   iframe.title = "Mill";
   iframe.setAttribute("allow", `microphone ${widgetHost}`);
   iframe.setAttribute("aria-hidden", "false");
-  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-downloads");
+  iframe.setAttribute(
+    "sandbox",
+    "allow-scripts allow-same-origin allow-forms allow-downloads allow-popups allow-popups-to-escape-sandbox",
+  );
   iframe.style.position = "fixed";
   iframe.style.bottom = "0";
   iframe.style.maxWidth = "100vw";

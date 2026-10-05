@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  MILL_DIALOGUE_REAR_PATH,
+  MILL_DIALOGUE_FRONT_PATH,
+  MILL_WEBSITE_URL,
+  MILL_DIALOGUE_MARK,
   WIDGET_FONT_FAMILY_STACKS,
   widgetStudioMessagesEn,
   type WidgetAppearanceConfig,
@@ -288,7 +292,33 @@ export function WidgetStudioPreview({
                   className="text-muted-foreground border-t py-1 text-center text-xs"
                   data-testid="widget-studio-preview-powered-by"
                 >
-                  Powered by Mill
+                  <a
+                    href={MILL_WEBSITE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Powered by Mill"
+                    className="inline-flex items-center gap-1.5 no-underline"
+                  >
+                    <span>Powered by</span>
+                    {/* Inline public SVG keeps the preview identical to the embeddable widget. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={MILL_DIALOGUE_MARK}
+                      alt=""
+                      width={18}
+                      height={18}
+                      className="block shrink-0"
+                    />
+                    <span
+                      style={{
+                        fontFamily: "Arial, Helvetica, sans-serif",
+                        fontWeight: 600,
+                        color: "#142838",
+                      }}
+                    >
+                      Mill
+                    </span>
+                  </a>
                 </p>
               ) : null}
             </div>
@@ -332,7 +362,19 @@ export function WidgetStudioPreview({
                   className="size-1/2 object-contain"
                 />
               ) : (
-                <MessageCircle className="size-1/2" />
+                <svg
+                  aria-hidden="true"
+                  viewBox="-1 -1 34 34"
+                  className="size-1/2"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d={MILL_DIALOGUE_REAR_PATH} />
+                  <path d={MILL_DIALOGUE_FRONT_PATH} />
+                </svg>
               )}
             </button>
           </div>
