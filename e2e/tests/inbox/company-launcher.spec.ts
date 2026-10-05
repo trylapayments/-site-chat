@@ -28,6 +28,15 @@ test("desktop rectangle and mobile circle survive publication and host resize", 
 }) => {
   await loginOperator(page);
   await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/settings/widget-studio`);
+  page.once("dialog", (d) => {
+    void d.accept();
+  });
+  await page.getByTestId("widget-studio-reset").click();
+  await expect(page.getByText("Draft reset to defaults.", { exact: true })).toBeVisible();
+  if (await page.getByTestId("widget-studio-publish").isEnabled()) {
+    await page.getByTestId("widget-studio-publish").click();
+    await expect(page.getByText("Published to production.", { exact: true })).toBeVisible();
+  }
   await page.getByLabel("Shape", { exact: true }).selectOption("rectangle");
   await page.getByLabel("Button label", { exact: true }).fill("Online chat");
   await page.getByLabel("Button width", { exact: true }).fill("220");
@@ -40,7 +49,6 @@ test("desktop rectangle and mobile circle survive publication and host resize", 
   await page.screenshot({ path: `${shots}/launcher-settings.png`, fullPage: true });
   await page.getByTestId("widget-studio-save-draft").click();
   await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
-  page.once("dialog", (d) => d.accept());
   await page.getByTestId("widget-studio-publish").click();
   await expect(page.getByText("Published to production.", { exact: true })).toBeVisible();
   const client = await browser.newPage();
@@ -57,4 +65,11 @@ test("desktop rectangle and mobile circle survive publication and host resize", 
   await client.setViewportSize({ width: 1280, height: 800 });
   await expect(launcher).toHaveCSS("width", "220px");
   await client.close();
+  page.once("dialog", (d) => {
+    void d.accept();
+  });
+  await page.getByTestId("widget-studio-reset").click();
+  await expect(page.getByText("Draft reset to defaults.", { exact: true })).toBeVisible();
+  await page.getByTestId("widget-studio-publish").click();
+  await expect(page.getByText("Published to production.", { exact: true })).toBeVisible();
 });

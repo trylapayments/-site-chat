@@ -21,6 +21,7 @@ import {
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { enrichWidgetPublicAppearance } from "@/lib/widget-studio/public-config";
+import { workspaceWidgetAccessEnabled } from "@/lib/platform-admin/access";
 
 function parseRpcResult<T>(
   label: string,
@@ -190,6 +191,7 @@ export async function resolveWidgetByPublicKey(
     },
   });
 
+  if (!(await workspaceWidgetAccessEnabled(parsed.workspaceId))) return null;
   return {
     ...parsed,
     config: await enrichWidgetPublicAppearance({

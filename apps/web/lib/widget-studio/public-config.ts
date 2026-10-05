@@ -19,7 +19,7 @@ import {
 import { createSupabaseObjectStorage } from "@/lib/storage/supabase-object-storage";
 import { createServiceClient } from "@/lib/supabase/service";
 
-import { workspaceWidgetStudioEntitlements } from "./entitlements.server";
+import { effectiveWidgetEntitlements } from "@/lib/platform-admin/access";
 
 type AssetTarget = {
   id: string;
@@ -38,7 +38,8 @@ export async function enrichWidgetPublicAppearance(input: {
   entitlements?: WidgetStudioEntitlements;
 }): Promise<WidgetPublicAppearance> {
   const entitlements =
-    input.entitlements ?? workspaceWidgetStudioEntitlements(input.workspaceId);
+    input.entitlements ??
+    (await effectiveWidgetEntitlements(input.workspaceId));
 
   const supabase = createServiceClient();
   const { data: configRow, error: configError } = await supabase

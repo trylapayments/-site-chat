@@ -1,3 +1,4 @@
+import { InvoiceDownload } from "@/components/settings/InvoiceDownload";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -8,9 +9,16 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
-import { BillingPortalButton } from "@/components/settings/BillingPortalButton";
+import { BillingPaymentMethods } from "@/components/settings/BillingPaymentMethods";
+import { BillingDetailsEditor } from "@/components/settings/BillingDetailsEditor";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
-import { billingMode, loadBilling } from "@/lib/billing/stripe";
+import {
+  billingMode,
+  loadBilling,
+  billingConfigured,
+  stripePublishableKey,
+  BillingSetupError,
+} from "@/lib/billing/stripe";
 import { workspaceWidgetStudioEntitlements } from "@/lib/widget-studio/entitlements.server";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { formatBillingAmount as amount } from "@/lib/billing/format";
@@ -25,8 +33,14 @@ export default async function BillingPage({
   let state: Awaited<ReturnType<typeof loadBilling>> | null = null;
   try {
     state = await loadBilling(workspace.workspace_id);
-  } catch {
-    /* Display failure explicitly; never manufacture subscription data. */
+  } catch (error) {
+    if (error instanceof BillingSetupError)
+      console.error("[Mill billing]", { stage: error.stage, code: error.code });
+    else
+      console.error("[Mill billing]", {
+        stage: "load",
+        code: error instanceof Error ? error.name : "unknown",
+      });
   }
   const subscription = state?.subscriptions.find((s) =>
     ["active", "trialing", "past_due", "unpaid", "paused"].includes(s.status),
@@ -95,12 +109,6 @@ export default async function BillingPage({
                 : "There is no paid subscription for this workspace yet."}
             </p>
           )}
-          <div className="mt-6">
-            <BillingPortalButton
-              slug={workspaceSlug}
-              enabled={state?.connected === true}
-            />
-          </div>
           {state && !state.connected ? (
             <p className="mt-3 text-xs text-muted-foreground">
               Billing is not connected yet.
@@ -129,45 +137,32 @@ export default async function BillingPage({
             <ArrowUpRight className="size-4" />
           </Link>
           <p className="mt-4 text-xs text-muted-foreground">
-            Invoice details and payment methods are managed securely in the
-            billing portal.
+            Payment methods and invoice details are managed here in Mill.
           </p>
         </section>
       </div>
-      <section className="rounded-xl border border-inbox-border bg-white p-6">
-        <h2 className="flex items-center gap-2 font-semibold">
-          <CreditCard className="size-4 text-muted-foreground" />
-          Payment methods
-        </h2>
-        {state?.paymentMethods.length ? (
-          <ul className="mt-5 divide-y">
-            {state.paymentMethods.map((m) => (
-              <li
-                key={m.id}
-                className="flex flex-wrap items-center justify-between gap-2 py-3"
-              >
-                <span className="capitalize">
-                  {m.card
-                    ? `${m.card.brand} ending in ${m.card.last4}`
-                    : m.type.replaceAll("_", " ")}
-                </span>
-                {m.card ? (
-                  <span className="text-sm text-muted-foreground">
-                    Expires {String(m.card.exp_month).padStart(2, "0")}/
-                    {m.card.exp_year}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-4 text-sm text-muted-foreground">
-            {state
-              ? "No saved payment method. Add or update your payment method through Manage billing."
-              : "Payment methods are temporarily unavailable."}
-          </p>
-        )}
-      </section>
+      <BillingPaymentMethods
+        slug={workspaceSlug}
+        methods={state?.paymentMethods ?? []}
+        defaultMethod={state?.defaultPaymentMethod ?? null}
+        publishableKey={stripePublishableKey()}
+        enabled={billingConfigured()}
+        unavailable={!state}
+      />
+      <BillingDetailsEditor
+        slug={workspaceSlug}
+        enabled={billingConfigured()}
+        initial={{
+          name: state?.customerDetails?.name ?? workspace.name,
+          email: state?.customerDetails?.email ?? "",
+          line1: state?.customerDetails?.address?.line1 ?? "",
+          line2: state?.customerDetails?.address?.line2 ?? "",
+          city: state?.customerDetails?.address?.city ?? "",
+          state: state?.customerDetails?.address?.state ?? "",
+          postal_code: state?.customerDetails?.address?.postal_code ?? "",
+          country: state?.customerDetails?.address?.country ?? "",
+        }}
+      />
       <section className="overflow-hidden rounded-xl border border-inbox-border bg-white">
         <h2 className="flex items-center gap-2 p-6 font-semibold">
           <ReceiptText className="size-4 text-muted-foreground" />
@@ -197,17 +192,11 @@ export default async function BillingPage({
                       {i.status || "Draft"}
                     </td>
                     <td className="px-6 py-4">
-                      {i.invoice_pdf || i.hosted_invoice_url ? (
-                        <a
-                          className="text-brand"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          href={
-                            i.invoice_pdf || i.hosted_invoice_url || undefined
-                          }
-                        >
-                          View invoice
-                        </a>
+                      {i.invoice_pdf ? (
+                        <InvoiceDownload
+                          slug={workspaceSlug}
+                          invoiceId={i.id}
+                        />
                       ) : null}
                     </td>
                   </tr>
@@ -216,7 +205,7 @@ export default async function BillingPage({
             </table>
             {state.hasMoreInvoices ? (
               <p className="p-6 text-sm text-muted-foreground">
-                Open Manage billing to view your complete invoice history.
+                Showing the latest 100 invoices.
               </p>
             ) : null}
           </div>

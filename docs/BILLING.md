@@ -1,28 +1,32 @@
 # Mill billing
 
-Stripe is server-only. Configure `STRIPE_SECRET_KEY` as a Vercel Secret in the
-site-chat-staging project's Production and Preview environments. Start with a
-`sk_test_` key. `STRIPE_BILLING_MODE` defaults to `test`; live mode requires an
-explicit `live` value and matching live key. A deployment is required after
-changing environment variables. No publishable key is required by this portal.
+Configure `STRIPE_SECRET_KEY` as a Vercel Secret and
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` as Config in the site-chat-staging project's
+Production and Preview environments. Start with matching `sk_test_` / `pk_test_`
+keys from the same Stripe account. `STRIPE_BILLING_MODE` defaults to `test`; live
+mode requires an explicit `live` value and matching live keys. Deploy after
+changing environment variables. A secret key is never sent to the browser.
 
-The workspace owner/admin can open Billing. A customer is created on the first
-Manage billing action using a server-resolved workspace ID. Tenant/customer
-references live in `workspace_billing_accounts`, inaccessible to client roles.
-Test and live mappings are separate. Creation uses an idempotency key.
+Only workspace owners/admins can use Billing. Mill displays actual Stripe
+subscriptions, invoice history, cards and billing details. A customer is created
+on the first card or billing-details action with a server-resolved workspace ID.
+Tenant references live in `workspace_billing_accounts`, inaccessible to client
+roles; test/live mappings are separate and customer creation is idempotent.
 
-Mill lists actual Stripe subscriptions, invoices and payment methods, and opens
-a Stripe-hosted portal for payment and invoice details. Complete card data never
-passes through Mill. The portal configuration is created once per mode or can
-be supplied with `STRIPE_PORTAL_CONFIGURATION_ID`.
+Card entry uses Stripe Elements embedded in Mill. A card-only SetupIntent saves
+a payment method without creating a charge or subscription. Stripe.js handles
+card authentication; there is no hosted customer-portal redirect. Before making
+a saved card default, Mill verifies the successful SetupIntent's customer,
+workspace metadata and environment, and verifies the card's customer. Invoice
+PDF downloads verify the invoice customer and stay inside Mill. No complete
+card numbers/CVC pass through Mill. Server diagnostics record only failure stage
+and code, never API keys or card information.
+
+Billing details are explicitly saved to Stripe for future invoices; updating a
+Mill company profile does not silently alter invoice data. Existing invoices
+are not rewritten. Company renames preserve the workspace URL.
 
 No checkout, paid-plan catalogue or entitlement synchronization is enabled yet.
-Agree prices and paid-plan feature limits before enabling live subscriptions.
-Webhook handling will be needed when subscription events begin controlling
-entitlements. Pilot grants are explicitly shown as pilot access and never
-represented as a paid or free subscription.
-
-Company settings control Mill workspace display name and business profile. The
-workspace URL is stable across renames. Invoice business details are managed
-separately in the Stripe portal; editing a Mill company profile does not silently
-rewrite existing invoices or Stripe customer data.
+Agree prices and feature limits before enabling live subscriptions. Webhooks
+will be needed when subscription events begin controlling entitlements. Pilot
+access is explicitly identified and never presented as a paid or free plan.

@@ -302,6 +302,100 @@ export type Database = {
           },
         ]
       }
+      billing_card_setups: {
+        Row: {
+          customer_id: string
+          expires_at: string
+          intent_id: string
+          site: string
+          workspace_id: string
+        }
+        Insert: {
+          customer_id: string
+          expires_at: string
+          intent_id: string
+          site: string
+          workspace_id: string
+        }
+        Update: {
+          customer_id?: string
+          expires_at?: string
+          intent_id?: string
+          site?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_card_setups_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_provider_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          processed_at: string
+          site: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          processed_at?: string
+          site: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          processed_at?: string
+          site?: string
+        }
+        Relationships: []
+      }
+      billing_resource_snapshots: {
+        Row: {
+          customer_id: string
+          kind: string
+          payload: Json
+          resource_id: string
+          resource_version: number
+          site: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          customer_id: string
+          kind: string
+          payload: Json
+          resource_id: string
+          resource_version: number
+          site: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          customer_id?: string
+          kind?: string
+          payload?: Json
+          resource_id?: string
+          resource_version?: number
+          site?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_resource_snapshots_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       canned_response_favorites: {
         Row: {
           canned_response_id: string
@@ -1932,6 +2026,100 @@ export type Database = {
           },
         ]
       }
+      platform_administrators: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      platform_audit_log: {
+        Row: {
+          action: string
+          actor_id: string
+          after_json: Json | null
+          before_json: Json | null
+          created_at: string
+          id: string
+          reason: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string
+          id?: string
+          reason: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string
+          id?: string
+          reason?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_audit_log_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_customer_notes: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          workspace_id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          workspace_id: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_customer_notes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pre_chat_submissions: {
         Row: {
           conversation_id: string
@@ -2336,6 +2524,47 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_admin_controls: {
+        Row: {
+          access_mode: string
+          features: Json
+          limits: Json
+          override_expires_at: string | null
+          trial_ends_at: string | null
+          updated_at: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          access_mode?: string
+          features?: Json
+          limits?: Json
+          override_expires_at?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          access_mode?: string
+          features?: Json
+          limits?: Json
+          override_expires_at?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_admin_controls_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_billing_accounts: {
         Row: {
           created_at: string
@@ -2358,6 +2587,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workspace_billing_accounts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_chargebee_accounts: {
+        Row: {
+          customer_id: string
+          site: string
+          snapshot: Json
+          synced_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          customer_id: string
+          site: string
+          snapshot?: Json
+          synced_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          customer_id?: string
+          site?: string
+          snapshot?: Json
+          synced_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_chargebee_accounts_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2563,6 +2824,15 @@ export type Database = {
           p_window_seconds: number
         }
         Returns: boolean
+      }
+      apply_chargebee_event: {
+        Args: {
+          p_event_id: string
+          p_event_type: string
+          p_resources: Json
+          p_site: string
+        }
+        Returns: undefined
       }
       assign_contact_tag: {
         Args: { p_contact_id: string; p_tag_id: string; p_workspace_id: string }
@@ -2897,6 +3167,31 @@ export type Database = {
       }
       mark_notification_read: {
         Args: { p_notification_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      platform_admin_apply: {
+        Args: {
+          p_action: string
+          p_actor_id: string
+          p_expected_version: number
+          p_payload: Json
+          p_reason: string
+          p_workspace_id: string
+        }
+        Returns: number
+      }
+      platform_admin_set_administrator: {
+        Args: {
+          p_actor_id: string
+          p_enabled: boolean
+          p_reason: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      platform_customer_usage: {
+        Args: { p_actor_id: string; p_workspace_id: string }
         Returns: Json
       }
       promote_workspace_member_to_owner: {
