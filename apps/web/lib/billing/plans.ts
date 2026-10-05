@@ -2,6 +2,7 @@
 export const MILL_PLANS = [
   {
     id: "starter",
+    aiConversations: 0,
     name: "Starter",
     monthlyPriceCents: 2900,
     operators: 3,
@@ -11,6 +12,7 @@ export const MILL_PLANS = [
   },
   {
     id: "essential",
+    aiConversations: 100,
     name: "Essential",
     monthlyPriceCents: 4900,
     operators: 5,
@@ -20,6 +22,7 @@ export const MILL_PLANS = [
   },
   {
     id: "growth",
+    aiConversations: 500,
     name: "Growth",
     monthlyPriceCents: 8900,
     operators: 10,
@@ -29,6 +32,7 @@ export const MILL_PLANS = [
   },
   {
     id: "business",
+    aiConversations: 1000,
     name: "Business",
     monthlyPriceCents: 19900,
     operators: 20,

@@ -1,4 +1,4 @@
-import { Check, MessageSquareText } from "lucide-react";
+import { Check, MessageSquareText, Sparkles } from "lucide-react";
 import { MILL_PLANS, MILL_PRICING, formatMillPrice } from "@/lib/billing/plans";
 export default function PlansPage() {
   return (
@@ -49,12 +49,27 @@ export default function PlansPage() {
                   : "Powered by Mill"}
               </li>
             </ul>
+            <div className="mt-6 border-t pt-4">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="size-4 text-[#1763de]" /> Mill AI
+              </p>
+              <p className="mt-2 text-sm">
+                {plan.aiConversations > 0
+                  ? `${plan.aiConversations.toLocaleString("en-US")} AI conversations / month included`
+                  : "Not included"}
+              </p>
+              {plan.aiConversations > 0 && (
+                <p className="mt-2 text-xs text-[#747b80]">Coming soon</p>
+              )}
+            </div>
           </section>
         ))}
       </div>
       <p className="text-sm text-[#747b80]">
-        AI is not included in these plans. Separate AI options and pricing will
-        be defined later.
+        Mill AI answers visitor questions and hands over to your team when
+        needed. Included allowances will be available when Mill AI launches.
+        After the monthly allowance is used, AI pauses and human chat continues.
+        Additional packages and pricing are not configured.
       </p>
       <p className="text-sm text-[#747b80]">
         {MILL_PRICING.trialDays}-day trial without a card. No permanent free
