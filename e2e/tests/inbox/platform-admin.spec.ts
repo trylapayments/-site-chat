@@ -31,27 +31,31 @@ test("tenant owner is denied; platform owner edits a real company with audit his
   if (clearError) throw clearError;
   try {
     await loginOperator(page);
+    await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}`);
+    await expect(page.getByRole("link", { name: "Mill administration", exact: true })).toHaveCount(
+      0,
+    );
     await page.goto(`${APP_URL}/admin/customers`);
     await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
     const { error: grantError } = await service
       .from("platform_administrators")
       .upsert({ user_id: user.id, role: "owner", enabled: true });
     if (grantError) throw grantError;
-    await page.goto(`${APP_URL}/admin/customers`);
+    await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}`);
+    await page.getByRole("link", { name: "Mill administration", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Customers", exact: true })).toBeVisible();
     await page.getByRole("link", { name: workspace.name, exact: true }).click();
     await expect(page.getByRole("heading", { name: workspace.name, exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Notes", exact: true }).click();
     const marker = `Platform E2E ${Date.now()}`;
+    const reason = `Verify audited change ${marker}`;
     await page.getByLabel("New note").fill(marker);
-    await page.getByLabel("Reason for this change").fill("Verify an audited platform change");
+    await page.getByLabel("Reason for this change").fill(reason);
     await page.getByRole("button", { name: "Add note", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("recorded in the audit log");
     await expect(page.getByText(marker, { exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
-    await expect(
-      page.getByText("Verify an audited platform change", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText(reason, { exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Company", exact: true }).click();
     await expect(page.getByLabel("Workspace name")).toHaveValue(workspace.name);
     const dir =
@@ -62,6 +66,10 @@ test("tenant owner is denied; platform owner edits a real company with audit his
     await page.getByRole("tab", { name: "Notes", exact: true }).click();
     await expect(page.getByLabel("New note")).toBeVisible();
     await page.screenshot({ path: `${dir}/mobile.png`, fullPage: true });
+    await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}`);
+    await page.getByRole("button", { name: "Open menu", exact: true }).click();
+    await page.getByRole("link", { name: "Mill administration", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Customers", exact: true })).toBeVisible();
   } finally {
     if (existing) await service.from("platform_administrators").upsert(existing);
     else await service.from("platform_administrators").delete().eq("user_id", user.id);

@@ -1,5 +1,7 @@
 "use client";
 
+import { PlatformAdminLink } from "@/components/dashboard/PlatformAdminLink";
+
 import { Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -33,12 +35,14 @@ export function MobileNav({
   currentWorkspaceId,
   memberId,
   email,
+  canAdministerPlatform = false,
 }: {
   slug: string;
   workspaces: AccessibleWorkspace[];
   currentWorkspaceId: string;
   memberId: string;
   email: string;
+  canAdministerPlatform?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -100,6 +104,13 @@ export function MobileNav({
               workspace.role !== "viewer",
           ) ? (
             <OperatorAvailability key={slug} slug={slug} />
+          ) : null}
+          {canAdministerPlatform ? (
+            <PlatformAdminLink
+              onNavigate={() => {
+                setOpen(false);
+              }}
+            />
           ) : null}
           <UserMenu email={email} />
         </div>

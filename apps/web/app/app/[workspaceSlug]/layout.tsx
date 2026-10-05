@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { requireUser } from "@/lib/auth/session";
+import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { resolveWorkspaceBySlug } from "@/lib/workspace/guards";
 import { getWorkspaceContext } from "@/lib/workspace/redirect.server";
@@ -46,8 +47,18 @@ export default async function WorkspaceLayout({
     .eq("user_id", user.id)
     .maybeSingle<{ id: string }>();
 
+  const { data: platformAdministrator } = user.email_confirmed_at
+    ? await createServiceClient()
+        .from("platform_administrators")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("enabled", true)
+        .maybeSingle()
+    : { data: null };
+
   return (
     <DashboardShell
+      canAdministerPlatform={Boolean(platformAdministrator)}
       slug={guard.workspace.slug}
       workspaceName={guard.workspace.name}
       workspaceId={guard.workspace.workspace_id}

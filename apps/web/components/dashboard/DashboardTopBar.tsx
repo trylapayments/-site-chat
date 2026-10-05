@@ -12,6 +12,7 @@ export function DashboardTopBar({
   currentWorkspaceId,
   memberId,
   email,
+  canAdministerPlatform = false,
   canSearchNotes,
 }: {
   slug: string;
@@ -19,6 +20,7 @@ export function DashboardTopBar({
   currentWorkspaceId: string;
   memberId: string;
   email: string;
+  canAdministerPlatform?: boolean;
   canSearchNotes: boolean;
 }) {
   return (
@@ -29,6 +31,7 @@ export function DashboardTopBar({
         currentWorkspaceId={currentWorkspaceId}
         memberId={memberId}
         email={email}
+        canAdministerPlatform={canAdministerPlatform}
       />
       <div className="min-w-0 flex-1">
         <GlobalSearch workspaceSlug={slug} canSearchNotes={canSearchNotes} />

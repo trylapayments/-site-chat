@@ -16,6 +16,7 @@ export function DashboardShell({
   memberId,
   workspaces,
   email,
+  canAdministerPlatform = false,
   role,
   children,
 }: {
@@ -25,6 +26,7 @@ export function DashboardShell({
   memberId: string;
   workspaces: AccessibleWorkspace[];
   email: string;
+  canAdministerPlatform?: boolean;
   role: MemberRole;
   children: React.ReactNode;
 }) {
@@ -82,6 +84,7 @@ export function DashboardShell({
               memberId={memberId}
               workspaces={workspaces}
               email={email}
+              canAdministerPlatform={canAdministerPlatform}
             />
           </Suspense>
         </div>
@@ -93,6 +96,7 @@ export function DashboardShell({
               currentWorkspaceId={workspaceId}
               memberId={memberId}
               email={email}
+              canAdministerPlatform={canAdministerPlatform}
             />
             <p className="truncate text-sm font-semibold">{workspaceName}</p>
           </div>
@@ -115,6 +119,7 @@ export function DashboardShell({
             memberId={memberId}
             workspaces={workspaces}
             email={email}
+            canAdministerPlatform={canAdministerPlatform}
           />
         </Suspense>
       </div>
@@ -125,6 +130,7 @@ export function DashboardShell({
           currentWorkspaceId={workspaceId}
           memberId={memberId}
           email={email}
+          canAdministerPlatform={canAdministerPlatform}
           canSearchNotes={canSearchNotes}
         />
         <main

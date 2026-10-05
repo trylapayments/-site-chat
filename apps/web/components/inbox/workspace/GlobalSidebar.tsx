@@ -1,5 +1,7 @@
 "use client";
 
+import { PlatformAdminLink } from "@/components/dashboard/PlatformAdminLink";
+
 import {
   MILL_DIALOGUE_MARK,
   type AccessibleWorkspace,
@@ -167,6 +169,7 @@ export function GlobalSidebar({
   memberId,
   workspaces,
   email,
+  canAdministerPlatform = false,
 }: {
   workspaceName: string;
   slug: string;
@@ -174,6 +177,7 @@ export function GlobalSidebar({
   memberId: string;
   workspaces: AccessibleWorkspace[];
   email: string;
+  canAdministerPlatform?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -272,6 +276,7 @@ export function GlobalSidebar({
             currentPath={pathname}
           />
         </div>
+        {canAdministerPlatform ? <PlatformAdminLink /> : null}
         <Link
           href={settingsHref}
           className={cn(
