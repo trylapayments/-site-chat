@@ -1,7 +1,7 @@
 \ir helpers/000_helpers.psql
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(14);
+SELECT plan(16);
 TRUNCATE tests.fixtures;
 DO $$
 DECLARE owner_id uuid; viewer_id uuid; wid uuid; result jsonb; sid uuid;
@@ -32,6 +32,11 @@ END; $$;
 SELECT is((SELECT count(*)::integer FROM public.messages WHERE conversation_id=tests.fixture('conversation')::uuid),1,'Submission retries create one durable request');
 SELECT ok((SELECT count(*)>0 FROM public.notifications WHERE conversation_id=tests.fixture('conversation')::uuid),'Submitted form notifies the team');
 SELECT is((SELECT snapshot->'fields'->0->>'label' FROM public.pre_chat_submissions WHERE visitor_session_id=tests.fixture('session')::uuid),'Company','Snapshot preserves submitted field labels');
+SELECT tests.authenticate_as(tests.fixture('owner')::uuid,'engagement-owner@test.local');
+SELECT is((SELECT item->>'status' FROM jsonb_array_elements(public.list_active_visitors(tests.fixture('workspace')::uuid)) item WHERE item->>'id'=tests.fixture('session')),'waiting','Submitted form waits for an operator before a visitor message');
+SELECT public.start_visitor_chat(tests.fixture('workspace')::uuid,tests.fixture('session')::uuid,'Welcome',gen_random_uuid());
+SELECT is((SELECT item->>'status' FROM jsonb_array_elements(public.list_active_visitors(tests.fixture('workspace')::uuid)) item WHERE item->>'id'=tests.fixture('session')),'chatting','Operator reply starts chatting after a form submission');
+SELECT tests.clear_auth();
 SELECT lives_ok(format('SELECT public.widget_send_visitor_message(%L::uuid,%L,%L)',tests.fixture('workspace'),tests.fixture('token'),'After form'),'Visitor can reply after submission');
 SELECT tests.authenticate_as(tests.fixture('viewer')::uuid,'engagement-viewer@test.local');
 SELECT throws_ok(format('SELECT public.start_visitor_chat(%L::uuid,%L::uuid,%L,gen_random_uuid())',tests.fixture('workspace'),tests.fixture('session'),'Hello'),'P0001','Insufficient permissions','Viewer cannot initiate chats');

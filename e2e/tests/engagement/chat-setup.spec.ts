@@ -140,3 +140,51 @@ test("operator starts a custom chat with a browsing visitor while widget is clos
     await vc.close();
   }
 });
+
+test("standard invitation bypasses the pre-chat form and follows the visitor's current page", async ({
+  browser,
+}) => {
+  const oc = await browser.newContext();
+  const vc = await browser.newContext();
+  const operator = await oc.newPage();
+  const visitor = await vc.newPage();
+  await loginOperator(operator);
+  const settingsUrl = `${APP_URL}/app/${WORKSPACE_SLUG}/settings/chat-setup`;
+  await operator.goto(settingsUrl);
+  const enabled = operator.getByRole("checkbox", {
+    name: "Ask visitors to fill in a form before chatting",
+  });
+  try {
+    await enabled.check();
+    await operator.getByRole("button", { name: "Save settings", exact: true }).click();
+    await expect(operator.getByRole("status")).toHaveText("Settings saved.");
+    await openWidget(visitor, { expectComposer: false });
+    const frame = widgetFrameLocator(visitor);
+    await expect(frame.getByTestId("widget-pre-chat-form")).toBeVisible();
+    const currentPath = `/visitor-page-${Date.now()}`;
+    await visitor.evaluate((path) => window.history.pushState({}, "", path), currentPath);
+    await operator.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/visitors`);
+    const row = operator.getByRole("row").filter({ hasText: currentPath });
+    await expect(row).toBeVisible();
+    await row.getByRole("button").click();
+    await operator.getByRole("textbox", { name: "Invitation message" }).fill("Temporary draft");
+    await operator.getByRole("button", { name: "Use standard greeting", exact: true }).click();
+    const greeting = await operator
+      .getByRole("textbox", { name: "Invitation message" })
+      .inputValue();
+    expect(greeting).not.toBe("Temporary draft");
+    await operator.getByRole("button", { name: "Start chat", exact: true }).click();
+    await expect(frame.getByText(greeting, { exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(frame.getByTestId("widget-pre-chat-form")).toHaveCount(0);
+    await frame.getByPlaceholder("Type your message…").fill("Thanks for reaching out.");
+    await frame.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(frame.getByText("Thanks for reaching out.", { exact: true })).toBeVisible();
+  } finally {
+    await operator.goto(settingsUrl);
+    await enabled.uncheck();
+    await operator.getByRole("button", { name: "Save settings", exact: true }).click();
+    await expect(operator.getByRole("status")).toHaveText("Settings saved.");
+    await oc.close();
+    await vc.close();
+  }
+});
