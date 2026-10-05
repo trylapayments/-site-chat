@@ -1,6 +1,25 @@
 import "server-only";
+import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
 import { formatTranscript } from "./transcript-format";
+const transcriptPageSchema = z.object({
+  workspaceName: z.string(),
+  messages: z.array(
+    z.object({
+      sender_type: z.enum(["visitor", "agent", "system"]),
+      body: z.string(),
+      is_internal: z.literal(false),
+      created_at: z.string(),
+      metadata_json: z
+        .object({
+          attachments: z.array(z.object({ filename: z.string() })).default([]),
+        })
+        .default({}),
+      agent_member_id: z.string().nullable(),
+      agent_name: z.string(),
+    }),
+  ),
+});
 export async function sendConversationTranscript(input: {
   workspaceId: string;
   conversationId: string;
@@ -42,53 +61,34 @@ export async function sendConversationTranscript(input: {
       throw new Error("Unable to load the transcript request.");
     let payload = snapshot.data.payload;
     if (!payload) {
-      const workspace = await service
-        .from("workspaces")
-        .select("name")
-        .eq("id", input.workspaceId)
-        .single();
-      if (workspace.error) throw new Error("Unable to load the transcript.");
-      // Paginate rather than silently truncating a long conversation at PostgREST's row cap.
       const messages = [];
-      for (let offset = 0; ; offset += 500) {
-        const result = await service
-          .from("messages")
-          .select(
-            "sender_type,body,is_internal,created_at,metadata_json,agent_member_id",
-          )
-          .eq("workspace_id", input.workspaceId)
-          .eq("conversation_id", input.conversationId)
-          .eq("is_internal", false)
-          .order("sequence_number")
-          .range(offset, offset + 499);
-        if (result.error) throw new Error("Unable to load the transcript.");
-        messages.push(...result.data);
-        if (result.data.length < 500) break;
-      }
-      const memberIds = [
-        ...new Set(
-          messages
-            .map((m) => m.agent_member_id)
-            .filter((id): id is string => !!id),
-        ),
-      ];
       const names = new Map<string, string>();
-      if (memberIds.length) {
-        const profiles = await service
-          .from("agent_profiles")
-          .select("member_id,display_name")
-          .eq("workspace_id", input.workspaceId)
-          .in("member_id", memberIds);
-        if (profiles.error) throw new Error("Unable to load the transcript.");
-        for (const p of profiles.data) names.set(p.member_id, p.display_name);
+      let workspaceName = "Mill";
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await service.rpc(
+          "read_conversation_transcript",
+          {
+            p_workspace_id: input.workspaceId,
+            p_request_id: input.requestId,
+            p_offset: offset,
+          },
+        );
+        if (error) throw new Error("Unable to load the transcript.");
+        const page = transcriptPageSchema.parse(data);
+        workspaceName = page.workspaceName;
+        messages.push(...page.messages);
+        for (const message of page.messages)
+          if (message.agent_member_id)
+            names.set(message.agent_member_id, message.agent_name);
+        if (page.messages.length < 500) break;
       }
-      const text = formatTranscript(workspace.data.name, messages, names);
+      const text = formatTranscript(workspaceName, messages, names);
       payload = {
         from:
           process.env.RESEND_FROM_EMAIL ??
           "Mill <notifications@notify.mill.chat>",
         to: [input.email],
-        subject: `Your ${workspace.data.name} conversation transcript`,
+        subject: `Your ${workspaceName} conversation transcript`,
         text,
         attachments: [
           {

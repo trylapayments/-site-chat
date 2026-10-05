@@ -1,7 +1,7 @@
 \ir helpers/000_helpers.psql
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(20);
+SELECT plan(24);
 TRUNCATE tests.fixtures;
 DO $$
 DECLARE uid uuid;wid uuid;other_wid uuid;r jsonb;sid uuid;cid uuid;mid uuid;other_token text;
@@ -43,5 +43,9 @@ SELECT is(public.claim_conversation_transcript(tests.fixture('workspace')::uuid,
 UPDATE public.conversation_transcript_requests SET status='sent' WHERE id='10000000-0000-4000-8000-000000000001';
 SELECT is(public.claim_conversation_transcript(tests.fixture('workspace')::uuid,tests.fixture('conversation')::uuid,'10000000-0000-4000-8000-000000000001','visitor@example.com'),'sent','Completed retry is idempotent');
 SELECT throws_ok(format('SELECT public.claim_conversation_transcript(%L::uuid,%L::uuid,%L::uuid,%L)',tests.fixture('other_workspace'),tests.fixture('conversation'),'10000000-0000-4000-8000-000000000002','visitor@example.com'),'P0001','Conversation not found','Cross-workspace transcript claim is rejected');
+SELECT ok(NOT has_function_privilege('authenticated','public.read_conversation_transcript(uuid,uuid,integer)','EXECUTE'),'Operators cannot access transcript delivery snapshots through a raw RPC');
+SELECT is(jsonb_array_length(public.read_conversation_transcript(tests.fixture('workspace')::uuid,'10000000-0000-4000-8000-000000000001')->'messages'),1,'Transcript reader excludes internal notes in SQL');
+SELECT is(public.read_conversation_transcript(tests.fixture('workspace')::uuid,'10000000-0000-4000-8000-000000000001')->'messages'->0->>'agent_name','Alice','Transcript reader uses personal agent name');
+SELECT throws_ok(format('SELECT public.read_conversation_transcript(%L::uuid,%L::uuid)',tests.fixture('other_workspace'),'10000000-0000-4000-8000-000000000001'),'P0001','Transcript request not found','Transcript reader rejects cross-workspace access');
 SELECT * FROM finish();
 ROLLBACK;

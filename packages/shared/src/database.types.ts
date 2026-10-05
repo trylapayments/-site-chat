@@ -2844,6 +2844,14 @@ export type Database = {
         Args: { p_expected_published_version?: number; p_workspace_id: string }
         Returns: Json
       }
+      read_conversation_transcript: {
+        Args: {
+          p_offset?: number
+          p_request_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       record_canned_response_usage: {
         Args: { p_id: string; p_workspace_id: string }
         Returns: Json
