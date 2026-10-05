@@ -22,6 +22,12 @@ describe("buildDashboardNavItems", () => {
         icon: "Inbox",
       },
       {
+        id: "visitors",
+        label: "Visitors",
+        href: "/app/acme/visitors",
+        icon: "Users",
+      },
+      {
         id: "contacts",
         label: "Contacts",
         href: "/app/acme/contacts",
@@ -49,6 +55,9 @@ describe("resolveActiveNavItemId", () => {
     expect(resolveActiveNavItemId("/app/acme/", "acme")).toBe("overview");
     expect(resolveActiveNavItemId("/app/acme/inbox", "acme")).toBe("inbox");
     expect(resolveActiveNavItemId("/app/acme/inbox/123", "acme")).toBe("inbox");
+    expect(resolveActiveNavItemId("/app/acme/visitors", "acme")).toBe(
+      "visitors",
+    );
     expect(resolveActiveNavItemId("/app/acme/settings/profile", "acme")).toBe(
       "settings",
     );
