@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Content-Security-Policy",
-            value: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:;   connect-src 'self' http://127.0.0.1:54321 http://localhost:54321 ws://127.0.0.1:54321 ws://localhost:54321 https://*.supabase.co wss://*.supabase.co ${supabaseConnectSources}; frame-ancestors *; base-uri 'none'; form-action 'self'`,
+            value: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:;   connect-src 'self' http://127.0.0.1:54321 http://localhost:54321 ws://127.0.0.1:54321 ws://localhost:54321 https://*.supabase.co wss://*.supabase.co ${supabaseConnectSources}; media-src 'self' blob: http://127.0.0.1:54321 http://localhost:54321 https://*.supabase.co ${supabaseConnectSources}; frame-ancestors *; base-uri 'none'; form-action 'self'`,
           },
           {
             key: "Referrer-Policy",

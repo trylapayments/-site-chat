@@ -1,3 +1,4 @@
+import { VisitorComposerTools } from "./VisitorComposerTools";
 import { PreChatForm } from "./PreChatForm";
 import { shouldShowWaitingAcknowledgement } from "./waiting";
 import {
@@ -973,6 +974,13 @@ function WidgetApp() {
       const incoming = Array.from(fileList);
       const accepted: SelectedLocalFile[] = [];
       for (const file of incoming) {
+        if (
+          engagement?.setup.voiceMessagesEnabled === false &&
+          (file.type.startsWith("audio/") || /\.(webm|m4a|ogg|oga|mp3|wav)$/i.test(file.name))
+        ) {
+          setSendError("Voice messages are disabled for this chat.");
+          continue;
+        }
         const result = await fileToSelectedLocalFile(file);
         if (!result.ok) {
           setSendError(
@@ -990,7 +998,11 @@ function WidgetApp() {
       setPendingFiles((current) => [...current, ...accepted].slice(0, 10));
       setSendError(null);
     },
-    [messagesCopy.attachmentTooLarge, messagesCopy.attachmentUnsupported],
+    [
+      messagesCopy.attachmentTooLarge,
+      messagesCopy.attachmentUnsupported,
+      engagement?.setup.voiceMessagesEnabled,
+    ],
   );
 
   useEffect(() => {
@@ -1039,15 +1051,15 @@ function WidgetApp() {
     }
   };
 
-  const handleSend = async () => {
+  const handleSend = async (selectedQuestion?: string) => {
     if (state.status !== "ready" || sending) {
       return;
     }
-    if (!composer.trim() && pendingFiles.length === 0) {
+    if (!(selectedQuestion ?? composer).trim() && pendingFiles.length === 0) {
       return;
     }
 
-    const body = composer.trim();
+    const body = (selectedQuestion ?? composer).trim();
     const filesForSend = pendingFiles;
     const clientMessageId = pendingClientMessageIdRef.current ?? generateClientMessageId();
     pendingClientMessageIdRef.current = clientMessageId;
@@ -1805,6 +1817,42 @@ function WidgetApp() {
           >
             {!preChatRequired && engagement ? (
               <>
+                {engagement.setup.quickQuestionsEnabled &&
+                  !messages.some((message) => message.senderType === "visitor") && (
+                    <div
+                      aria-label="Quick questions"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: "8px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {engagement.setup.quickQuestions.map((question, index) => (
+                        <button
+                          key={`${String(index)}-${question}`}
+                          type="button"
+                          disabled={sending || !!composer.trim() || pendingFiles.length > 0}
+                          onClick={() => {
+                            void handleSend(question);
+                          }}
+                          style={{
+                            border: `1px solid ${borderColor}`,
+                            borderRadius: "20px",
+                            padding: "8px 12px",
+                            background: backgroundColor,
+                            color: textColor,
+                            fontSize: "13px",
+                            cursor: "pointer",
+                            maxWidth: "100%",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 {dragActive ? (
                   <div
                     role="status"
@@ -1919,7 +1967,16 @@ function WidgetApp() {
                 </div>
                 <div
                   className="sitechat-composer-row"
-                  style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                    border: `1px solid ${borderColor}`,
+                    borderRadius: "16px",
+                    padding: "8px",
+                    background: backgroundColor,
+                  }}
                 >
                   <input
                     ref={fileInputRef}
@@ -1966,7 +2023,17 @@ function WidgetApp() {
                       }
                     }}
                   />
-                  <div style={{ position: "relative" }}>
+                  <div
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      minWidth: 0,
+                      gap: "2px",
+                      gridColumn: "1",
+                      gridRow: "2",
+                    }}
+                  >
                     {attachmentMenuOpen ? (
                       <div
                         role="menu"
@@ -2032,15 +2099,41 @@ function WidgetApp() {
                       }}
                       style={{
                         borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                        border: `1px solid ${borderColor}`,
-                        background: backgroundColor,
+                        border: "none",
+                        background: "transparent",
                         color: textColor,
-                        padding: "0.625rem 0.75rem",
+                        padding: "6px",
                         cursor: "pointer",
                       }}
                     >
-                      +
+                      <svg
+                        width="22"
+                        height="22"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="m21 11-8.6 8.6a6 6 0 0 1-8.5-8.5L12.5 2.5a4 4 0 0 1 5.7 5.7L9.6 16.8a2 2 0 1 1-2.8-2.8l8-8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
                     </button>
+                    <VisitorComposerTools
+                      emojiEnabled={engagement.setup.emojiEnabled}
+                      voiceEnabled={engagement.setup.voiceMessagesEnabled}
+                      disabled={state.status !== "ready" || sending || pendingFiles.length >= 10}
+                      active={open}
+                      color={textColor}
+                      onEmoji={(emoji) => {
+                        setComposer((current) => current + emoji);
+                      }}
+                      onVoice={(file) => {
+                        void addLocalFiles([file]);
+                      }}
+                    />
                   </div>
                   <textarea
                     className="sitechat-composer"
@@ -2078,11 +2171,15 @@ function WidgetApp() {
                       }
                     }}
                     style={{
-                      flex: 1,
+                      gridColumn: "1 / -1",
+                      gridRow: "1",
+                      minWidth: 0,
+                      width: "100%",
+                      boxSizing: "border-box",
                       resize: "none",
                       borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                      border: `1px solid ${borderColor}`,
-                      background: backgroundColor,
+                      border: "none",
+                      background: "transparent",
                       color: textColor,
                       padding: "0.625rem 0.75rem",
                       font: "inherit",
@@ -2157,7 +2254,9 @@ function WidgetApp() {
                         padding: "0 1rem",
                         cursor: "pointer",
                         minWidth: config?.sendButtonStyle === "icon" ? "2.75rem" : "4.5rem",
-                        minHeight: "2.75rem",
+                        minHeight: "2.5rem",
+                        gridColumn: "2",
+                        gridRow: "2",
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",

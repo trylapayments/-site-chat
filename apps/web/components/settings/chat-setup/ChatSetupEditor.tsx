@@ -4,7 +4,7 @@ import {
   type ChatSetup,
   type PreChatField,
 } from "@site-chat/shared";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { saveChatSetupAction } from "@/lib/chat-setup/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,10 @@ export function ChatSetupEditor({
   initial: { config: ChatSetup; version: number };
   canManage: boolean;
 }) {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
   const [draft, setDraft] = useState(initial.config);
   const [saved, setSaved] = useState(initial.config);
   const [version, setVersion] = useState(initial.version);
@@ -56,7 +60,7 @@ export function ChatSetupEditor({
     update({ fields });
   };
   const valid = chatSetupSchema.safeParse(draft);
-  const disabled = !canManage || pending;
+  const disabled = !canManage || pending || !hydrated;
   return (
     <div className="space-y-6" data-testid="chat-setup-editor">
       <div>
@@ -65,6 +69,73 @@ export function ChatSetupEditor({
           Choose how visitors start a conversation with your team.
         </p>
       </div>
+      <section
+        className="space-y-4 rounded-lg border bg-white p-5"
+        aria-labelledby="composer-tools-title"
+      >
+        <h2 id="composer-tools-title" className="text-lg font-semibold">
+          Visitor message tools
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Help visitors start a conversation. All three tools are enabled by
+          default.
+        </p>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.quickQuestionsEnabled}
+            disabled={disabled}
+            onChange={(e) => {
+              update({ quickQuestionsEnabled: e.target.checked });
+            }}
+          />{" "}
+          Show quick questions
+        </label>
+        <label className="block text-sm font-medium" htmlFor="quick-questions">
+          Quick questions (one per line)
+        </label>
+        <textarea
+          id="quick-questions"
+          rows={4}
+          value={draft.quickQuestions.join("\n")}
+          disabled={disabled}
+          className="w-full rounded-md border p-3 text-sm"
+          onChange={(e) => {
+            update({ quickQuestions: e.target.value.split("\n") });
+          }}
+        />
+        <p className="text-xs text-muted-foreground">
+          Up to 8 questions, 120 characters each. Clicking a question sends it
+          as the visitor’s first message. Questions disappear once the visitor
+          sends a message.
+        </p>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.emojiEnabled}
+            disabled={disabled}
+            onChange={(e) => {
+              update({ emojiEnabled: e.target.checked });
+            }}
+          />{" "}
+          Enable emoji picker
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.voiceMessagesEnabled}
+            disabled={disabled}
+            onChange={(e) => {
+              update({ voiceMessagesEnabled: e.target.checked });
+            }}
+          />{" "}
+          Enable voice messages
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Visitors can record up to 2 minutes, review the recording and send it.
+          Microphone access is requested only when they press Record.
+        </p>
+      </section>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <form
           className="space-y-6 rounded-lg border bg-white p-5"

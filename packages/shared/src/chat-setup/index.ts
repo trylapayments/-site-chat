@@ -55,6 +55,18 @@ export const chatSetupSchema = z
   .object({
     enabled: z.boolean().default(false),
     showReadReceipts: z.boolean().default(false),
+    quickQuestionsEnabled: z.boolean().default(true),
+    quickQuestions: z
+      .array(z.string().trim().min(1).max(120))
+      .max(8)
+      .default([
+        "How can you help me?",
+        "What services do you offer?",
+        "Can I talk to your team?",
+        "How do I get started?",
+      ]),
+    emojiEnabled: z.boolean().default(true),
+    voiceMessagesEnabled: z.boolean().default(true),
     allOfflineBehavior: z.enum(["message", "hide"]).default("message"),
     outsideHoursBehavior: z.enum(["message", "hide"]).default("message"),
     workingHours: workingHoursSchema.default({}),

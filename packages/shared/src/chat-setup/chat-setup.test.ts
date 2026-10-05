@@ -102,3 +102,20 @@ describe("unavailable widget", () => {
     ).toBe(false);
   });
 });
+
+it("enables visitor tools for legacy settings while preserving explicit opt-outs", () => {
+  const defaults = chatSetupSchema.parse({});
+  expect(defaults.quickQuestionsEnabled).toBe(true);
+  expect(defaults.emojiEnabled).toBe(true);
+  expect(defaults.voiceMessagesEnabled).toBe(true);
+  expect(defaults.quickQuestions).toHaveLength(4);
+  const disabled = chatSetupSchema.parse({
+    quickQuestionsEnabled: false,
+    emojiEnabled: false,
+    voiceMessagesEnabled: false,
+    quickQuestions: [],
+  });
+  expect(
+    disabled.quickQuestionsEnabled || disabled.emojiEnabled || disabled.voiceMessagesEnabled,
+  ).toBe(false);
+});

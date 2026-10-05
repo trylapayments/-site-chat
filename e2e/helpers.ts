@@ -64,7 +64,7 @@ export async function openWidget(page: Page, options: { expectComposer?: boolean
     (response) =>
       response.url().includes("/widget/loader.js") &&
       response.request().method() === "GET" &&
-      response.status() === 200,
+      [200, 304].includes(response.status()),
     { timeout: 60_000 },
   );
   const bootstrapResponse = page.waitForResponse(

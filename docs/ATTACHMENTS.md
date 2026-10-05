@@ -130,3 +130,18 @@ Operator:
 - `GET /api/v1/inbox/attachments/download`
 
 Existing text send routes unchanged. Message payloads gain optional `attachments: []`.
+
+### Visitor voice messages
+
+Voice clips use the existing private attachment bucket, document metadata, scoped
+signed download URLs and server magic-byte validation. WebM/Opus, MP4/M4A, Ogg,
+MP3 and WAV are accepted; clips are capped at 10 MB. The visitor recorder stops at
+two minutes. Recording starts only after the visitor presses Record and grants
+browser microphone permission. Preview/deletion are local until the recording
+is attached and the visitor sends the message. Closing/hiding the widget, losing
+page visibility or disabling voice tools terminates capture.
+
+Workspace voice settings default to enabled. Server-side initiation and
+finalization enforce a disabled setting, including clips selected as ordinary
+attachments. Operators can still receive/play existing voice messages. Emoji
+settings control the picker, not Unicode text typed with the user's keyboard.

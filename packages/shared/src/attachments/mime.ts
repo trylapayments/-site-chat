@@ -105,6 +105,11 @@ export const ALLOWED_ATTACHMENT_TYPES: readonly AllowedAttachmentType[] = [
     kind: "document",
     label: "ZIP",
   },
+  { mimeType: "audio/webm", extensions: ["webm"], kind: "document", label: "Voice" },
+  { mimeType: "audio/mp4", extensions: ["m4a"], kind: "document", label: "Voice" },
+  { mimeType: "audio/ogg", extensions: ["ogg", "oga"], kind: "document", label: "Voice" },
+  { mimeType: "audio/mpeg", extensions: ["mp3"], kind: "document", label: "Audio" },
+  { mimeType: "audio/wav", extensions: ["wav"], kind: "document", label: "Audio" },
 ] as const;
 
 /** MIME types that must never be accepted (XSS / execution risk). */
@@ -228,6 +233,24 @@ export function detectMimeFromMagicBytes(bytes: Uint8Array, filenameHint?: strin
   if (bytes.length < 4) {
     return null;
   }
+
+  // Voice containers. Keep the existing private document storage and access rules.
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3)
+    return "audio/webm";
+  if (bytes.length >= 12 && String.fromCharCode(...bytes.subarray(4, 8)) === "ftyp")
+    return "audio/mp4";
+  if (String.fromCharCode(...bytes.subarray(0, 4)) === "OggS") return "audio/ogg";
+  if (
+    bytes.length >= 12 &&
+    String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
+    String.fromCharCode(...bytes.subarray(8, 12)) === "WAVE"
+  )
+    return "audio/wav";
+  if (
+    String.fromCharCode(...bytes.subarray(0, 3)) === "ID3" ||
+    (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0 && ((bytes[1] ?? 0) & 0x06) !== 0)
+  )
+    return "audio/mpeg";
 
   // JPEG
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {

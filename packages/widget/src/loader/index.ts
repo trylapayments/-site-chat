@@ -290,6 +290,7 @@ function createIframe(
   const iframe = document.createElement("iframe");
   iframe.src = buildEmbedIframeSrc(widgetHost, parentOrigin);
   iframe.title = "Mill";
+  iframe.setAttribute("allow", `microphone ${widgetHost}`);
   iframe.setAttribute("aria-hidden", "false");
   iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-downloads");
   iframe.style.position = "fixed";

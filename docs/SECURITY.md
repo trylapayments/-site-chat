@@ -568,3 +568,20 @@ If any server secret is compromised:
 - Quarterly dependency audit.
 - Annual penetration test once SOC 2 preparation begins.
 - Security review required for all PRs touching auth, RLS, widget, or billing code.
+
+### Website installation domain controls
+
+Settings → Install widget exposes only the public widget key and loader snippet.
+Owners/admins approve or block exact hostnames; agents/viewers can view and copy
+installation code. Server Actions resolve active membership for the requested
+workspace and never accept a caller-provided workspace ID. The existing
+`allowed_domains.verified` flag represents approval for embedding, not DNS
+ownership proof. Domain changes are reversible; blocking marks the row inactive.
+
+Production bootstrap and authenticated widget HTTP requests validate the
+approved parent hostname. Missing/unknown origins and lookalike suffixes are
+rejected; apex and www hosts require separate approvals. Development localhost
+exceptions do not apply in production. This stops a copied loader on an
+unapproved browser origin; an Origin header is not cryptographic authentication
+of arbitrary non-browser clients. Existing rate limits and scoped session/token
+checks remain necessary.

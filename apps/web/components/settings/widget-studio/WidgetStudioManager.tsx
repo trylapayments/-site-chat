@@ -380,7 +380,7 @@ export function WidgetStudioManager({
         adoptState(saved.data);
         setError(
           published.code === "PUBLISH_CONFLICT"
-            ? "Publish conflict: another admin published while you were editing. Reload Widget Studio, review the latest version, and try again."
+            ? "Publish conflict: another admin published while you were editing. Reload Widget Studio, review the latest settings, and try again."
             : published.message,
         );
         return;
@@ -584,9 +584,6 @@ export function WidgetStudioManager({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background p-4">
         <div>
-          <p className="text-sm font-medium">
-            {messages.versionLabel}: {studioState.publishedVersion}
-          </p>
           <p
             className="text-muted-foreground text-xs"
             data-testid="widget-studio-dirty-badge"

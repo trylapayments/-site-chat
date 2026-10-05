@@ -48,7 +48,13 @@ export function OperatorMessageAttachments({
       data-testid="operator-attachments"
     >
       {ordered.map((attachment) =>
-        attachment.kind === "image" ? (
+        attachment.mimeType.startsWith("audio/") ? (
+          <OperatorVoiceAttachment
+            key={attachment.id}
+            workspaceId={workspaceId}
+            attachment={attachment}
+          />
+        ) : attachment.kind === "image" ? (
           <OperatorImageAttachment
             key={attachment.id}
             workspaceId={workspaceId}
@@ -234,6 +240,56 @@ function OperatorDocumentAttachment({
       >
         Download
       </button>
+    </div>
+  );
+}
+
+function OperatorVoiceAttachment({
+  workspaceId,
+  attachment,
+}: {
+  workspaceId: string;
+  attachment: MessageAttachmentViewModel;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDownloadUrl(workspaceId, attachment.id, "full")
+      .then((url) => {
+        if (!cancelled) setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, attachment.id]);
+  return (
+    <div className="min-w-0">
+      {src && (
+        <audio
+          controls
+          preload="none"
+          src={src}
+          aria-label={`Voice message ${attachment.filename}`}
+          data-testid="operator-voice-message-player"
+          className="h-10 w-full"
+          onError={() => {
+            setFailed(true);
+          }}
+        />
+      )}
+      {failed && (
+        <p className="text-xs text-muted-foreground">
+          Could not play this recording. Try downloading it below.
+        </p>
+      )}
+      <OperatorDocumentAttachment
+        workspaceId={workspaceId}
+        attachment={attachment}
+      />
     </div>
   );
 }

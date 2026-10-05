@@ -36,7 +36,17 @@ export function MessageAttachments({
       }}
     >
       {ordered.map((attachment) =>
-        attachment.kind === "image" ? (
+        attachment.mimeType.startsWith("audio/") ? (
+          <VoiceAttachment
+            key={attachment.id}
+            attachment={attachment}
+            api={api}
+            embedToken={embedToken}
+            sessionToken={sessionToken}
+            copy={copy}
+            isVisitor={isVisitor}
+          />
+        ) : attachment.kind === "image" ? (
           <ImageAttachment
             key={attachment.id}
             attachment={attachment}
@@ -360,6 +370,55 @@ function DocumentAttachment({
       >
         {busy ? "…" : "↓"}
       </button>
+    </div>
+  );
+}
+
+function VoiceAttachment(props: Parameters<typeof DocumentAttachment>[0]) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setFailed(false);
+    if (props.attachment.id.startsWith("local-")) return;
+    void props.api
+      .getAttachmentDownloadUrl({
+        embedToken: props.embedToken,
+        sessionToken: props.sessionToken,
+        attachmentId: props.attachment.id,
+        variant: "full",
+      })
+      .then((result) => {
+        if (!cancelled) setSrc(result.url);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.api, props.embedToken, props.sessionToken, props.attachment.id]);
+  return (
+    <div style={{ width: "100%", minWidth: 0 }}>
+      {src && (
+        <audio
+          controls
+          preload="none"
+          src={src}
+          aria-label={`Voice message ${props.attachment.filename}`}
+          data-testid="voice-message-player"
+          style={{ width: "100%", height: "40px" }}
+          onError={() => {
+            setFailed(true);
+          }}
+        />
+      )}
+      {failed && (
+        <p role="status" style={{ fontSize: "12px" }}>
+          Could not play this recording. Try downloading it below.
+        </p>
+      )}
+      <DocumentAttachment {...props} />
     </div>
   );
 }
