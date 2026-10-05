@@ -35,7 +35,7 @@ test("Mill branding is centered and opens its website from the embedded widget",
   await expect(popup).toHaveURL("https://mill.chat/");
   await expect(popup.getByRole("heading", { name: "Mill website" })).toBeVisible();
   await popup.close();
-  await frame.getByRole("button", { name: "Close chat", exact: true }).click();
+  await frame.getByRole("button", { name: "Close", exact: true }).click();
   const launcher = frame.getByRole("button", { name: "Open chat", exact: true });
   await expect(launcher.locator("svg path")).toHaveCount(2);
   await page.screenshot({ path: test.info().outputPath("mill-brand-launcher.png") });
