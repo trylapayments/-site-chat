@@ -52,6 +52,9 @@ test.describe("PR 4C realtime cross-origin", () => {
     await openWidget(widgetPage);
     await sendWidgetMessage(widgetPage, visitorMessage);
     await waitForWidgetRealtimeReady(widgetPage);
+    await expect(
+      widgetFrameLocator(widgetPage).getByTestId("widget-waiting-acknowledgement"),
+    ).toBeVisible();
 
     await loginOperator(operatorPage);
     await operatorPage.goto(`${APP_URL}/app/${WORKSPACE_SLUG}/inbox`);
@@ -63,6 +66,9 @@ test.describe("PR 4C realtime cross-origin", () => {
     await expect(widgetFrameLocator(widgetPage).getByText("Operator live reply")).toBeVisible({
       timeout: 30_000,
     });
+    await expect(
+      widgetFrameLocator(widgetPage).getByTestId("widget-waiting-acknowledgement"),
+    ).toHaveCount(0);
 
     await operatorContext.close();
     await widgetContext.close();

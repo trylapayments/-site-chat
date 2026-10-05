@@ -1,3 +1,4 @@
+import { shouldShowWaitingAcknowledgement } from "./waiting";
 import {
   createOptimisticMessage,
   deriveMessageReceiptStatus,
@@ -1603,6 +1604,24 @@ function WidgetApp() {
                 </div>
               );
             })}
+            {state.status === "ready" && shouldShowWaitingAcknowledgement(messages) ? (
+              <p
+                role="status"
+                data-testid="widget-waiting-acknowledgement"
+                style={{
+                  color: mutedColor,
+                  fontSize: "0.8125rem",
+                  lineHeight: 1.5,
+                  textAlign: "center",
+                  padding: "0.75rem 0.5rem",
+                  margin: 0,
+                }}
+              >
+                {available
+                  ? "We've notified our team. An operator will join you shortly."
+                  : "We've notified our team. We'll reply as soon as we're available."}
+              </p>
+            ) : null}
             <div data-testid="widget-messages-end" aria-hidden="true" />
           </div>
 
