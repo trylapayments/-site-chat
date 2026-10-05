@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils";
 
 const tones = [
-  "bg-blue-100 text-blue-700",
-  "bg-violet-100 text-violet-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-orange-100 text-orange-800",
-  "bg-rose-100 text-rose-700",
+  "bg-[#e8ede7] text-[#53634f]",
+  "bg-[#eee7dc] text-[#7b6245]",
+  "bg-[#e7ebec] text-[#4b626b]",
+  "bg-[#ece4e0] text-[#865e4f]",
+  "bg-[#e9e7e2] text-[#696158]",
 ];
 
 export function CountryFlag({ code }: { code?: string | null }) {

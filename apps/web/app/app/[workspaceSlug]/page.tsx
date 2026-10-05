@@ -85,7 +85,7 @@ export default async function WorkspaceHomePage({
             Your workspace at a glance
           </p>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-            Let’s make every conversation count.
+            Workspace overview
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Your conversations, visitors and next steps in one place.

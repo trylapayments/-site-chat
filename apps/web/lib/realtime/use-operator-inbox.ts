@@ -61,7 +61,15 @@ export function useLiveInboxList(input: {
   // Reset from server props only when the list scope changes — not on every new
   // initialItems array reference (RSC re-renders were clobbering live upserts).
   useEffect(() => {
-    setItems(input.initialItems);
+    setItems(
+      input.initialItems.filter((item) =>
+        conversationMatchesFilters(item, {
+          status: input.query.status,
+          assignment: input.query.assignment,
+          memberId: input.memberId,
+        }),
+      ),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped
   }, [input.workspaceId, input.memberId, queryKey]);
 
@@ -105,12 +113,19 @@ export function useLiveInboxList(input: {
           refreshed.items.map((item) => [item.id, item] as const),
         );
         for (const local of current) {
-          if (!byId.has(local.id)) {
-            byId.set(local.id, local);
-          }
-        }
-        for (const local of itemsBeforeFetch) {
-          if (!byId.has(local.id)) {
+          const previous = itemsBeforeFetch.find(
+            (item) => item.id === local.id,
+          );
+          if (
+            local !== previous &&
+            !byId.has(local.id) &&
+            !queryRef.current.q &&
+            conversationMatchesFilters(local, {
+              status: statusFilterRef.current,
+              assignment: assignmentFilterRef.current,
+              memberId: memberIdRef.current,
+            })
+          ) {
             byId.set(local.id, local);
           }
         }

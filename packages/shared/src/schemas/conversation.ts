@@ -93,6 +93,7 @@ export const conversationDetailSchema = z
     id: z.string().uuid(),
     status: conversationStatusSchema,
     channel_type: channelTypeSchema,
+    visitor_ip: z.string().nullable().optional(),
     ip_country_code: z
       .string()
       .regex(/^[A-Z]{2}$/)

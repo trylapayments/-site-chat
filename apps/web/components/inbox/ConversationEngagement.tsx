@@ -13,12 +13,15 @@ import {
 export function ConversationEngagement({
   slug,
   conversationId,
+  initialIp,
 }: {
   slug: string;
   conversationId: string;
+  initialIp?: string | null;
 }) {
-  const [data, setData] =
-    useState<Awaited<ReturnType<typeof getConversationEngagementAction>>>(null);
+  const [data, setData] = useState<
+    Awaited<ReturnType<typeof getConversationEngagementAction>>
+  >(initialIp ? { ip: initialIp, submission: null } : null);
   const [error, setError] = useState(false);
   useEffect(() => {
     let active = true;
@@ -108,6 +111,7 @@ export function ConversationEngagement({
 export function MobileConversationDetails(props: {
   slug: string;
   conversationId: string;
+  initialIp?: string | null;
 }) {
   return (
     <Sheet>

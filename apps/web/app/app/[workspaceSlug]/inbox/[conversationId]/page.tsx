@@ -4,6 +4,7 @@ import {
   type ContactTagSummary,
   type InternalNote,
 } from "@site-chat/shared";
+import { countryForStoredIp } from "@/lib/visitors/ip-country";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
@@ -93,6 +94,8 @@ export default async function ConversationDetailPage({
       notFound();
     }
   }
+
+  conversation.ip_country_code ??= countryForStoredIp(conversation.visitor_ip);
 
   const canManageNotes = can(workspace.role, "manage_internal_notes");
   const canAssign = can(workspace.role, "assign_conversations");

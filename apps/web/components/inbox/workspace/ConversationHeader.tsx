@@ -148,6 +148,7 @@ export function ConversationHeader({
         <MobileConversationDetails
           slug={workspaceSlug}
           conversationId={conversationId}
+          initialIp={conversation.visitor_ip}
         />
       </div>
 

@@ -311,6 +311,7 @@ export function ConversationSidebar({
             <ConversationEngagement
               slug={workspaceSlug}
               conversationId={conversationId}
+              initialIp={conversation.visitor_ip}
             />
             <ConversationFollowUp
               slug={workspaceSlug}

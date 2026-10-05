@@ -17,6 +17,12 @@ const supabaseConnectSources = configuredSupabaseUrl
 const nextConfig: NextConfig = {
   transpilePackages: ["@site-chat/shared"],
   typedRoutes: true,
+  serverExternalPackages: ["geoip-country"],
+  outputFileTracingIncludes: {
+    "/*": [
+      "../../node_modules/.pnpm/geoip-country*/node_modules/geoip-country/data/**/*",
+    ],
+  },
   experimental: { serverActions: { bodySizeLimit: "3mb" } },
   headers() {
     return Promise.resolve([

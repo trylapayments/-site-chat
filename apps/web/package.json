@@ -22,6 +22,7 @@
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "geoip-country": "5.0.202610030217",
     "lucide-react": "^0.483.0",
     "next": "^15.2.2",
     "radix-ui": "^1.6.7",

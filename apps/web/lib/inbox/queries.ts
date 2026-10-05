@@ -141,7 +141,24 @@ export async function fetchConversation(
   const countries = await fetchIpCountries(supabase, workspaceId, [
     conversationId,
   ]);
-  return { ...result, ip_country_code: countries[conversationId] ?? null };
+  const { data: engagement } = await callPublicRpc(
+    supabase,
+    "get_conversation_engagement",
+    {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+    },
+  );
+  const parsedIp = z
+    .object({ ip: z.string().nullable() })
+    .nullable()
+    .safeParse(engagement);
+  const ip = parsedIp.success ? (parsedIp.data?.ip ?? null) : null;
+  return {
+    ...result,
+    visitor_ip: ip,
+    ip_country_code: countries[conversationId] ?? null,
+  };
 }
 
 export async function fetchMessages(
