@@ -33,3 +33,5 @@ export * from "./attachments/index";
 export * from "./storage/index";
 export * from "./i18n/index";
 export type { Database, Json } from "./database.types";
+
+export * from "./chat-setup/index";

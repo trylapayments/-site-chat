@@ -1806,6 +1806,55 @@ export type Database = {
           },
         ]
       }
+      pre_chat_submissions: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          snapshot: Json
+          visitor_session_id: string
+          workspace_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id: string
+          snapshot: Json
+          visitor_session_id: string
+          workspace_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          snapshot?: Json
+          visitor_session_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pre_chat_submissions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pre_chat_submissions_visitor_session_id_fkey"
+            columns: ["visitor_session_id"]
+            isOneToOne: true
+            referencedRelation: "visitor_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pre_chat_submissions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           created_at: string
@@ -1923,11 +1972,14 @@ export type Database = {
           expires_at: string
           id: string
           initial_url: string | null
+          ip_address: unknown
           landing_url: string | null
           language: string | null
           last_seen_at: string
           locale: string
+          operator_initiated_at: string | null
           os_family: string | null
+          pre_chat_submitted_at: string | null
           referrer: string | null
           session_token_hash: string
           timezone: string | null
@@ -1953,11 +2005,14 @@ export type Database = {
           expires_at: string
           id?: string
           initial_url?: string | null
+          ip_address?: unknown
           landing_url?: string | null
           language?: string | null
           last_seen_at?: string
           locale?: string
+          operator_initiated_at?: string | null
           os_family?: string | null
+          pre_chat_submitted_at?: string | null
           referrer?: string | null
           session_token_hash: string
           timezone?: string | null
@@ -1983,11 +2038,14 @@ export type Database = {
           expires_at?: string
           id?: string
           initial_url?: string | null
+          ip_address?: unknown
           landing_url?: string | null
           language?: string | null
           last_seen_at?: string
           locale?: string
+          operator_initiated_at?: string | null
           os_family?: string | null
+          pre_chat_submitted_at?: string | null
           referrer?: string | null
           session_token_hash?: string
           timezone?: string | null
@@ -2148,6 +2206,35 @@ export type Database = {
           window_start?: string
         }
         Relationships: []
+      }
+      workspace_chat_settings: {
+        Row: {
+          config: Json
+          updated_at: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          config?: Json
+          updated_at?: string
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          config?: Json
+          updated_at?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_chat_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspace_invitations: {
         Row: {
@@ -2487,6 +2574,10 @@ export type Database = {
         Args: { p_conversation_id: string; p_workspace_id: string }
         Returns: Json
       }
+      get_conversation_engagement: {
+        Args: { p_conversation_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       get_inbox_unread_total: {
         Args: { p_workspace_id: string }
         Returns: Json
@@ -2520,6 +2611,7 @@ export type Database = {
         Returns: Json
       }
       list_accessible_workspaces: { Args: never; Returns: Json }
+      list_active_visitors: { Args: { p_workspace_id: string }; Returns: Json }
       list_assignable_members: {
         Args: { p_workspace_id: string }
         Returns: Json
@@ -2691,6 +2783,15 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: undefined
       }
+      start_visitor_chat: {
+        Args: {
+          p_body: string
+          p_client_message_id: string
+          p_visitor_session_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       take_conversation: {
         Args: {
           p_conversation_id: string
@@ -2836,6 +2937,10 @@ export type Database = {
         }
         Returns: Json
       }
+      widget_engagement_heartbeat: {
+        Args: { p_ip?: string; p_session_token: string; p_workspace_id: string }
+        Returns: Json
+      }
       widget_ensure_conversation_for_attachments: {
         Args: {
           p_page_url?: string
@@ -2907,6 +3012,16 @@ export type Database = {
           p_page_url?: string
           p_referrer?: string
           p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_submit_pre_chat: {
+        Args: {
+          p_config_version: number
+          p_request_id: string
+          p_session_token: string
+          p_snapshot: Json
           p_workspace_id: string
         }
         Returns: Json

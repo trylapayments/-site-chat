@@ -59,7 +59,7 @@ export async function waitForOperatorInboxRealtimeReady(page: Page) {
   );
 }
 
-export async function openWidget(page: Page) {
+export async function openWidget(page: Page, options: { expectComposer?: boolean } = {}) {
   const loaderLoaded = page.waitForResponse(
     (response) =>
       response.url().includes("/widget/loader.js") &&
@@ -88,7 +88,9 @@ export async function openWidget(page: Page) {
   await expect(frame.getByTestId("widget-realtime-ready")).toBeVisible({
     timeout: 60_000,
   });
-  await expect(widgetComposer(page)).toBeVisible({ timeout: 60_000 });
+  if (options.expectComposer !== false) {
+    await expect(widgetComposer(page)).toBeVisible({ timeout: 60_000 });
+  }
 }
 
 export function widgetComposer(page: Page) {

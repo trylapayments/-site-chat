@@ -1,4 +1,4 @@
-import type { WidgetLocale } from "@site-chat/shared";
+import type { ChatSetup, PreChatSubmission, WidgetLocale } from "@site-chat/shared";
 
 export const WIDGET_EMBED_TOKEN_HEADER = "X-SiteChat-Embed-Token";
 
@@ -203,6 +203,41 @@ export type ApiError = {
 
 export class WidgetApiClient {
   constructor(private readonly apiBase: string) {}
+
+  async engagement(
+    embedToken: string,
+    sessionToken: string,
+  ): Promise<{
+    setup: ChatSetup;
+    version: number;
+    hasConversation: boolean;
+    formSubmitted: boolean;
+    operatorInitiated: boolean;
+  }> {
+    const response = await fetch(new URL("/api/v1/widget/engagement", this.apiBase), {
+      headers: { Authorization: `Bearer ${sessionToken}`, [WIDGET_EMBED_TOKEN_HEADER]: embedToken },
+      credentials: "omit",
+      cache: "no-store",
+    });
+    return this.parseResponse(response);
+  }
+  async submitPreChat(
+    embedToken: string,
+    sessionToken: string,
+    submission: PreChatSubmission,
+  ): Promise<{ submitted: boolean; hasConversation: boolean }> {
+    const response = await fetch(new URL("/api/v1/widget/engagement", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        [WIDGET_EMBED_TOKEN_HEADER]: embedToken,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify(submission),
+    });
+    return this.parseResponse(response);
+  }
 
   async operatorAvailability(
     embedToken: string,

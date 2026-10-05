@@ -39,6 +39,18 @@ export default async function SettingsPage({
       <ul className="grid gap-4 sm:grid-cols-2">
         <li>
           <Link
+            href={`/app/${workspaceSlug}/settings/chat-setup`}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="block text-sm font-medium">Chat setup</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Pre-chat forms, custom fields, waiting messages and chat
+              invitations.
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
             href={toAppRoute(
               workspaceSettingsPath(
                 workspaceSlug,

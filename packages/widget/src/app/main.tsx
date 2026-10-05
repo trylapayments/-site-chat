@@ -1,3 +1,4 @@
+import { PreChatForm } from "./PreChatForm";
 import { shouldShowWaitingAcknowledgement } from "./waiting";
 import {
   createOptimisticMessage,
@@ -300,6 +301,18 @@ function WidgetApp() {
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [operatorsOnline, setOperatorsOnline] = useState(false);
+  const [engagement, setEngagement] = useState<Awaited<
+    ReturnType<WidgetApiClient["engagement"]>
+  > | null>(null);
+  const [engagementError, setEngagementError] = useState(false);
+  const inviteSeenRef = useRef(false);
+  const hasEngagementConversation = engagement?.hasConversation ?? false;
+  const preChatRequired =
+    engagement?.setup.enabled === true &&
+    !engagement.hasConversation &&
+    !engagement.formSubmitted &&
+    !engagement.operatorInitiated;
+
   const [agentReceipts, setAgentReceipts] = useState<ReceiptCursors>(EMPTY_RECEIPTS);
   const [pendingFiles, setPendingFiles] = useState<SelectedLocalFile[]>([]);
   const [uploadBatch, setUploadBatch] = useState<UploadBatchState>(createEmptyUploadBatch());
@@ -453,6 +466,41 @@ function WidgetApp() {
     };
   }, [api, readyEmbedToken, open]);
 
+  useEffect(() => {
+    if (!readyEmbedToken || !readySessionToken) return;
+    let active = true;
+    let inFlight = false;
+    async function refresh() {
+      if (inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const next = await api.engagement(readyEmbedToken as string, readySessionToken as string);
+        if (!active) return;
+        setEngagement(next);
+        setEngagementError(false);
+        if (next.operatorInitiated && !inviteSeenRef.current) {
+          inviteSeenRef.current = true;
+          setOpen(true);
+        }
+      } catch {
+        if (active) setEngagementError(true);
+      } finally {
+        inFlight = false;
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const onVisibility = () => {
+      void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [api, readyEmbedToken, readySessionToken]);
+
   const sessionTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -511,6 +559,7 @@ function WidgetApp() {
           language,
         });
 
+        inviteSeenRef.current = session.hasConversation;
         writeSessionToken(init.widgetPublicKey, session.sessionToken);
         if (session.continuityToken) {
           writeContinuityToken(init.widgetPublicKey, session.continuityToken);
@@ -781,6 +830,7 @@ function WidgetApp() {
         embedToken: init.embedToken,
         sessionToken,
         initialMessages: snapshot,
+        hasConversation: hasEngagementConversation,
         initialAgentReceipts: agentReceiptsRef.current,
         initialVisitorReceipts: visitorReceiptsRef.current,
       });
@@ -798,7 +848,7 @@ function WidgetApp() {
       setAgentTyping({ active: false, displayName: null });
       setOperatorsOnline(false);
     };
-  }, [api, open, readyEmbedToken, readySessionToken]);
+  }, [api, open, readyEmbedToken, readySessionToken, hasEngagementConversation]);
 
   // Read receipts: only while the panel is open AND the document is visible.
   // Closing the panel or hiding the tab stops further mark-read calls.
@@ -1474,10 +1524,35 @@ function WidgetApp() {
 
             {state.status === "booting" ? <p>{messagesCopy.welcomeTitle}</p> : null}
 
-            {state.status === "ready" && messages.length === 0 ? (
+            {state.status === "ready" && messages.length === 0 && !preChatRequired ? (
               <p dir="auto">{welcomeMessage}</p>
             ) : null}
 
+            {state.status === "ready" && !engagement ? (
+              <p role="status">
+                {engagementError ? "Unable to load chat settings. Reconnecting…" : "Connecting…"}
+              </p>
+            ) : null}
+            {preChatRequired ? (
+              <PreChatForm
+                key={engagement.version}
+                setup={engagement.setup}
+                accentColor={accentColor}
+                textColor={textColor}
+                onSubmit={async (submission) => {
+                  if (!readyEmbedToken || !readySessionToken) return;
+                  await api.submitPreChat(readyEmbedToken, readySessionToken, submission);
+                  setEngagement((current) =>
+                    current ? { ...current, formSubmitted: true, hasConversation: true } : current,
+                  );
+                  const listed = await api.listMessages({
+                    embedToken: readyEmbedToken,
+                    sessionToken: readySessionToken,
+                  });
+                  setMessages(mapWidgetHttpMessages(listed.items));
+                }}
+              />
+            ) : null}
             {messages.map((message) => {
               const isVisitor = message.senderType === "visitor";
               const label = isVisitor
@@ -1604,7 +1679,10 @@ function WidgetApp() {
                 </div>
               );
             })}
-            {state.status === "ready" && shouldShowWaitingAcknowledgement(messages) ? (
+            {state.status === "ready" &&
+            (shouldShowWaitingAcknowledgement(messages) ||
+              (engagement?.formSubmitted &&
+                !messages.some((message) => message.senderType === "agent"))) ? (
               <p
                 role="status"
                 data-testid="widget-waiting-acknowledgement"
@@ -1618,8 +1696,10 @@ function WidgetApp() {
                 }}
               >
                 {available
-                  ? "We've notified our team. An operator will join you shortly."
-                  : "We've notified our team. We'll reply as soon as we're available."}
+                  ? (engagement?.setup.waitingMessage ??
+                    "We've notified our team. An operator will join you shortly.")
+                  : (engagement?.setup.offlineWaitingMessage ??
+                    "We've notified our team. We'll reply as soon as we're available.")}
               </p>
             ) : null}
             <div data-testid="widget-messages-end" aria-hidden="true" />
@@ -1674,373 +1754,377 @@ function WidgetApp() {
               }
             }}
           >
-            {dragActive ? (
-              <div
-                role="status"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: surfaceColor,
-                  color: textColor,
-                  zIndex: 2,
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                }}
-              >
-                {messagesCopy.dropFilesLabel}
-              </div>
-            ) : null}
-            {sendError ? (
-              <p
-                role="alert"
-                style={{ color: "#b91c1c", fontSize: "0.875rem", marginBottom: "0.5rem" }}
-              >
-                {sendError}
-              </p>
-            ) : null}
-            {pendingFiles.length > 0 ? (
-              <ul
-                data-testid="pending-attachments"
-                style={{
-                  listStyle: "none",
-                  margin: "0 0 0.5rem",
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.35rem",
-                }}
-              >
-                {pendingFiles.map((file) => (
-                  <li
-                    key={file.localId}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    {file.previewUrl ? (
-                      <img
-                        src={file.previewUrl}
-                        alt=""
-                        width={32}
-                        height={32}
-                        style={{ objectFit: "cover", borderRadius: "0.25rem" }}
-                      />
-                    ) : null}
-                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {file.filename}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={formatWidgetMessage(messagesCopy.removeAttachmentLabel, {
-                        filename: file.filename,
-                      })}
-                      onClick={() => {
-                        setPendingFiles((current) => {
-                          const next = current.filter((item) => item.localId !== file.localId);
-                          revokePreviewUrls(
-                            current.filter((item) => item.localId === file.localId),
-                          );
-                          return next;
-                        });
-                      }}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        color: mutedColor,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <div
-              role="status"
-              aria-live="polite"
-              data-testid="upload-status"
-              data-upload-status={uploadBatchAriaStatus(uploadBatch.status)}
-              style={{
-                fontSize: "0.75rem",
-                color: mutedColor,
-                minHeight: uploadBatch.status === "idle" ? 0 : "1rem",
-                marginBottom: uploadBatch.status === "idle" ? 0 : "0.35rem",
-              }}
-            >
-              {uploadBatch.status === "uploading" || uploadBatch.status === "confirming"
-                ? messagesCopy.uploadUploadingLabel
-                : uploadBatch.status === "failed"
-                  ? messagesCopy.uploadFailedLabel
-                  : uploadBatch.status === "complete"
-                    ? messagesCopy.uploadCompleteLabel
-                    : null}
-              {(() => {
-                const uploading = uploadBatch.items.find((item) => item.status === "uploading");
-                return uploading ? ` ${String(uploading.progress)}%` : null;
-              })()}
-            </div>
-            <div
-              className="sitechat-composer-row"
-              style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept={acceptAttributeForAttachments()}
-                aria-label={messagesCopy.attachFilesLabel}
-                data-testid="widget-file-input"
-                style={{ display: "none" }}
-                onChange={(event) => {
-                  if (event.target.files) {
-                    void addLocalFiles(event.target.files);
-                    event.target.value = "";
-                  }
-                }}
-              />
-              <input
-                ref={photoInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                aria-label="Photo library"
-                data-testid="widget-photo-input"
-                style={{ display: "none" }}
-                onChange={(event) => {
-                  if (event.target.files) {
-                    void addLocalFiles(event.target.files);
-                    event.target.value = "";
-                  }
-                }}
-              />
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                aria-label="Take photo"
-                data-testid="widget-camera-input"
-                style={{ display: "none" }}
-                onChange={(event) => {
-                  if (event.target.files) {
-                    void addLocalFiles(event.target.files);
-                    event.target.value = "";
-                  }
-                }}
-              />
-              <div style={{ position: "relative" }}>
-                {attachmentMenuOpen ? (
+            {!preChatRequired && engagement ? (
+              <>
+                {dragActive ? (
                   <div
-                    role="menu"
-                    aria-label="Add attachment"
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") setAttachmentMenuOpen(false);
-                    }}
+                    role="status"
                     style={{
                       position: "absolute",
-                      bottom: "100%",
-                      marginBottom: "0.5rem",
-                      left: 0,
-                      minWidth: "10rem",
-                      border: `1px solid ${borderColor}`,
-                      borderRadius: "0.75rem",
-                      background: backgroundColor,
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: surfaceColor,
                       color: textColor,
-                      padding: "0.25rem",
-                      boxShadow: widgetFloatingShadow(config?.shadowLevel),
-                      zIndex: 5,
+                      zIndex: 2,
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
                     }}
                   >
-                    {(
-                      [
-                        ["Photo library", photoInputRef],
-                        ["Take photo", cameraInputRef],
-                        ["Choose file", fileInputRef],
-                      ] as const
-                    ).map(([label, input]) => (
-                      <button
-                        key={label}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          input.current?.click();
-                          setAttachmentMenuOpen(false);
-                        }}
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          padding: "0.7rem",
-                          textAlign: "start",
-                          border: 0,
-                          background: "transparent",
-                          color: "inherit",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                    {messagesCopy.dropFilesLabel}
                   </div>
                 ) : null}
-                <button
-                  type="button"
-                  data-testid="widget-attach-button"
-                  aria-label={messagesCopy.attachLabel}
-                  disabled={state.status !== "ready" || sending}
-                  aria-haspopup="menu"
-                  aria-expanded={attachmentMenuOpen}
-                  onClick={() => {
-                    setAttachmentMenuOpen((current) => !current);
-                  }}
+                {sendError ? (
+                  <p
+                    role="alert"
+                    style={{ color: "#b91c1c", fontSize: "0.875rem", marginBottom: "0.5rem" }}
+                  >
+                    {sendError}
+                  </p>
+                ) : null}
+                {pendingFiles.length > 0 ? (
+                  <ul
+                    data-testid="pending-attachments"
+                    style={{
+                      listStyle: "none",
+                      margin: "0 0 0.5rem",
+                      padding: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.35rem",
+                    }}
+                  >
+                    {pendingFiles.map((file) => (
+                      <li
+                        key={file.localId}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {file.previewUrl ? (
+                          <img
+                            src={file.previewUrl}
+                            alt=""
+                            width={32}
+                            height={32}
+                            style={{ objectFit: "cover", borderRadius: "0.25rem" }}
+                          />
+                        ) : null}
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {file.filename}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={formatWidgetMessage(messagesCopy.removeAttachmentLabel, {
+                            filename: file.filename,
+                          })}
+                          onClick={() => {
+                            setPendingFiles((current) => {
+                              const next = current.filter((item) => item.localId !== file.localId);
+                              revokePreviewUrls(
+                                current.filter((item) => item.localId === file.localId),
+                              );
+                              return next;
+                            });
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: mutedColor,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div
+                  role="status"
+                  aria-live="polite"
+                  data-testid="upload-status"
+                  data-upload-status={uploadBatchAriaStatus(uploadBatch.status)}
                   style={{
-                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                    border: `1px solid ${borderColor}`,
-                    background: backgroundColor,
-                    color: textColor,
-                    padding: "0.625rem 0.75rem",
-                    cursor: "pointer",
+                    fontSize: "0.75rem",
+                    color: mutedColor,
+                    minHeight: uploadBatch.status === "idle" ? 0 : "1rem",
+                    marginBottom: uploadBatch.status === "idle" ? 0 : "0.35rem",
                   }}
                 >
-                  +
-                </button>
-              </div>
-              <textarea
-                className="sitechat-composer"
-                value={composer}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setComposer(next);
-                  transportRef.current?.notifyComposerChange(next);
-                }}
-                onPaste={(event) => {
-                  const items = event.clipboardData.items;
-                  const files: File[] = [];
-                  for (const item of Array.from(items)) {
-                    if (item.kind === "file") {
-                      const file = item.getAsFile();
-                      if (file) {
-                        files.push(file);
+                  {uploadBatch.status === "uploading" || uploadBatch.status === "confirming"
+                    ? messagesCopy.uploadUploadingLabel
+                    : uploadBatch.status === "failed"
+                      ? messagesCopy.uploadFailedLabel
+                      : uploadBatch.status === "complete"
+                        ? messagesCopy.uploadCompleteLabel
+                        : null}
+                  {(() => {
+                    const uploading = uploadBatch.items.find((item) => item.status === "uploading");
+                    return uploading ? ` ${String(uploading.progress)}%` : null;
+                  })()}
+                </div>
+                <div
+                  className="sitechat-composer-row"
+                  style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept={acceptAttributeForAttachments()}
+                    aria-label={messagesCopy.attachFilesLabel}
+                    data-testid="widget-file-input"
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        void addLocalFiles(event.target.files);
+                        event.target.value = "";
                       }
-                    }
-                  }
-                  if (files.length > 0) {
-                    event.preventDefault();
-                    void addLocalFiles(files);
-                  }
-                }}
-                placeholder={placeholderText}
-                aria-label={placeholderText}
-                dir="auto"
-                rows={2}
-                disabled={state.status !== "ready" || sending}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void handleSend();
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  resize: "none",
-                  borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                  border: `1px solid ${borderColor}`,
-                  background: backgroundColor,
-                  color: textColor,
-                  padding: "0.625rem 0.75rem",
-                  font: "inherit",
-                }}
-              />
-              {uploadBatch.status === "uploading" || uploadBatch.status === "confirming" ? (
-                <button
-                  type="button"
-                  data-testid="widget-upload-cancel"
-                  aria-label={messagesCopy.uploadCancelLabel}
-                  onClick={() => {
-                    uploadAbortRef.current?.abort();
-                    setUploadBatch((current) => reduceUploadBatch(current, { type: "CANCEL" }));
-                    if (uploadBatch.batchId && state.status === "ready") {
-                      void api.cancelUploads({
-                        embedToken: state.init.embedToken,
-                        sessionToken: state.sessionToken,
-                        batchId: uploadBatch.batchId,
-                      });
-                    }
-                    setSending(false);
-                  }}
-                  style={{
-                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                    border: `1px solid ${borderColor}`,
-                    background: backgroundColor,
-                    color: textColor,
-                    padding: "0 0.75rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  ✕
-                </button>
-              ) : null}
-              {uploadBatch.status === "failed" ? (
-                <button
-                  type="button"
-                  data-testid="widget-upload-retry"
-                  aria-label={messagesCopy.uploadRetryLabel}
-                  onClick={() => {
-                    setUploadBatch((current) => reduceUploadBatch(current, { type: "RETRY" }));
-                    void handleSend();
-                  }}
-                  style={{
-                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                    border: "none",
-                    background: accentColor,
-                    color: contrastingTextColor(accentColor),
-                    padding: "0 1rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  {messagesCopy.uploadRetryLabel}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleSend();
-                  }}
-                  disabled={
-                    state.status !== "ready" ||
-                    sending ||
-                    (!composer.trim() && pendingFiles.length === 0)
-                  }
-                  aria-label={sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
-                  style={{
-                    borderRadius: `${String(Math.min(borderRadius, 12))}px`,
-                    border: "none",
-                    background: accentColor,
-                    color: contrastingTextColor(accentColor),
-                    padding: "0 1rem",
-                    cursor: "pointer",
-                    minWidth: config?.sendButtonStyle === "icon" ? "2.75rem" : "4.5rem",
-                    minHeight: "2.75rem",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "0.4rem",
-                  }}
-                >
-                  <SendButtonContent
-                    copy={messagesCopy}
-                    sending={sending}
-                    style={config?.sendButtonStyle ?? "text"}
+                    }}
                   />
-                </button>
-              )}
-            </div>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    aria-label="Photo library"
+                    data-testid="widget-photo-input"
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        void addLocalFiles(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    aria-label="Take photo"
+                    data-testid="widget-camera-input"
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        void addLocalFiles(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
+                  <div style={{ position: "relative" }}>
+                    {attachmentMenuOpen ? (
+                      <div
+                        role="menu"
+                        aria-label="Add attachment"
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") setAttachmentMenuOpen(false);
+                        }}
+                        style={{
+                          position: "absolute",
+                          bottom: "100%",
+                          marginBottom: "0.5rem",
+                          left: 0,
+                          minWidth: "10rem",
+                          border: `1px solid ${borderColor}`,
+                          borderRadius: "0.75rem",
+                          background: backgroundColor,
+                          color: textColor,
+                          padding: "0.25rem",
+                          boxShadow: widgetFloatingShadow(config?.shadowLevel),
+                          zIndex: 5,
+                        }}
+                      >
+                        {(
+                          [
+                            ["Photo library", photoInputRef],
+                            ["Take photo", cameraInputRef],
+                            ["Choose file", fileInputRef],
+                          ] as const
+                        ).map(([label, input]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              input.current?.click();
+                              setAttachmentMenuOpen(false);
+                            }}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              padding: "0.7rem",
+                              textAlign: "start",
+                              border: 0,
+                              background: "transparent",
+                              color: "inherit",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      data-testid="widget-attach-button"
+                      aria-label={messagesCopy.attachLabel}
+                      disabled={state.status !== "ready" || sending}
+                      aria-haspopup="menu"
+                      aria-expanded={attachmentMenuOpen}
+                      onClick={() => {
+                        setAttachmentMenuOpen((current) => !current);
+                      }}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: `1px solid ${borderColor}`,
+                        background: backgroundColor,
+                        color: textColor,
+                        padding: "0.625rem 0.75rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <textarea
+                    className="sitechat-composer"
+                    value={composer}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setComposer(next);
+                      transportRef.current?.notifyComposerChange(next);
+                    }}
+                    onPaste={(event) => {
+                      const items = event.clipboardData.items;
+                      const files: File[] = [];
+                      for (const item of Array.from(items)) {
+                        if (item.kind === "file") {
+                          const file = item.getAsFile();
+                          if (file) {
+                            files.push(file);
+                          }
+                        }
+                      }
+                      if (files.length > 0) {
+                        event.preventDefault();
+                        void addLocalFiles(files);
+                      }
+                    }}
+                    placeholder={placeholderText}
+                    aria-label={placeholderText}
+                    dir="auto"
+                    rows={2}
+                    disabled={state.status !== "ready" || sending}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void handleSend();
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      resize: "none",
+                      borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                      border: `1px solid ${borderColor}`,
+                      background: backgroundColor,
+                      color: textColor,
+                      padding: "0.625rem 0.75rem",
+                      font: "inherit",
+                    }}
+                  />
+                  {uploadBatch.status === "uploading" || uploadBatch.status === "confirming" ? (
+                    <button
+                      type="button"
+                      data-testid="widget-upload-cancel"
+                      aria-label={messagesCopy.uploadCancelLabel}
+                      onClick={() => {
+                        uploadAbortRef.current?.abort();
+                        setUploadBatch((current) => reduceUploadBatch(current, { type: "CANCEL" }));
+                        if (uploadBatch.batchId && state.status === "ready") {
+                          void api.cancelUploads({
+                            embedToken: state.init.embedToken,
+                            sessionToken: state.sessionToken,
+                            batchId: uploadBatch.batchId,
+                          });
+                        }
+                        setSending(false);
+                      }}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: `1px solid ${borderColor}`,
+                        background: backgroundColor,
+                        color: textColor,
+                        padding: "0 0.75rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  ) : null}
+                  {uploadBatch.status === "failed" ? (
+                    <button
+                      type="button"
+                      data-testid="widget-upload-retry"
+                      aria-label={messagesCopy.uploadRetryLabel}
+                      onClick={() => {
+                        setUploadBatch((current) => reduceUploadBatch(current, { type: "RETRY" }));
+                        void handleSend();
+                      }}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: "none",
+                        background: accentColor,
+                        color: contrastingTextColor(accentColor),
+                        padding: "0 1rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {messagesCopy.uploadRetryLabel}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleSend();
+                      }}
+                      disabled={
+                        state.status !== "ready" ||
+                        sending ||
+                        (!composer.trim() && pendingFiles.length === 0)
+                      }
+                      aria-label={sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: "none",
+                        background: accentColor,
+                        color: contrastingTextColor(accentColor),
+                        padding: "0 1rem",
+                        cursor: "pointer",
+                        minWidth: config?.sendButtonStyle === "icon" ? "2.75rem" : "4.5rem",
+                        minHeight: "2.75rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.4rem",
+                      }}
+                    >
+                      <SendButtonContent
+                        copy={messagesCopy}
+                        sending={sending}
+                        style={config?.sendButtonStyle ?? "text"}
+                      />
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : null}
             {(config?.showPoweredBy ?? config?.branding.showPoweredBy) !== false ? (
               <div
                 style={{

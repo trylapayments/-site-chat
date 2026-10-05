@@ -69,6 +69,13 @@ function buildInboxNav(slug: string): NavItem[] {
       assignment: "assigned_to_me",
     },
     {
+      id: "visitors",
+      label: "Visitors",
+      href: workspaceNavPath(slug, "visitors"),
+      icon: Users,
+      match: "prefix",
+    },
+    {
       id: "contacts",
       label: "Contacts",
       href: workspaceNavPath(slug, "contacts"),

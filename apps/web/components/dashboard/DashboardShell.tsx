@@ -59,7 +59,8 @@ export function DashboardShell({
   const isTeam = pathname === teamBase || pathname.startsWith(`${teamBase}/`);
   // Team inherits Inbox chrome (GlobalSidebar + full-height canvas) only.
   // Inbox and Contacts layout/visuals remain unchanged.
-  const useOperatorWorkspaceChrome = isInbox || isContacts || isTeam;
+  const useOperatorWorkspaceChrome =
+    isInbox || isContacts || isTeam || pathname === `/app/${slug}/visitors`;
 
   if (useOperatorWorkspaceChrome) {
     // h-svh (small viewport) — not h-dvh. Safari's dynamic viewport tracks

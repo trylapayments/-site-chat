@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { ConversationEngagement } from "@/components/inbox/ConversationEngagement";
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { CustomerTimeline } from "@/components/inbox/CustomerTimeline";
@@ -314,6 +315,10 @@ export function ConversationSidebar({
             className="divide-y divide-zinc-100"
             data-testid="inspector-details"
           >
+            <ConversationEngagement
+              slug={workspaceSlug}
+              conversationId={conversationId}
+            />
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
                 Visitor

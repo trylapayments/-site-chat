@@ -2,7 +2,7 @@ export type DashboardNavIconKey =
   "LayoutDashboard" | "Inbox" | "Users" | "UserCog" | "Settings";
 
 export type DashboardNavItemId =
-  "overview" | "inbox" | "contacts" | "team" | "settings";
+  "overview" | "inbox" | "visitors" | "contacts" | "team" | "settings";
 
 export type DashboardNavItem = {
   id: DashboardNavItemId;
@@ -24,6 +24,7 @@ export const DASHBOARD_NAV_ITEMS = [
     segment: "inbox",
     icon: "Inbox",
   },
+  { id: "visitors", label: "Visitors", segment: "visitors", icon: "Users" },
   {
     id: "contacts",
     label: "Contacts",

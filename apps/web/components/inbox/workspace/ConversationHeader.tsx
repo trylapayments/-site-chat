@@ -12,6 +12,7 @@ import { useTransition } from "react";
 
 import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
+import { MobileConversationDetails } from "@/components/inbox/ConversationEngagement";
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { Button } from "@/components/ui/button";
 import {
@@ -126,7 +127,7 @@ export function ConversationHeader({
         >
           {initialsFromLabel(contactLabel)}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-[16px] font-semibold tracking-tight text-neutral-950">
               {contactLabel}
@@ -158,6 +159,10 @@ export function ConversationHeader({
             {meta || "No visitor context yet"}
           </p>
         </div>
+        <MobileConversationDetails
+          slug={workspaceSlug}
+          conversationId={conversationId}
+        />
       </div>
 
       <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 md:w-auto md:flex-nowrap">
