@@ -1,4 +1,8 @@
 "use client";
+import {
+  IdentityAvatar,
+  CountryFlag,
+} from "@/components/dashboard/IdentityAvatar";
 import { useEffect, useState, useTransition, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -150,12 +154,13 @@ export function VisitorsPanel({
                 {filtered.map((visitor) => (
                   <tr
                     key={visitor.id}
-                    className={`border-t ${visitor.id === selectedId ? "bg-slate-50" : ""}`}
+                    aria-selected={visitor.id === selectedId}
+                    className={`border-t ${visitor.id === selectedId ? "bg-brand-soft" : ""}`}
                   >
                     <td className="px-2 py-3">
                       <button
                         type="button"
-                        className="text-left font-medium hover:underline"
+                        className="flex items-center gap-3 text-left font-medium hover:underline"
                         onClick={() => {
                           setSelectedId(visitor.id);
                           setMessage(standardMessage);
@@ -163,6 +168,10 @@ export function VisitorsPanel({
                           requestId.current = null;
                         }}
                       >
+                        <IdentityAvatar
+                          label={visitorLabel(visitor)}
+                          country={visitor.country}
+                        />
                         {visitorLabel(visitor)}
                       </button>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -203,7 +212,7 @@ export function VisitorsPanel({
                 {visitorLabel(selected)}
               </h2>
               <p className="text-sm capitalize text-muted-foreground">
-                {selected.status}
+                <CountryFlag code={selected.country} /> {selected.status}
               </p>
               <dl className="space-y-4 text-sm">
                 {[

@@ -4,7 +4,15 @@ import {
   notificationsMessagesEn,
   widgetStudioMessagesEn,
 } from "@site-chat/shared";
-import { Bell, MessageSquareQuote, Palette, Tags } from "lucide-react";
+import {
+  Bell,
+  MessageSquareQuote,
+  Palette,
+  Tags,
+  UserRound,
+  Code2,
+  SlidersHorizontal,
+} from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -42,6 +50,9 @@ export default async function SettingsPage({
             href={toAppRoute(`/app/${workspaceSlug}/settings/profile`)}
             className="block h-full rounded-lg border p-4"
           >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <UserRound className="size-5" aria-hidden="true" />
+            </span>
             <span className="block text-sm font-medium">My profile</span>
             <span className="mt-1 block text-sm text-muted-foreground">
               Set the name and photo visitors see when you reply.
@@ -54,6 +65,9 @@ export default async function SettingsPage({
             className="block h-full rounded-lg border p-4"
             data-testid="settings-link-install"
           >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <Code2 className="size-5" aria-hidden="true" />
+            </span>
             <span className="block text-sm font-medium">Install widget</span>
             <span className="mt-1 block text-sm text-muted-foreground">
               Copy your website code and manage allowed domains.
@@ -65,6 +79,9 @@ export default async function SettingsPage({
             href={`/app/${workspaceSlug}/settings/chat-setup`}
             className="block h-full rounded-lg border p-4"
           >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <SlidersHorizontal className="size-5" aria-hidden="true" />
+            </span>
             <span className="block text-sm font-medium">Chat setup</span>
             <span className="mt-1 block text-sm text-muted-foreground">
               Pre-chat forms, custom fields, waiting messages and chat

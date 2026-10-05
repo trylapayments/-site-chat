@@ -1,3 +1,4 @@
+import { ipCountryFromRequest } from "@/lib/widget/ip-country";
 import { publicVisitorConversationContext } from "@/lib/conversation-wrapup/context";
 import { validatePreChatSubmission } from "@site-chat/shared";
 import { isIP } from "node:net";
@@ -75,6 +76,20 @@ export async function GET(request: Request) {
       },
     );
     if (error) throw error;
+    const country = ipCountryFromRequest(request);
+    if (process.env.VERCEL === "1") {
+      const { error: geoError } = await createServiceClient().rpc(
+        "record_widget_ip_country",
+        {
+          p_workspace_id: auth.workspaceId,
+          p_session_token: auth.session,
+          // Postgres argument nullability is not emitted by the generator.
+          p_country: country as string,
+        },
+      );
+      if (geoError)
+        console.error("Unable to record visitor IP country", geoError.code);
+    }
     const settings = await fetchChatSetup(auth.workspaceId);
     const context = await publicVisitorConversationContext(
       auth.workspaceId,

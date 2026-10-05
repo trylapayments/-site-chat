@@ -5,7 +5,6 @@ import { can } from "@site-chat/shared";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState, type CSSProperties } from "react";
 
-import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardTopBar } from "@/components/dashboard/DashboardTopBar";
 import { MobileNav } from "@/components/dashboard/MobileNav";
 import { GlobalSidebar } from "@/components/inbox/workspace/GlobalSidebar";
@@ -50,17 +49,13 @@ export function DashboardShell({
   }, []);
   const canSearchNotes = can(role, "manage_internal_notes");
   const inboxBase = `/app/${slug}/inbox`;
-  const contactsBase = `/app/${slug}/contacts`;
-  const teamBase = `/app/${slug}/team`;
   const isInbox =
     pathname === inboxBase || pathname.startsWith(`${inboxBase}/`);
-  const isContacts =
-    pathname === contactsBase || pathname.startsWith(`${contactsBase}/`);
-  const isTeam = pathname === teamBase || pathname.startsWith(`${teamBase}/`);
-  // Team inherits Inbox chrome (GlobalSidebar + full-height canvas) only.
-  // Inbox and Contacts layout/visuals remain unchanged.
+  const isContacts = pathname.startsWith(`/app/${slug}/contacts`);
+  const isTeam = pathname.startsWith(`/app/${slug}/team`);
+  const isVisitors = pathname === `/app/${slug}/visitors`;
   const useOperatorWorkspaceChrome =
-    isInbox || isContacts || isTeam || pathname === `/app/${slug}/visitors`;
+    isInbox || isContacts || isTeam || isVisitors;
 
   if (useOperatorWorkspaceChrome) {
     // h-svh (small viewport) — not h-dvh. Safari's dynamic viewport tracks
@@ -68,7 +63,7 @@ export function DashboardShell({
     // document scrollbar appear/disappear and shift the whole 3-column page.
     return (
       <div
-        className="bg-inbox-canvas flex h-[var(--operator-mobile-height,100svh)] overflow-hidden lg:h-svh"
+        className="mill-operator bg-inbox-canvas flex h-[var(--operator-mobile-height,100svh)] overflow-hidden lg:h-svh"
         style={
           mobileHeight === null
             ? undefined
@@ -79,7 +74,7 @@ export function DashboardShell({
         data-testid="dashboard-operator-shell"
       >
         <div className="hidden lg:flex">
-          <Suspense fallback={<div className="bg-inbox-nav w-[232px]" />}>
+          <Suspense fallback={<div className="bg-inbox-nav w-[208px]" />}>
             <GlobalSidebar
               workspaceName={workspaceName}
               slug={slug}
@@ -110,13 +105,19 @@ export function DashboardShell({
   }
 
   return (
-    <div className="bg-background flex min-h-screen">
-      <DashboardSidebar
-        workspaceName={workspaceName}
-        slug={slug}
-        workspaceId={workspaceId}
-        memberId={memberId}
-      />
+    <div className="mill-operator bg-inbox-canvas flex h-svh overflow-hidden">
+      <div className="hidden lg:flex">
+        <Suspense fallback={<div className="bg-inbox-nav w-[208px]" />}>
+          <GlobalSidebar
+            workspaceName={workspaceName}
+            slug={slug}
+            workspaceId={workspaceId}
+            memberId={memberId}
+            workspaces={workspaces}
+            email={email}
+          />
+        </Suspense>
+      </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardTopBar
           slug={slug}
@@ -126,7 +127,10 @@ export function DashboardShell({
           email={email}
           canSearchNotes={canSearchNotes}
         />
-        <main id="main-content" className="flex-1 p-6">
+        <main
+          id="main-content"
+          className="mill-page min-h-0 flex-1 overflow-y-auto p-4 md:p-8"
+        >
           {children}
         </main>
       </div>

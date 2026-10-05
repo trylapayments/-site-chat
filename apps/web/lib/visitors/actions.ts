@@ -9,6 +9,11 @@ const visitorSchema = z.object({
   name: z.string().nullable(),
   email: z.string().nullable(),
   ip: z.string().nullable(),
+  country: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
+    .nullable()
+    .optional(),
   url: z.string().nullable(),
   title: z.string().nullable(),
   browser: z.string().nullable(),

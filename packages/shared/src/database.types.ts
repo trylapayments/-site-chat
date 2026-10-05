@@ -2099,6 +2099,7 @@ export type Database = {
           id: string
           initial_url: string | null
           ip_address: unknown
+          ip_country_code: string | null
           landing_url: string | null
           language: string | null
           last_seen_at: string
@@ -2132,6 +2133,7 @@ export type Database = {
           id?: string
           initial_url?: string | null
           ip_address?: unknown
+          ip_country_code?: string | null
           landing_url?: string | null
           language?: string | null
           last_seen_at?: string
@@ -2165,6 +2167,7 @@ export type Database = {
           id?: string
           initial_url?: string | null
           ip_address?: unknown
+          ip_country_code?: string | null
           landing_url?: string | null
           language?: string | null
           last_seen_at?: string
@@ -2574,6 +2577,10 @@ export type Database = {
         }
         Returns: Json
       }
+      conversation_ip_countries: {
+        Args: { p_conversation_ids: string[]; p_workspace_id: string }
+        Returns: Json
+      }
       create_canned_response: {
         Args: {
           p_body: string
@@ -2855,6 +2862,14 @@ export type Database = {
       record_canned_response_usage: {
         Args: { p_id: string; p_workspace_id: string }
         Returns: Json
+      }
+      record_widget_ip_country: {
+        Args: {
+          p_country: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: undefined
       }
       remove_workspace_member: {
         Args: { p_member_id: string }

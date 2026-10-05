@@ -4,7 +4,10 @@ import { Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import type { AccessibleWorkspace } from "@site-chat/shared";
+import {
+  MILL_DIALOGUE_MARK,
+  type AccessibleWorkspace,
+} from "@site-chat/shared";
 
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { OperatorAvailability } from "@/components/dashboard/OperatorAvailability";
@@ -58,7 +61,11 @@ export function MobileNav({
       </SheetTrigger>
       <SheetContent side="left" className="w-72 overflow-y-auto p-0">
         <SheetHeader className="border-border border-b px-4 py-4 text-left">
-          <SheetTitle className="text-base">Mill</SheetTitle>
+          <SheetTitle className="flex items-center gap-3 text-xl">
+            {/* eslint-disable-next-line @next/next/no-img-element -- inline brand asset */}
+            <img src={MILL_DIALOGUE_MARK} alt="" className="size-9" />
+            Mill
+          </SheetTitle>
           {sectionLabel ? (
             <p className="text-muted-foreground text-sm">{sectionLabel}</p>
           ) : null}

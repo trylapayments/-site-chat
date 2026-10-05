@@ -517,8 +517,8 @@ function MessageList({
             <article
               className={
                 isVisitor
-                  ? "ml-auto flex w-full max-w-[min(100%,36rem)] flex-row-reverse gap-2.5"
-                  : "mr-auto flex w-full max-w-[min(100%,36rem)] gap-2.5"
+                  ? "mr-auto flex w-full max-w-[min(100%,36rem)] gap-2.5"
+                  : "ml-auto flex w-full max-w-[min(100%,36rem)] flex-row-reverse gap-2.5"
               }
               data-sequence={message.sequenceNumber}
               data-message-id={message.id}
@@ -542,8 +542,8 @@ function MessageList({
               <div
                 className={
                   isVisitor
-                    ? `min-w-0 flex-1 rounded-xl rounded-br-md bg-inbox-bubble-visitor px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
-                    : `min-w-0 flex-1 rounded-xl rounded-bl-md border border-zinc-200/60 bg-inbox-bubble-agent px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
+                    ? `min-w-0 flex-1 rounded-xl rounded-bl-md border border-inbox-border bg-inbox-bubble-visitor px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
+                    : `mill-agent-bubble min-w-0 flex-1 rounded-xl rounded-br-md bg-inbox-bubble-agent px-3.5 py-2.5${focused ? " ring-2 ring-brand/30" : ""}`
                 }
               >
                 <header className="mb-1 flex items-center justify-between gap-3">
@@ -1020,7 +1020,7 @@ function LiveReplyComposer({
           {uploadProgress}
         </p>
       ) : null}
-      <div className="border-inbox-border/90 bg-inbox-surface focus-within:ring-brand/20 rounded-lg border focus-within:ring-1">
+      <div className="mill-message-composer border-inbox-border/90 bg-inbox-surface focus-within:ring-brand/20 rounded-lg border focus-within:ring-1">
         <div className="relative">
           {canned.query !== null ? (
             <CannedSlashMenu

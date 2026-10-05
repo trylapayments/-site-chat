@@ -12,6 +12,11 @@ import {
   type VisitorIdentityValues,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
+import {
+  IdentityAvatar,
+  CountryFlag,
+} from "@/components/dashboard/IdentityAvatar";
+import { UserRound, MessagesSquare, Globe, Activity } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -41,19 +46,6 @@ import { cn } from "@/lib/utils";
 const crmMessages = crmMessagesEn;
 
 type InspectorTab = "details" | "activity";
-
-function initialsFromLabel(label: string): string {
-  const parts = label.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  const first = parts[0] ?? "";
-  if (parts.length === 1) {
-    return first.slice(0, 2).toUpperCase();
-  }
-  const second = parts[1] ?? "";
-  return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
-}
 
 function MetaRow({
   label,
@@ -216,18 +208,18 @@ export function ConversationSidebar({
 
       <div className="border-inbox-border/80 shrink-0 border-b px-4 pt-4 pb-3.5">
         <div className="flex items-start gap-3">
-          <div
-            className="bg-brand/10 text-brand flex size-11 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold tracking-wide"
-            aria-hidden="true"
-          >
-            {initialsFromLabel(contactLabel)}
-          </div>
+          <IdentityAvatar
+            label={contactLabel}
+            country={conversation.ip_country_code}
+            className="size-12"
+          />
           <div className="min-w-0 flex-1 pt-0.5">
             <p className="truncate text-[15px] font-semibold tracking-tight text-neutral-950">
               {contactLabel}
             </p>
             {locationLabel ? (
               <p className="text-inbox-muted mt-1 truncate text-[12.5px]">
+                <CountryFlag code={conversation.ip_country_code} />{" "}
                 {locationLabel}
               </p>
             ) : null}
@@ -327,6 +319,10 @@ export function ConversationSidebar({
             />
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <UserRound
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Visitor
               </h2>
               {canUpdateVisitor ? (
@@ -466,6 +462,10 @@ export function ConversationSidebar({
 
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <MessagesSquare
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Conversation
               </h2>
               <dl className="mt-2">
@@ -544,6 +544,10 @@ export function ConversationSidebar({
 
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <Globe
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Current context
               </h2>
               <div className="mt-2 space-y-0.5">
@@ -595,6 +599,10 @@ export function ConversationSidebar({
 
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <Activity
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Activity
               </h2>
               <dl className="mt-2">
@@ -659,6 +667,10 @@ export function ConversationSidebar({
           >
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">
+                <Activity
+                  className="mr-2 inline size-4 text-brand"
+                  aria-hidden="true"
+                />
                 Activity
               </h2>
               <p className="text-inbox-muted mt-2 text-[13px]">

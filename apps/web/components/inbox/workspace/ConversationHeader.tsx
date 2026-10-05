@@ -5,6 +5,7 @@ import {
   type ConversationDetail,
   type WorkspaceMemberOption,
 } from "@site-chat/shared";
+import { IdentityAvatar } from "@/components/dashboard/IdentityAvatar";
 import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,19 +24,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { updateConversationStatusAction } from "@/lib/inbox/actions";
 import { cn } from "@/lib/utils";
-
-function initialsFromLabel(label: string): string {
-  const parts = label.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  const first = parts[0] ?? "";
-  if (parts.length === 1) {
-    return first.slice(0, 2).toUpperCase();
-  }
-  const second = parts[1] ?? "";
-  return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase();
-}
 
 export function ConversationHeader({
   contactLabel: initialContactLabel,
@@ -121,12 +109,10 @@ export function ConversationHeader({
         >
           <ArrowLeft className="size-5" aria-hidden="true" />
         </Link>
-        <div
-          className="bg-brand/10 text-brand flex size-10 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold"
-          aria-hidden="true"
-        >
-          {initialsFromLabel(contactLabel)}
-        </div>
+        <IdentityAvatar
+          label={contactLabel}
+          country={conversation.ip_country_code}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-[16px] font-semibold tracking-tight text-neutral-950">

@@ -259,7 +259,7 @@ export default async function ConversationDetailPage({
         </section>
 
         {/* Customer inspector — collapses before the thread on narrower desktops */}
-        <div className="hidden w-[320px] shrink-0 overflow-hidden xl:flex 2xl:w-[340px]">
+        <div className="hidden w-[288px] shrink-0 overflow-hidden xl:flex 2xl:w-[310px]">
           <ConversationSidebar
             workspaceId={workspace.workspace_id}
             workspaceSlug={workspaceSlug}

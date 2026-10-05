@@ -61,6 +61,30 @@ function parseRpcResult<T>(
 
 const assignableMembersSchema = z.array(workspaceMemberOptionSchema);
 
+async function fetchIpCountries(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  ids: string[],
+): Promise<Record<string, string | null>> {
+  if (!ids.length) return {};
+  const { data, error } = await callPublicRpc(
+    supabase,
+    "conversation_ip_countries",
+    { p_workspace_id: workspaceId, p_conversation_ids: ids },
+  );
+  // A rollout without the migration must not prevent an operator answering.
+  if (error) return {};
+  return z
+    .record(
+      z.string(),
+      z
+        .string()
+        .regex(/^[A-Z]{2}$/)
+        .nullable(),
+    )
+    .parse(data);
+}
+
 export async function fetchConversations(
   supabase: AppSupabaseClient,
   workspaceId: string,
@@ -76,11 +100,23 @@ export async function fetchConversations(
     throw error;
   }
 
-  return parseRpcResult(
+  const result = parseRpcResult(
     listConversationsResultSchema,
     data,
     "list_conversations",
   );
+  const countries = await fetchIpCountries(
+    supabase,
+    workspaceId,
+    result.items.map((item) => item.id),
+  );
+  return {
+    ...result,
+    items: result.items.map((item) => ({
+      ...item,
+      ip_country_code: countries[item.id] ?? null,
+    })),
+  };
 }
 
 export async function fetchConversation(
@@ -97,7 +133,15 @@ export async function fetchConversation(
     throw error;
   }
 
-  return parseRpcResult(conversationDetailSchema, data, "get_conversation");
+  const result = parseRpcResult(
+    conversationDetailSchema,
+    data,
+    "get_conversation",
+  );
+  const countries = await fetchIpCountries(supabase, workspaceId, [
+    conversationId,
+  ]);
+  return { ...result, ip_country_code: countries[conversationId] ?? null };
 }
 
 export async function fetchMessages(
