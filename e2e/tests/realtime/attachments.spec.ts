@@ -284,11 +284,23 @@ test.describe("attachments", () => {
     const visitor = await vc.newPage();
     const operator = await oc.newPage();
     try {
+      let bootstraps = 0;
+      await visitor.route("**/api/v1/widget/bootstrap?*", async (route) => {
+        const response = await route.fetch();
+        const body = (await response.json()) as { data: { embedTokenExpiresAt: string } };
+        bootstraps += 1;
+        if (bootstraps === 1)
+          body.data.embedTokenExpiresAt = new Date(Date.now() + 35000).toISOString();
+        await route.fulfill({ response, json: body });
+      });
       const marker = `operator-pdf-download-${Date.now()}`;
       const fixture = path.join(fixturesDir, "sample.pdf");
       await openWidget(visitor);
       await sendWidgetMessage(visitor, marker);
       await waitForWidgetRealtimeReady(visitor);
+      await widgetComposer(visitor).fill("Keep this draft during access renewal");
+      await expect.poll(() => bootstraps, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
+      await expect(widgetComposer(visitor)).toHaveValue("Keep this draft during access renewal");
       await prepareOperatorInbox(operator);
       await openOperatorConversation(operator, marker);
       await waitForOperatorThreadRealtimeReady(operator);

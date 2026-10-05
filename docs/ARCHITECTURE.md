@@ -656,3 +656,5 @@ Chat setup stores `allOfflineBehavior`, `outsideHoursBehavior`, `workingHours` a
 Visitor read visibility controls the displayed receipt state, not internal unread counters or visitor-to-operator read tracking. Disabling it maps Seen to Delivered, including after settings change or reconnect. Workspace administrators configure the setting in Chat setup.
 
 The widget sandbox allows downloads but does not allow popups or top-level navigation. Document downloads use a scoped signed storage URL with attachment disposition and avoid a new-window target. E2E verifies actual PDF bytes and a subsequent reply in the same chat.
+
+Embed access is renewed thirty seconds before its five-minute expiry, with retries after network failures and a focus check after background suspension. A trusted renewal replaces the embed token/config while preserving the visitor session, history and composer draft. The download E2E advertises a short expiry to exercise renewal before verifying PDF bytes.

@@ -436,6 +436,36 @@ function WidgetApp() {
 
   const readySessionToken = state.status === "ready" ? state.sessionToken : null;
   const readyEmbedToken = state.status === "ready" ? state.init.embedToken : null;
+  const embedExpiresAt = state.status === "ready" ? state.init.embedTokenExpiresAt : null;
+  const embedPublicKey = state.status === "ready" ? state.init.widgetPublicKey : null;
+  useEffect(() => {
+    if (!readyEmbedToken || !embedExpiresAt || !embedPublicKey) return;
+    const expiresAt = Date.parse(embedExpiresAt);
+    if (!Number.isFinite(expiresAt)) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = () => {
+      const origin = parentOriginRef.current;
+      if (origin)
+        postToParent(origin, "sitechat:refresh-embed", { widgetPublicKey: embedPublicKey });
+      // Retry a failed refresh; a successful token change cancels this timer.
+      timer = setTimeout(refresh, 30_000);
+    };
+    timer = setTimeout(refresh, Math.max(1000, expiresAt - Date.now() - 30_000));
+    const onFocus = () => {
+      if (Date.now() >= expiresAt - 30_000) {
+        clearTimeout(timer);
+        refresh();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [readyEmbedToken, embedExpiresAt, embedPublicKey]);
+
   useEffect(() => {
     if (!readyEmbedToken) return;
     const token = readyEmbedToken;
@@ -681,7 +711,18 @@ function WidgetApp() {
         if (!isMessageFromParent(event, payload.parentOrigin)) {
           return;
         }
-        void initialize(payload);
+        if (
+          sessionTokenRef.current &&
+          initRef.current?.widgetPublicKey === payload.widgetPublicKey &&
+          initRef.current.parentOrigin === payload.parentOrigin
+        ) {
+          initRef.current = payload;
+          setState((current) =>
+            current.status === "ready" ? { ...current, init: payload } : current,
+          );
+        } else {
+          void initialize(payload);
+        }
         return;
       }
 
