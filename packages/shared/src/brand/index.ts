@@ -1,7 +1,7 @@
 /** Public Mill identity, shared by the widget and its admin preview. */
 export const MILL_WEBSITE_URL = "https://mill.chat";
 export const MILL_DIALOGUE_REAR_PATH =
-  "M14 7V5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3v4l-2-2";
+  "M10 7V5a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3v5l-5-5";
 export const MILL_DIALOGUE_FRONT_PATH =
   "M6 10h13a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H9l-6 4V13a3 3 0 0 1 3-3Z";
 export const MILL_DIALOGUE_MARK = `data:image/svg+xml,${encodeURIComponent(
