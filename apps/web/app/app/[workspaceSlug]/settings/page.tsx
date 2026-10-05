@@ -39,6 +39,17 @@ export default async function SettingsPage({
       <ul className="grid gap-4 sm:grid-cols-2">
         <li>
           <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/profile`)}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="block text-sm font-medium">My profile</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Set the name and photo visitors see when you reply.
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
             href={toAppRoute(`/app/${workspaceSlug}/settings/install`)}
             className="block h-full rounded-lg border p-4"
             data-testid="settings-link-install"

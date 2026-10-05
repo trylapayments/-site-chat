@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { ConversationFollowUp } from "@/components/inbox/ConversationFollowUp";
 import { ConversationEngagement } from "@/components/inbox/ConversationEngagement";
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
 import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
@@ -318,6 +319,11 @@ export function ConversationSidebar({
             <ConversationEngagement
               slug={workspaceSlug}
               conversationId={conversationId}
+            />
+            <ConversationFollowUp
+              slug={workspaceSlug}
+              conversationId={conversationId}
+              email={conversation.contact?.email}
             />
             <section className="py-4">
               <h2 className="text-[11px] font-semibold tracking-[0.08em] text-zinc-400 uppercase">

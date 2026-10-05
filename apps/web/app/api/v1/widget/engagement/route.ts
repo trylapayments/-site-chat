@@ -1,3 +1,4 @@
+import { publicVisitorConversationContext } from "@/lib/conversation-wrapup/context";
 import { validatePreChatSubmission } from "@site-chat/shared";
 import { isIP } from "node:net";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -75,10 +76,16 @@ export async function GET(request: Request) {
     );
     if (error) throw error;
     const settings = await fetchChatSetup(auth.workspaceId);
+    const context = await publicVisitorConversationContext(
+      auth.workspaceId,
+      auth.session,
+    );
     return response(
       {
         data: {
           ...(data as Record<string, unknown>),
+          ...context,
+          hasConversation: context.conversationId !== null,
           setup: settings.config,
           version: settings.version,
         },

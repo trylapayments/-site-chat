@@ -55,6 +55,8 @@ export const chatSetupSchema = z
   .object({
     enabled: z.boolean().default(false),
     showReadReceipts: z.boolean().default(false),
+    ratingEnabled: z.boolean().default(false),
+    transcriptEnabled: z.boolean().default(true),
     quickQuestionsEnabled: z.boolean().default(true),
     quickQuestions: z
       .array(z.string().trim().min(1).max(120))

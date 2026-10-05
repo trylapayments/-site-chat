@@ -34,6 +34,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_profiles: {
+        Row: {
+          avatar_path: string | null
+          display_name: string
+          member_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          avatar_path?: string | null
+          display_name: string
+          member_id: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          avatar_path?: string | null
+          display_name?: string
+          member_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_profiles_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_profiles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_rate_limit_buckets: {
         Row: {
           bucket_key: string
@@ -790,6 +829,93 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspace_members"
             referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
+      conversation_ratings: {
+        Row: {
+          comment: string
+          conversation_id: string
+          created_at: string
+          score: number
+          workspace_id: string
+        }
+        Insert: {
+          comment?: string
+          conversation_id: string
+          created_at?: string
+          score: number
+          workspace_id: string
+        }
+        Update: {
+          comment?: string
+          conversation_id?: string
+          created_at?: string
+          score?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_ratings_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_ratings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_transcript_requests: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          payload: Json | null
+          recipient: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id: string
+          payload?: Json | null
+          recipient: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          recipient?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_transcript_requests_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_transcript_requests_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2403,6 +2529,15 @@ export type Database = {
         }
         Returns: number
       }
+      claim_conversation_transcript: {
+        Args: {
+          p_conversation_id: string
+          p_recipient: string
+          p_request_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       claim_notification_email_outbox: {
         Args: { p_limit?: number }
         Returns: {
@@ -2913,6 +3048,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      widget_conversation_context: {
+        Args: { p_session_token: string; p_workspace_id: string }
+        Returns: Json
+      }
       widget_create_or_resume_visitor_session: {
         Args: {
           p_browser_family?: string
@@ -2977,6 +3116,16 @@ export type Database = {
           p_kind: string
           p_session_token: string
           p_through_sequence: number
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      widget_rate_conversation: {
+        Args: {
+          p_comment: string
+          p_conversation_id: string
+          p_score: number
+          p_session_token: string
           p_workspace_id: string
         }
         Returns: Json

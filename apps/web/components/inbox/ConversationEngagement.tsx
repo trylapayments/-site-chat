@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { ConversationFollowUp } from "./ConversationFollowUp";
 import { getConversationEngagementAction } from "@/lib/visitors/context-action";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,6 +121,7 @@ export function MobileConversationDetails(props: {
           <SheetTitle>Visitor details</SheetTitle>
         </SheetHeader>
         <ConversationEngagement {...props} />
+        <ConversationFollowUp {...props} />
       </SheetContent>
     </Sheet>
   );

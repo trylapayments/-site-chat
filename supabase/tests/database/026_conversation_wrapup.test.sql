@@ -1,0 +1,47 @@
+\ir helpers/000_helpers.psql
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+SELECT plan(20);
+TRUNCATE tests.fixtures;
+DO $$
+DECLARE uid uuid;wid uuid;other_wid uuid;r jsonb;sid uuid;cid uuid;mid uuid;other_token text;
+BEGIN
+ uid:=tests.create_auth_user('wrapup-owner@test.local');
+ PERFORM tests.authenticate_as(uid,'wrapup-owner@test.local');
+ wid:=(public.create_workspace('Wrap-up test','wrapup-test')->>'workspace_id')::uuid;
+ other_wid:=(public.create_workspace('Other wrap-up','other-wrapup-test')->>'workspace_id')::uuid;
+ PERFORM tests.clear_auth();
+ r:=public.widget_create_or_resume_visitor_session(p_workspace_id=>wid,p_locale=>'en');
+ SELECT id INTO sid FROM public.visitor_sessions WHERE workspace_id=wid ORDER BY created_at DESC LIMIT 1;
+ INSERT INTO public.conversations(workspace_id,visitor_session_id,status)VALUES(wid,sid,'closed')RETURNING id INTO cid;
+ SELECT id INTO mid FROM public.workspace_members WHERE workspace_id=wid AND user_id=uid;
+ INSERT INTO public.agent_profiles(member_id,workspace_id,display_name)VALUES(mid,wid,'Alice');
+ INSERT INTO public.messages(workspace_id,conversation_id,sender_type,agent_member_id,body,is_internal,sequence_number)VALUES(wid,cid,'agent',mid,'Public reply',false,1),(wid,cid,'agent',mid,'Secret note',true,2);
+ INSERT INTO tests.fixtures VALUES('workspace',wid::text),('other_workspace',other_wid::text),('session',sid::text),('conversation',cid::text),('token',r->>'session_token'),('member',mid::text);
+ r:=public.widget_create_or_resume_visitor_session(p_workspace_id=>other_wid,p_locale=>'en');
+ INSERT INTO tests.fixtures VALUES('other_token',r->>'session_token');
+END; $$;
+SELECT ok(NOT has_table_privilege('anon','public.agent_profiles','SELECT'),'Anonymous clients cannot list personal profiles');
+SELECT ok(NOT has_table_privilege('authenticated','public.agent_profiles','UPDATE'),'Operators cannot forge another profile through direct writes');
+SELECT ok(NOT has_table_privilege('anon','public.conversation_ratings','SELECT'),'Anonymous clients cannot list customer ratings');
+SELECT ok(NOT has_table_privilege('authenticated','public.conversation_transcript_requests','SELECT'),'Transcript snapshots remain server-only');
+SELECT ok(NOT has_function_privilege('anon','public.widget_conversation_context(uuid,text)','EXECUTE'),'Conversation context needs a server-validated session');
+SELECT ok(NOT has_function_privilege('authenticated','public.widget_rate_conversation(uuid,text,uuid,integer,text)','EXECUTE'),'Customer ratings cannot be forged via operator RPC');
+SELECT ok(NOT has_function_privilege('anon','public.claim_conversation_transcript(uuid,uuid,uuid,text)','EXECUTE'),'Email claims cannot be called directly by visitors');
+SELECT is((SELECT public FROM storage.buckets WHERE id='agent-avatars'),false,'Agent photos use a private bucket');
+SELECT is(app_private.member_display_label(tests.fixture('member')::uuid),'Alice','Personal display name is used in the inbox');
+SELECT is(public.widget_conversation_context(tests.fixture('workspace')::uuid,tests.fixture('token'))->>'conversationStatus','closed','Visitor receives completed status');
+SELECT is((SELECT count(*)::integer FROM jsonb_each(public.widget_conversation_context(tests.fixture('workspace')::uuid,tests.fixture('token'))->'messageAgents')),1,'Identity mapping excludes internal messages');
+SELECT is((app_private.widget_viewable_conversation(tests.fixture('workspace')::uuid,tests.fixture('session')::uuid)).id::text,tests.fixture('conversation'),'Closed transcript stays accessible to its visitor');
+SELECT throws_ok(format('SELECT public.widget_rate_conversation(%L::uuid,%L,%L::uuid,5,%L)',tests.fixture('workspace'),tests.fixture('token'),tests.fixture('conversation'),'Great'),'P0001','Ratings are disabled','Ratings enforce workspace opt-out on the server');
+INSERT INTO public.workspace_chat_settings(workspace_id,config)VALUES(tests.fixture('workspace')::uuid,'{"ratingEnabled":true}');
+SELECT is((public.widget_rate_conversation(tests.fixture('workspace')::uuid,tests.fixture('token'),tests.fixture('conversation')::uuid,5,'Great')->>'score')::integer,5,'Completed conversation accepts a rating');
+SELECT is((public.widget_rate_conversation(tests.fixture('workspace')::uuid,tests.fixture('token'),tests.fixture('conversation')::uuid,1,'Changed')->>'score')::integer,5,'Repeated submission preserves the first rating');
+SELECT throws_ok(format('SELECT public.widget_rate_conversation(%L::uuid,%L,%L::uuid,5,%L)',tests.fixture('other_workspace'),tests.fixture('other_token'),tests.fixture('conversation'),'Forged'),'P0001','Conversation is not complete','Other visitor cannot rate this conversation');
+SELECT is(public.claim_conversation_transcript(tests.fixture('workspace')::uuid,tests.fixture('conversation')::uuid,'10000000-0000-4000-8000-000000000001','visitor@example.com'),'claimed','Scoped request claims one email');
+SELECT is(public.claim_conversation_transcript(tests.fixture('workspace')::uuid,tests.fixture('conversation')::uuid,'10000000-0000-4000-8000-000000000001','visitor@example.com'),'busy','Concurrent retry cannot send a second email');
+UPDATE public.conversation_transcript_requests SET status='sent' WHERE id='10000000-0000-4000-8000-000000000001';
+SELECT is(public.claim_conversation_transcript(tests.fixture('workspace')::uuid,tests.fixture('conversation')::uuid,'10000000-0000-4000-8000-000000000001','visitor@example.com'),'sent','Completed retry is idempotent');
+SELECT throws_ok(format('SELECT public.claim_conversation_transcript(%L::uuid,%L::uuid,%L::uuid,%L)',tests.fixture('other_workspace'),tests.fixture('conversation'),'10000000-0000-4000-8000-000000000002','visitor@example.com'),'P0001','Conversation not found','Cross-workspace transcript claim is rejected');
+SELECT * FROM finish();
+ROLLBACK;

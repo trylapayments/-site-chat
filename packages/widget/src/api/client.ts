@@ -211,6 +211,10 @@ export class WidgetApiClient {
     setup: ChatSetup;
     version: number;
     hasConversation: boolean;
+    conversationId: string | null;
+    conversationStatus: "open" | "pending" | "resolved" | "closed" | null;
+    rating: { score: number; comment: string } | null;
+    messageAgents: Record<string, { name: string; avatarUrl: string | null }>;
     formSubmitted: boolean;
     operatorInitiated: boolean;
   }> {
@@ -218,6 +222,23 @@ export class WidgetApiClient {
       headers: { Authorization: `Bearer ${sessionToken}`, [WIDGET_EMBED_TOKEN_HEADER]: embedToken },
       credentials: "omit",
       cache: "no-store",
+    });
+    return this.parseResponse(response);
+  }
+  async conversationAction(
+    embedToken: string,
+    sessionToken: string,
+    input: unknown,
+  ): Promise<{ score?: number; comment?: string; sent?: boolean }> {
+    const response = await fetch(new URL("/api/v1/widget/conversation", this.apiBase), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        [WIDGET_EMBED_TOKEN_HEADER]: embedToken,
+        "Content-Type": "application/json",
+      },
+      credentials: "omit",
+      body: JSON.stringify(input),
     });
     return this.parseResponse(response);
   }

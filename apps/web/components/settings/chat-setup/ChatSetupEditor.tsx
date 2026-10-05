@@ -71,6 +71,44 @@ export function ChatSetupEditor({
       </div>
       <section
         className="space-y-4 rounded-lg border bg-white p-5"
+        aria-labelledby="wrapup-settings-title"
+      >
+        <h2 id="wrapup-settings-title" className="text-lg font-semibold">
+          Conversation follow-up
+        </h2>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.ratingEnabled}
+            disabled={disabled}
+            onChange={(e) => {
+              update({ ratingEnabled: e.target.checked });
+            }}
+          />
+          Ask visitors to rate completed conversations
+        </label>
+        <p className="text-sm text-muted-foreground">
+          A five-star rating and optional comment appear after the conversation
+          is closed. Disabled by default.
+        </p>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.transcriptEnabled}
+            disabled={disabled}
+            onChange={(e) => {
+              update({ transcriptEnabled: e.target.checked });
+            }}
+          />
+          Allow visitors to email themselves a transcript
+        </label>
+        <p className="text-sm text-muted-foreground">
+          Only public messages are included. Your team can also send a
+          transcript from the conversation details.
+        </p>
+      </section>
+      <section
+        className="space-y-4 rounded-lg border bg-white p-5"
         aria-labelledby="composer-tools-title"
       >
         <h2 id="composer-tools-title" className="text-lg font-semibold">

@@ -1,3 +1,4 @@
+import { ConversationFollowUp } from "./ConversationFollowUp";
 import { VisitorComposerTools } from "./VisitorComposerTools";
 import { PreChatForm } from "./PreChatForm";
 import { shouldShowWaitingAcknowledgement } from "./waiting";
@@ -1623,7 +1624,7 @@ function WidgetApp() {
               const label = isVisitor
                 ? messagesCopy.youLabel
                 : message.senderType === "agent"
-                  ? messagesCopy.agentLabel
+                  ? (engagement?.messageAgents[message.id]?.name ?? messagesCopy.agentLabel)
                   : messagesCopy.systemLabel;
               const actualReceiptStatus =
                 isVisitor && message.status !== "failed" && !message.isOptimistic
@@ -1636,6 +1637,7 @@ function WidgetApp() {
                 actualReceiptStatus && engagement?.setup.showReadReceipts !== true
                   ? "sent"
                   : actualReceiptStatus;
+              const personalAgent = engagement?.messageAgents[message.id];
               const showAvatar =
                 message.senderType === "agent" && config?.showAgentAvatars !== false;
 
@@ -1670,15 +1672,15 @@ function WidgetApp() {
                         fontWeight: 700,
                       }}
                     >
-                      {config?.agentAvatarUrl ? (
+                      {(personalAgent?.avatarUrl ?? config?.agentAvatarUrl) ? (
                         <img
-                          src={config.agentAvatarUrl}
+                          src={(personalAgent?.avatarUrl ?? config?.agentAvatarUrl) as string}
                           alt=""
                           referrerPolicy="no-referrer"
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       ) : (
-                        messagesCopy.agentLabel.slice(0, 1)
+                        label.slice(0, 1)
                       )}
                     </span>
                   ) : null}
@@ -1749,6 +1751,8 @@ function WidgetApp() {
               );
             })}
             {state.status === "ready" &&
+            engagement?.conversationStatus !== "closed" &&
+            engagement?.conversationStatus !== "resolved" &&
             (shouldShowWaitingAcknowledgement(messages) ||
               (engagement?.formSubmitted &&
                 !messages.some((message) => message.senderType === "agent"))) ? (
@@ -1770,6 +1774,27 @@ function WidgetApp() {
                   : (engagement?.setup.offlineWaitingMessage ??
                     "We've notified our team. We'll reply as soon as we're available.")}
               </p>
+            ) : null}
+            {state.status === "ready" &&
+            readyEmbedToken &&
+            readySessionToken &&
+            engagement?.conversationId &&
+            (engagement.setup.transcriptEnabled ||
+              engagement.conversationStatus === "closed" ||
+              engagement.conversationStatus === "resolved") ? (
+              <ConversationFollowUp
+                key={engagement.conversationId}
+                api={api}
+                embedToken={readyEmbedToken}
+                sessionToken={readySessionToken}
+                context={engagement}
+                accentColor={accentColor}
+                textColor={textColor}
+                borderColor={borderColor}
+                onRated={(rating) => {
+                  setEngagement((current) => (current ? { ...current, rating } : current));
+                }}
+              />
             ) : null}
             <div data-testid="widget-messages-end" aria-hidden="true" />
           </div>
