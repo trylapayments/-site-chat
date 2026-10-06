@@ -53,11 +53,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useRef(false);
   function save(change: (previous: PendingMessage[]) => PendingMessage[]) {
     const userId = currentUser.current;
-    if (!userId) return Promise.reject(new Error("Сессия завершена."));
+    if (!userId) return Promise.reject(new Error("Your session has ended."));
     const operation = writeChain.current
       .catch(() => {})
       .then(async () => {
-        if (currentUser.current !== userId) throw new Error("Сессия изменилась.");
+        if (currentUser.current !== userId) throw new Error("Your account has changed.");
         const next = change(items.current);
         await storage.setItem(`mill.outbox.${userId}`, JSON.stringify(next));
         if (currentUser.current === userId) {
@@ -82,7 +82,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       );
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось загрузить рабочие пространства.");
+      setError(e instanceof Error ? e.message : "Unable to load workspaces.");
     }
   }, []);
   useEffect(() => {
@@ -118,7 +118,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setPending(items.current);
         hydrated.current = true;
       })
-      .catch(() => setError("Не удалось восстановить очередь сообщений."));
+      .catch(() => setError("Unable to restore queued messages."));
     void Promise.resolve().then(reload);
     void storage.getItem(`mill.workspace.${userId}`).then((id) => {
       if (id && currentUser.current === userId) setSelected(id);
@@ -199,7 +199,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                       throw new ApiError(
                         response.status,
                         "UPLOAD_FAILED",
-                        "Не удалось загрузить файл.",
+                        "Unable to upload the file.",
                       );
                   }
                 } finally {
@@ -242,7 +242,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 m.id === item.id
                   ? {
                       ...failedAttempt(m, e instanceof ApiError ? e.status : 0, Date.now()),
-                      error: e instanceof Error ? e.message : "Нет соединения",
+                      error: e instanceof Error ? e.message : "No connection",
                     }
                   : m,
               ),
@@ -302,9 +302,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           }),
         send: async (conversationId, body, file) => {
           if (!session || !workspace || !hydrated.current)
-            throw new Error("Сессия ещё загружается.");
+            throw new Error("Your session is still loading.");
           if (items.current.length >= 100)
-            throw new Error("В очереди 100 сообщений. Дождитесь отправки.");
+            throw new Error("You have 100 queued messages. Wait for them to send.");
           await save((previous) => [
             ...previous,
             {

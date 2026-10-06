@@ -34,7 +34,7 @@ export default function Login() {
       });
       if (failure) throw failure;
     } catch {
-      setError("Не удалось войти. Проверьте email, пароль и соединение.");
+      setError("Unable to sign in. Check your email, password, and connection.");
     } finally {
       setBusy(false);
     }
@@ -55,16 +55,16 @@ export default function Login() {
               <Text
                 style={{ fontSize: 36, fontWeight: "700", letterSpacing: -1.3, color: colors.ink }}
               >
-                Ближе к клиентам.{"\n"}Где бы вы ни были.
+                Closer to your customers.{"\n"}Wherever you are.
               </Text>
               <Text style={styles.caption}>
-                Ваши разговоры, команда и клиенты —{"\n"}в одном спокойном рабочем пространстве.
+                Your conversations, team, and customers{"\n"}in one calm workspace.
               </Text>
             </View>
             <View style={{ gap: 12, marginTop: 20 }}>
               <TextInput
                 accessibilityLabel="Email"
-                placeholder="Рабочий email"
+                placeholder="Work email"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -78,8 +78,8 @@ export default function Login() {
               />
               <TextInput
                 ref={passwordRef}
-                accessibilityLabel="Пароль"
-                placeholder="Пароль"
+                accessibilityLabel="Password"
+                placeholder="Password"
                 secureTextEntry
                 textContentType="password"
                 autoComplete="current-password"
@@ -90,7 +90,7 @@ export default function Login() {
                 style={styles.input}
               />
               <Button
-                title={busy ? "Входим…" : "Войти в Mill"}
+                title={busy ? "Signing in…" : "Sign in to Mill"}
                 onPress={() => void login()}
                 disabled={!configured || !email.trim() || !password || busy}
               />
@@ -98,7 +98,7 @@ export default function Login() {
             <ErrorBanner
               message={
                 !configured
-                  ? "Для подключения задайте публичный адрес Supabase и anon key в конфигурации приложения."
+                  ? "Mill is not configured yet. Please contact your administrator."
                   : error
               }
             />
@@ -106,10 +106,10 @@ export default function Login() {
               onPress={() => void Linking.openURL("https://app.mill.chat/forgot-password")}
               style={{ color: colors.blue, textAlign: "center", padding: 10 }}
             >
-              Забыли пароль?
+              Forgot password?
             </Text>
             <Text style={[styles.caption, { textAlign: "center", fontSize: 12, marginTop: 22 }]}>
-              Войдите под существующим аккаунтом Mill.
+              Sign in with your existing Mill account.
             </Text>
           </ScrollView>
         </KeyboardAvoidingView>

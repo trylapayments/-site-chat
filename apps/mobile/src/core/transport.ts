@@ -23,13 +23,12 @@ export function createTransport(
     expectedUserId?: string,
   ): Promise<T> {
     const { data, error } = await readSession();
-    if (error || !data.session)
-      throw new ApiError(401, "UNAUTHORIZED", "Войдите в аккаунт заново.");
+    if (error || !data.session) throw new ApiError(401, "UNAUTHORIZED", "Please sign in again.");
     if (expectedUserId && data.session.user.id !== expectedUserId)
       throw new ApiError(
         401,
         "ACCOUNT_CHANGED",
-        "Аккаунт изменился. Сообщение сохранено для исходного аккаунта.",
+        "Your account has changed. The message is saved for the original account.",
       );
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
@@ -48,7 +47,7 @@ export function createTransport(
         throw new ApiError(
           response.status,
           body.error?.code || "FAILED",
-          body.error?.message || "Не удалось выполнить действие.",
+          body.error?.message || "Unable to complete this action.",
         );
       return body.data as T;
     } finally {

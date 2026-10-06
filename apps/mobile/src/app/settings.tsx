@@ -47,7 +47,7 @@ export default function Settings() {
       setStatus(result.status);
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось изменить статус.");
+      setError(e instanceof Error ? e.message : "Unable to update your status.");
     } finally {
       setBusy(false);
     }
@@ -57,9 +57,9 @@ export default function Settings() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={{ padding: 22, gap: 20 }}>
         <View style={[styles.row, { justifyContent: "space-between" }]}>
-          <Text style={styles.heading}>Ваш Mill</Text>
+          <Text style={styles.heading}>Your Mill</Text>
           <Pressable onPress={() => router.back()}>
-            <Text style={{ padding: 10, color: colors.blue }}>Готово</Text>
+            <Text style={{ padding: 10, color: colors.blue }}>Done</Text>
           </Pressable>
         </View>
         <View style={[styles.card, styles.row, { gap: 16 }]}>
@@ -72,10 +72,10 @@ export default function Settings() {
         <ErrorBanner message={error} />
         {enabled && (
           <View style={[styles.card, { gap: 12 }]}>
-            <Text style={{ color: colors.ink, fontWeight: "600" }}>Статус оператора</Text>
+            <Text style={{ color: colors.ink, fontWeight: "600" }}>Operator status</Text>
             {[
-              { key: "available", label: "Доступен", color: colors.green },
-              { key: "away", label: "Отошёл", color: "#DFA447" },
+              { key: "available", label: "Available", color: colors.green },
+              { key: "away", label: "Away", color: "#DFA447" },
               { key: "offline", label: "Offline", color: colors.muted },
             ].map((item) => (
               <Pressable
@@ -94,7 +94,7 @@ export default function Settings() {
           </View>
         )}
         <View style={[styles.card, { gap: 15 }]}>
-          <Text style={{ color: colors.ink, fontWeight: "600" }}>Рабочие пространства</Text>
+          <Text style={{ color: colors.ink, fontWeight: "600" }}>Workspaces</Text>
           {workspaces.map((w) => (
             <Pressable
               key={w.workspace_id}
@@ -110,7 +110,7 @@ export default function Settings() {
         </View>
         {enabled && (
           <Button
-            title={push ? "Уведомления подключены" : "Включить push-уведомления"}
+            title={push ? "Notifications enabled" : "Enable push notifications"}
             subtle
             disabled={busy}
             onPress={() => {
@@ -125,20 +125,22 @@ export default function Settings() {
             }}
           />
         )}
-        <Text style={styles.caption}>Подписка и доступ управляются в веб-портале Mill.</Text>
+        <Text style={styles.caption}>
+          Manage your subscription and access in the Mill web portal.
+        </Text>
         <Button
-          title="Выйти из аккаунта"
+          title="Sign out"
           subtle
           onPress={() =>
             Alert.alert(
-              "Выйти из Mill?",
+              "Sign out of Mill?",
               pending.length
-                ? "Неотправленные сообщения сохранятся для этого аккаунта. Push-уведомления будут отключены."
-                : "Push-уведомления на этом устройстве будут отключены.",
+                ? "Unsent messages will be saved for this account. Push notifications will be disabled."
+                : "Push notifications will be disabled on this device.",
               [
-                { text: "Отмена", style: "cancel" },
+                { text: "Cancel", style: "cancel" },
                 {
-                  text: "Выйти",
+                  text: "Sign out",
                   style: "destructive",
                   onPress: () => void logout().catch((e) => setError(e.message)),
                 },

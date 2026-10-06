@@ -11,7 +11,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: process.env.MILL_IOS_BUNDLE_ID || "chat.mill.operators",
-    infoPlist: { ITSAppUsesNonExemptEncryption: false },
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      CFBundleDevelopmentRegion: "en",
+      CFBundleLocalizations: ["en"],
+    },
   },
   android: { package: "chat.mill.operators", permissions: [] },
   plugins: [
@@ -21,7 +25,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       "expo-image-picker",
       {
-        photosPermission: "Mill использует выбранные фотографии для отправки клиентам.",
+        photosPermission: "Mill uses the photos you select to share them with customers.",
         cameraPermission: false,
         microphonePermission: false,
       },

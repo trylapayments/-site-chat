@@ -51,7 +51,7 @@ function Attachment({
       setError("");
       return data.url;
     } catch {
-      setError("Не удалось открыть файл");
+      setError("Unable to open the file");
       return null;
     }
   }, [workspaceId, attachment.id]);
@@ -66,20 +66,20 @@ function Attachment({
         })
       }
       style={{ paddingVertical: 6 }}
-      accessibilityLabel={`Открыть ${attachment.filename}`}
+      accessibilityLabel={`Open ${attachment.filename}`}
     >
       {attachment.kind === "image" && url ? (
         <Image
           source={{ uri: url }}
           style={{ width: 210, height: 160, borderRadius: 12 }}
           resizeMode="cover"
-          onError={() => setError("Ссылка истекла. Нажмите для обновления.")}
+          onError={() => setError("This link has expired. Tap to refresh.")}
         />
       ) : (
         <Text style={{ color: colors.blue, fontWeight: "600" }}>↗ {attachment.filename}</Text>
       )}
       <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4 }}>
-        {error || `${Math.ceil(attachment.size_bytes / 1024)} КБ`}
+        {error || `${Math.ceil(attachment.size_bytes / 1024)} KB`}
       </Text>
     </Pressable>
   );
@@ -168,7 +168,7 @@ export default function Chat() {
         setError("");
       } catch (e) {
         if (scope.current === identity)
-          setError(e instanceof Error ? e.message : "Не удалось загрузить разговор.");
+          setError(e instanceof Error ? e.message : "Unable to load this conversation.");
       }
     },
     [workspaceId, id, oldestSequence],
@@ -212,7 +212,7 @@ export default function Chat() {
       return true;
     } catch (e) {
       await refresh();
-      setError(e instanceof Error ? e.message : "Не удалось выполнить действие.");
+      setError(e instanceof Error ? e.message : "Unable to complete this action.");
       return false;
     } finally {
       setBusy(false);
@@ -243,7 +243,7 @@ export default function Chat() {
       setNotesBefore(result.has_more ? result.next_before : null);
     } catch (e) {
       if (scope.current === identity)
-        setError(e instanceof Error ? e.message : "Не удалось загрузить заметки.");
+        setError(e instanceof Error ? e.message : "Unable to load notes.");
     } finally {
       setNotesLoading(false);
     }
@@ -260,7 +260,7 @@ export default function Chat() {
         await loadNotes();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось загрузить данные.");
+      setError(e instanceof Error ? e.message : "Unable to load data.");
     }
   }
   async function submit() {
@@ -272,7 +272,7 @@ export default function Chat() {
       setFile(undefined);
       void Haptics.selectionAsync();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось сохранить сообщение.");
+      setError(e instanceof Error ? e.message : "Unable to save your message.");
     } finally {
       setBusy(false);
     }
@@ -283,11 +283,11 @@ export default function Chat() {
       const value = await pickFile(photo, session.user.id);
       if (value) setFile(value);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось выбрать файл.");
+      setError(e instanceof Error ? e.message : "Unable to select the file.");
     }
   }
   if (!session) return <Redirect href="/login" />;
-  const name = detail?.contact?.name || detail?.contact?.email || "Посетитель";
+  const name = detail?.contact?.name || detail?.contact?.email || "Visitor";
   const local = pending.filter(
     (m) =>
       m.workspaceId === workspaceId &&
@@ -310,7 +310,7 @@ export default function Chat() {
         ]}
       >
         <Pressable
-          accessibilityLabel="Назад к диалогам"
+          accessibilityLabel="Back to inbox"
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/inbox"))}
           style={{ width: 32, height: 44, justifyContent: "center" }}
         >
@@ -322,16 +322,16 @@ export default function Chat() {
             {name}
           </Text>
           <Text style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {detail?.assigned_to?.display_label || "Без оператора"} ·{" "}
+            {detail?.assigned_to?.display_label || "Unassigned"} ·{" "}
             {detail?.status
-              ? { open: "Открыт", pending: "В ожидании", resolved: "Завершён", closed: "Закрыт" }[
+              ? { open: "Open", pending: "Pending", resolved: "Resolved", closed: "Closed" }[
                   detail.status
                 ]
-              : "Загрузка"}
+              : "Loading"}
           </Text>
         </Pressable>
         <Pressable
-          accessibilityLabel="Действия с диалогом"
+          accessibilityLabel="Conversation actions"
           onPress={() => void openPanel("actions")}
           style={{ padding: 10 }}
         >
@@ -341,7 +341,7 @@ export default function Chat() {
       <ErrorBanner message={error} />
       {!online && (
         <Text style={{ textAlign: "center", color: colors.muted, padding: 8 }}>
-          Нет сети · сообщения сохранены в очереди
+          Offline · messages saved in the queue
         </Text>
       )}
       <KeyboardAvoidingView
@@ -367,15 +367,16 @@ export default function Chat() {
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           ListHeaderComponent={
             older ? (
-              <Button
-                title="Загрузить предыдущие сообщения"
-                subtle
-                onPress={() => void refresh(true)}
-              />
+              <Button title="Load earlier messages" subtle onPress={() => void refresh(true)} />
             ) : null
           }
           ListEmptyComponent={
-            !detail ? <Empty title="Открываем разговор" detail="Загружаем историю Mill." /> : null
+            !detail ? (
+              <Empty
+                title="Opening conversation"
+                detail="Loading your Mill conversation history."
+              />
+            ) : null
           }
           renderItem={({ item }) => {
             if (item.sender_type === "system")
@@ -428,14 +429,14 @@ export default function Chat() {
                     alignSelf: "flex-end",
                   }}
                 >
-                  {new Date(item.created_at).toLocaleTimeString("ru", {
+                  {new Date(item.created_at).toLocaleTimeString("en-US", {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
                   {mine
                     ? item.sequence_number <= (detail?.visitor_last_read_sequence || 0)
-                      ? " · Прочитано"
-                      : " · Отправлено"
+                      ? " · Read"
+                      : " · Sent"
                     : ""}
                 </Text>
               </View>
@@ -458,16 +459,16 @@ export default function Chat() {
                     {item.body || item.file?.filename}
                   </Text>
                   <Text style={{ color: colors.muted, fontSize: 11, marginTop: 7 }}>
-                    {item.state === "failed" ? "Не отправлено" : "В очереди…"}
+                    {item.state === "failed" ? "Not sent" : "Queued…"}
                     {item.file ? ` · ${item.file.filename}` : ""}
                   </Text>
                   {item.state === "failed" && (
                     <View style={{ gap: 8, marginTop: 10 }}>
                       <Text style={{ color: "#9C3E43", fontSize: 12 }}>{item.error}</Text>
-                      <Button title="Повторить" subtle onPress={() => void retry(item.id)} />
+                      <Button title="Retry" subtle onPress={() => void retry(item.id)} />
                       <Pressable onPress={() => void discard(item.id)}>
                         <Text style={{ color: colors.muted, textAlign: "center", padding: 8 }}>
-                          Удалить из очереди
+                          Remove from queue
                         </Text>
                       </Pressable>
                     </View>
@@ -509,24 +510,24 @@ export default function Chat() {
             )}
             <View style={[styles.row, { gap: 7, alignItems: "flex-end" }]}>
               <Pressable
-                accessibilityLabel="Прикрепить фото"
+                accessibilityLabel="Attach photo"
                 onPress={() => void choose(true)}
                 style={{ padding: 10 }}
               >
                 <Text style={{ fontSize: 24, color: colors.blue }}>▧</Text>
               </Pressable>
               <Pressable
-                accessibilityLabel="Прикрепить файл"
+                accessibilityLabel="Attach file"
                 onPress={() => void choose(false)}
                 style={{ padding: 7 }}
               >
                 <Text style={{ fontSize: 24, color: colors.blue }}>＋</Text>
               </Pressable>
               <TextInput
-                accessibilityLabel="Сообщение клиенту"
+                accessibilityLabel="Message to customer"
                 multiline
                 maxLength={4000}
-                placeholder="Написать ответ…"
+                placeholder="Write a reply…"
                 value={body}
                 onChangeText={setBody}
                 style={[
@@ -535,7 +536,7 @@ export default function Chat() {
                 ]}
               />
               <Pressable
-                accessibilityLabel="Отправить сообщение"
+                accessibilityLabel="Send message"
                 onPress={() => void submit()}
                 disabled={busy || (!body.trim() && !file)}
                 style={{
@@ -555,7 +556,7 @@ export default function Chat() {
           </View>
         ) : (
           <Text style={{ padding: 20, textAlign: "center", color: colors.muted }}>
-            Для вашей роли доступен просмотр.
+            Your role has read-only access.
           </Text>
         )}
       </KeyboardAvoidingView>
@@ -569,13 +570,13 @@ export default function Chat() {
           <View style={[styles.row, { justifyContent: "space-between", padding: 22 }]}>
             <Text style={styles.heading}>
               {panel === "profile"
-                ? "Клиент"
+                ? "Customer"
                 : panel === "notes"
-                  ? "Внутренние заметки"
-                  : "Управление диалогом"}
+                  ? "Internal notes"
+                  : "Manage conversation"}
             </Text>
             <Pressable onPress={() => setPanel(null)}>
-              <Text style={{ color: colors.blue, padding: 8 }}>Готово</Text>
+              <Text style={{ color: colors.blue, padding: 8 }}>Done</Text>
             </Pressable>
           </View>
           <ErrorBanner message={error} />
@@ -589,17 +590,17 @@ export default function Chat() {
                 <Text style={styles.heading}>{name}</Text>
                 {[
                   ["Email", detail?.contact?.email],
-                  ["Телефон", detail?.contact?.phone],
-                  ["Страница", detail?.source_url],
+                  ["Phone", detail?.contact?.phone],
+                  ["Page", detail?.source_url],
                   [
-                    "Создан",
-                    detail?.created_at && new Date(detail.created_at).toLocaleDateString("ru"),
+                    "Created",
+                    detail?.created_at && new Date(detail.created_at).toLocaleDateString("en-US"),
                   ],
                 ].map(([label, value]) => (
                   <View key={label}>
                     <Text style={{ color: colors.muted, fontSize: 12 }}>{label}</Text>
                     <Text selectable style={{ color: colors.ink, marginTop: 5 }}>
-                      {value || "Не указан"}
+                      {value || "Not provided"}
                     </Text>
                   </View>
                 ))}
@@ -607,18 +608,14 @@ export default function Chat() {
             )}
             {panel === "actions" && (
               <>
-                <Button title="Карточка клиента" subtle onPress={() => void openPanel("profile")} />
+                <Button title="Customer profile" subtle onPress={() => void openPanel("profile")} />
                 {role && can(role, "manage_internal_notes") && (
-                  <Button
-                    title="Внутренние заметки"
-                    subtle
-                    onPress={() => void openPanel("notes")}
-                  />
+                  <Button title="Internal notes" subtle onPress={() => void openPanel("notes")} />
                 )}
                 {writable && (
                   <>
                     <Button
-                      title="Взять диалог"
+                      title="Assign to me"
                       disabled={busy || !detail}
                       onPress={() =>
                         void action("take", {
@@ -630,8 +627,8 @@ export default function Chat() {
                     <Button
                       title={
                         detail?.status === "closed" || detail?.status === "resolved"
-                          ? "Открыть заново"
-                          : "Закрыть диалог"
+                          ? "Reopen conversation"
+                          : "Close conversation"
                       }
                       disabled={busy || !detail}
                       subtle
@@ -645,7 +642,7 @@ export default function Chat() {
                         })
                       }
                     />
-                    <Text style={[styles.caption, { marginTop: 12 }]}>Назначить оператору</Text>
+                    <Text style={[styles.caption, { marginTop: 12 }]}>Assign to an operator</Text>
                     {members.map((member) => (
                       <Pressable
                         key={member.member_id}
@@ -664,7 +661,7 @@ export default function Chat() {
                       </Pressable>
                     ))}
                     <Button
-                      title="Снять назначение"
+                      title="Unassign"
                       subtle
                       disabled={busy}
                       onPress={() =>
@@ -681,7 +678,7 @@ export default function Chat() {
             )}
             {panel === "notes" && (
               <>
-                <Text style={styles.caption}>Заметки видит только ваша команда.</Text>
+                <Text style={styles.caption}>Only your team can see these notes.</Text>
                 {notes.map((item) => (
                   <View key={item.id} style={[styles.card, { backgroundColor: "#FFF9E9", gap: 8 }]}>
                     <Text style={{ fontWeight: "600", color: colors.ink }}>
@@ -691,32 +688,32 @@ export default function Chat() {
                       {item.body}
                     </Text>
                     <Text style={{ fontSize: 11, color: colors.muted }}>
-                      {new Date(item.created_at).toLocaleString("ru")}
+                      {new Date(item.created_at).toLocaleString("en-US")}
                     </Text>
                   </View>
                 ))}
                 {notesBefore && (
                   <Button
-                    title={notesLoading ? "Загрузка…" : "Загрузить предыдущие заметки"}
+                    title={notesLoading ? "Loading…" : "Load earlier notes"}
                     subtle
                     disabled={notesLoading}
                     onPress={() => void loadNotes(notesBefore)}
                   />
                 )}
                 {notesLoading && !notes.length && (
-                  <Text style={styles.caption}>Загружаем заметки…</Text>
+                  <Text style={styles.caption}>Loading notes…</Text>
                 )}
                 <TextInput
-                  accessibilityLabel="Внутренняя заметка"
+                  accessibilityLabel="Internal note"
                   value={note}
                   onChangeText={setNote}
                   multiline
                   maxLength={4000}
-                  placeholder="Добавить заметку для команды…"
+                  placeholder="Add a note for your team…"
                   style={[styles.input, { minHeight: 100, paddingVertical: 15 }]}
                 />
                 <Button
-                  title="Добавить заметку"
+                  title="Add note"
                   disabled={busy || !note.trim()}
                   onPress={() => {
                     void action("note", {

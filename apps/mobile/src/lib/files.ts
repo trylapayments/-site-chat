@@ -38,7 +38,7 @@ export async function pickFile(
     ? ATTACHMENT_LIMITS.imageMaxBytes
     : ATTACHMENT_LIMITS.documentMaxBytes;
   if (source.size > limit)
-    throw new Error(`Файл слишком большой. Максимум ${limit / 1024 / 1024} МБ.`);
+    throw new Error(`File is too large. Maximum size: ${limit / 1024 / 1024} MB.`);
   const directory = new Directory(Paths.document, "mill-outbox", userId);
   directory.create({ intermediates: true, idempotent: true });
   const destination = new File(directory, Crypto.randomUUID());

@@ -44,18 +44,18 @@ async function registerToken(workspaceId: string, userId: string, token: string)
 }
 export async function registerPush(workspaceId: string) {
   const { data } = await supabase.auth.getSession();
-  if (!data.session) throw new Error("Войдите в аккаунт заново.");
+  if (!data.session) throw new Error("Please sign in again.");
   const userId = data.session.user.id;
   if (!Device.isDevice || Platform.OS === "web")
-    throw new Error("Push проверяется на физическом iPhone в сборке приложения.");
+    throw new Error("Push notifications are available on a physical iPhone.");
   const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
-  if (!projectId) throw new Error("Сначала привяжите приложение к Expo EAS.");
+  if (!projectId) throw new Error("Notifications are not configured yet.");
   const permission = await Notifications.requestPermissionsAsync();
   if (
     !permission.granted &&
     permission.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL
   )
-    throw new Error("Разрешите уведомления для Mill в настройках iPhone.");
+    throw new Error("Allow notifications for Mill in your iPhone settings.");
   const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   await registerToken(workspaceId, userId, token);
 }

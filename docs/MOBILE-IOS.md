@@ -101,8 +101,10 @@ Push opt-in is recorded per workspace; foreground/network restoration and device
 
 Reproduce isolated SQL validation using the existing local container only: `python3 apps/web/lib/mobile/validate-push-schema.py --container supabase_db_site-chat`. It creates and removes a disposable database, covering recipient/workspace routing, inactive membership, dedupe, leases, private table/RPC permissions, invalid tokens and cross-workspace foreign keys. It does not migrate the working database.
 
-The user confirmed that Apple Developer exists but there is no App Store Connect app record yet. Proposed name: Mill; bundle: chat.mill.operators; SKU: mill-operators-ios. App record creation and signing still require Apple account access.
+The user confirmed that Apple Developer exists but there is no App Store Connect app record yet. Proposed name: Mill; bundle: chat.mill.operators; SKU: mill-operators-ios; primary language: English (U.S.). App record creation and signing still require Apple account access.
 
 Upload retries retain the latest persisted upload batch, renew expired upload intents with the same client message UUID, and finalize only genuine duplicate-object errors. PUT requests have a timeout.
 
 First native cloud Simulator build finished successfully. Its archive was downloaded and its Info.plist verified. Native app execution is still untested on this Mac (no Xcode). Later JS fixes in notes, push refresh and attachment recovery are not in that first archive; include them in the next build.
+
+Product language is English throughout: UI, accessibility labels, errors, permission prompts, notification titles, date formatting and App Store metadata. Discussion language in the development chat does not determine the product locale. Existing Russian screenshots and the first native archive predate this change and must not be used as English release assets.

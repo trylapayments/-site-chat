@@ -18,10 +18,10 @@ import { Avatar, Button, Empty, ErrorBanner, Logo, colors, styles } from "../com
 import { usePushNavigation } from "../lib/push";
 
 const tabs = [
-  { key: "all", label: "Все" },
-  { key: "unassigned", label: "Без оператора" },
-  { key: "assigned_to_me", label: "Мои" },
-  { key: "closed", label: "Закрытые" },
+  { key: "all", label: "All" },
+  { key: "unassigned", label: "Unassigned" },
+  { key: "assigned_to_me", label: "Assigned to me" },
+  { key: "closed", label: "Closed" },
 ] as const;
 export default function Inbox() {
   const {
@@ -66,7 +66,7 @@ export default function Inbox() {
         setError("");
       } catch (e) {
         if (request.current === version)
-          setError(e instanceof Error ? e.message : "Не удалось загрузить диалоги.");
+          setError(e instanceof Error ? e.message : "Unable to load conversations.");
       } finally {
         if (request.current === version) setLoading(false);
       }
@@ -91,7 +91,7 @@ export default function Inbox() {
         <View style={[styles.row, { justifyContent: "space-between" }]}>
           <Logo small />
           <Pressable
-            accessibilityLabel="Настройки оператора"
+            accessibilityLabel="Operator settings"
             onPress={() => router.push("/settings")}
           >
             <Avatar name={session.user.email || "Mill"} size={38} />
@@ -99,14 +99,14 @@ export default function Inbox() {
         </View>
         <View style={[styles.row, { justifyContent: "space-between" }]}>
           <Text style={{ fontSize: 32, fontWeight: "700", letterSpacing: -1, color: colors.ink }}>
-            Диалоги
+            Inbox
           </Text>
           <Pressable
             onPress={() => setPicker(!picker)}
             style={[styles.row, { gap: 6, maxWidth: "55%" }]}
           >
             <Text numberOfLines={1} style={{ fontSize: 14, color: colors.blue, fontWeight: "600" }}>
-              {workspace?.name || "Рабочее пространство"}
+              {workspace?.name || "Workspace"}
             </Text>
             <Text style={{ color: colors.blue }}>⌄</Text>
           </Pressable>
@@ -134,8 +134,8 @@ export default function Inbox() {
           </View>
         )}
         <TextInput
-          accessibilityLabel="Поиск диалогов"
-          placeholder="Поиск разговоров и клиентов"
+          accessibilityLabel="Search conversations"
+          placeholder="Search conversations and customers"
           value={query}
           onChangeText={setQuery}
           style={[styles.input, { backgroundColor: "#EDF1F7", borderWidth: 0, minHeight: 46 }]}
@@ -171,16 +171,13 @@ export default function Inbox() {
         ))}
       </ScrollView>
       {!online && (
-        <ErrorBanner message="Нет сети. Очередь сообщений сохранена; отправим при подключении." />
+        <ErrorBanner message="You're offline. Messages are saved and will send when you reconnect." />
       )}
       <ErrorBanner message={error || workspaceError} />
       {!workspace ? (
         <View style={{ flex: 1 }}>
-          <Empty
-            title="Ваше рабочее пространство"
-            detail="Здесь появятся доступные вам пространства Mill."
-          />
-          <Button title="Обновить" subtle onPress={() => void reload()} />
+          <Empty title="Your workspace" detail="Your available Mill workspaces will appear here." />
+          <Button title="Refresh" subtle onPress={() => void reload()} />
         </View>
       ) : (
         <FlatList
@@ -197,10 +194,8 @@ export default function Inbox() {
           ListEmptyComponent={
             !loading ? (
               <Empty
-                title={error ? "Не удалось загрузить диалоги" : "Всё спокойно"}
-                detail={
-                  error ? "Потяните вниз, чтобы повторить." : "Новые разговоры появятся здесь."
-                }
+                title={error ? "Unable to load conversations" : "You're all caught up"}
+                detail={error ? "Pull down to try again." : "New conversations will appear here."}
               />
             ) : null
           }
@@ -209,9 +204,9 @@ export default function Inbox() {
           }}
           onEndReachedThreshold={0.3}
           renderItem={({ item }) => {
-            const name = item.contact?.name || item.contact?.email || "Посетитель";
+            const name = item.contact?.name || item.contact?.email || "Visitor";
             const time = new Date(item.last_message_at || item.created_at).toLocaleTimeString(
-              "ru",
+              "en-US",
               { hour: "2-digit", minute: "2-digit" },
             );
             return (
@@ -257,11 +252,11 @@ export default function Inbox() {
                     numberOfLines={2}
                     style={{ fontSize: 13, lineHeight: 19, color: colors.muted }}
                   >
-                    {item.last_message_preview || "Новый разговор"}
+                    {item.last_message_preview || "New conversation"}
                   </Text>
                   <View style={[styles.row, { justifyContent: "space-between" }]}>
                     <Text style={{ fontSize: 11, color: colors.muted }}>
-                      {item.assigned_to?.display_label || "Без оператора"}
+                      {item.assigned_to?.display_label || "Unassigned"}
                     </Text>
                     {item.has_unread && (
                       <View
