@@ -89,7 +89,7 @@ Completed: iOS Hermes bundle export; mobile and web TypeScript checks; 21/21 Exp
 
 Browser UI validation used controlled fixtures after local Docker was stopped during the session; login, inbox, chat and queue-send UI passed without browser runtime errors. The output screenshots are viewport previews, not Simulator screenshots or App Store submission assets.
 
-Remaining: native compile/signing and device run; iPhone keyboard, background/process termination, interrupted attachment upload and expiry scenarios; push/APNs end-to-end delivery and receipts; full staging schema rollout and push worker integration; device validation of automatic expired upload renewal; privacy review of retained offline attachments; physical-device validation of workspace-specific push opt-in and token refresh. Offline cached history after a full process restart is not yet implemented; durable outbox is implemented. These gates must be completed before declaring this release TestFlight-ready.
+Remaining: device signing and device run; iPhone keyboard, background/process termination, interrupted attachment upload and expiry scenarios; push/APNs end-to-end delivery and receipts; full staging schema rollout and push worker integration; device validation of automatic expired upload renewal; privacy review of retained offline attachments; physical-device validation of workspace-specific push opt-in and token refresh. Offline cached history after a full process restart is not yet implemented; durable outbox is implemented. These gates must be completed before declaring this release TestFlight-ready.
 
 Official references: [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/), [Supabase React Native Auth](https://supabase.com/docs/guides/auth/quickstarts/react-native), [Expo Notifications](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/).
 
@@ -104,3 +104,5 @@ Reproduce isolated SQL validation using the existing local container only: `pyth
 The user confirmed that Apple Developer exists but there is no App Store Connect app record yet. Proposed name: Mill; bundle: chat.mill.operators; SKU: mill-operators-ios. App record creation and signing still require Apple account access.
 
 Upload retries retain the latest persisted upload batch, renew expired upload intents with the same client message UUID, and finalize only genuine duplicate-object errors. PUT requests have a timeout.
+
+First native cloud Simulator build finished successfully. Its archive was downloaded and its Info.plist verified. Native app execution is still untested on this Mac (no Xcode). Later JS fixes in notes, push refresh and attachment recovery are not in that first archive; include them in the next build.
