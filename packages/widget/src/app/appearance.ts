@@ -111,7 +111,7 @@ export function fontSizeForScale(scale: WidgetPublicConfig["fontSizeScale"] | un
 }
 
 export function launcherSizePixels(size: WidgetPublicConfig["launcherSize"] | undefined): number {
-  return size === "sm" ? 48 : size === "lg" ? 64 : 56;
+  return size === "sm" ? 56 : size === "lg" ? 72 : 64;
 }
 
 export function launcherRadius(shape: WidgetPublicConfig["launcherShape"] | undefined): string {

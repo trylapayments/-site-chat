@@ -1,3 +1,4 @@
+import { millEmailHtml } from "./mill-template";
 import "server-only";
 
 import { z } from "zod";
@@ -258,6 +259,13 @@ async function sendViaResend(input: {
         to: [input.to],
         subject: input.subject,
         text: body,
+        html: millEmailHtml({
+          title: input.subject,
+          paragraphs: ["A conversation needs your attention in Mill."],
+          button: { label: "Open conversation", href: input.appUrl },
+          footer:
+            "You received this because email notifications are enabled for your account. You can manage them in Mill Settings.",
+        }),
       }),
     });
 

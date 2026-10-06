@@ -260,3 +260,5 @@ credential in Vault, and configures one named job (`mill-notification-emails`)
 every minute. Calls are made only while the outbox has eligible work. Running
 the script again updates the existing job and credential without duplicates.
 No Resend key is stored in Supabase or in the job command.
+
+Visitor messages and successful pre-chat submissions also dispatch the committed outbox immediately using Next.js after(), without blocking the response. Atomic claims prevent duplicate delivery alongside cron. The minute scheduler remains active for retries and other notification paths.

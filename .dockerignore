@@ -1,0 +1,13 @@
+.git
+**/node_modules
+**/.next
+**/dist
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+playwright-report
+test-results
+supabase/snippets
+work
+outputs
+infra/aws/runtime

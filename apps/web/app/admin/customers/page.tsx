@@ -1,5 +1,6 @@
 import { toAppRoute } from "@/lib/auth/redirect";
 import Link from "next/link";
+import { CompanyIdentifier } from "@/components/platform-admin/CompanyIdentifier";
 import { loadPlatformCustomers } from "@/lib/platform-admin/data";
 export default async function CustomersPage({
   searchParams,
@@ -22,8 +23,8 @@ export default async function CustomersPage({
         <input
           name="q"
           defaultValue={q}
-          aria-label="Search companies"
-          placeholder="Search companies…"
+          aria-label="Search by company name or Company ID"
+          placeholder="Search by company name or Company ID…"
           className="min-w-0 flex-1 rounded-md border bg-white px-3 py-2"
         />
         <button className="rounded-md bg-[#1763de] px-4 py-2 text-white">
@@ -54,6 +55,7 @@ export default async function CustomersPage({
                     {c.name}
                   </Link>
                   <p className="mt-1 text-xs text-[#747b80]">{c.slug}</p>
+                  <CompanyIdentifier id={c.id} />
                 </td>
                 <td className="px-5 py-5 capitalize">{c.status}</td>
                 <td className="px-5 py-5 capitalize">

@@ -104,7 +104,7 @@ export function ConversationListItemRow({
       data-selected={selected ? "true" : "false"}
       data-conversation-id={conversation.id}
       className={cn(
-        "group relative border-b border-inbox-border/60 transition-colors",
+        "mill-queue-row group relative border-b border-inbox-border/60 transition-colors",
         selected ? "bg-brand-soft" : "hover:bg-inbox-hover bg-transparent",
       )}
     >

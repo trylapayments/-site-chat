@@ -78,27 +78,35 @@ export default async function WorkspaceHomePage({
   const chats =
     unassigned.status === "fulfilled" ? unassigned.value.items.slice(0, 5) : [];
   return (
-    <div className="space-y-6" data-testid="overview-page">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="mill-overview space-y-6" data-testid="overview-page">
+      <div className="mill-overview-welcome flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-widest text-brand">
-            Your workspace at a glance
+            YOUR WORKSPACE, CONNECTED
           </p>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-            Workspace overview
+            Your day. In conversation.
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Your conversations, visitors and next steps in one place.
           </p>
         </div>
-        <OverviewRefresh />
+        <div className="mill-overview-actions">
+          <Link
+            className="mill-primary-link"
+            href={toAppRoute(`${base}/inbox`)}
+          >
+            Open inbox <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+          <OverviewRefresh />
+        </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="mill-overview-metrics grid gap-4 sm:grid-cols-3">
         {metrics.map((m) => (
           <Link
             key={m.label}
             href={toAppRoute(m.href)}
-            className="group flex gap-4 rounded-xl border border-inbox-border bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md"
+            className="mill-metric group flex gap-4 rounded-xl border border-inbox-border bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md"
           >
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
               <m.icon className="size-5" />
@@ -118,7 +126,7 @@ export default async function WorkspaceHomePage({
         ))}
       </div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section className="rounded-xl border border-inbox-border bg-white p-5">
+        <section className="mill-overview-panel rounded-xl border border-inbox-border bg-white p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Clock3 className="size-4 text-brand" />
@@ -179,7 +187,7 @@ export default async function WorkspaceHomePage({
             </div>
           )}
         </section>
-        <section className="rounded-xl border border-inbox-border bg-white p-5">
+        <section className="mill-overview-panel rounded-xl border border-inbox-border bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <UsersRound className="size-4 text-brand" />
@@ -214,7 +222,7 @@ export default async function WorkspaceHomePage({
           )}
         </section>
       </div>
-      <section className="rounded-xl border border-inbox-border bg-white p-5">
+      <section className="mill-overview-panel rounded-xl border border-inbox-border bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Radar className="size-4 text-brand" />
@@ -263,7 +271,7 @@ export default async function WorkspaceHomePage({
           </p>
         )}
       </section>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="mill-overview-shortcuts grid gap-4 sm:grid-cols-2">
         {[
           {
             title: "Make the chat feel like your brand",

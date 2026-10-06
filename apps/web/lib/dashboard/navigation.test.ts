@@ -40,6 +40,12 @@ describe("buildDashboardNavItems", () => {
         icon: "UserCog",
       },
       {
+        id: "billing",
+        label: "Billing",
+        href: "/app/acme/billing",
+        icon: "CreditCard",
+      },
+      {
         id: "settings",
         label: "Settings",
         href: "/app/acme/settings",
@@ -55,6 +61,7 @@ describe("resolveActiveNavItemId", () => {
     expect(resolveActiveNavItemId("/app/acme/", "acme")).toBe("overview");
     expect(resolveActiveNavItemId("/app/acme/inbox", "acme")).toBe("inbox");
     expect(resolveActiveNavItemId("/app/acme/inbox/123", "acme")).toBe("inbox");
+    expect(resolveActiveNavItemId("/app/acme/billing", "acme")).toBe("billing");
     expect(resolveActiveNavItemId("/app/acme/visitors", "acme")).toBe(
       "visitors",
     );

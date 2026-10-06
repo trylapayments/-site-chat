@@ -290,10 +290,7 @@ export async function updateConversationStatusAction(
       parsed.data.status,
     );
 
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // Return after the mutation; client refresh and realtime update the views.
     return { success: true };
   } catch (error) {
     return mapActionError(error);

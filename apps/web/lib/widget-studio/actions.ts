@@ -296,6 +296,14 @@ export async function initiateWidgetStudioAssetUploadAction(
     };
   }
 
+  if (parsed.data.kind === "launcher_icon") {
+    return {
+      success: false,
+      message: "Custom launcher icons are managed by Mill.",
+      code: "FORBIDDEN",
+    };
+  }
+
   try {
     const { workspace, supabase } = await requireWidgetStudioContext(
       workspaceSlug,

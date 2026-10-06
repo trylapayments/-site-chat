@@ -22,8 +22,10 @@ const INVITE_INVALID_DESTINATION = `${AUTH_ROUTES.authError}?code=invite_invalid
 
 export const getWorkspaceContext = cache(async () => {
   const supabase = await createClient();
-  const membership = await fetchAccessibleWorkspaces(supabase);
-  const lastWorkspaceId = await fetchLastWorkspaceId(supabase);
+  const [membership, lastWorkspaceId] = await Promise.all([
+    fetchAccessibleWorkspaces(supabase),
+    fetchLastWorkspaceId(supabase),
+  ]);
   return { membership, lastWorkspaceId };
 });
 

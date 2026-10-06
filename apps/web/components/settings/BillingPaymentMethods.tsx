@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { ChargebeeCardForm, preloadChargebeeSdk } from "./ChargebeeCardForm";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CardElement,
@@ -179,6 +180,7 @@ export function BillingPaymentMethods({
   publishableKey,
   enabled,
   unavailable,
+  chargebeeConfig,
 }: {
   slug: string;
   methods: Method[];
@@ -186,7 +188,11 @@ export function BillingPaymentMethods({
   publishableKey: string | null;
   enabled: boolean;
   unavailable: boolean;
+  chargebeeConfig?: { site: string; publishableKey: string } | null;
 }) {
+  useEffect(() => {
+    if (enabled && chargebeeConfig) preloadChargebeeSdk();
+  }, [enabled, chargebeeConfig]);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
@@ -201,7 +207,7 @@ export function BillingPaymentMethods({
         <Button
           size="sm"
           variant="outline"
-          disabled={!enabled || !publishableKey || open}
+          disabled={!enabled || (!publishableKey && !chargebeeConfig) || open}
           onClick={() => {
             setOpen(true);
           }}
@@ -281,7 +287,16 @@ export function BillingPaymentMethods({
             : "No saved payment method. Add a card securely here."}
         </p>
       )}
-      {open && publishableKey ? (
+      {open && chargebeeConfig ? (
+        <ChargebeeCardForm
+          slug={slug}
+          config={chargebeeConfig}
+          onClose={() => {
+            setOpen(false);
+          }}
+        />
+      ) : null}
+      {open && !chargebeeConfig && publishableKey ? (
         <EmbeddedCardForm
           slug={slug}
           publishableKey={publishableKey}

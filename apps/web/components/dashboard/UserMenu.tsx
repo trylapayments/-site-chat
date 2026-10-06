@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronsUpDown } from "lucide-react";
+import { IdentityAvatar } from "@/components/dashboard/IdentityAvatar";
 import { useParams } from "next/navigation";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { signOutAction } from "@/lib/auth/actions";
@@ -22,10 +24,15 @@ export function UserMenu({ email }: { email: string }) {
         <Button
           variant="outline"
           size="sm"
-          className="max-w-[12rem] truncate"
+          className="mill-user-menu max-w-full truncate"
           aria-label="Account menu"
         >
-          <span className="truncate">{email}</span>
+          <IdentityAvatar
+            label={email}
+            className="size-7 rounded-lg text-[10px]"
+          />
+          <span className="min-w-0 flex-1 truncate text-left">{email}</span>
+          <ChevronsUpDown className="size-3 shrink-0" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

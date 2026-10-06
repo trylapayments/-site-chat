@@ -173,7 +173,7 @@ const WIDGET_STYLES = `
   .sitechat-composer-row { min-width: 0; }
   .sitechat-composer { min-width: 0; }
   @media (max-width: 640px) {
-    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-panel {
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-panel {
       inset: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
@@ -181,12 +181,12 @@ const WIDGET_STYLES = `
       max-height: none !important;
       border-radius: 0 !important;
     }
-    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-header {
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-header {
       padding-top: calc(var(--widget-density-padding) + env(safe-area-inset-top));
       padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
       padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
     }
-    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-footer {
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-footer {
       padding-bottom: calc(var(--widget-density-padding) + env(safe-area-inset-bottom));
       padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
       padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
@@ -198,7 +198,9 @@ function LauncherGlyph({
   customUrl,
   icon,
   open,
+  rectangular = false,
 }: {
+  rectangular?: boolean;
   customUrl: string | null;
   icon: WidgetPublicConfig["launcherIcon"];
   open: boolean;
@@ -254,8 +256,8 @@ function LauncherGlyph({
     <svg
       aria-hidden="true"
       viewBox="-1 -1 34 34"
-      width="52%"
-      height="52%"
+      width={rectangular ? 34 : "52%"}
+      height={rectangular ? 34 : "52%"}
       fill="none"
       stroke="currentColor"
       strokeWidth="2.2"
@@ -1393,12 +1395,13 @@ function WidgetApp() {
       data-color-mode={configuredColorMode}
       data-effective-color-mode={effectiveColorMode}
       data-mobile-behavior={config?.mobileBehavior ?? "responsive"}
+      data-host-mobile={hostViewportWidth <= 640 ? "true" : "false"}
       data-widget-locale={locale}
       data-widget-dir={direction}
       style={rootStyle}
     >
       <style>{WIDGET_STYLES}</style>
-      {config?.showGreeting === true && !open ? (
+      {config?.showGreeting === true && !open && hostViewportWidth > 640 ? (
         <div
           role="status"
           style={{
@@ -1416,7 +1419,7 @@ function WidgetApp() {
             zIndex: 1,
           }}
         >
-          {welcomeMessage}
+          <span style={{ color: available ? "#15803D" : "inherit", fontWeight: 600 }}>{presenceFallback}</span> · {welcomeMessage}
         </div>
       ) : null}
 
@@ -1450,6 +1453,7 @@ function WidgetApp() {
           }}
         >
           <LauncherGlyph
+            rectangular={config?.launcherShape === "rectangle"}
             customUrl={config?.launcherIconUrl ?? null}
             icon={config?.launcherIcon ?? "chat"}
             open={open}

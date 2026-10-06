@@ -1,3 +1,7 @@
+import { dispatchNotificationEmails } from "@/lib/email/dispatch-notifications";
+
+export const maxDuration = 60;
+
 import { ipCountryFromRequest } from "@/lib/widget/ip-country";
 import { publicVisitorConversationContext } from "@/lib/conversation-wrapup/context";
 import { validatePreChatSubmission } from "@site-chat/shared";
@@ -169,6 +173,7 @@ export async function POST(request: Request) {
       },
     );
     if (error) throw error;
+    dispatchNotificationEmails();
     return response({ data }, 200, auth.origin);
   } catch {
     return response(

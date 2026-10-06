@@ -238,7 +238,7 @@ export function TeamShell({
         ) : null}
       </div>
 
-      <div className="border-inbox-border flex shrink-0 items-start justify-between gap-4 border-b bg-inbox-panel px-5 py-4">
+      <div className="mill-section-banner border-inbox-border flex shrink-0 items-start justify-between gap-4 border-b bg-inbox-panel px-5 py-4">
         <div className="flex min-w-0 items-start gap-2.5">
           <div className="bg-brand-soft text-brand mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg">
             <UserCog className="size-4" strokeWidth={1.75} aria-hidden="true" />

@@ -2530,6 +2530,7 @@ export type Database = {
           features: Json
           limits: Json
           override_expires_at: string | null
+          plan_id: string | null
           trial_ends_at: string | null
           updated_at: string
           version: number
@@ -2540,6 +2541,7 @@ export type Database = {
           features?: Json
           limits?: Json
           override_expires_at?: string | null
+          plan_id?: string | null
           trial_ends_at?: string | null
           updated_at?: string
           version?: number
@@ -2550,6 +2552,7 @@ export type Database = {
           features?: Json
           limits?: Json
           override_expires_at?: string | null
+          plan_id?: string | null
           trial_ends_at?: string | null
           updated_at?: string
           version?: number

@@ -35,7 +35,7 @@ const DEFAULT_FRAME_CONFIG: WidgetFrameConfig = {
   hideLauncherWhenOpen: false,
   launcherOffsetX: 16,
   launcherOffsetY: 16,
-  launcherSize: 56,
+  launcherSize: 64,
   launcherWidth: 56,
   mobileBehavior: "responsive",
   position: "bottom-right",
@@ -65,7 +65,7 @@ function readWidgetFrameConfig(value: unknown): WidgetFrameConfig {
           position: (mobile as Record<string, unknown>).launcherPosition,
         }
       : base;
-  const launcherSize = config.launcherSize === "sm" ? 48 : config.launcherSize === "lg" ? 64 : 56;
+  const launcherSize = config.launcherSize === "sm" ? 56 : config.launcherSize === "lg" ? 72 : 64;
   return {
     hideLauncherWhenOpen: config.hideLauncherWhenOpen === true,
     launcherOffsetX: clampedNumber(config.launcherOffsetX, 16, 0, 120),

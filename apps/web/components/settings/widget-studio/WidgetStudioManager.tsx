@@ -134,7 +134,10 @@ function SelectControl({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option
+            {(id === "studio-header-style" && option === "branded"
+              ? "Gradient"
+              : option
+            )
               .replaceAll("-", " ")
               .replaceAll("_", " ")
               .replace(/^./, (letter) => letter.toUpperCase())}
@@ -817,9 +820,13 @@ export function WidgetStudioManager({
             <SelectControl
               id="studio-launcher-icon"
               label="Icon"
-              value={draft.launcherIcon}
-              options={WIDGET_LAUNCHER_ICONS}
-              disabled={disabled}
+              value={
+                draft.launcherIcon === "custom" ? "chat" : draft.launcherIcon
+              }
+              options={WIDGET_LAUNCHER_ICONS.filter(
+                (icon) => icon !== "custom",
+              )}
+              disabled={disabled || draft.launcherIcon === "custom"}
               onChange={(launcherIcon) => {
                 updateDraft({
                   launcherIcon:
@@ -916,7 +923,6 @@ export function WidgetStudioManager({
                 updateDraft({ launcherOffsetY });
               }}
             />
-            {assetControl("launcher_icon", "Custom launcher icon")}
           </Section>
 
           <Section title={messages.sections.branding}>

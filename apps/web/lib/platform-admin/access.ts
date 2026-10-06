@@ -1,4 +1,6 @@
 import "server-only";
+import { workspaceBillingAccess } from "@/lib/billing/access";
+import { findMillPlan } from "@/lib/billing/plans";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   WIDGET_STUDIO_FEATURES,
@@ -12,11 +14,16 @@ export async function effectiveWidgetEntitlements(workspaceId: string) {
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) throw new Error("Workspace access could not be resolved.");
+  const access = await workspaceBillingAccess(workspaceId);
   const base = workspaceWidgetStudioEntitlements(workspaceId);
-  if (!data) return base;
-  const features = new Set<WidgetStudioFeature>(
-    data.access_mode === "pilot" ? WIDGET_STUDIO_FEATURES : base.features,
-  );
+  const plan = access.planId ? findMillPlan(access.planId) : null;
+  const planFeatures = plan
+    ? WIDGET_STUDIO_FEATURES.filter(
+        (f) => f !== "hide_powered_by" || plan.removeBranding,
+      )
+    : base.features;
+  if (!data) return { features: new Set<WidgetStudioFeature>(planFeatures) };
+  const features = new Set<WidgetStudioFeature>(planFeatures);
   const active =
     !data.override_expires_at ||
     Date.parse(data.override_expires_at) > Date.now();
@@ -33,15 +40,5 @@ export async function effectiveWidgetEntitlements(workspaceId: string) {
   return { features };
 }
 export async function workspaceWidgetAccessEnabled(workspaceId: string) {
-  const { data, error } = await createServiceClient()
-    .from("workspace_admin_controls")
-    .select("access_mode,trial_ends_at")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-  if (error) throw new Error("Workspace access could not be resolved.");
-  return (
-    !data ||
-    data.access_mode !== "trial" ||
-    Boolean(data.trial_ends_at && Date.parse(data.trial_ends_at) > Date.now())
-  );
+  return (await workspaceBillingAccess(workspaceId)).enabled;
 }

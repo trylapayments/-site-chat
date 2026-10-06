@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronsUpDown } from "lucide-react";
 import type { AccessibleWorkspace } from "@site-chat/shared";
 
 import { switchWorkspaceAction } from "@/lib/workspace/actions";
@@ -45,6 +46,10 @@ export function WorkspaceSwitcher({
           <span className="truncate">
             {currentWorkspace?.name ?? "Workspace"}
           </span>
+          <ChevronsUpDown
+            className="ml-auto size-3.5 shrink-0"
+            aria-hidden="true"
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">

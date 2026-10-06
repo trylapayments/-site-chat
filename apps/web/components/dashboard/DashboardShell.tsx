@@ -19,6 +19,7 @@ export function DashboardShell({
   canAdministerPlatform = false,
   role,
   children,
+  trialBanner,
 }: {
   slug: string;
   workspaceName: string;
@@ -29,6 +30,7 @@ export function DashboardShell({
   canAdministerPlatform?: boolean;
   role: MemberRole;
   children: React.ReactNode;
+  trialBanner?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [mobileHeight, setMobileHeight] = useState<number | null>(null);
@@ -76,7 +78,7 @@ export function DashboardShell({
         data-testid="dashboard-operator-shell"
       >
         <div className="hidden lg:flex">
-          <Suspense fallback={<div className="bg-inbox-nav w-[208px]" />}>
+          <Suspense fallback={<div className="bg-inbox-nav w-[224px]" />}>
             <GlobalSidebar
               workspaceName={workspaceName}
               slug={slug}
@@ -100,7 +102,11 @@ export function DashboardShell({
             />
             <p className="truncate text-sm font-semibold">{workspaceName}</p>
           </div>
-          <main id="main-content" className="min-h-0 flex-1 overflow-hidden">
+          {trialBanner}
+          <main
+            id="main-content"
+            className="mill-workbench min-h-0 flex-1 overflow-hidden"
+          >
             {children}
           </main>
         </div>
@@ -111,7 +117,7 @@ export function DashboardShell({
   return (
     <div className="mill-operator bg-inbox-canvas flex h-svh overflow-hidden">
       <div className="hidden lg:flex">
-        <Suspense fallback={<div className="bg-inbox-nav w-[208px]" />}>
+        <Suspense fallback={<div className="bg-inbox-nav w-[224px]" />}>
           <GlobalSidebar
             workspaceName={workspaceName}
             slug={slug}
@@ -133,6 +139,7 @@ export function DashboardShell({
           canAdministerPlatform={canAdministerPlatform}
           canSearchNotes={canSearchNotes}
         />
+        {trialBanner}
         <main
           id="main-content"
           className="mill-page min-h-0 flex-1 overflow-y-auto p-4 md:p-8"

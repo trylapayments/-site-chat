@@ -3,9 +3,11 @@ import { useState } from "react";
 export function InvoiceDownload({
   slug,
   invoiceId,
+  adminWorkspaceId,
 }: {
   slug: string;
   invoiceId: string;
+  adminWorkspaceId?: string;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
@@ -20,7 +22,9 @@ export function InvoiceDownload({
             setError(false);
             try {
               const response = await fetch(
-                `/api/billing/${encodeURIComponent(slug)}/invoices/${encodeURIComponent(invoiceId)}`,
+                adminWorkspaceId
+                  ? `/api/admin/customers/${encodeURIComponent(adminWorkspaceId)}/invoices/${encodeURIComponent(invoiceId)}`
+                  : `/api/billing/${encodeURIComponent(slug)}/invoices/${encodeURIComponent(invoiceId)}`,
                 { cache: "no-store" },
               );
               if (!response.ok) throw new Error();

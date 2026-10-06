@@ -13,8 +13,16 @@ export async function loadPlatformCustomers(query = "", page = 1) {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .range((page - 1) * 25, page * 25 - 1);
-  if (query)
-    request = request.ilike("name", `%${query.replace(/[%_,()]/g, "")}%`);
+  const search = query.trim();
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      search,
+    )
+  ) {
+    request = request.eq("id", search.toLowerCase());
+  } else if (search) {
+    request = request.ilike("name", `%${search.replace(/[%_,()]/g, "")}%`);
+  }
   const { data, error, count } = await request;
   if (error) throw new Error("Customers could not be loaded.");
   const ids = data.map((w) => w.id);

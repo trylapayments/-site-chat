@@ -1,4 +1,6 @@
 import "server-only";
+import { createHash } from "node:crypto";
+import { millPlanPrice, planFromPriceId } from "./plans";
 import { createServiceClient } from "@/lib/supabase/service";
 import { z } from "zod";
 import type { Json } from "@site-chat/shared";
@@ -159,10 +161,15 @@ export async function ensureChargebeeCustomer(
   if (error) throw new BillingSetupError("chargebee_mapping", error.code);
   return id;
 }
-export async function loadChargebeeBilling(
-  workspaceId: string,
-): Promise<
-  Awaited<ReturnType<typeof stripeLoadBilling>> & { cached?: boolean }
+export async function loadChargebeeBilling(workspaceId: string): Promise<
+  Awaited<ReturnType<typeof stripeLoadBilling>> & {
+    cached?: boolean;
+    scheduledChange?: {
+      name: string;
+      amount: number;
+      interval: "month" | "year";
+    } | null;
+  }
 > {
   const record = await account(workspaceId);
   const empty = {
@@ -215,6 +222,63 @@ export async function loadChargebeeBilling(
       ].some((r) => r.customer_id !== record.customer_id)
     )
       throw new Error("Billing customer mismatch.");
+    let scheduledChange = null;
+    const changing = subscriptions.find(
+      (s) => s.has_scheduled_changes === true,
+    );
+    if (changing) {
+      const scheduled = z
+        .object({ subscription: subscriptionSchema })
+        .parse(
+          await chargebeeRequest(
+            `subscriptions/${encodeURIComponent(changing.id)}/retrieve_with_scheduled_changes`,
+          ),
+        ).subscription;
+      if (
+        scheduled.id !== changing.id ||
+        scheduled.customer_id !== record.customer_id
+      )
+        throw new Error("Scheduled billing customer mismatch.");
+      const priceId = scheduled.subscription_items?.[0]?.item_price_id ?? "";
+      const plan = planFromPriceId(priceId);
+      const interval = priceId.endsWith("-annual")
+        ? ("year" as const)
+        : ("month" as const);
+      if (plan)
+        scheduledChange = {
+          name: plan.name,
+          amount: millPlanPrice(plan.id, interval) ?? 0,
+          interval,
+        };
+    }
+    // A single monotonic archive refresh keeps access current before delayed webhooks arrive.
+    const resources = [
+      ...subscriptions.map((value) => ({ kind: "subscription", value })),
+      ...invoices.list.map(({ invoice: value }) => ({
+        kind: "invoice",
+        value,
+      })),
+    ].filter(({ value }) => typeof value.resource_version === "number");
+    const digest = createHash("sha256")
+      .update(JSON.stringify(resources))
+      .digest("hex");
+    const { error: syncError } = await createServiceClient().rpc(
+      "apply_chargebee_event",
+      {
+        p_site: chargebeeSite() ?? "",
+        p_event_id: `refresh-${digest}`,
+        p_event_type: "mill_billing_refresh",
+        p_resources: resources.map(({ kind, value }) => ({
+          kind,
+          id: value.id,
+          customer_id: value.customer_id,
+          resource_version: value.resource_version as number,
+          payload: value as Json,
+        })),
+      },
+    );
+    if (syncError)
+      throw new BillingSetupError("chargebee_sync", syncError.code);
     const snapshot = {
       customer,
       subscriptions,
@@ -231,7 +295,10 @@ export async function loadChargebeeBilling(
       .eq("workspace_id", workspaceId)
       .eq("site", chargebeeSite() ?? "");
     if (error) throw new BillingSetupError("chargebee_cache", error.code);
-    return normalizeSnapshot(snapshot, record.customer_id);
+    return {
+      ...normalizeSnapshot(snapshot, record.customer_id),
+      scheduledChange,
+    };
   } catch (error) {
     const cached = snapshotSchema.safeParse(record.snapshot);
     if (cached.success)
@@ -276,7 +343,9 @@ function normalizeSnapshot(
           price: {
             unit_amount: i.unit_price ?? null,
             currency: s.currency_code ?? "USD",
-            product: { name: i.item_price_id },
+            product: {
+              name: planFromPriceId(i.item_price_id)?.name ?? "Mill plan",
+            },
             recurring: {
               interval: s.billing_period_unit ?? "month",
               interval_count: s.billing_period ?? 1,
@@ -336,12 +405,14 @@ export async function startChargebeeCardSetup(
 ) {
   const intent = z
     .object({
-      payment_intent: z.object({
-        id: z.string(),
-        expires_at: z.number(),
-        amount: z.number(),
-        customer_id: z.string().optional(),
-      }),
+      payment_intent: z
+        .object({
+          id: z.string(),
+          expires_at: z.number(),
+          amount: z.number(),
+          customer_id: z.string().optional(),
+        })
+        .passthrough(),
     })
     .parse(
       await chargebeeRequest(
@@ -369,7 +440,7 @@ export async function startChargebeeCardSetup(
       expires_at: new Date(intent.expires_at * 1000).toISOString(),
     });
   if (error) throw new BillingSetupError("chargebee_card_setup", error.code);
-  return { id: intent.id };
+  return intent;
 }
 export async function completeChargebeeCardSetup(
   workspaceId: string,
@@ -440,6 +511,21 @@ export async function setChargebeeDefaultCard(customer: string, id: string) {
     `customers/${encodeURIComponent(customer)}/assign_payment_role`,
     new URLSearchParams({ payment_source_id: id, role: "primary" }),
   );
+  const subscriptions = z
+    .object({ list: z.array(z.object({ subscription: subscriptionSchema })) })
+    .parse(
+      await chargebeeRequest(
+        `subscriptions?customer_id[is]=${encodeURIComponent(customer)}&limit=100`,
+      ),
+    );
+  for (const { subscription } of subscriptions.list) {
+    if (["cancelled", "transferred"].includes(subscription.status)) continue;
+    // This operation changes only the payment source, preserving scheduled plan changes.
+    await chargebeeRequest(
+      `subscriptions/${encodeURIComponent(subscription.id)}/override_billing_profile`,
+      new URLSearchParams({ payment_source_id: id }),
+    );
+  }
 }
 export async function removeChargebeeCard(customer: string, id: string) {
   await ownedSource(customer, id);

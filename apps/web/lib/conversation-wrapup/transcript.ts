@@ -1,3 +1,4 @@
+import { millEmailHtml } from "@/lib/email/mill-template";
 import "server-only";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -90,6 +91,15 @@ export async function sendConversationTranscript(input: {
         to: [input.email],
         subject: `Your ${workspaceName} conversation transcript`,
         text,
+        html: millEmailHtml({
+          title: `Your ${workspaceName} conversation transcript`,
+          paragraphs: [
+            "Here is a copy of your conversation. A plain-text copy is also attached.",
+          ],
+          preformatted: text,
+          footer:
+            "This conversation transcript was requested by you or your support team.",
+        }),
         attachments: [
           {
             filename: "conversation.txt",

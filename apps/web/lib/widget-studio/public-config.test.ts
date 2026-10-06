@@ -245,6 +245,7 @@ describe("enrichWidgetPublicAppearance asset authorization", () => {
     const result = await enrichWidgetPublicAppearance({
       workspaceId,
       publicConfig: {},
+      entitlements: emptyWidgetStudioEntitlements(),
     });
     expect(result.logoUrl).toBeNull();
     expect(createSignedDownloadUrl).not.toHaveBeenCalled();

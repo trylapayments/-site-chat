@@ -6,14 +6,17 @@ const {
   createClient,
   streamSuggestedReply,
   requireCapability,
+  workspaceBillingAccess,
 } = vi.hoisted(() => ({
   requireUser: vi.fn(),
   getWorkspaceContext: vi.fn(),
   createClient: vi.fn(),
   streamSuggestedReply: vi.fn(),
   requireCapability: vi.fn(),
+  workspaceBillingAccess: vi.fn().mockResolvedValue({ disabledAddOns: [] }),
 }));
 
+vi.mock("@/lib/billing/access", () => ({ workspaceBillingAccess }));
 vi.mock("@/lib/auth/session", () => ({
   requireUser,
 }));
@@ -214,4 +217,21 @@ describe("suggested replies route authorization and hardening", () => {
     expect(auth).not.toHaveProperty("operatorDisplayName");
     expect(auth).not.toHaveProperty("regenerateNonce");
   });
+});
+
+it("pauses only AI when the AI add-on has outstanding debt", async () => {
+  requireUser.mockResolvedValue({ user: { id: "user-1" } });
+  createClient.mockResolvedValue(memberLookupClient("member-1"));
+  getWorkspaceContext.mockResolvedValue({
+    membership: {
+      accessible_workspaces: [
+        { workspace_id: workspaceId, name: "Own WS", role: "agent" },
+      ],
+    },
+  });
+  requireCapability.mockImplementation(() => undefined);
+  workspaceBillingAccess.mockResolvedValue({ disabledAddOns: ["mill-ai-100"] });
+  const response = await POST(jsonRequest({ workspaceId, conversationId }));
+  expect(response.status).toBe(402);
+  expect(streamSuggestedReply).not.toHaveBeenCalled();
 });
