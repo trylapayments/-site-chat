@@ -5,15 +5,27 @@ import { Redirect, router } from "expo-router";
 import { can } from "@site-chat/shared";
 import { useMill } from "../lib/session";
 import { api } from "../lib/client";
-import { registerPush } from "../lib/push";
+import { registerPush, pushWorkspaces } from "../lib/push";
 import { Avatar, Button, ErrorBanner, colors, styles } from "../components/ui";
 export default function Settings() {
   const { session, workspace, workspaces, selectWorkspace, logout, pending, active } = useMill();
   const [status, setStatus] = useState("offline");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [push, setPush] = useState(false);
+  const [pushScope, setPushScope] = useState<string | null>(null);
+  const push = !!workspace && pushScope === workspace.workspace_id;
   const enabled = !!workspace && can(workspace.role, "send_messages");
+  useEffect(() => {
+    let cancelled = false;
+    if (session && workspace)
+      void pushWorkspaces(session.user.id).then((scopes) => {
+        if (!cancelled)
+          setPushScope(scopes.includes(workspace.workspace_id) ? workspace.workspace_id : null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, workspace]);
   useEffect(() => {
     if (!enabled || !active) return;
     const update = () =>
@@ -105,7 +117,7 @@ export default function Settings() {
               setBusy(true);
               void registerPush(workspace!.workspace_id)
                 .then(() => {
-                  setPush(true);
+                  setPushScope(workspace!.workspace_id);
                   setError("");
                 })
                 .catch((e) => setError(e.message))

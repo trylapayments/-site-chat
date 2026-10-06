@@ -2,6 +2,7 @@ import type { ExpoConfig, ConfigContext } from "expo/config";
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "Mill",
+  owner: "millcorns-team",
   slug: "mill-operators",
   scheme: "mill",
   version: "0.1.0",
@@ -27,8 +28,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   extra: {
-    ...(process.env.EXPO_PUBLIC_EAS_PROJECT_ID
-      ? { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } }
-      : {}),
+    eas: {
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || "9deb0aa1-df65-4c03-99dd-0d8757f4ba73",
+    },
   },
 });

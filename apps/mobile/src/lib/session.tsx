@@ -7,6 +7,7 @@ import type { Session } from "@supabase/supabase-js";
 import type { AccessibleWorkspace, ListAccessibleWorkspacesResult } from "@site-chat/shared";
 import { api, ApiError, configured, supabase } from "./client";
 import { storage } from "./storage";
+import { withPushRegistrationLock } from "./push-lock";
 import { eligible, failedAttempt, type PendingMessage } from "../core/outbox";
 import { removeLocalFile } from "./files";
 
@@ -270,17 +271,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         revision,
         selectWorkspace,
         reload,
-        logout: async () => {
-          const installationId = await storage.getItem("mill.installation");
-          const registered = await storage.getItem(`mill.push.${session?.user.id}`);
-          if (installationId && registered) {
-            await api("unregisterPush", undefined, { installationId });
-            await storage.removeItem(`mill.push.${session?.user.id}`);
-          }
-          await writeChain.current;
-          await supabase.auth.signOut({ scope: "local" });
-          setSession(null);
-        },
+        logout: () =>
+          withPushRegistrationLock(async () => {
+            const installationId = await storage.getItem("mill.installation");
+            const registered = await storage.getItem(`mill.push.${session?.user.id}`);
+            if (installationId && registered) {
+              await api("unregisterPush", undefined, { installationId });
+              await storage.removeItem(`mill.push.${session?.user.id}`);
+              await storage.removeItem(`mill.push.scopes.${session?.user.id}`);
+            }
+            await writeChain.current;
+            await supabase.auth.signOut({ scope: "local" });
+            setSession(null);
+          }),
         send: async (conversationId, body, file) => {
           if (!session || !workspace || !hydrated.current)
             throw new Error("Сессия ещё загружается.");

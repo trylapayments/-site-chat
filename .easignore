@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Turbo
+.turbo/
+
+# Vercel
+.vercel
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# AWS staging secrets and downloaded backend runtime
+infra/aws/runtime/
+.env*
+
+# Local mobile validation artifacts
+/work/
+
+# Only mobile and shared workspace packages are required in cloud builds
+.git/
+apps/web/
+supabase/
+infra/
+work/
+outputs/
+**/.env*
+**/*.pem
+**/*.p8
+**/*.p12
+**/*.mobileprovision

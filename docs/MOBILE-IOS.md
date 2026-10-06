@@ -56,7 +56,9 @@ There is no Xcode or iOS Simulator on this Mac at initial inspection. Install Xc
 
 `apps/mobile/eas.json` contains Simulator preview, development, physical-device internal and production profiles. Public release configuration must be set as EAS environment variables. `.env.local` and private signing material are excluded from the archive. The preflight hook rejects privileged public variables and localhost/non-HTTPS production endpoints. The post-install hook builds the existing shared package.
 
-The EAS CLI check returned `Not logged in`. From `apps/mobile`:
+Expo EAS is now linked to team `millcorns-team`, project `9deb0aa1-df65-4c03-99dd-0d8757f4ba73`. The first native Simulator build was dispatched: https://expo.dev/accounts/millcorns-team/projects/mill-operators/builds/a8126c1e-63f8-4f5b-9bc8-7639600a1870 . Its preview environment uses local Simulator endpoints, so it is not a TestFlight configuration. Production environment is not configured.
+
+For another developer, from `apps/mobile`:
 
 ```sh
 npx eas-cli@latest login
@@ -83,10 +85,16 @@ A production build is not yet submitted or signed. App Store Connect needs a mat
 
 ## Validation and remaining release gates
 
-Completed: iOS Hermes bundle export; mobile and web TypeScript checks; 21/21 Expo Doctor checks; 9 core outbox/routing/transport tests; 10 API authorization tests. Local live smoke confirmed seeded login, history/inbox, subscription refusal, foreign workspace refusal and one stored message after a repeated UUID. A dedicated local `Mill Mobile QA` workspace was created by the existing workspace/trial RPC for those checks. No production mutations.
+Completed: iOS Hermes bundle export; mobile and web TypeScript checks; 21/21 Expo Doctor checks; 11 core outbox/routing/transport/push concurrency tests; 10 API authorization tests. Local live smoke confirmed seeded login, history/inbox, subscription refusal, foreign workspace refusal and one stored message after a repeated UUID. A dedicated local `Mill Mobile QA` workspace was created by the existing workspace/trial RPC for those checks. No production mutations.
 
 Browser UI validation used controlled fixtures after local Docker was stopped during the session; login, inbox, chat and queue-send UI passed without browser runtime errors. The output screenshots are viewport previews, not Simulator screenshots or App Store submission assets.
 
-Remaining: native compile/signing and device run; iPhone keyboard, background/process termination, interrupted attachment upload and expiry scenarios; push/APNs end-to-end delivery and receipts; isolated push SQL migration test; precise note pagination beyond the first 50 notes; expired upload intent recovery UX; privacy review of retained offline attachments; workspace-specific push settings and refresh registration after reinstall/token change. Offline cached history after a full process restart is not yet implemented; durable outbox is implemented. These gates must be completed before declaring this release TestFlight-ready.
+Remaining: native compile/signing and device run; iPhone keyboard, background/process termination, interrupted attachment upload and expiry scenarios; push/APNs end-to-end delivery and receipts; isolated push SQL migration test; expired upload intent recovery UX; privacy review of retained offline attachments; physical-device validation of workspace-specific push opt-in and token refresh. Offline cached history after a full process restart is not yet implemented; durable outbox is implemented. These gates must be completed before declaring this release TestFlight-ready.
 
 Official references: [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/), [Supabase React Native Auth](https://supabase.com/docs/guides/auth/quickstarts/react-native), [Expo Notifications](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/).
+
+Cloud archive is 811 KB; root `.easignore` excludes backend, database, server settings and private keys. EAS was dispatched with `EAS_NO_VCS=1` to avoid stalled Git file reads, with explicit monorepo `EAS_PROJECT_ROOT`. No native build runs on this Mac.
+
+Internal notes support older-page pagination with server cursors and duplicate merging.
+
+Push opt-in is recorded per workspace; foreground/network restoration and device token change refresh existing registrations without prompting again. New installations still require explicit opt-in.

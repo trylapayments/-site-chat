@@ -114,6 +114,8 @@ export default function Chat() {
   const [members, setMembers] = useState<WorkspaceMemberOption[]>([]);
   const [notes, setNotes] = useState<InternalNote[]>([]);
   const [note, setNote] = useState("");
+  const [notesBefore, setNotesBefore] = useState<ListInternalNotesResult["next_before"]>(null);
+  const [notesLoading, setNotesLoading] = useState(false);
   const scope = useRef("");
   useEffect(() => {
     scope.current = `${workspaceId}:${id}`;
@@ -216,16 +218,47 @@ export default function Chat() {
       setBusy(false);
     }
   }
+  async function loadNotes(before?: NonNullable<ListInternalNotesResult["next_before"]>) {
+    if (!workspaceId || !session || notesLoading) return;
+    const identity = `${workspaceId}:${id}`;
+    setNotesLoading(true);
+    try {
+      const result = await api<ListInternalNotesResult>(
+        "notes",
+        workspaceId,
+        {
+          conversationId: id,
+          query: { limit: 50, ...(before ? { before } : {}) },
+        },
+        session.user.id,
+      );
+      if (scope.current !== identity) return;
+      setNotes((previous) =>
+        before
+          ? Array.from(
+              new Map([...previous, ...result.items].map((item) => [item.id, item])).values(),
+            )
+          : result.items,
+      );
+      setNotesBefore(result.has_more ? result.next_before : null);
+    } catch (e) {
+      if (scope.current === identity)
+        setError(e instanceof Error ? e.message : "Не удалось загрузить заметки.");
+    } finally {
+      setNotesLoading(false);
+    }
+  }
   async function openPanel(next: typeof panel) {
     setPanel(next);
     if (!workspaceId) return;
     try {
       if (next === "actions")
         setMembers(await api<WorkspaceMemberOption[]>("members", workspaceId));
-      if (next === "notes")
-        setNotes(
-          (await api<ListInternalNotesResult>("notes", workspaceId, { conversationId: id })).items,
-        );
+      if (next === "notes") {
+        setNotes([]);
+        setNotesBefore(null);
+        await loadNotes();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить данные.");
     }
@@ -662,6 +695,17 @@ export default function Chat() {
                     </Text>
                   </View>
                 ))}
+                {notesBefore && (
+                  <Button
+                    title={notesLoading ? "Загрузка…" : "Загрузить предыдущие заметки"}
+                    subtle
+                    disabled={notesLoading}
+                    onPress={() => void loadNotes(notesBefore)}
+                  />
+                )}
+                {notesLoading && !notes.length && (
+                  <Text style={styles.caption}>Загружаем заметки…</Text>
+                )}
                 <TextInput
                   accessibilityLabel="Внутренняя заметка"
                   value={note}
