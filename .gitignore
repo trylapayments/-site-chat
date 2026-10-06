@@ -50,3 +50,6 @@ supabase/.temp/
 # AWS staging secrets and downloaded backend runtime
 infra/aws/runtime/
 .env*
+
+# Local mobile validation artifacts
+/work/

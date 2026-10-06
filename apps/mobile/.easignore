@@ -1,0 +1,15 @@
+node_modules
+.expo
+.next
+work
+outputs
+dist
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+ios
+android
+*.p8
+*.p12
+*.mobileprovision

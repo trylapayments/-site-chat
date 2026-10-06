@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Mill",
+    "slug": "mill-operators",
+    "icon": "./assets/icon.png",
+    "web": {
+      "favicon": "./assets/icon.png"
+    }
+  }
+}
