@@ -1,3 +1,4 @@
+import { reusableUpload, duplicateUpload } from "../core/uploads";
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import * as Crypto from "expo-crypto";
@@ -156,7 +157,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           if (currentUser.current !== userId) break;
           try {
             if (item.file) {
-              let upload = item.upload;
+              let upload = reusableUpload(item.upload, Date.now());
               if (!upload) {
                 upload = await api<NonNullable<PendingMessage["upload"]>>(
                   "initiateUpload",
@@ -182,18 +183,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 );
               }
               for (const target of upload.uploads) {
-                const response = await fetch(target.uploadUrl, {
-                  method: "PUT",
-                  headers: target.headers ?? { "Content-Type": item.file.mimeType },
-                  body: await new File(item.file.uri).arrayBuffer(),
-                });
-                // Existing signed object after interrupted upload is validated on server finalize.
-                if (!response.ok && response.status !== 409 && response.status !== 400)
-                  throw new ApiError(
-                    response.status,
-                    "UPLOAD_FAILED",
-                    "Не удалось загрузить файл.",
-                  );
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 60000);
+                try {
+                  const response = await fetch(target.uploadUrl, {
+                    method: "PUT",
+                    headers: target.headers ?? { "Content-Type": item.file.mimeType },
+                    body: await new File(item.file.uri).arrayBuffer(),
+                    signal: controller.signal,
+                  });
+                  if (!response.ok) {
+                    const payload = await response.json().catch(() => null);
+                    // Finalize verifies an existing object; unrelated 400 errors must fail.
+                    if (!duplicateUpload(response.status, payload))
+                      throw new ApiError(
+                        response.status,
+                        "UPLOAD_FAILED",
+                        "Не удалось загрузить файл.",
+                      );
+                  }
+                } finally {
+                  clearTimeout(timeout);
+                }
               }
               await api(
                 "completeUpload",
@@ -226,11 +237,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             setRevision((v) => v + 1);
           } catch (e) {
             if (currentUser.current !== userId) break;
-            const next = {
-              ...failedAttempt(item, e instanceof ApiError ? e.status : 0, Date.now()),
-              error: e instanceof Error ? e.message : "Нет соединения",
-            };
-            await save((previous) => previous.map((m) => (m.id === item.id ? next : m)));
+            await save((previous) =>
+              previous.map((m) =>
+                m.id === item.id
+                  ? {
+                      ...failedAttempt(m, e instanceof ApiError ? e.status : 0, Date.now()),
+                      error: e instanceof Error ? e.message : "Нет соединения",
+                    }
+                  : m,
+              ),
+            );
             if (e instanceof ApiError && e.status === 401) break;
           }
         }
@@ -312,11 +328,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 ? {
                     ...m,
                     state: "queued",
-                    upload: m.upload?.uploads.some(
-                      (u) => u.expiresAt && Date.parse(u.expiresAt) < Date.now(),
-                    )
-                      ? undefined
-                      : m.upload,
+                    upload: reusableUpload(m.upload, Date.now()),
                     attempts: 0,
                     nextAttempt: 0,
                     error: undefined,

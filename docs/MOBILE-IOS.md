@@ -28,7 +28,7 @@ The outbox does not send under a different account. Workspace switching leaves a
 4. `supabase/migrations/20261007090000_mobile_push_outbox.sql`: service-only device registrations and leased push outbox, trigger on existing notifications, unique notification/device pair, bounded claim RPC with `SKIP LOCKED`.
 5. `apps/web/lib/mobile/push.ts` and `/api/internal/mobile-push`: server delivery worker using existing notification recipients, quiet hours, current membership and subscription checks. Lock-screen payload omits customer names and message bodies. Expo tickets and delivery receipts are handled separately; invalid device tokens are removed.
 
-No migration was applied, no cloud scheduler was created and no production configuration or web deployment was changed. Integration is not available on `app.mill.chat` until this change set is coordinated with the parallel portal branch. Proposed schema migration still needs an isolated database rollout test.
+No migration was applied, no cloud scheduler was created and no production configuration or web deployment was changed. Integration is not available on `app.mill.chat` until this change set is coordinated with the parallel portal branch. Proposed schema passed an isolated PostgreSQL smoke test with minimal fixture tables; a rollout against a complete staging schema still needs coordination.
 
 After review, the server needs `MOBILE_PUSH_CRON_SECRET` (at least 32 random characters), optional `EXPO_ACCESS_TOKEN`, and a scheduler POST to `/api/internal/mobile-push` roughly every minute using its bearer secret. These secrets stay on the server. APNs credentials belong in EAS. Push delivery may be retried after an ambiguous provider timeout; message idempotency is independent of push delivery.
 
@@ -85,11 +85,11 @@ A production build is not yet submitted or signed. App Store Connect needs a mat
 
 ## Validation and remaining release gates
 
-Completed: iOS Hermes bundle export; mobile and web TypeScript checks; 21/21 Expo Doctor checks; 11 core outbox/routing/transport/push concurrency tests; 10 API authorization tests. Local live smoke confirmed seeded login, history/inbox, subscription refusal, foreign workspace refusal and one stored message after a repeated UUID. A dedicated local `Mill Mobile QA` workspace was created by the existing workspace/trial RPC for those checks. No production mutations.
+Completed: iOS Hermes bundle export; mobile and web TypeScript checks; 21/21 Expo Doctor checks; 13 core outbox/routing/transport/push concurrency/upload tests; 10 API authorization tests. Local live smoke confirmed seeded login, history/inbox, subscription refusal, foreign workspace refusal and one stored message after a repeated UUID. A dedicated local `Mill Mobile QA` workspace was created by the existing workspace/trial RPC for those checks. No production mutations.
 
 Browser UI validation used controlled fixtures after local Docker was stopped during the session; login, inbox, chat and queue-send UI passed without browser runtime errors. The output screenshots are viewport previews, not Simulator screenshots or App Store submission assets.
 
-Remaining: native compile/signing and device run; iPhone keyboard, background/process termination, interrupted attachment upload and expiry scenarios; push/APNs end-to-end delivery and receipts; isolated push SQL migration test; expired upload intent recovery UX; privacy review of retained offline attachments; physical-device validation of workspace-specific push opt-in and token refresh. Offline cached history after a full process restart is not yet implemented; durable outbox is implemented. These gates must be completed before declaring this release TestFlight-ready.
+Remaining: native compile/signing and device run; iPhone keyboard, background/process termination, interrupted attachment upload and expiry scenarios; push/APNs end-to-end delivery and receipts; full staging schema rollout and push worker integration; device validation of automatic expired upload renewal; privacy review of retained offline attachments; physical-device validation of workspace-specific push opt-in and token refresh. Offline cached history after a full process restart is not yet implemented; durable outbox is implemented. These gates must be completed before declaring this release TestFlight-ready.
 
 Official references: [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/), [Supabase React Native Auth](https://supabase.com/docs/guides/auth/quickstarts/react-native), [Expo Notifications](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/).
 
@@ -98,3 +98,9 @@ Cloud archive is 811 KB; root `.easignore` excludes backend, database, server se
 Internal notes support older-page pagination with server cursors and duplicate merging.
 
 Push opt-in is recorded per workspace; foreground/network restoration and device token change refresh existing registrations without prompting again. New installations still require explicit opt-in.
+
+Reproduce isolated SQL validation using the existing local container only: `python3 apps/web/lib/mobile/validate-push-schema.py --container supabase_db_site-chat`. It creates and removes a disposable database, covering recipient/workspace routing, inactive membership, dedupe, leases, private table/RPC permissions, invalid tokens and cross-workspace foreign keys. It does not migrate the working database.
+
+The user confirmed that Apple Developer exists but there is no App Store Connect app record yet. Proposed name: Mill; bundle: chat.mill.operators; SKU: mill-operators-ios. App record creation and signing still require Apple account access.
+
+Upload retries retain the latest persisted upload batch, renew expired upload intents with the same client message UUID, and finalize only genuine duplicate-object errors. PUT requests have a timeout.
