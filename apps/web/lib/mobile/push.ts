@@ -98,8 +98,8 @@ export async function processMobilePush() {
           title: "Mill",
           body:
             notification.type === "conversation_new"
-              ? "Новый диалог в Mill"
-              : "Новое событие в диалоге",
+              ? "New conversation in Mill"
+              : "New conversation activity",
           sound: "default",
           data: {
             workspaceId: device.workspace_id,
