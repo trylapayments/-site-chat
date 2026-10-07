@@ -5,16 +5,42 @@ import { Redirect, router } from "expo-router";
 import { can } from "@site-chat/shared";
 import { useMill } from "../lib/session";
 import { api } from "../lib/client";
+import { getMobileCapabilities } from "../lib/capabilities";
 import { registerPush, pushWorkspaces } from "../lib/push";
 import { Avatar, Button, ErrorBanner, colors, styles } from "../components/ui";
 export default function Settings() {
-  const { session, workspace, workspaces, selectWorkspace, logout, pending, active } = useMill();
+  const { session, workspace, workspaces, selectWorkspace, logout, pending, active, online } =
+    useMill();
   const [status, setStatus] = useState("offline");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pushScope, setPushScope] = useState<string | null>(null);
+  const [pushCapabilities, setPushCapabilities] = useState<{
+    userId: string;
+    push: boolean;
+  } | null>(null);
+  const pushAvailable =
+    !!session &&
+    active &&
+    online &&
+    pushCapabilities?.userId === session.user.id &&
+    pushCapabilities?.push === true;
   const push = !!workspace && pushScope === workspace.workspace_id;
   const enabled = !!workspace && can(workspace.role, "send_messages");
+  useEffect(() => {
+    let cancelled = false;
+    if (session && active && online)
+      void getMobileCapabilities(session.user.id)
+        .then((capabilities) => {
+          if (!cancelled) setPushCapabilities({ userId: session.user.id, push: capabilities.push });
+        })
+        .catch(() => {
+          if (!cancelled) setPushCapabilities({ userId: session!.user.id, push: false });
+        });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, active, online]);
   useEffect(() => {
     let cancelled = false;
     if (session && workspace)
@@ -110,9 +136,15 @@ export default function Settings() {
         </View>
         {enabled && (
           <Button
-            title={push ? "Notifications enabled" : "Enable push notifications"}
+            title={
+              !pushAvailable
+                ? "Push notifications unavailable"
+                : push
+                  ? "Notifications enabled"
+                  : "Enable push notifications"
+            }
             subtle
-            disabled={busy}
+            disabled={busy || !pushAvailable}
             onPress={() => {
               setBusy(true);
               void registerPush(workspace!.workspace_id)

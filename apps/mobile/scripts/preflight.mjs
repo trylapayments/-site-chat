@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 for (const filename of [".env", ".env.local"]) {
   try {
     process.loadEnvFile(filename);
@@ -6,7 +7,8 @@ for (const filename of [".env", ".env.local"]) {
   }
 }
 const release =
-  process.argv.includes("--release") || process.env.EAS_BUILD_PROFILE === "production";
+  process.argv.includes("--release") ||
+  ["production", "testflight"].includes(process.env.EAS_BUILD_PROFILE);
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const api = process.env.EXPO_PUBLIC_API_URL;
@@ -25,7 +27,7 @@ if (key?.split(".").length === 3) {
     errors.push("Invalid public key.");
   }
 }
-for (const [name, value] of Object.entries(process.env))
+for (const name of Object.keys(process.env))
   if (
     name.startsWith("EXPO_PUBLIC_") &&
     /SERVICE_ROLE|PRIVATE|SECRET|PASSWORD|CHARGEBEE|RESEND|STRIPE_SECRET|CRON/.test(name)

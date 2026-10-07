@@ -41,7 +41,7 @@ export async function authenticateMobile(request: Request) {
     },
   );
   const { data, error } = await client.auth.getUser(token);
-  if (error)
+  if (error || !data.user)
     throw new MobileError(401, "UNAUTHORIZED", "Please sign in again.");
   return { client, user: data.user };
 }
@@ -71,7 +71,7 @@ export async function authorizeMobile(
     .eq("user_id", context.user.id)
     .eq("status", "active")
     .single<{ id: string }>();
-  if (error)
+  if (error || !member)
     throw new MobileError(403, "FORBIDDEN", "Workspace access denied.");
   return { workspace, memberId: member.id };
 }

@@ -27,7 +27,6 @@ import {
   authorizeMobile,
   MobileError,
 } from "@/lib/mobile/access";
-import { mobileService } from "@/lib/mobile/push";
 import { effectiveOperatorStatus } from "@/lib/operators/status";
 
 export const runtime = "nodejs";
@@ -65,19 +64,14 @@ export async function POST(request: Request) {
     );
     if (operation === "workspaces")
       return ok(await fetchAccessibleWorkspaces(context.client));
-    if (operation === "unregisterPush") {
-      const p = z
-        .object({ installationId: z.string().uuid() })
-        .strict()
-        .parse(input);
-      const { error } = await mobileService()
-        .from("mobile_push_devices")
-        .delete()
-        .eq("user_id", context.user.id)
-        .eq("installation_id", p.installationId);
-      if (error) throw error;
-      return ok({ removed: true });
-    }
+    if (operation === "capabilities") return ok({ apiVersion: 1, push: false });
+    // Core rollout is independent of the separately approved push schema/worker.
+    if (operation === "registerPush" || operation === "unregisterPush")
+      throw new MobileError(
+        503,
+        "FEATURE_UNAVAILABLE",
+        "Push notifications are not available yet.",
+      );
     if (!workspaceId)
       throw new MobileError(400, "INVALID_INPUT", "Workspace is required.");
     const { memberId } = await authorizeMobile(
@@ -228,6 +222,7 @@ export async function POST(request: Request) {
           .in("id", p.uploadIds);
         if (
           error ||
+          !uploads ||
           uploads.length !== p.uploadIds.length ||
           uploads.some(
             (u) =>
@@ -298,33 +293,6 @@ export async function POST(request: Request) {
           status: effectiveOperatorStatus(data),
           selectedStatus: data.status,
         });
-      }
-      case "registerPush": {
-        const p = z
-          .object({
-            token: z
-              .string()
-              .regex(/^(Expo|Exponent)PushToken\[[A-Za-z0-9_-]+\]$/),
-            installationId: z.string().uuid(),
-          })
-          .strict()
-          .parse(input);
-        // Table is service-only and introduced by the separately reviewed mobile migration.
-        const { error } = await mobileService()
-          .from("mobile_push_devices")
-          .upsert(
-            {
-              user_id: context.user.id,
-              member_id: memberId,
-              workspace_id: workspaceId,
-              installation_id: p.installationId,
-              token: p.token,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "installation_id,workspace_id" },
-          );
-        if (error) throw error;
-        return ok({ registered: true });
       }
       default:
         throw new MobileError(400, "UNKNOWN_OPERATION", "Unknown operation.");

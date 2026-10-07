@@ -2,6 +2,20 @@
 
 The first operator client lives in `apps/mobile`. React Native, Expo SDK 57, Expo Router and strict TypeScript fit the existing pnpm TypeScript monorepo. Android remains possible through the same application, but iOS is the first release target. No billing UI or subscription purchases are included.
 
+## Current staging status — 7 October 2026
+
+The isolated Supabase project `uopfebpabhgkflbwmvmj` (mill-mobile-staging, London, Micro) is ready. Exactly 62 portal-compatible migrations through `20261007020000_operator_message_retry_lock.sql` were applied, after confirming an empty public schema. No production data was copied or modified.
+
+A separate Vercel project, `mill-mobile-staging`, exposes only the mobile adapter and an informational page. Preview API: https://mill-mobile-staging-cdaxmfri0-millcorn.vercel.app. The owner explicitly approved storing staging server credentials in this project's Preview environment. Credentials are not in the source archive or app. No portal/widget route or scheduled worker is deployed. A synthetic QA account and workspace were created through existing Auth/workspace RPCs.
+
+Live checks passed: unauthenticated requests are denied; workspace list, conversations and history work; foreign workspaces are denied; repeated send UUID returns one message. Core backend tests: 20 passing, including attachment member/conversation ownership and null-data denial. Mobile core tests: 13 passing. Mobile TypeScript and lint passed.
+
+The initial core adapter advertises `capabilities.push=false` and refuses push registration. Push SQL/worker rollout and physical-device testing remain separate release gates. This does not complete the full push scope.
+
+The `testflight` EAS profile inherits store signing from `production` but deliberately uses the Preview environment with the isolated HTTPS backend. Release preflight also validates this profile. Public preview variables point to this staging project, not localhost. App Store Connect app ID: `6819889630`; bundle ID: `chat.mill.operators`. No App Store public release has been requested.
+
+The sections below record implementation and earlier checks; current staging information above supersedes older unconfigured/unsigned status notes.
+
 ## Isolation from parallel portal development
 
 Worktree: `/Users/antonlevy/Documents/Codex/2026-10-06/mill-iphone-mill-live-chat-https/mill-ios`.

@@ -5,6 +5,12 @@
     "icon": "./assets/icon.png",
     "web": {
       "favicon": "./assets/icon.png"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9deb0aa1-df65-4c03-99dd-0d8757f4ba73"
+      }
     }
   }
 }

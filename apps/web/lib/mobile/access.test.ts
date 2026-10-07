@@ -59,6 +59,16 @@ describe("mobile authorization", () => {
     expect(mocks.billing).not.toHaveBeenCalled();
     expect(mocks.member).not.toHaveBeenCalled();
   });
+  it("rejects an auth response with no user even when no error is returned", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: null });
+    await expect(
+      authenticateMobile(
+        new Request("https://test", {
+          headers: { authorization: "Bearer expired" },
+        }),
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+  });
   it("viewer can read but cannot send", async () => {
     mocks.workspaces.mockResolvedValue({
       accessible_workspaces: [{ workspace_id: workspaceId, role: "viewer" }],
@@ -80,6 +90,12 @@ describe("mobile authorization", () => {
   });
   it("fails closed when membership was revoked", async () => {
     mocks.member.mockResolvedValue({ data: null, error: new Error("Revoked") });
+    await expect(authorizeMobile(context, workspaceId)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+  it("fails closed when an active membership is absent without a query error", async () => {
+    mocks.member.mockResolvedValue({ data: null, error: null });
     await expect(authorizeMobile(context, workspaceId)).rejects.toMatchObject({
       status: 403,
     });

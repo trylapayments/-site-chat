@@ -10,6 +10,7 @@ import { storage } from "./storage";
 import { withPushRegistrationLock } from "./push-lock";
 import { useMill } from "./session";
 import { pushDestination } from "../core/outbox";
+import { getMobileCapabilities } from "./capabilities";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -48,6 +49,8 @@ export async function registerPush(workspaceId: string) {
   const userId = data.session.user.id;
   if (!Device.isDevice || Platform.OS === "web")
     throw new Error("Push notifications are available on a physical iPhone.");
+  if (!(await getMobileCapabilities(userId)).push)
+    throw new Error("Push notifications are not available yet.");
   const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
   if (!projectId) throw new Error("Notifications are not configured yet.");
   const permission = await Notifications.requestPermissionsAsync();
