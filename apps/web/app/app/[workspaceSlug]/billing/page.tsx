@@ -255,80 +255,85 @@ export default async function BillingPage({
           </p>
         </section>
       </div>
-      <Suspense
-        fallback={
+      <div className="grid gap-6 md:grid-cols-2">
+        {aiBalance ? (
           <section
-            className="rounded-xl border border-inbox-border bg-white p-6"
-            aria-label="AI translation usage"
+            className="h-full rounded-xl border border-inbox-border bg-white p-6"
+            aria-label="AI conversation allowance"
           >
-            <h2 className="text-lg font-semibold">AI translations</h2>
-            <p role="status" className="mt-2 text-sm text-muted-foreground">
-              Loading your account balance…
+            <h2 className="text-lg font-semibold">AI conversations</h2>
+            <p className="mt-2 text-2xl font-semibold">
+              {aiBalance.remaining.toLocaleString()} remaining{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                of {aiBalance.limit.toLocaleString()} this month
+              </span>
             </p>
-          </section>
-        }
-      >
-        <AccountTranslationUsage workspaceId={workspace.workspace_id} />
-      </Suspense>
-      {aiBalance ? (
-        <section
-          className="rounded-2xl border border-border bg-card p-6"
-          aria-label="AI conversation allowance"
-        >
-          <h2 className="text-lg font-semibold">AI conversations</h2>
-          <p className="mt-2 text-2xl font-semibold">
-            {aiBalance.remaining.toLocaleString()} remaining{" "}
-            <span className="text-sm font-normal text-muted-foreground">
-              of {aiBalance.limit.toLocaleString()} this month
-            </span>
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {aiBalance.used.toLocaleString()} used. Renews{" "}
-            {new Date(aiBalance.end).toLocaleDateString("en-US", {
-              timeZone: "UTC",
-            })}
-            .
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            A conversation counts once after a successful AI reply. Failed
-            requests do not use your allowance. Your live chat keeps working
-            when AI conversations run out.
-          </p>
-          {Boolean(aiUsage.history.length) && (
-            <div className="mt-5 border-t pt-4">
-              <h3 className="text-sm font-semibold">Recent AI usage</h3>
-              <ul className="mt-2 space-y-2">
-                {aiUsage.history.map((entry) => (
-                  <li
-                    key={entry.conversation_id + entry.updated_at}
-                    className="flex justify-between gap-4 text-sm"
-                  >
-                    <Link
-                      className="text-primary hover:underline"
-                      href={toAppRoute(
-                        `/app/${workspaceSlug}/inbox/${entry.conversation_id}`,
-                      )}
+            <p className="mt-2 text-sm text-muted-foreground">
+              {aiBalance.used.toLocaleString()} used. Renews{" "}
+              {new Date(aiBalance.end).toLocaleDateString("en-US", {
+                timeZone: "UTC",
+              })}
+              .
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              A conversation counts once after a successful AI reply. Failed
+              requests do not use your allowance. Your live chat keeps working
+              when AI conversations run out.
+            </p>
+            {Boolean(aiUsage.history.length) && (
+              <div className="mt-5 border-t pt-4">
+                <h3 className="text-sm font-semibold">Recent AI usage</h3>
+                <ul className="mt-2 space-y-2">
+                  {aiUsage.history.map((entry) => (
+                    <li
+                      key={entry.conversation_id + entry.updated_at}
+                      className="flex justify-between gap-4 text-sm"
                     >
-                      View conversation
-                    </Link>
-                    <span className="text-muted-foreground">
-                      1 conversation ·{" "}
-                      {new Date(entry.updated_at).toLocaleDateString("en-US", {
-                        timeZone: "UTC",
-                      })}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          AI usage is temporarily unavailable. You can still manage your
-          subscription and payment methods.
-        </p>
-      )}
+                      <Link
+                        className="text-primary hover:underline"
+                        href={toAppRoute(
+                          `/app/${workspaceSlug}/inbox/${entry.conversation_id}`,
+                        )}
+                      >
+                        View conversation
+                      </Link>
+                      <span className="text-muted-foreground">
+                        1 conversation ·{" "}
+                        {new Date(entry.updated_at).toLocaleDateString(
+                          "en-US",
+                          {
+                            timeZone: "UTC",
+                          },
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            AI usage is temporarily unavailable. You can still manage your
+            subscription and payment methods.
+          </p>
+        )}
+        <Suspense
+          fallback={
+            <section
+              className="rounded-xl border border-inbox-border bg-white p-6"
+              aria-label="AI translation usage"
+            >
+              <h2 className="text-lg font-semibold">AI translations</h2>
+              <p role="status" className="mt-2 text-sm text-muted-foreground">
+                Loading your account balance…
+              </p>
+            </section>
+          }
+        >
+          <AccountTranslationUsage workspaceId={workspace.workspace_id} />
+        </Suspense>
+      </div>
       {usesChargebee() ? (
         <SubscriptionManager
           slug={workspaceSlug}

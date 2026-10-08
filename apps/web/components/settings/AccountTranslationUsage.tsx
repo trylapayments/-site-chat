@@ -26,7 +26,7 @@ export async function AccountTranslationUsage({
   } catch {
     return (
       <section
-        className="rounded-xl border border-inbox-border bg-white p-6"
+        className="h-full rounded-xl border border-inbox-border bg-white p-6"
         aria-label="AI translation usage"
       >
         <h2 className="text-lg font-semibold">AI translations</h2>
@@ -44,7 +44,7 @@ export async function AccountTranslationUsage({
   const low = balance.monthlyLimit > 0 && percent >= 80;
   return (
     <section
-      className="rounded-xl border border-inbox-border bg-white p-6"
+      className="h-full rounded-xl border border-inbox-border bg-white p-6"
       aria-label="AI translation usage"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
