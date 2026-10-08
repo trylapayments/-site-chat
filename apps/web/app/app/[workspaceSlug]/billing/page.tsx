@@ -1,4 +1,6 @@
 import { CancelPlan } from "@/components/settings/CancelPlan";
+import { AccountTranslationUsage } from "@/components/settings/AccountTranslationUsage";
+import { Suspense } from "react";
 import { aiCreditBalance, aiCreditHistory } from "@/lib/ai/credits";
 import { OverduePayment } from "@/components/settings/OverduePayment";
 import { SubscriptionManager } from "@/components/settings/SubscriptionManager";
@@ -253,6 +255,21 @@ export default async function BillingPage({
           </p>
         </section>
       </div>
+      <Suspense
+        fallback={
+          <section
+            className="rounded-xl border border-inbox-border bg-white p-6"
+            aria-label="AI translation usage"
+          >
+            <h2 className="text-lg font-semibold">AI translations</h2>
+            <p role="status" className="mt-2 text-sm text-muted-foreground">
+              Loading your account balance…
+            </p>
+          </section>
+        }
+      >
+        <AccountTranslationUsage workspaceId={workspace.workspace_id} />
+      </Suspense>
       {aiBalance ? (
         <section
           className="rounded-2xl border border-border bg-card p-6"
