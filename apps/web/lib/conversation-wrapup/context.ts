@@ -1,7 +1,10 @@
 import "server-only";
+import type { Database, Json } from "@site-chat/shared";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
 export const conversationContextSchema = z.object({
+  replyEmailSaved: z.boolean().optional(),
   conversationId: z.string().uuid().nullable(),
   conversationStatus: z
     .enum(["open", "pending", "resolved", "closed"])
@@ -56,4 +59,17 @@ export async function publicVisitorConversationContext(
       ]),
     ),
   };
+}
+
+export async function endVisitorConversation(workspaceId: string, sessionToken: string, conversationId: string) {
+  type EndDatabase = Omit<Database,"public"> & {
+    public: Omit<Database["public"],"Functions"> & {
+      Functions: Database["public"]["Functions"] & {
+        widget_end_conversation: { Args: {p_workspace_id:string;p_session_token:string;p_conversation_id:string}; Returns: Json };
+      };
+    };
+  };
+  const client = createServiceClient() as unknown as SupabaseClient<EndDatabase>;
+  const {error}=await client.rpc("widget_end_conversation",{p_workspace_id:workspaceId,p_session_token:sessionToken,p_conversation_id:conversationId});
+  if(error) throw new Error("Unable to end the chat. Please try again.");
 }

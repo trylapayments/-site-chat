@@ -18,9 +18,10 @@ const STATUS_OPTIONS = [
 ];
 
 const ASSIGNMENT_TABS = [
-  { value: "all", label: "All" },
+  { value: "all", label: "All open" },
   { value: "assigned_to_me", label: messages.filterMine },
   { value: "unassigned", label: messages.filterUnassigned },
+  { value: "closed", label: "Closed" },
 ] as const;
 
 export function InboxListFilters() {
@@ -37,6 +38,9 @@ export function InboxListFilters() {
     router.push(toAppRoute(query ? `${inboxRoot}?${query}` : inboxRoot));
   }
 
+  const completed =
+    searchParams.get("statusGroup") === "completed" ||
+    ["closed", "resolved"].includes(searchParams.get("status") ?? "");
   const assignmentValue = searchParams.get("assignment") ?? "all";
 
   return (
@@ -44,14 +48,17 @@ export function InboxListFilters() {
       <div
         role="tablist"
         aria-label={messages.filterLabel}
-        className="flex gap-0 px-2"
+        className="grid grid-cols-[1fr_0.8fr_1.3fr_0.9fr] px-2"
         data-testid="inbox-assignment-tabs"
       >
         {ASSIGNMENT_TABS.map((tab) => {
           const selected =
-            tab.value === "all"
-              ? assignmentValue === "all" || assignmentValue === ""
-              : assignmentValue === tab.value;
+            tab.value === "closed"
+              ? completed
+              : !completed &&
+                (tab.value === "all"
+                  ? assignmentValue === "all" || assignmentValue === ""
+                  : assignmentValue === tab.value);
           return (
             <button
               key={tab.value}
@@ -60,14 +67,19 @@ export function InboxListFilters() {
               aria-selected={selected}
               data-testid={`inbox-assignment-tab-${tab.value}`}
               className={cn(
-                "relative px-3.5 py-2.5 text-[13px] font-medium transition-colors",
+                "relative min-w-0 whitespace-nowrap px-1.5 py-2.5 text-[12px] font-medium transition-colors",
                 selected
                   ? "text-brand"
                   : "text-inbox-muted hover:text-neutral-800",
               )}
               onClick={() => {
                 pushWithParams((params) => {
-                  if (tab.value === "all") {
+                  params.set(
+                    "statusGroup",
+                    tab.value === "closed" ? "completed" : "active",
+                  );
+                  params.delete("status");
+                  if (tab.value === "all" || tab.value === "closed") {
                     params.delete("assignment");
                   } else {
                     params.set("assignment", tab.value);
@@ -106,7 +118,14 @@ export function InboxListFilters() {
           }}
           className="border-inbox-border bg-inbox-surface text-inbox-muted focus-visible:ring-brand/30 h-9 w-full rounded-lg border px-2.5 text-[13px] shadow-[var(--inbox-shadow)] focus-visible:ring-1 focus-visible:outline-none"
         >
-          {STATUS_OPTIONS.map((option) => (
+          {STATUS_OPTIONS.filter(
+            (option) =>
+              !option.value ||
+              (completed
+                ? ["closed", "resolved"]
+                : ["open", "pending"]
+              ).includes(option.value),
+          ).map((option) => (
             <option key={option.value || "all"} value={option.value}>
               {option.label}
             </option>

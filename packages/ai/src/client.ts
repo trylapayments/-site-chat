@@ -17,3 +17,5 @@ export {
   type AIFeatureFlags,
 } from "./features/capabilities";
 export { AI_ERROR_CODES, publicMessageForCode, type AIErrorCode } from "./types/errors";
+
+export { TRANSLATION_LANGUAGES, type TranslationLanguage } from "./translation-languages";

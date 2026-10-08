@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 
-import { updateVisitorProfile } from "./queries";
+import { fetchConversation, updateVisitorProfile } from "./queries";
 
 function fakeSupabase(rpcResult: {
   data?: unknown;
@@ -71,5 +71,20 @@ describe("updateVisitorProfile contract", () => {
         { email: null },
       ),
     ).rejects.toEqual({ message: "boom" });
+  });
+});
+
+describe("conversation loading", () => {
+  it("starts visitor lookups without waiting for the conversation and preserves an access rejection", async () => {
+    let finish: ((result: { data: null; error: { message: string } }) => void) | undefined;
+    const main = new Promise<{ data: null; error: { message: string } }>((resolve) => { finish = resolve; });
+    const rpc = vi.fn((name: string) => name === "get_conversation" ? main : Promise.resolve({ data: name === "conversation_ip_countries" ? {} : null, error: null }));
+    const supabase = { rpc } as unknown as AppSupabaseClient;
+    const load = fetchConversation(supabase, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    const failure = expect(load).rejects.toEqual({ message: "forbidden" });
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["get_conversation", "conversation_ip_countries", "get_conversation_engagement"]);
+    if (!finish) throw new Error("Missing resolver");
+    finish({ data: null, error: { message: "forbidden" } });
+    await failure;
   });
 });

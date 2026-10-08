@@ -10,6 +10,7 @@ export type AIProviderId = (typeof AI_PROVIDER_IDS)[number];
 
 export const AI_ERROR_CODES = [
   "AI_DISABLED",
+  "AI_QUOTA_EXHAUSTED",
   "AI_NOT_CONFIGURED",
   "AI_RATE_LIMITED",
   "AI_PROVIDER_ERROR",

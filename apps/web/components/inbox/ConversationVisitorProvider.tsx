@@ -1,6 +1,9 @@
 "use client";
 
-import type { ConversationDetail } from "@site-chat/shared";
+import {
+  conversationStatusSchema,
+  type ConversationDetail,
+} from "@site-chat/shared";
 import {
   createContext,
   useCallback,
@@ -13,18 +16,22 @@ import {
 } from "react";
 
 import { fetchConversation } from "@/lib/inbox/queries";
-import { subscribeOperatorVisitorContext } from "@/lib/realtime/operator-subscriptions";
+import {
+  subscribeOperatorConversation,
+  subscribeOperatorVisitorContext,
+} from "@/lib/realtime/operator-subscriptions";
 import { createVisitorContextRefresh } from "@/lib/realtime/visitor-context-refresh";
 import { createClient } from "@/lib/supabase/client";
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 
 type VisitorSnapshot = Pick<
   ConversationDetail,
-  "contact" | "visitor" | "visitor_context" | "visitor_activity"
+  "status" | "contact" | "visitor" | "visitor_context" | "visitor_activity"
 >;
 
 function visitorSnapshot(conversation: ConversationDetail): VisitorSnapshot {
   return {
+    status: conversation.status,
     contact: conversation.contact,
     visitor: conversation.visitor,
     visitor_context: conversation.visitor_context,
@@ -89,7 +96,28 @@ export function ConversationVisitorProvider({
         if (status === "connected") refresh.schedule();
       },
     });
+    const unsubscribeConversation = subscribeOperatorConversation({
+      workspaceId,
+      conversationId,
+      onMessageInsert: () => {},
+      onConversationChange: () => {
+        refresh.schedule();
+      },
+    });
+    const statusChanged = (event: Event) => {
+      const detail: unknown = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== "object") return;
+      const payload = detail as Record<string, unknown>;
+      const status = conversationStatusSchema.safeParse(payload.status);
+      if (payload.conversationId === conversationId && status.success) {
+        setSnapshot((current) => ({ ...current, status: status.data }));
+        refresh.schedule();
+      }
+    };
+    window.addEventListener("mill:conversation-status", statusChanged);
     return () => {
+      unsubscribeConversation();
+      window.removeEventListener("mill:conversation-status", statusChanged);
       refresh.stop();
       refreshRef.current = null;
       unsubscribe();

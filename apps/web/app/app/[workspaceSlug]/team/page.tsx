@@ -1,3 +1,4 @@
+import { workspaceCapacity } from "@/lib/billing/capacity";
 import { can } from "@site-chat/shared";
 import type { ListWorkspaceTeamResult } from "@site-chat/shared/team";
 
@@ -36,6 +37,7 @@ export default async function TeamPage({
     loadError = true;
   }
 
+  const capacity = await workspaceCapacity(workspace.workspace_id);
   return (
     <TeamShell
       workspaceId={workspace.workspace_id}
@@ -45,6 +47,7 @@ export default async function TeamPage({
       canSearchNotes={can(workspace.role, "manage_internal_notes")}
       initialTeam={team}
       loadError={loadError}
+      operatorLimit={capacity.operators}
     />
   );
 }

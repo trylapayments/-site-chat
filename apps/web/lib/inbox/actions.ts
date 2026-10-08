@@ -35,7 +35,6 @@ import {
   type ReceiptCursors,
   type SendOperatorMessageResult,
 } from "@site-chat/shared";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import {
@@ -44,7 +43,6 @@ import {
   completeOperatorUploads,
   initiateOperatorUploads,
 } from "@/lib/attachments/service";
-import { workspaceNavPath } from "@/lib/dashboard/routes";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
 import {
   assignConversation,
@@ -114,9 +112,11 @@ function mapActionError(error: unknown): InboxActionResult {
 }
 
 async function requireInboxMutationContext(workspaceSlug: string) {
-  const { workspace } = await requireInboxWorkspace(workspaceSlug);
   const supabase = await createClient();
-  const { user } = await requireUser(supabase);
+  const [{ workspace }, { user }] = await Promise.all([
+    requireInboxWorkspace(workspaceSlug),
+    requireUser(supabase),
+  ]);
 
   if (!user) {
     throw new CapabilityError(workspace.role, "view_conversations");
@@ -151,10 +151,8 @@ export async function sendMessageAction(
       parsed.data.clientMessageId,
     );
 
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // Return the saved message directly; thread reconciliation and inbox CDC
+    // update the UI without blocking acknowledgement on a full route render.
     return { success: true, data: result };
   } catch (error) {
     return mapActionError(error);
@@ -290,10 +288,7 @@ export async function updateConversationStatusAction(
       parsed.data.status,
     );
 
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // Return after the mutation; client refresh and realtime update the views.
     return { success: true };
   } catch (error) {
     return mapActionError(error);
@@ -564,10 +559,8 @@ export async function completeOperatorUploadsAction(
     });
 
     const result = sendOperatorMessageResultSchema.parse(data);
-    revalidatePath(workspaceNavPath(workspaceSlug, "inbox"));
-    revalidatePath(
-      `${workspaceNavPath(workspaceSlug, "inbox")}/${parsed.data.conversationId}`,
-    );
+    // Return the saved message directly; thread reconciliation and inbox CDC
+    // update the UI without blocking acknowledgement on a full route render.
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof AttachmentValidationError) {

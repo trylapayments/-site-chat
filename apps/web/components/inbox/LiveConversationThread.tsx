@@ -1,5 +1,13 @@
 "use client";
 
+import { ConversationTranslationProvider, InlineTranslation, useConversationTranslation, translationLanguageName } from "./ConversationTranslation";
+import { translateInPortal } from "@/lib/ai-translation/portal-client";
+import { TRANSLATION_LANGUAGES, type TranslationLanguage } from "@site-chat/ai/client";
+
+import {
+  startInteraction,
+  finishInteraction,
+} from "@/lib/performance/interactions";
 import type {
   CannedResponse,
   MessageItem,
@@ -26,8 +34,10 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
+import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { Paperclip } from "lucide-react";
 
+import { ConversationFollowUp } from "@/components/inbox/ConversationFollowUp";
 import { Button } from "@/components/ui/button";
 import {
   CannedSlashMenu,
@@ -319,9 +329,32 @@ export function LiveConversationThread({
     [conversationId, workspaceSlug],
   );
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const followLatestRef = useRef(true);
+  const previousLastRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || focusMessageId) return;
+    const last = messages.at(-1);
+    const changed = last?.id !== previousLastRef.current;
+    previousLastRef.current = last?.id;
+    if (followLatestRef.current || (changed && last?.isOptimistic)) {
+      container.scrollTop = container.scrollHeight;
+      followLatestRef.current = true;
+    }
+    const observer = new ResizeObserver(() => {
+      if (followLatestRef.current) container.scrollTop = container.scrollHeight;
+    });
+    if (container.firstElementChild) observer.observe(container.firstElementChild);
+    return () => { observer.disconnect(); };
+  }, [messages, focusMessageId]);
+
+  const currentStatus = useConversationVisitorContext()?.snapshot.status;
+
   return (
+    <ConversationTranslationProvider key={`${memberId}:${conversationId}`} identity={memberId} workspaceId={workspaceId} conversationId={conversationId} messageVersion={String(maxSequenceNumber(messages))}>
     <div
-      className="flex h-full min-h-0 flex-col"
+      className="flex min-h-0 flex-1 flex-col"
       data-testid="conversation-thread"
     >
       <span
@@ -346,20 +379,39 @@ export function LiveConversationThread({
           {visitorOnline ? "Online" : "Offline"}
         </p>
       </div>
+      <ConversationFollowUp
+        key={conversationId}
+        slug={workspaceSlug}
+        conversationId={conversationId}
+        ratingOnly
+        pollRating={currentStatus === "closed" || currentStatus === "resolved"}
+      />
       <ConnectionBanner
         state={connectionState}
         onRetry={() => {
           void catchUp();
         }}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-5">
+      <div ref={scrollRef} onScroll={() => {
+        const node = scrollRef.current;
+        if (node) followLatestRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 120;
+      }} className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-5">
         <MessageList
+          conversationId={conversationId}
           workspaceId={workspaceId}
           messages={messages}
           visitorReceipts={visitorReceipts}
           bottomRef={observeBottom}
           focusMessageId={focusMessageId}
         />
+        {currentStatus === "closed" || currentStatus === "resolved" ? (
+          <p
+            role="status"
+            className="py-4 text-center text-xs text-inbox-muted"
+          >
+            Chat Closed
+          </p>
+        ) : null}
         {newMessagesBelow > 0 ? (
           <div className="flex justify-center py-3">
             <Button
@@ -367,7 +419,8 @@ export function LiveConversationThread({
               variant="outline"
               size="sm"
               onClick={() => {
-                observeBottom(document.createElement("div"));
+                followLatestRef.current = true;
+                if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
               }}
             >
               New messages
@@ -422,6 +475,7 @@ export function LiveConversationThread({
         }}
       />
     </div>
+    </ConversationTranslationProvider>
   );
 }
 
@@ -452,12 +506,14 @@ function initialsFromSender(label: string): string {
 }
 
 function MessageList({
+  conversationId,
   workspaceId,
   messages,
   visitorReceipts,
   bottomRef,
   focusMessageId,
 }: {
+  conversationId: string;
   workspaceId: string;
   messages: MessageView[];
   visitorReceipts: ReceiptCursors;
@@ -476,6 +532,8 @@ function MessageList({
       node.focus({ preventScroll: true });
     }
   }, [focusMessageId, messages]);
+
+  const translation = useConversationTranslation();
 
   if (messages.length === 0) {
     return (
@@ -497,6 +555,7 @@ function MessageList({
                 peer: visitorReceipts,
               })
             : null;
+        const replyOriginal = message.clientMessageId && translation?.prefs.enabled ? translation.originals[message.clientMessageId] : undefined;
         const focused = focusMessageId === message.id;
         const isVisitor = message.senderType === "visitor";
         const day = messageDayKey(message.createdAt);
@@ -556,8 +615,12 @@ function MessageList({
                 </header>
                 {message.body ? (
                   <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-neutral-900">
-                    {message.body}
+                    {replyOriginal?.original ?? message.body}
                   </p>
+                ) : null}
+                {replyOriginal && <div className="mt-2 border-t border-neutral-200 pt-2 text-xs text-neutral-500"><p className="mb-1 text-[10px]">{translationLanguageName(replyOriginal.sourceLanguage)} → {translationLanguageName(replyOriginal.targetLanguage)}</p><p dir="auto" className="whitespace-pre-wrap leading-relaxed">{replyOriginal.translated}</p></div>}
+                {isVisitor && message.body && !message.isInternal && !message.isOptimistic && messages.indexOf(message) >= messages.length - 20 ? (
+                  <InlineTranslation workspaceId={workspaceId} conversationId={conversationId} messageId={message.id} original={message.body} latest={message.id === [...messages].reverse().find(item => item.senderType === "visitor" && !item.isInternal)?.id} />
                 ) : null}
                 {message.attachments && message.attachments.length > 0 ? (
                   <OperatorMessageAttachments
@@ -617,6 +680,8 @@ function LiveReplyComposer({
   onClearTyping: () => void;
   onVisitorMessageDisplayed: (sequence: number) => void;
 }) {
+  const translation = useConversationTranslation();
+  const translationRequestRef = useRef<{ binding: string; id: string } | null>(null);
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -714,6 +779,9 @@ function LiveReplyComposer({
           clientMessageIdRef.current = crypto.randomUUID();
         }
 
+        const timing = startInteraction(
+          pendingFiles.length ? "Send attachment" : "Send message",
+        );
         const clientMessageId = clientMessageIdRef.current;
         const tempId = crypto.randomUUID();
         const filesForSend = pendingFiles;
@@ -744,6 +812,22 @@ function LiveReplyComposer({
         startTransition(async () => {
           let batchIdForCleanup: string | null = null;
           try {
+            let deliveredBody = trimmed;
+            if (translation?.prefs.enabled && translation.prefs.replies && trimmed) {
+              const target = translation.prefs.replyLanguage === "auto" ? translation.customerLanguage : translation.prefs.replyLanguage;
+              if (!target || !Object.hasOwn(TRANSLATION_LANGUAGES, target))
+                throw new Error("Choose a reply language while the customer's language is being detected.");
+              const binding = JSON.stringify([conversationId, trimmed, target]);
+              if (translationRequestRef.current?.binding !== binding)
+                translationRequestRef.current = { binding, id: crypto.randomUUID() };
+              const translated = await translateInPortal({ workspaceId, operation: "previewReplyTranslation", input: {
+                conversationId, text: trimmed, targetLanguage: target as TranslationLanguage, consent: true, requestId: clientMessageId,
+              } });
+              if (!translated.ok) throw new Error(translated.error);
+              const translatedText = translated.result.translatedText;
+              translation.rememberOriginal(clientMessageId, { original: trimmed, translated: translatedText, sourceLanguage: translated.result.sourceLanguage ?? "und", targetLanguage: target });
+              deliveredBody = translation.prefs.shareOriginal && trimmed !== translatedText ? `${trimmed}\n\n${translatedText}` : translatedText;
+            }
             if (filesForSend.length > 0) {
               const {
                 initiateOperatorUploadsAction,
@@ -755,7 +839,7 @@ function LiveReplyComposer({
                 workspaceSlug,
                 {
                   conversationId,
-                  body: trimmed,
+                  body: deliveredBody,
                   clientMessageId,
                   files: filesForSend.map((file, index) => ({
                     localId: `op-${String(index)}-${file.name}`,
@@ -830,7 +914,7 @@ function LiveReplyComposer({
                   uploadIds: initiated.data.uploads.map(
                     (item) => item.uploadId,
                   ),
-                  body: trimmed,
+                  body: deliveredBody,
                   clientMessageId,
                 },
               );
@@ -843,6 +927,7 @@ function LiveReplyComposer({
                 );
               }
 
+              finishInteraction(timing, true);
               const sent = completed.data;
               clientMessageIdRef.current = null;
               setUploadProgress(null);
@@ -873,7 +958,7 @@ function LiveReplyComposer({
             const { sendMessageAction } = await import("@/lib/inbox/actions");
             const result = await sendMessageAction(workspaceSlug, {
               conversationId,
-              body: trimmed,
+              body: deliveredBody,
               clientMessageId,
             });
 
@@ -889,6 +974,7 @@ function LiveReplyComposer({
                     : message,
                 ),
               );
+              finishInteraction(timing, false);
               setError(
                 !result.success ? result.message : "Something went wrong.",
               );
@@ -897,6 +983,7 @@ function LiveReplyComposer({
               return;
             }
 
+            finishInteraction(timing, true);
             const sent = result.data;
             clientMessageIdRef.current = null;
             setMessages((current) =>
@@ -919,6 +1006,7 @@ function LiveReplyComposer({
               ),
             );
           } catch (uploadError) {
+            finishInteraction(timing, false);
             setUploadProgress(null);
             setActiveBatchId(null);
             if (filesForSend.length > 0) {
@@ -1020,6 +1108,7 @@ function LiveReplyComposer({
           {uploadProgress}
         </p>
       ) : null}
+
       <div className="mill-message-composer border-inbox-border/90 bg-inbox-surface focus-within:ring-brand/20 rounded-lg border focus-within:ring-1">
         <div className="relative">
           {canned.query !== null ? (

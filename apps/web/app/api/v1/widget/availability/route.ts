@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       );
     const [status, setup] = await Promise.all([
       workspaceOperatorStatus(context.workspaceId),
-      fetchChatSetup(context.workspaceId),
+      fetchChatSetup(context.workspaceId, context.parentOrigin),
     ]);
     const availability = evaluateWidgetAvailability(setup.config, status);
     return widgetJsonSuccess(

@@ -1,3 +1,4 @@
+import { workspaceCapacity } from "@/lib/billing/capacity";
 import { can, widgetPublicKeySchema } from "@site-chat/shared";
 import { WidgetInstallManager } from "@/components/settings/widget-install/WidgetInstallManager";
 import { clientEnv } from "@/lib/env";
@@ -27,9 +28,11 @@ export default async function InstallPage({
   ]);
   if (key.error || domains.error)
     throw new Error("Could not load widget installation settings.");
+  const capacity = await workspaceCapacity(workspace.workspace_id);
   return (
     <WidgetInstallManager
       slug={workspaceSlug}
+      siteLimit={capacity.sites}
       snippet={buildInstallSnippet(
         clientEnv.NEXT_PUBLIC_APP_URL,
         widgetPublicKeySchema.parse(

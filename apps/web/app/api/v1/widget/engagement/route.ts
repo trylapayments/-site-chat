@@ -1,4 +1,14 @@
-import { ipCountryFromRequest } from "@/lib/widget/ip-country";
+import { dispatchMobilePush } from "@/lib/mobile/dispatch";
+import { dispatchNotificationEmails } from "@/lib/email/dispatch-notifications";
+
+export const maxDuration = 60;
+
+import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  ipCountryFromRequest,
+  ipCityFromRequest,
+} from "@/lib/widget/ip-country";
 import { publicVisitorConversationContext } from "@/lib/conversation-wrapup/context";
 import { validatePreChatSubmission } from "@site-chat/shared";
 import { isIP } from "node:net";
@@ -78,19 +88,19 @@ export async function GET(request: Request) {
     if (error) throw error;
     const country = ipCountryFromRequest(request);
     if (process.env.VERCEL === "1") {
-      const { error: geoError } = await createServiceClient().rpc(
-        "record_widget_ip_country",
-        {
-          p_workspace_id: auth.workspaceId,
-          p_session_token: auth.session,
-          // Postgres argument nullability is not emitted by the generator.
-          p_country: country as string,
-        },
-      );
+      // Trusted edge location, scoped to the authenticated visitor session.
+      const { error: geoError } = await (
+        createServiceClient() as unknown as SupabaseClient
+      ).rpc("record_widget_ip_location", {
+        p_workspace_id: auth.workspaceId,
+        p_session_token: auth.session,
+        p_country: country,
+        p_city: ipCityFromRequest(request),
+      });
       if (geoError)
         console.error("Unable to record visitor IP country", geoError.code);
     }
-    const settings = await fetchChatSetup(auth.workspaceId);
+    const settings = await fetchChatSetup(auth.workspaceId, auth.origin);
     const context = await publicVisitorConversationContext(
       auth.workspaceId,
       auth.session,
@@ -134,7 +144,33 @@ export async function POST(request: Request) {
     );
   try {
     const input: unknown = await request.json();
-    const settings = await fetchChatSetup(auth.workspaceId);
+    const followUp = z
+      .object({
+        action: z.literal("reply_email"),
+        email: z.string().trim().email().max(254),
+      })
+      .strict()
+      .safeParse(input);
+    if (followUp.success) {
+      const settings = await fetchChatSetup(auth.workspaceId, auth.origin);
+      if (!settings.config.unansweredEmailEnabled)
+        return response(
+          { error: { message: "Email follow-up is disabled." } },
+          403,
+          auth.origin,
+        );
+      const { data, error } = await createServiceClient().rpc(
+        "widget_save_reply_email" as never,
+        {
+          p_workspace_id: auth.workspaceId,
+          p_session_token: auth.session,
+          p_email: followUp.data.email,
+        } as never,
+      );
+      if (error || data !== true) throw new Error("Unable to save email");
+      return response({ data: { saved: true } }, 200, auth.origin);
+    }
+    const settings = await fetchChatSetup(auth.workspaceId, auth.origin);
     const parsed = validatePreChatSubmission(settings.config, input);
     if (!parsed.success)
       return response(
@@ -169,6 +205,8 @@ export async function POST(request: Request) {
       },
     );
     if (error) throw error;
+    dispatchNotificationEmails();
+    dispatchMobilePush();
     return response({ data }, 200, auth.origin);
   } catch {
     return response(

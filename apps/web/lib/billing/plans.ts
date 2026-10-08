@@ -2,7 +2,6 @@
 export const MILL_PLANS = [
   {
     id: "starter",
-    aiConversations: 0,
     name: "Starter",
     monthlyPriceCents: 2900,
     operators: 3,
@@ -12,7 +11,6 @@ export const MILL_PLANS = [
   },
   {
     id: "essential",
-    aiConversations: 100,
     name: "Essential",
     monthlyPriceCents: 4900,
     operators: 5,
@@ -22,7 +20,6 @@ export const MILL_PLANS = [
   },
   {
     id: "growth",
-    aiConversations: 500,
     name: "Growth",
     monthlyPriceCents: 8900,
     operators: 10,
@@ -32,7 +29,6 @@ export const MILL_PLANS = [
   },
   {
     id: "business",
-    aiConversations: 1000,
     name: "Business",
     monthlyPriceCents: 19900,
     operators: 20,
@@ -51,3 +47,45 @@ export const formatMillPrice = (cents: number) =>
     currency: MILL_PRICING.currency,
     maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
   }).format(cents / 100);
+
+export type MillPlanId = (typeof MILL_PLANS)[number]["id"];
+export function findMillPlan(id: string) {
+  return MILL_PLANS.find((plan) => plan.id === id) ?? null;
+}
+export type BillingInterval = "month" | "year";
+export function chargebeePlanPriceId(
+  id: MillPlanId,
+  interval: BillingInterval = "month",
+) {
+  return `mill-${id}-usd-${interval === "year" ? "annual" : "monthly"}`;
+}
+export function millPlanPrice(id: MillPlanId, interval: BillingInterval) {
+  const plan = findMillPlan(id);
+  return plan ? plan.monthlyPriceCents * (interval === "year" ? 10 : 1) : null;
+}
+export function planFromPriceId(priceId: string) {
+  return (
+    MILL_PLANS.find((p) =>
+      [chargebeePlanPriceId(p.id), chargebeePlanPriceId(p.id, "year")].includes(
+        priceId,
+      ),
+    ) ?? null
+  );
+}
+
+/** Downgrades and annual-to-monthly switches take effect at renewal. */
+export function paidPlanChangeTiming(
+  currentId: MillPlanId,
+  currentInterval: BillingInterval,
+  nextId: MillPlanId,
+  nextInterval: BillingInterval,
+): "now" | "renewal" {
+  const current = findMillPlan(currentId);
+  const next = findMillPlan(nextId);
+  if (!current || !next) throw new Error("Unknown Mill plan");
+  if (next.monthlyPriceCents > current.monthlyPriceCents) return "now";
+  if (next.monthlyPriceCents < current.monthlyPriceCents) return "renewal";
+  return currentInterval === "year" && nextInterval === "month"
+    ? "renewal"
+    : "now";
+}

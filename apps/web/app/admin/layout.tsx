@@ -2,6 +2,7 @@ import { toAppRoute } from "@/lib/auth/redirect";
 import Link from "next/link";
 import {
   Building2,
+  Users,
   Layers,
   Tags,
   ReceiptText,
@@ -39,6 +40,9 @@ export default async function PlatformLayout({
           >
             {[
               { href: "/admin/customers", name: "Customers", Icon: Building2 },
+              ...(role === "owner"
+                ? [{ href: "/admin/users", name: "User accounts", Icon: Users }]
+                : []),
               {
                 href: "/admin/subscriptions",
                 name: "Subscriptions",

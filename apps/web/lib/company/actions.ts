@@ -30,3 +30,13 @@ export async function saveCompanyAction(slug: string, input: CompanyProfile) {
   revalidatePath(`/app/${slug}`, "layout");
   return { success: true, message: "Company details saved." };
 }
+
+export async function deleteCompanyAction(slug: string, confirmation: string) {
+ const {workspace}=await requireInboxWorkspace(slug);
+ try {
+  const {deleteCompany}=await import("./inboxes");
+  await deleteCompany(await createClient(),workspace.workspace_id,{confirmation});
+  revalidatePath("/app","layout");
+  return {success:true,message:"Company deleted. Your login account is unchanged."};
+ } catch(error) { return {success:false,message:error instanceof Error ? error.message : "Unable to delete company. Cancel any subscription in Billing first."}; }
+}

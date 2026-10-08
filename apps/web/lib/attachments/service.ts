@@ -99,6 +99,7 @@ async function resolveVisitorConversationContext(input: {
 export async function initiateVisitorUploads(
   input: {
     workspaceId: string;
+    parentOrigin?: string;
     sessionToken: string;
     files: InitiateUploadFileInput[];
     body?: string;
@@ -121,7 +122,7 @@ export async function initiateVisitorUploads(
   }
 
   if (batch.value.some((file) => file.mimeType.startsWith("audio/")))
-    await assertVisitorVoiceEnabled(input.workspaceId);
+    await assertVisitorVoiceEnabled(input.workspaceId, input.parentOrigin);
 
   const { conversationId, visitorSessionId } =
     await resolveVisitorConversationContext({
@@ -321,6 +322,7 @@ async function uploadsAlreadyConfirmed(input: {
 export async function completeVisitorUploads(
   input: {
     workspaceId: string;
+    parentOrigin?: string;
     sessionToken: string;
     batchId: string;
     uploadIds: string[];
@@ -385,7 +387,7 @@ export async function completeVisitorUploads(
         row.mime_type.startsWith("audio/"),
     )
   )
-    await assertVisitorVoiceEnabled(input.workspaceId);
+    await assertVisitorVoiceEnabled(input.workspaceId, input.parentOrigin);
 
   const { data, error } = await supabase.rpc(
     "finalize_visitor_attachment_message",
@@ -829,8 +831,11 @@ export class AttachmentValidationError extends Error {
   }
 }
 
-async function assertVisitorVoiceEnabled(workspaceId: string) {
-  const setup = await fetchChatSetup(workspaceId);
+async function assertVisitorVoiceEnabled(
+  workspaceId: string,
+  parentOrigin?: string,
+) {
+  const setup = await fetchChatSetup(workspaceId, parentOrigin);
   if (!setup.config.voiceMessagesEnabled)
     throw new AttachmentValidationError(
       "VOICE_DISABLED",

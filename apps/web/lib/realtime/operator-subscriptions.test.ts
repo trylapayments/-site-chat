@@ -17,7 +17,16 @@ class MockRealtimeChannel {
     this.deferSubscribed = options?.deferSubscribed ?? false;
   }
 
-  on(): this {
+  bindings: Array<{
+    type: string;
+    callback: (payload: Record<string, unknown>) => void;
+  }> = [];
+  on(
+    type: string,
+    _filter: unknown,
+    callback: (payload: Record<string, unknown>) => void,
+  ): this {
+    this.bindings.push({ type, callback });
     this.bindingCount += 1;
     return this;
   }
@@ -110,6 +119,7 @@ vi.mock("@/lib/supabase/client", () => ({
 
 describe("subscribeOperatorWorkspaceInbox auth lifecycle", () => {
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -123,6 +133,54 @@ describe("subscribeOperatorWorkspaceInbox auth lifecycle", () => {
     await Promise.resolve();
     await Promise.resolve();
   }
+
+  it("shares one private Broadcast message channel and releases it only after the last consumer", async () => {
+    vi.stubEnv("NEXT_PUBLIC_OPERATOR_BROADCAST", "true");
+    const supabase = createMockSupabase();
+    createClientMock.mockReturnValue(supabase);
+    const input = {
+      workspaceId: "broadcast-workspace",
+      memberId: "member",
+      onMessageInsert: vi.fn(),
+      onConversationChange: vi.fn(),
+    };
+    const stopFirst = subscribeOperatorWorkspaceInbox(input);
+    const stopSecond = subscribeOperatorWorkspaceInbox(input);
+    await vi.waitFor(() => {
+      expect(supabase.__channels.length).toBe(3);
+    });
+    const messages = supabase.__channels.find(
+      (channel) =>
+        channel.topic === "realtime:operator-messages:broadcast-workspace",
+    );
+    expect(messages).toBeDefined();
+    const deliver = messages?.bindings.find(
+      (binding) => binding.type === "broadcast",
+    )?.callback;
+    if (!deliver) throw new Error("Broadcast handler missing");
+    const row = {
+      id: "event-one",
+      workspace_id: "broadcast-workspace",
+      is_internal: false,
+    };
+    deliver({ payload: row });
+    deliver({ payload: row });
+    deliver({
+      payload: { ...row, id: "event-two", workspace_id: "other-workspace" },
+    });
+    deliver({ payload: { ...row, id: "event-three", is_internal: true } });
+    // Two consumers, one invocation each. Duplicate/foreign/internal events ignored.
+    expect(input.onMessageInsert).toHaveBeenCalledTimes(2);
+
+    expect(supabase.channel).toHaveBeenCalledWith(
+      "operator-messages:broadcast-workspace",
+      { config: { private: true } },
+    );
+    stopFirst();
+    expect(supabase.__channels).toContain(messages);
+    stopSecond();
+    expect(supabase.__channels).not.toContain(messages);
+  });
 
   it("does not resubscribe on same-token INITIAL_SESSION while connecting", async () => {
     const supabase = createMockSupabase({

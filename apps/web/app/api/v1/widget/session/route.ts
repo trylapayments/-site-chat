@@ -32,6 +32,10 @@ import {
   createOrResumeVisitorSession,
 } from "@/lib/widget/service";
 
+import { dispatchMobilePush } from "@/lib/mobile/dispatch";
+
+export const maxDuration = 60;
+
 function requireJsonContentType(request: Request): boolean {
   const contentType = request.headers.get("content-type") ?? "";
   return contentType.toLowerCase().includes("application/json");
@@ -131,6 +135,7 @@ export async function POST(request: Request) {
 
     const session = await createOrResumeVisitorSession({
       workspaceId: embedContext.workspaceId,
+      parentOrigin: embedContext.parentOrigin,
       sessionToken: resumeToken,
       locale: parsed.data.locale,
       pageUrl: pageContext.url,
@@ -150,6 +155,8 @@ export async function POST(request: Request) {
       utmContent: pageContext.utmContent,
       utmTerm: pageContext.utmTerm,
     });
+
+    if (process.env.MOBILE_VISITOR_PUSH_ENABLED === "1") dispatchMobilePush();
 
     return widgetJsonSuccess(widgetSessionDataSchema, session, requestId, {
       headers: Object.fromEntries(corsHeaders(corsOrigin).entries()),

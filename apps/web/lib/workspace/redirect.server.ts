@@ -20,10 +20,16 @@ import { createClient } from "@/lib/supabase/server";
 
 const INVITE_INVALID_DESTINATION = `${AUTH_ROUTES.authError}?code=invite_invalid`;
 
+export const getWorkspaceMembership = cache(async () => {
+  return fetchAccessibleWorkspaces(await createClient());
+});
+
 export const getWorkspaceContext = cache(async () => {
   const supabase = await createClient();
-  const membership = await fetchAccessibleWorkspaces(supabase);
-  const lastWorkspaceId = await fetchLastWorkspaceId(supabase);
+  const [membership, lastWorkspaceId] = await Promise.all([
+    getWorkspaceMembership(),
+    fetchLastWorkspaceId(supabase),
+  ]);
   return { membership, lastWorkspaceId };
 });
 

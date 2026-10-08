@@ -9,11 +9,12 @@ import {
 import { getBearerToken, widgetOptionsResponse } from "@/lib/widget/responses";
 import { consumeWidgetRateLimit } from "@/lib/widget/service";
 import { hashSessionRateLimitKey } from "@/lib/widget/rate-limit";
-import { visitorConversationContext } from "@/lib/conversation-wrapup/context";
+import { visitorConversationContext, endVisitorConversation } from "@/lib/conversation-wrapup/context";
 import { sendConversationTranscript } from "@/lib/conversation-wrapup/transcript";
 import { createServiceClient } from "@/lib/supabase/service";
 import { fetchChatSetup } from "@/lib/chat-setup/queries";
 const inputSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("end"), conversationId: z.string().uuid() }).strict(),
   z
     .object({
       action: z.literal("rating"),
@@ -84,7 +85,11 @@ export async function POST(request: Request) {
         409,
         origin,
       );
-    const setup = await fetchChatSetup(embed.workspaceId);
+    if (input.action === "end") {
+      await endVisitorConversation(embed.workspaceId,session,input.conversationId);
+      return respond({ data: { ended: true } }, 200, origin);
+    }
+    const setup = await fetchChatSetup(embed.workspaceId, embed.parentOrigin);
     if (input.action === "rating") {
       const { data, error } = await createServiceClient().rpc(
         "widget_rate_conversation",

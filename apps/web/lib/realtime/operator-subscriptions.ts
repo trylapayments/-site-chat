@@ -4,9 +4,12 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js";
 import { useEffect, useRef } from "react";
 
+import { realtimeRetryDelay } from "./retry-delay";
 import { createClient } from "@/lib/supabase/client";
 
 type OperatorSupabaseClient = ReturnType<typeof createClient>;
+// A fixed private topic must finish leaving before the SDK can rejoin it.
+const pendingBroadcastRemoval = new Map<string, Promise<void>>();
 
 export type RealtimeConnectionListener = (
   status:
@@ -25,6 +28,7 @@ function subscribeWithOperatorAuth(input: {
   supabase: OperatorSupabaseClient;
   channelName: string;
   bindings: OperatorBinding[];
+  broadcastTopic?: string;
   onConnectionChange?: RealtimeConnectionListener;
 }): () => void {
   let currentStatus: RealtimeConnectionListener extends (
@@ -85,14 +89,29 @@ function subscribeWithOperatorAuth(input: {
     channelEpoch += 1;
     const previous = channel;
     channel = null;
-    if (previous) void input.supabase.removeChannel(previous);
+    if (previous) {
+      const removal = input.supabase
+        .removeChannel(previous)
+        .then(() => undefined);
+      if (input.broadcastTopic) {
+        const topic = input.broadcastTopic;
+        pendingBroadcastRemoval.set(topic, removal);
+        void removal
+          .finally(() => {
+            if (pendingBroadcastRemoval.get(topic) === removal)
+              pendingBroadcastRemoval.delete(topic);
+          })
+          .catch(() => undefined);
+      }
+      void removal.catch(() => undefined);
+    }
   }
 
   function scheduleResubscribe() {
     if (!isActive() || retryTimer !== null) {
       return;
     }
-    const delayMs = Math.min(1_000 * 2 ** retryAttempt, 15_000);
+    const delayMs = realtimeRetryDelay(retryAttempt);
     retryAttempt += 1;
     retryTimer = setTimeout(() => {
       retryTimer = null;
@@ -147,9 +166,33 @@ function subscribeWithOperatorAuth(input: {
     const epoch = ++channelEpoch;
     // Unique topic per subscribe attempt avoids colliding with a channel that is
     // still being removed after StrictMode remount / CHANNEL_ERROR.
-    const topic = `${input.channelName}:${String(epoch)}:${Math.random().toString(36).slice(2, 8)}`;
-    let nextChannel = input.supabase.channel(topic);
-    for (const binding of input.bindings) {
+    const topic =
+      input.broadcastTopic ??
+      `${input.channelName}:${String(epoch)}:${Math.random().toString(36).slice(2, 8)}`;
+    if (input.broadcastTopic) {
+      await pendingBroadcastRemoval.get(topic);
+      if (!isActive() || epoch !== channelEpoch) return;
+    }
+    let nextChannel = input.supabase.channel(
+      topic,
+      input.broadcastTopic ? { config: { private: true } } : undefined,
+    );
+    if (input.broadcastTopic) {
+      nextChannel = nextChannel.on(
+        "broadcast",
+        { event: "message.created" },
+        (envelope) => {
+          if (!isActive() || epoch !== channelEpoch) return;
+          const payload: unknown = envelope.payload;
+          if (!payload || typeof payload !== "object" || Array.isArray(payload))
+            return;
+          const row = payload as Record<string, unknown>;
+          if (row.is_internal !== false) return;
+          input.bindings[0]?.handler(row);
+        },
+      );
+    }
+    for (const binding of input.broadcastTopic ? [] : input.bindings) {
       nextChannel = nextChannel.on(
         "postgres_changes",
         {
@@ -243,6 +286,93 @@ function subscribeWithOperatorAuth(input: {
   };
 }
 
+// One workspace message channel is shared by the inbox, badge and open thread.
+// Enable only after the database migration and private-channel checks pass.
+const messagePools = new Map<
+  string,
+  {
+    listeners: Set<{
+      message: (row: Record<string, unknown>) => void;
+      status?: RealtimeConnectionListener;
+    }>;
+    stop: () => void;
+    status: Parameters<RealtimeConnectionListener>[0];
+  }
+>();
+function subscribePublicMessages(
+  workspaceId: string,
+  message: (row: Record<string, unknown>) => void,
+  status?: RealtimeConnectionListener,
+): () => void {
+  const listener = { message, status };
+  let pool = messagePools.get(workspaceId);
+  if (!pool) {
+    pool = { listeners: new Set(), stop: () => {}, status: "connecting" };
+    messagePools.set(workspaceId, pool);
+    const shared = pool;
+    const seen = new Set<string>();
+    shared.stop = subscribeWithOperatorAuth({
+      supabase: createClient(),
+      channelName: `operator-messages:${workspaceId}`,
+      broadcastTopic: `operator-messages:${workspaceId}`,
+      bindings: [
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: "",
+          handler: (row) => {
+            if (row.workspace_id !== workspaceId || typeof row.id !== "string")
+              return;
+            if (seen.has(row.id)) return;
+            seen.add(row.id);
+            if (seen.size > 2048) {
+              const oldest = seen.values().next().value;
+              if (oldest) seen.delete(oldest);
+            }
+            for (const target of shared.listeners) target.message(row);
+          },
+        },
+      ],
+      onConnectionChange: (next) => {
+        shared.status = next;
+        for (const target of shared.listeners) target.status?.(next);
+      },
+    });
+  }
+  pool.listeners.add(listener);
+  status?.(pool.status);
+  const shared = pool;
+  return () => {
+    shared.listeners.delete(listener);
+    if (shared.listeners.size === 0) {
+      shared.stop();
+      if (messagePools.get(workspaceId) === shared)
+        messagePools.delete(workspaceId);
+    }
+  };
+}
+
+function combinedConnection(listener?: RealtimeConnectionListener) {
+  type Status = Parameters<RealtimeConnectionListener>[0];
+  const states: Status[] = ["connecting", "connecting"];
+  let previous: Status | undefined;
+  return [0, 1].map((index) => (status: Status) => {
+    states[index] = status;
+    const next = states.every((state) => state === "connected")
+      ? "connected"
+      : (states.find(
+          (state) => state === "failed" || state === "disconnected",
+        ) ??
+        states.find((state) => state !== "connected") ??
+        "connecting");
+    if (next !== previous) {
+      previous = next;
+      listener?.(next);
+    }
+  });
+}
+
 export function subscribeOperatorWorkspaceInbox(input: {
   workspaceId: string;
   memberId: string;
@@ -302,12 +432,31 @@ export function subscribeOperatorWorkspaceInbox(input: {
     );
   }
 
-  return subscribeWithOperatorAuth({
+  const broadcast = process.env.NEXT_PUBLIC_OPERATOR_BROADCAST === "true";
+  const [messageStatus, changeStatus] = combinedConnection(
+    input.onConnectionChange,
+  );
+  const stopMessages = broadcast
+    ? subscribePublicMessages(
+        input.workspaceId,
+        (row) => {
+          input.onMessageInsert(row);
+        },
+        messageStatus,
+      )
+    : () => {};
+  const stopChanges = subscribeWithOperatorAuth({
     supabase,
     channelName: `workspace:${input.workspaceId}:inbox`,
-    onConnectionChange: input.onConnectionChange,
-    bindings,
+    onConnectionChange: broadcast ? changeStatus : input.onConnectionChange,
+    bindings: broadcast
+      ? bindings.filter((binding) => binding.table !== "messages")
+      : bindings,
   });
+  return () => {
+    stopMessages();
+    stopChanges();
+  };
 }
 
 export function subscribeOperatorConversation(input: {
@@ -363,12 +512,32 @@ export function subscribeOperatorConversation(input: {
     );
   }
 
-  return subscribeWithOperatorAuth({
+  const broadcast = process.env.NEXT_PUBLIC_OPERATOR_BROADCAST === "true";
+  const [messageStatus, changeStatus] = combinedConnection(
+    input.onConnectionChange,
+  );
+  const stopMessages = broadcast
+    ? subscribePublicMessages(
+        input.workspaceId,
+        (row) => {
+          if (row.conversation_id !== input.conversationId) return;
+          input.onMessageInsert(row);
+        },
+        messageStatus,
+      )
+    : () => {};
+  const stopChanges = subscribeWithOperatorAuth({
     supabase,
     channelName: `conversation:${input.conversationId}`,
-    onConnectionChange: input.onConnectionChange,
-    bindings,
+    onConnectionChange: broadcast ? changeStatus : input.onConnectionChange,
+    bindings: broadcast
+      ? bindings.filter((binding) => binding.table !== "messages")
+      : bindings,
   });
+  return () => {
+    stopMessages();
+    stopChanges();
+  };
 }
 
 /**

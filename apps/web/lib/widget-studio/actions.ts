@@ -35,6 +35,7 @@ import {
   publishWidgetStudio,
   resetWidgetStudioDraft,
   saveWidgetStudioDraft,
+  siteStudioState,
 } from "@/lib/widget-studio/queries";
 
 const messages = widgetStudioMessagesEn;
@@ -128,16 +129,21 @@ async function requireWidgetStudioContext(
 
 export async function getWidgetStudioStateAction(
   workspaceSlug: string,
+  siteDomain?: string,
 ): Promise<WidgetStudioActionResult<WidgetStudioState>> {
   try {
     const { workspace, supabase } = await requireWidgetStudioContext(
       workspaceSlug,
       false,
     );
-    const state = await fetchWidgetStudioState(
-      supabase,
-      workspace.workspace_id,
-    );
+    const state = siteDomain
+      ? await siteStudioState(
+          supabase,
+          workspace.workspace_id,
+          siteDomain,
+          "get",
+        )
+      : await fetchWidgetStudioState(supabase, workspace.workspace_id);
     return { success: true, data: state };
   } catch (error) {
     return actionError(error, "Unable to load Widget Studio.");
@@ -147,6 +153,7 @@ export async function getWidgetStudioStateAction(
 export async function saveWidgetStudioDraftAction(
   workspaceSlug: string,
   draft: unknown,
+  siteDomain?: string,
 ): Promise<WidgetStudioActionResult<WidgetStudioState>> {
   const parsed = widgetAppearanceConfigSchema.safeParse(draft);
   if (!parsed.success) {
@@ -163,11 +170,19 @@ export async function saveWidgetStudioDraftAction(
       workspaceSlug,
       true,
     );
-    const state = await saveWidgetStudioDraft(
-      supabase,
-      workspace.workspace_id,
-      parsed.data,
-    );
+    const state = siteDomain
+      ? await siteStudioState(
+          supabase,
+          workspace.workspace_id,
+          siteDomain,
+          "save",
+          parsed.data,
+        )
+      : await saveWidgetStudioDraft(
+          supabase,
+          workspace.workspace_id,
+          parsed.data,
+        );
     revalidateStudio(workspaceSlug);
     return { success: true, data: state };
   } catch (error) {
@@ -178,6 +193,7 @@ export async function saveWidgetStudioDraftAction(
 export async function publishWidgetStudioAction(
   workspaceSlug: string,
   expectedPublishedVersion?: unknown,
+  siteDomain?: string,
 ): Promise<WidgetStudioActionResult<WidgetStudioState>> {
   const expected =
     expectedPublishedVersion === undefined || expectedPublishedVersion === null
@@ -200,13 +216,24 @@ export async function publishWidgetStudioAction(
       workspaceSlug,
       true,
     );
-    const state = await publishWidgetStudio(
-      supabase,
-      workspace.workspace_id,
-      expected && "success" in expected && expected.success
-        ? expected.data
-        : null,
-    );
+    const state = siteDomain
+      ? await siteStudioState(
+          supabase,
+          workspace.workspace_id,
+          siteDomain,
+          "publish",
+          undefined,
+          expected && "success" in expected && expected.success
+            ? expected.data
+            : null,
+        )
+      : await publishWidgetStudio(
+          supabase,
+          workspace.workspace_id,
+          expected && "success" in expected && expected.success
+            ? expected.data
+            : null,
+        );
     revalidateStudio(workspaceSlug);
     return { success: true, data: state };
   } catch (error) {
@@ -216,16 +243,21 @@ export async function publishWidgetStudioAction(
 
 export async function discardWidgetStudioDraftAction(
   workspaceSlug: string,
+  siteDomain?: string,
 ): Promise<WidgetStudioActionResult<WidgetStudioState>> {
   try {
     const { workspace, supabase } = await requireWidgetStudioContext(
       workspaceSlug,
       true,
     );
-    const state = await discardWidgetStudioDraft(
-      supabase,
-      workspace.workspace_id,
-    );
+    const state = siteDomain
+      ? await siteStudioState(
+          supabase,
+          workspace.workspace_id,
+          siteDomain,
+          "discard",
+        )
+      : await discardWidgetStudioDraft(supabase, workspace.workspace_id);
     revalidateStudio(workspaceSlug);
     return { success: true, data: state };
   } catch (error) {
@@ -235,16 +267,21 @@ export async function discardWidgetStudioDraftAction(
 
 export async function resetWidgetStudioDraftAction(
   workspaceSlug: string,
+  siteDomain?: string,
 ): Promise<WidgetStudioActionResult<WidgetStudioState>> {
   try {
     const { workspace, supabase } = await requireWidgetStudioContext(
       workspaceSlug,
       true,
     );
-    const state = await resetWidgetStudioDraft(
-      supabase,
-      workspace.workspace_id,
-    );
+    const state = siteDomain
+      ? await siteStudioState(
+          supabase,
+          workspace.workspace_id,
+          siteDomain,
+          "reset",
+        )
+      : await resetWidgetStudioDraft(supabase, workspace.workspace_id);
     revalidateStudio(workspaceSlug);
     return { success: true, data: state };
   } catch (error) {
@@ -255,6 +292,7 @@ export async function resetWidgetStudioDraftAction(
 export async function applyWidgetStudioPresetAction(
   workspaceSlug: string,
   input: unknown,
+  siteDomain?: string,
 ): Promise<WidgetStudioActionResult<WidgetStudioState>> {
   const parsed = presetActionSchema.safeParse(input);
   if (!parsed.success) {
@@ -271,11 +309,15 @@ export async function applyWidgetStudioPresetAction(
       true,
     );
     const draft = applyWidgetPreset(parsed.data.presetId, parsed.data.draft);
-    const state = await saveWidgetStudioDraft(
-      supabase,
-      workspace.workspace_id,
-      draft,
-    );
+    const state = siteDomain
+      ? await siteStudioState(
+          supabase,
+          workspace.workspace_id,
+          siteDomain,
+          "save",
+          draft,
+        )
+      : await saveWidgetStudioDraft(supabase, workspace.workspace_id, draft);
     revalidateStudio(workspaceSlug);
     return { success: true, data: state };
   } catch (error) {
@@ -293,6 +335,14 @@ export async function initiateWidgetStudioAssetUploadAction(
       success: false,
       message: parsed.error.issues[0]?.message ?? "Invalid asset upload.",
       code: "VALIDATION_ERROR",
+    };
+  }
+
+  if (parsed.data.kind === "launcher_icon") {
+    return {
+      success: false,
+      message: "Custom launcher icons are managed by Mill.",
+      code: "FORBIDDEN",
     };
   }
 

@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils";
 
 const tones = [
-  "bg-[#e8ede7] text-[#53634f]",
-  "bg-[#eee7dc] text-[#7b6245]",
-  "bg-[#e7ebec] text-[#4b626b]",
-  "bg-[#ece4e0] text-[#865e4f]",
-  "bg-[#e9e7e2] text-[#696158]",
+  "bg-[#e3f1ed] text-[#326b5d]",
+  "bg-[#fff0df] text-[#906536]",
+  "bg-[#e4efff] text-[#3a64a1]",
+  "bg-[#f2eafd] text-[#7650a4]",
+  "bg-[#fde9e8] text-[#a95d60]",
 ];
 
 export function CountryFlag({ code }: { code?: string | null }) {
@@ -44,7 +44,7 @@ export function IdentityAvatar({
   return (
     <span
       className={cn(
-        "relative inline-flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+        "mill-identity relative inline-flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
         tones[tone],
         className,
       )}

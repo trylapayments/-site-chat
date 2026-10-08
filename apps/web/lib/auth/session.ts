@@ -1,10 +1,12 @@
+import { cache } from "react";
+
 import { AUTH_ERROR_CODES } from "@/lib/auth/errors";
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 
-export async function getUser(supabase: AppSupabaseClient) {
+export const getUser = cache(async (supabase: AppSupabaseClient) => {
   const { data, error } = await supabase.auth.getUser();
   return { user: data.user, error };
-}
+});
 
 export async function requireUser(supabase: AppSupabaseClient) {
   const { user, error } = await getUser(supabase);

@@ -18,7 +18,10 @@ vi.mock("@/lib/widget/service", () => ({ consumeWidgetRateLimit: rate }));
 import { POST } from "@/app/api/v1/widget/availability/route";
 beforeEach(() => {
   vi.clearAllMocks();
-  verify.mockResolvedValue({ workspaceId: "workspace-a" });
+  verify.mockResolvedValue({
+    workspaceId: "workspace-a",
+    parentOrigin: "https://example.com",
+  });
   rate.mockResolvedValue(true);
   status.mockResolvedValue("available");
   setup.mockResolvedValue({ config: chatSetupSchema.parse({}), version: 0 });
@@ -43,7 +46,7 @@ it("only exposes the aggregate for the verified workspace, without caching", asy
   const body: unknown = await result.json();
   expect(body).toMatchObject({ data: { status: "available", visible: true } });
   expect(status).toHaveBeenCalledWith("workspace-a");
-  expect(setup).toHaveBeenCalledWith("workspace-a");
+  expect(setup).toHaveBeenCalledWith("workspace-a", "https://example.com");
   expect(
     (await POST(request({ embedToken: "valid", workspaceId: "other" }))).status,
   ).toBe(400);

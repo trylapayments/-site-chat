@@ -29,7 +29,10 @@ export async function resolveBootstrapContext(input: {
     return { ok: false };
   }
 
-  const workspace = await resolveWidgetByPublicKey(keyResult.data);
+  const workspace = await resolveWidgetByPublicKey(
+    keyResult.data,
+    input.requestOrigin,
+  );
   if (!workspace) {
     return { ok: false };
   }
@@ -73,7 +76,10 @@ export async function verifyEmbedContext(
 ): Promise<VerifiedEmbedContext | null> {
   try {
     const payload = verifyEmbedToken(embedToken);
-    const workspace = await resolveWidgetByPublicKey(payload.widgetPublicKey);
+    const workspace = await resolveWidgetByPublicKey(
+      payload.widgetPublicKey,
+      payload.parentOrigin,
+    );
 
     if (!workspace || workspace.workspaceId !== payload.workspaceId) {
       return null;

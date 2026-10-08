@@ -2,10 +2,7 @@
 
 import { PlatformAdminLink } from "@/components/dashboard/PlatformAdminLink";
 
-import {
-  MILL_DIALOGUE_MARK,
-  type AccessibleWorkspace,
-} from "@site-chat/shared";
+import { type AccessibleWorkspace } from "@site-chat/shared";
 import {
   Bookmark,
   CreditCard,
@@ -19,7 +16,8 @@ import {
   UserCog,
   UserX,
 } from "lucide-react";
-import Link from "next/link";
+import { PortalLink as Link } from "@/components/dashboard/PortalLink";
+import { Fragment } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { OperatorAvailability } from "@/components/dashboard/OperatorAvailability";
@@ -49,7 +47,7 @@ type NavItem = {
 };
 
 function buildInboxNav(slug: string): NavItem[] {
-  const inbox = workspaceNavPath(slug, "inbox");
+  const inbox = "/app/all-websites";
   return [
     {
       id: "overview",
@@ -86,7 +84,7 @@ function buildInboxNav(slug: string): NavItem[] {
     {
       id: "closed",
       label: "Closed",
-      href: `${inbox}?status=closed`,
+      href: `${inbox}?statusGroup=completed`,
       icon: CheckCheck,
       match: "prefix",
     },
@@ -149,7 +147,10 @@ function isNavActive(
     return appPath === target || appPath.startsWith(`${target}/`);
   }
 
-  const onInbox = appPath === inboxBase || appPath.startsWith(`${inboxBase}/`);
+  const onInbox =
+    appPath === "/app/all-websites" ||
+    appPath === inboxBase ||
+    appPath.startsWith(`${inboxBase}/`);
   if (!onInbox) {
     return false;
   }
@@ -189,29 +190,42 @@ export function GlobalSidebar({
         workspaces.find((w) => w.workspace_id === workspaceId)?.role ?? "",
       ),
   );
-  const closed = searchParams.get("status") === "closed";
+  const closed =
+    searchParams.get("statusGroup") === "completed" ||
+    ["closed", "resolved"].includes(searchParams.get("status") ?? "");
   const settingsHref = toAppRoute(workspaceNavPath(slug, "settings"));
 
   return (
     <aside
-      className="mill-sidebar bg-inbox-nav border-inbox-nav-border border-r text-inbox-nav-foreground flex h-full w-[208px] shrink-0 flex-col"
+      className="mill-sidebar bg-inbox-nav border-inbox-nav-border border-r text-inbox-nav-foreground flex h-full w-[224px] shrink-0 flex-col"
       data-testid="inbox-global-sidebar"
       aria-label="Workspace"
     >
-      <div className="border-inbox-nav-border flex items-center gap-3 border-b px-4 py-5">
-        {/* Shared approved Mill mark; not a replacement initial. */}
-        {/* eslint-disable-next-line @next/next/no-img-element -- inline brand asset */}
-        <img src={MILL_DIALOGUE_MARK} alt="" className="size-10 shrink-0" />
-        <div className="min-w-0">
-          <p className="truncate text-[24px] font-semibold tracking-tight">
-            Mill
-          </p>
+      <div className="mill-sidebar-brand">
+        <Link
+          href={toAppRoute(`/app/${slug}`)}
+          aria-label="Mill workspace"
+          className="mill-brand-link"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- approved local brand asset */}
+          <img src="/icon.svg" alt="" width={38} height={38} />
+          <span>
+            Mill<span className="mill-brand-label">WORKSPACE</span>
+          </span>
+        </Link>
+        <div className="mill-workspace-switch">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            currentWorkspaceId={workspaceId}
+            currentPath={pathname}
+          />
           <Link
             href={toAppRoute(`/app/${slug}/settings/company`)}
-            className="text-inbox-nav-muted block truncate text-[12px] hover:text-foreground hover:underline"
             aria-label="Company details"
+            title={workspaceName}
+            className="mill-workspace-details"
           >
-            {workspaceName}
+            ↗
           </Link>
         </div>
       </div>
@@ -224,61 +238,64 @@ export function GlobalSidebar({
           const active =
             item.id === "closed"
               ? closed &&
-                pathname.startsWith(toAppRoute(workspaceNavPath(slug, "inbox")))
+                (pathname === "/app/all-websites" ||
+                  pathname.startsWith(
+                    toAppRoute(workspaceNavPath(slug, "inbox")),
+                  ))
               : !(item.match === "assignment" && closed) &&
                 isNavActive(item, pathname, assignment, slug);
           const Icon = item.icon;
           return (
-            <Link
-              key={item.id}
-              data-nav-item={item.id}
-              href={toAppRoute(item.href)}
-              prefetch={item.id === "team" ? false : undefined}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
-                active
-                  ? "bg-inbox-nav-active text-white"
-                  : "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground",
-              )}
-            >
-              <Icon
-                className={cn(
-                  "size-[18px] shrink-0",
-                  active ? "text-white" : "text-brand",
-                )}
-                strokeWidth={1.75}
-                aria-hidden={true}
-              />
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.showUnread && workspaceId && memberId ? (
-                <InboxUnreadBadge
-                  workspaceId={workspaceId}
-                  memberId={memberId}
-                  className={cn(
-                    "ml-auto",
-                    active
-                      ? "bg-white/20 text-white"
-                      : "bg-brand-soft text-brand",
-                  )}
-                />
+            <Fragment key={item.id}>
+              {item.id === "overview" || item.id === "visitors" ? (
+                <p className="mill-nav-label">
+                  {item.id === "overview" ? "WORKSPACE" : "MANAGE"}
+                </p>
               ) : null}
-            </Link>
+              <Link
+                data-nav-item={item.id}
+                href={toAppRoute(item.href)}
+                prefetch={item.id === "team" ? false : undefined}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
+                  active
+                    ? "bg-inbox-nav-active text-white"
+                    : "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground",
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "size-[18px] shrink-0",
+                    active ? "text-white" : "text-brand",
+                  )}
+                  strokeWidth={1.75}
+                  aria-hidden={true}
+                />
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {item.showUnread && workspaceId && memberId ? (
+                  <InboxUnreadBadge
+                    workspaceId={workspaceId}
+                    memberId={memberId}
+                    className={cn(
+                      "ml-auto",
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-brand-soft text-brand",
+                    )}
+                  />
+                ) : null}
+              </Link>
+            </Fragment>
           );
         })}
       </nav>
 
-      <div className="border-inbox-nav-border mt-auto space-y-2 border-t px-2.5 py-3.5">
-        <div className="px-1 [&_button]:border-inbox-border [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
-          <WorkspaceSwitcher
-            workspaces={workspaces}
-            currentWorkspaceId={workspaceId}
-            currentPath={pathname}
-          />
-        </div>
+      <div className="mill-sidebar-footer border-inbox-nav-border mt-auto space-y-2 border-t px-2.5 py-3.5">
         {canAdministerPlatform ? <PlatformAdminLink /> : null}
         <Link
           href={settingsHref}
+          aria-current={pathname.startsWith(settingsHref) ? "page" : undefined}
           className={cn(
             "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
             pathname.startsWith(settingsHref) &&
@@ -292,7 +309,7 @@ export function GlobalSidebar({
           />
           Settings
         </Link>
-        <div className="px-1 pt-1 [&_button]:border-inbox-border [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+        <div className="mill-account-area px-1 pt-1 [&_button]:border-inbox-border [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
           {workspaces.some(
             (workspace) =>
               workspace.workspace_id === workspaceId &&

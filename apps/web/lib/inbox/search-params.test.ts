@@ -27,6 +27,7 @@ describe("parseInboxListQuery", () => {
       pageSize: 10,
       sort: "-last_message_at",
       status: "open",
+      statusGroup: "active",
       assignment: "assigned_to_me",
     });
   });
@@ -111,5 +112,20 @@ describe("formatInboxDateTime", () => {
     expect(typeof engineCombined).toBe("string");
     expect(formatInboxDateTime(iso)).toBe("Aug 30, 2026, 2:11 PM");
     expect(formatInboxDateTime(iso)).not.toMatch(/\bat\b/);
+  });
+});
+
+describe("inbox status groups", () => {
+  it("defaults to all active conversations and supports legacy closed links", () => {
+    expect(parseInboxListQuery({}).statusGroup).toBe("active");
+    expect(parseInboxListQuery({ status: "closed" }).statusGroup).toBe(
+      "completed",
+    );
+    expect(parseInboxListQuery({ status: "resolved" }).statusGroup).toBe(
+      "completed",
+    );
+    expect(parseInboxListQuery({ statusGroup: "completed" }).statusGroup).toBe(
+      "completed",
+    );
   });
 });

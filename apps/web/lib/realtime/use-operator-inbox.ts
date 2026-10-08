@@ -30,6 +30,7 @@ import {
   subscribeOperatorWorkspaceInbox,
   useOnlineStatus,
 } from "@/lib/realtime/operator-subscriptions";
+import { createRequestFlight } from "./request-flight";
 import { reconcileThreadMessages } from "@/lib/realtime/reconcile-thread-messages";
 import { createClient } from "@/lib/supabase/client";
 import type { AppSupabaseClient } from "@/lib/supabase/server";
@@ -38,9 +39,13 @@ export function useLiveInboxList(input: {
   workspaceId: string;
   memberId: string;
   initialItems: ConversationListItem[];
+  initialTotal?: number;
   query: ListConversationsQuery;
 }) {
   const [items, setItems] = useState(input.initialItems);
+  const [total, setTotal] = useState(
+    input.initialTotal ?? input.initialItems.length,
+  );
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("connecting");
   const refreshTimerRef = useRef<number | null>(null);
@@ -48,6 +53,7 @@ export function useLiveInboxList(input: {
   const queryKey = useMemo(
     () =>
       JSON.stringify({
+        statusGroup: input.query.statusGroup,
         status: input.query.status ?? null,
         assignment: input.query.assignment ?? null,
         q: input.query.q ?? null,
@@ -64,6 +70,7 @@ export function useLiveInboxList(input: {
     setItems(
       input.initialItems.filter((item) =>
         conversationMatchesFilters(item, {
+          statusGroup: input.query.statusGroup,
           status: input.query.status,
           assignment: input.query.assignment,
           memberId: input.memberId,
@@ -106,6 +113,7 @@ export function useLiveInboxList(input: {
       if (generation !== refreshGenerationRef.current) {
         return;
       }
+      setTotal(refreshed.total);
       setItems((current) => {
         // Preserve CDC stubs that landed while the RPC was in flight so a
         // slightly-stale list_conversations response cannot wipe them.
@@ -121,6 +129,7 @@ export function useLiveInboxList(input: {
             !byId.has(local.id) &&
             !queryRef.current.q &&
             conversationMatchesFilters(local, {
+              statusGroup: queryRef.current.statusGroup,
               status: statusFilterRef.current,
               assignment: assignmentFilterRef.current,
               memberId: memberIdRef.current,
@@ -207,6 +216,7 @@ export function useLiveInboxList(input: {
             has_unread: nextUnread > 0,
           });
           const matches = conversationMatchesFilters(next, {
+            statusGroup: queryRef.current.statusGroup,
             status: statusFilterRef.current,
             assignment: assignmentFilterRef.current,
             memberId: memberIdRef.current,
@@ -244,6 +254,7 @@ export function useLiveInboxList(input: {
             currentExisting ?? conversationListItemFromChange(parsed.data);
           const patched = patchConversationListItem(base, parsed.data);
           const matches = conversationMatchesFilters(patched, {
+            statusGroup: queryRef.current.statusGroup,
             status: statusFilterRef.current,
             assignment: assignmentFilterRef.current,
             memberId: memberIdRef.current,
@@ -259,6 +270,7 @@ export function useLiveInboxList(input: {
           );
         });
 
+        scheduleRefreshRef.current();
         if (!existing) {
           void refreshListRef.current();
         } else if (assignmentNeedsEnrichmentRefresh(existing, parsed.data)) {
@@ -322,13 +334,44 @@ export function useLiveInboxList(input: {
     }
   }, [connectionState, refreshList]);
 
+  useEffect(() => {
+    const onStatus = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          conversationId: string;
+          workspaceSlug: string;
+          status: ConversationListItem["status"];
+        }>
+      ).detail;
+      if (!(event instanceof CustomEvent)) return;
+      setItems((current) =>
+        current.flatMap((item) => {
+          if (item.id !== detail.conversationId) return [item];
+          const next = { ...item, status: detail.status };
+          return conversationMatchesFilters(next, {
+            ...queryRef.current,
+            memberId: memberIdRef.current,
+          })
+            ? [next]
+            : [];
+        }),
+      );
+      void refreshList();
+    };
+    window.addEventListener("mill:conversation-status", onStatus);
+    return () => {
+      window.removeEventListener("mill:conversation-status", onStatus);
+    };
+  }, [refreshList]);
+
   return useMemo(
     () => ({
+      total,
       items,
       connectionState,
       refreshList,
     }),
-    [connectionState, items, refreshList],
+    [connectionState, items, refreshList, total],
   );
 }
 
@@ -388,41 +431,59 @@ export function useLiveConversationThread(input: {
     });
   }, [input.conversationId, input.initialMessages]);
 
+  const catchUpFlight = useRef(createRequestFlight());
+  useEffect(() => {
+    const flight = catchUpFlight.current;
+    return () => {
+      flight.invalidate();
+    };
+  }, [input.workspaceId, input.conversationId]);
+
   const catchUp = useCallback(async () => {
-    const supabase = createClient() as AppSupabaseClient;
-    let afterSequence = maxSequenceRef.current;
-
-    for (let page = 0; page < 20; page += 1) {
-      const result = await fetchConversationsMessages(
-        supabase,
-        input.workspaceId,
-        input.conversationId,
-        afterSequence,
-      );
-
-      if (result.length === 0) {
-        break;
+    await catchUpFlight.current.run(async (isCurrent) => {
+      try {
+        const supabase = createClient() as AppSupabaseClient;
+        let afterSequence = maxSequenceRef.current;
+        for (let page = 0; page < 20 && isCurrent(); page += 1) {
+          const result = await fetchConversationsMessages(
+            supabase,
+            input.workspaceId,
+            input.conversationId,
+            afterSequence,
+          );
+          if (!isCurrent() || result.length === 0) break;
+          setMessages((current) => {
+            if (!isCurrent()) return current;
+            const merged = mergeMessages(current, result, []);
+            maxSequenceRef.current = merged.reduce(
+              (max, message) => Math.max(max, message.sequenceNumber),
+              0,
+            );
+            return merged;
+          });
+          afterSequence = Math.max(
+            afterSequence,
+            ...result.map((message) => message.sequenceNumber),
+          );
+          if (result.length < 50) break;
+        }
+      } catch {
+        // Preserve the saved thread during a temporary outage. Reconnect,
+        // foregrounding or the next online event retries the durable cursor.
+        if (isCurrent()) setConnectionState("disconnected");
       }
-
-      setMessages((current) => {
-        const merged = mergeMessages(current, result, []);
-        maxSequenceRef.current = merged.reduce(
-          (max, message) => Math.max(max, message.sequenceNumber),
-          0,
-        );
-        return merged;
-      });
-
-      afterSequence = Math.max(
-        afterSequence,
-        ...result.map((message) => message.sequenceNumber),
-      );
-
-      if (result.length < 50) {
-        break;
-      }
-    }
+    });
   }, [input.conversationId, input.workspaceId]);
+
+  useEffect(() => {
+    const visible = () => {
+      if (document.visibilityState === "visible") void catchUp();
+    };
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [catchUp]);
 
   const onVisitorReceiptCursorsRef = useRef(input.onVisitorReceiptCursors);
   onVisitorReceiptCursorsRef.current = input.onVisitorReceiptCursors;

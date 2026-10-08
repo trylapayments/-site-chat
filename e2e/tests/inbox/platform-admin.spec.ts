@@ -44,7 +44,12 @@ test("tenant owner is denied; platform owner edits a real company with audit his
     await page.goto(`${APP_URL}/app/${WORKSPACE_SLUG}`);
     await page.getByRole("link", { name: "Mill administration", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Customers", exact: true })).toBeVisible();
+    await page.getByLabel("Search by company name or Company ID").fill(workspace.id);
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(page.locator("tbody tr")).toHaveCount(1);
+    await expect(page.getByRole("code").filter({ hasText: workspace.id })).toBeVisible();
     await page.getByRole("link", { name: workspace.name, exact: true }).click();
+    await expect(page.getByRole("code").filter({ hasText: workspace.id })).toBeVisible();
     await expect(page.getByRole("heading", { name: workspace.name, exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Notes", exact: true }).click();
     const marker = `Platform E2E ${Date.now()}`;

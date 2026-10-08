@@ -76,7 +76,7 @@ export async function GET(request: Request) {
 
     const config = widgetPublicAppearanceSchema.parse(context.workspace.config);
     const etag = widgetPublicConfigEtag(
-      context.workspace.widgetPublicKey,
+      `${context.workspace.widgetPublicKey}-${new URL(context.parentOrigin).hostname}-${config.showPoweredBy ? "branded" : "white-label"}`,
       config.version,
     );
     const responseHeaders = cacheHeaders(origin, etag);

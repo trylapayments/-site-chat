@@ -53,6 +53,7 @@ function mapCompleteResponse(data: unknown) {
           client_message_id: message.client_message_id ?? null,
           attachments: message.attachments ?? [],
         },
+        ...(record.conversation_id ? { conversationId: record.conversation_id } : {}),
         conversationStatus: record.conversation_status,
       };
     })(),
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
 
     const data = await completeVisitorUploads({
       workspaceId: embedContext.workspaceId,
+      parentOrigin: embedContext.parentOrigin,
       sessionToken,
       batchId: parsed.data.batchId,
       uploadIds: parsed.data.uploadIds,

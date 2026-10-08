@@ -124,30 +124,24 @@ export async function fetchConversation(
   workspaceId: string,
   conversationId: string,
 ): Promise<ConversationDetail> {
-  const { data, error } = await callPublicRpc(supabase, "get_conversation", {
-    p_workspace_id: workspaceId,
-    p_conversation_id: conversationId,
-  });
-
-  if (error) {
-    throw error;
-  }
-
+  // All three RPCs authorize the workspace independently. Visitor decorations
+  // must not add two serial round trips before the saved thread can appear.
+  const [{ data, error }, countries, { data: engagement }] = await Promise.all([
+    callPublicRpc(supabase, "get_conversation", {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+    }),
+    fetchIpCountries(supabase, workspaceId, [conversationId]),
+    callPublicRpc(supabase, "get_conversation_engagement", {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+    }),
+  ]);
+  if (error) throw error;
   const result = parseRpcResult(
     conversationDetailSchema,
     data,
     "get_conversation",
-  );
-  const countries = await fetchIpCountries(supabase, workspaceId, [
-    conversationId,
-  ]);
-  const { data: engagement } = await callPublicRpc(
-    supabase,
-    "get_conversation_engagement",
-    {
-      p_workspace_id: workspaceId,
-      p_conversation_id: conversationId,
-    },
   );
   const parsedIp = z
     .object({ ip: z.string().nullable() })

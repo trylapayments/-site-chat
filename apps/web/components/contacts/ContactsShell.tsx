@@ -62,7 +62,7 @@ export function ContactsShell({
           ) : null}
         </div>
 
-        <div className="border-inbox-border shrink-0 space-y-3 border-b bg-inbox-panel px-4 pt-4 pb-3">
+        <div className="mill-contacts-heading border-inbox-border shrink-0 space-y-3 border-b bg-inbox-panel px-4 pt-4 pb-3">
           <div className="flex items-start gap-2.5">
             <div className="bg-brand-soft text-brand mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg">
               <Users className="size-4" strokeWidth={1.75} aria-hidden="true" />

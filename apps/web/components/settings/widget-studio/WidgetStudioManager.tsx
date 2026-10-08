@@ -1,5 +1,7 @@
 "use client";
 
+import { prepareWidgetImage } from "@/lib/widget-studio/prepare-image";
+
 import {
   WIDGET_ASSET_LIMITS,
   WIDGET_COLOR_MODES,
@@ -134,7 +136,10 @@ function SelectControl({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option
+            {(id === "studio-header-style" && option === "branded"
+              ? "Gradient"
+              : option
+            )
               .replaceAll("-", " ")
               .replaceAll("_", " ")
               .replace(/^./, (letter) => letter.toUpperCase())}
@@ -308,17 +313,23 @@ function englishCopy(copy: WidgetLocalizedCopy): string {
 
 export function WidgetStudioManager({
   workspaceSlug,
+  siteDomain,
   initialState,
   canManage,
   features = [...defaultWidgetStudioEntitlements().features],
 }: {
   workspaceSlug: string;
+  siteDomain?: string;
   initialState: WidgetStudioState;
   canManage: boolean;
   features?: readonly WidgetStudioFeature[];
 }) {
   const [studioState, setStudioState] = useState(initialState);
   const [draft, setDraft] = useState(initialState.draft);
+  const [assetStatus, setAssetStatus] = useState<{
+    kind: WidgetAssetKind;
+    filename: string;
+  } | null>(null);
   const [assetUrls, setAssetUrls] = useState<AssetUrls>({});
   const [assetPending, setAssetPending] = useState<WidgetAssetKind | null>(
     null,
@@ -367,7 +378,11 @@ export function WidgetStudioManager({
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const result = await saveWidgetStudioDraftAction(workspaceSlug, draft);
+      const result = await saveWidgetStudioDraftAction(
+        workspaceSlug,
+        draft,
+        siteDomain,
+      );
       if (!result.success) {
         setError(result.message);
         return;
@@ -383,7 +398,11 @@ export function WidgetStudioManager({
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const saved = await saveWidgetStudioDraftAction(workspaceSlug, draft);
+      const saved = await saveWidgetStudioDraftAction(
+        workspaceSlug,
+        draft,
+        siteDomain,
+      );
       if (!saved.success) {
         setError(saved.message);
         return;
@@ -391,6 +410,7 @@ export function WidgetStudioManager({
       const published = await publishWidgetStudioAction(
         workspaceSlug,
         expectedPublishedVersion,
+        siteDomain,
       );
       if (!published.success) {
         adoptState(saved.data);
@@ -413,7 +433,10 @@ export function WidgetStudioManager({
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const result = await discardWidgetStudioDraftAction(workspaceSlug);
+      const result = await discardWidgetStudioDraftAction(
+        workspaceSlug,
+        siteDomain,
+      );
       if (!result.success) {
         setError(result.message);
         return;
@@ -430,7 +453,10 @@ export function WidgetStudioManager({
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const result = await resetWidgetStudioDraftAction(workspaceSlug);
+      const result = await resetWidgetStudioDraftAction(
+        workspaceSlug,
+        siteDomain,
+      );
       if (!result.success) {
         setError(result.message);
         return;
@@ -449,10 +475,14 @@ export function WidgetStudioManager({
     setError(null);
     setNotice(null);
     startTransition(async () => {
-      const result = await applyWidgetStudioPresetAction(workspaceSlug, {
-        draft: nextDraft,
-        presetId,
-      });
+      const result = await applyWidgetStudioPresetAction(
+        workspaceSlug,
+        {
+          draft: nextDraft,
+          presetId,
+        },
+        siteDomain,
+      );
       if (!result.success) {
         setError(result.message);
         return;
@@ -465,16 +495,18 @@ export function WidgetStudioManager({
   async function uploadAsset(kind: WidgetAssetKind, file: File): Promise<void> {
     if (!canManage || assetPending) return;
     setAssetPending(kind);
+    setAssetStatus({ kind, filename: file.name });
     setError(null);
     setNotice(null);
     try {
+      const prepared = await prepareWidgetImage(file);
       const initiated = await initiateWidgetStudioAssetUploadAction(
         workspaceSlug,
         {
           kind,
-          filename: file.name,
-          mimeType: file.type,
-          sizeBytes: file.size,
+          filename: prepared.name,
+          mimeType: prepared.type,
+          sizeBytes: prepared.size,
         },
       );
       if (!initiated.success) {
@@ -493,7 +525,7 @@ export function WidgetStudioManager({
 
       const body = new FormData();
       body.append("cacheControl", "3600");
-      body.append("", file, file.name);
+      body.append("", prepared, prepared.name);
       const uploadResponse = await fetch(uploadUrl, {
         method: "PUT",
         body,
@@ -527,8 +559,10 @@ export function WidgetStudioManager({
         [kind]: completed.data.url,
       }));
       setNotice("Asset uploaded. Save the draft to keep this selection.");
-    } catch {
-      setError("Unable to upload the asset.");
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Unable to upload the asset.",
+      );
     } finally {
       setAssetPending(null);
     }
@@ -558,6 +592,25 @@ export function WidgetStudioManager({
             }
           }}
         />
+        {assetStatus?.kind === kind ? (
+          <p
+            role="status"
+            aria-live="polite"
+            className={`text-sm ${error ? "text-red-600" : "text-blue-700"}`}
+          >
+            {assetPending === kind
+              ? `Preparing and uploading ${assetStatus.filename}…`
+              : (error ??
+                `${assetStatus.filename} uploaded. Save and publish to show it on your website.`)}
+          </p>
+        ) : null}
+        {assetUrls[kind] ? (
+          <img
+            src={assetUrls[kind]}
+            alt={`${label} preview`}
+            className="my-2 size-16 rounded-lg border bg-white object-contain"
+          />
+        ) : null}
         {draft[field] ? (
           <Button
             type="button"
@@ -580,7 +633,8 @@ export function WidgetStudioManager({
           </Button>
         ) : null}
         <p className="text-muted-foreground text-xs">
-          PNG, JPEG, or WebP. Maximum 512 KB and 1024 × 1024.
+          PNG, JPEG, or WebP, up to 20 MB. Larger images are automatically
+          resized for your widget.
         </p>
       </div>
     );
@@ -817,9 +871,13 @@ export function WidgetStudioManager({
             <SelectControl
               id="studio-launcher-icon"
               label="Icon"
-              value={draft.launcherIcon}
-              options={WIDGET_LAUNCHER_ICONS}
-              disabled={disabled}
+              value={
+                draft.launcherIcon === "custom" ? "chat" : draft.launcherIcon
+              }
+              options={WIDGET_LAUNCHER_ICONS.filter(
+                (icon) => icon !== "custom",
+              )}
+              disabled={disabled || draft.launcherIcon === "custom"}
               onChange={(launcherIcon) => {
                 updateDraft({
                   launcherIcon:
@@ -916,7 +974,6 @@ export function WidgetStudioManager({
                 updateDraft({ launcherOffsetY });
               }}
             />
-            {assetControl("launcher_icon", "Custom launcher icon")}
           </Section>
 
           <Section title={messages.sections.branding}>
@@ -1397,7 +1454,7 @@ export function WidgetStudioManager({
             </p>
             <a
               className="text-primary text-sm underline"
-              href={`/app/${workspaceSlug}/settings/chat-setup`}
+              href={`/app/${workspaceSlug}/settings/chat-setup${siteDomain ? `?site=${encodeURIComponent(siteDomain)}` : ""}`}
               data-testid="widget-studio-chat-setup-link"
             >
               Open Chat setup

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { PortalLink as Link } from "@/components/dashboard/PortalLink";
 import { usePathname } from "next/navigation";
 
 import { InboxUnreadBadge } from "@/components/inbox/InboxUnreadBadge";

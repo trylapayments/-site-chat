@@ -27,6 +27,8 @@ function throwTeamRpcError(error: unknown): never {
       message = candidate;
     }
   }
+  if (message?.startsWith("PLAN_OPERATOR_LIMIT:"))
+    throw new Error(message.slice("PLAN_OPERATOR_LIMIT:".length).trim());
   const typed = parseTeamErrorMessage(message);
   if (typed) {
     throw typed;

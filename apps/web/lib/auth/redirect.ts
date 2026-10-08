@@ -119,13 +119,14 @@ export function buildLoginUrl(nextPath?: string | null): string {
 export function resolveMiddlewareRedirect(
   pathname: string,
   isAuthenticated: boolean,
+  nextPath?: string | null,
 ): string | null {
   if (!isAuthenticated && pathname.startsWith("/app")) {
     return buildLoginUrl(pathname);
   }
 
   if (isAuthenticated && (pathname === "/login" || pathname === "/signup")) {
-    return "/app";
+    return sanitizeRedirectPath(nextPath) ?? "/app";
   }
 
   return null;

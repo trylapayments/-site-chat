@@ -92,6 +92,7 @@ function ImageAttachment({
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (attachment.id.startsWith("local-")) return;
     let cancelled = false;
     void api
       .getAttachmentDownloadUrl({
@@ -207,6 +208,7 @@ function ImageLightbox({
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
+    if (attachment.id.startsWith("local-")) return;
     let cancelled = false;
     void api
       .getAttachmentDownloadUrl({

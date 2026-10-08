@@ -1,4 +1,8 @@
-import { maxSequenceNumber, type MessageView } from "@site-chat/shared";
+import {
+  maxSequenceNumber,
+  mergeMessages,
+  type MessageView,
+} from "@site-chat/shared";
 
 /**
  * Structural equality for thread message lists.
@@ -60,7 +64,12 @@ export function reconcileThreadMessages(input: {
       (message) => message.isOptimistic || message.status === "pending",
     )
   ) {
-    return input.current;
+    // A reconnect snapshot can contain messages received while our send is pending.
+    // Merge it instead of dropping it; client IDs replace acknowledged placeholders.
+    const merged = mergeMessages(input.current, input.initialMessages);
+    return areMessageViewsEquivalent(input.current, merged)
+      ? input.current
+      : merged;
   }
 
   const serverMax = maxSequenceNumber(input.initialMessages);

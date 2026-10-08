@@ -7,7 +7,7 @@ export const assignmentMessagesEn = {
   filterLabel: "Assignment",
   filterMine: "Mine",
   filterUnassigned: "Unassigned",
-  filterAll: "All",
+  filterAll: "All open",
   sectionTitle: "Assignment",
   assignedTo: "Assigned to",
   unassigned: "Unassigned",

@@ -135,6 +135,7 @@ function mapSendMessageFromRpc(data: Json): unknown {
       client_message_id: message.client_message_id ?? null,
       attachments: message.attachments ?? [],
     },
+    ...(record.conversation_id ? { conversationId: record.conversation_id } : {}),
     conversationStatus: record.conversation_status,
   };
 }
@@ -162,6 +163,7 @@ export type WidgetWorkspaceLookup = {
 
 export async function resolveWidgetByPublicKey(
   widgetPublicKey: string,
+  parentOrigin?: string | null,
 ): Promise<WidgetWorkspaceLookup | null> {
   const supabase = createServiceClient();
   const { data, error } = await supabase.rpc("widget_resolve_public_key", {
@@ -197,6 +199,7 @@ export async function resolveWidgetByPublicKey(
     config: await enrichWidgetPublicAppearance({
       workspaceId: parsed.workspaceId,
       publicConfig: parsed.config,
+      parentOrigin,
     }),
   };
 }
@@ -241,6 +244,7 @@ export async function consumeWidgetRateLimit(
 
 export async function createOrResumeVisitorSession(input: {
   workspaceId: string;
+  parentOrigin?: string;
   sessionToken?: string | null;
   locale?: string;
   pageUrl?: string | null;
@@ -291,7 +295,20 @@ export async function createOrResumeVisitorSession(input: {
     throw error;
   }
 
-  return parseRpcResult("widget session", data, widgetSessionDataSchema);
+  const session = parseRpcResult(
+    "widget session",
+    data,
+    widgetSessionDataSchema,
+  );
+  if (input.parentOrigin) {
+    const bound = await supabase.rpc("bind_widget_session_site", {
+      p_workspace_id: input.workspaceId,
+      p_session_token: session.sessionToken,
+      p_origin: input.parentOrigin,
+    });
+    if (bound.error) throw bound.error;
+  }
+  return session;
 }
 
 export async function identifyVisitor(input: {

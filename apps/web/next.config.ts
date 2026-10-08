@@ -23,7 +23,12 @@ const nextConfig: NextConfig = {
       "../../node_modules/.pnpm/geoip-country*/node_modules/geoip-country/data/**/*",
     ],
   },
-  experimental: { serverActions: { bodySizeLimit: "3mb" } },
+  experimental: {
+    serverActions: { bodySizeLimit: "3mb" },
+    // Private, in-memory router snapshots. Live inbox subscriptions and visitor
+    // polling reconcile data; all mutations still authorize on the server.
+    staleTimes: { dynamic: 30, static: 30 },
+  },
   headers() {
     return Promise.resolve([
       {

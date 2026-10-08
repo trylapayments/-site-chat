@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { WIDGET_STUDIO_FEATURES } from "@site-chat/shared";
+import { MILL_PLANS } from "@/lib/billing/plans";
 import { companyProfileSchema } from "@/lib/company/schema";
 const reason = z.string().trim().min(3).max(2000);
 const featureOverrides = z
@@ -19,6 +20,24 @@ export const platformChangeSchema = z
     change: z.discriminatedUnion("action", [
       z.object({ action: z.literal("company"), payload: companyProfileSchema }),
       z.object({
+        action: z.literal("plan"),
+        payload: z
+          .object({
+            plan_id: z
+              .string()
+              .nullable()
+              .refine(
+                (id) => id === null || MILL_PLANS.some((p) => p.id === id),
+              ),
+            expires_at: z
+              .string()
+              .datetime()
+              .nullable()
+              .refine((v) => v === null || Date.parse(v) > Date.now()),
+          })
+          .strict(),
+      }),
+      z.object({
         action: z.literal("access"),
         payload: z
           .object({
@@ -26,6 +45,13 @@ export const platformChangeSchema = z
             features: featureOverrides,
             limits: z
               .object({
+                websites: z
+                  .number()
+                  .int()
+                  .min(1)
+                  .max(100000)
+                  .nullable()
+                  .optional(),
                 operator_seats: z.number().int().min(1).max(100000).nullable(),
                 monthly_conversations: z
                   .number()

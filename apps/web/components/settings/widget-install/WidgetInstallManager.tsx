@@ -13,11 +13,13 @@ export function WidgetInstallManager({
   snippet,
   initialDomains,
   canManage,
+  siteLimit,
 }: {
   slug: string;
   snippet: string;
   initialDomains: Domain[];
   canManage: boolean;
+  siteLimit?: number;
 }) {
   const [domains, setDomains] = useState(initialDomains);
   const [domain, setDomain] = useState("");
@@ -56,6 +58,30 @@ export function WidgetInstallManager({
         title="Install widget"
         description="Add Mill to your website and control where your widget can run."
       />
+      {siteLimit !== undefined ? (
+        <p className="rounded-xl border bg-white p-4 text-sm">
+          {
+            new Set(
+              domains
+                .filter((d) => d.verified)
+                .map((d) => d.domain.toLowerCase().replace(/^www\./, "")),
+            ).size
+          }{" "}
+          / {siteLimit} websites enabled. Addresses with and without www count
+          as one website.{" "}
+          {canManage ? (
+            <a className="text-brand underline" href={`/app/${slug}/billing`}>
+              Manage plan
+            </a>
+          ) : null}
+        </p>
+      ) : null}
+      <a
+        className="inline-block text-blue-600 underline"
+        href={`/app/${slug}/settings/widget-studio`}
+      >
+        Configure design and chat rules for each website
+      </a>
       <section
         className="space-y-4 rounded-xl border p-4 sm:p-6"
         aria-labelledby="install-code-title"

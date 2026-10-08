@@ -1,3 +1,4 @@
+import { DeleteCompany } from "@/components/settings/DeleteCompany";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { CompanyProfileEditor } from "@/components/settings/CompanyProfileEditor";
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
@@ -28,6 +29,7 @@ export default async function CompanyPage({
         initial={companyProfileSchema.parse(data)}
         canManage={["owner", "admin"].includes(workspace.role)}
       />
+      {workspace.role==="owner" ? <DeleteCompany slug={workspaceSlug} name={workspace.name} /> : null}
     </div>
   );
 }

@@ -153,6 +153,13 @@ describe("resolveMiddlewareRedirect", () => {
     expect(resolveMiddlewareRedirect("/signup", true)).toBe("/app");
   });
 
+  it("preserves conversation links when a login session is already available", () => {
+    const path = "/app/mill-website/inbox/44444444-4444-4444-4444-444444444444";
+    expect(resolveMiddlewareRedirect("/login", true, path)).toBe(path);
+    expect(resolveMiddlewareRedirect("/login", true, "https://evil.example")).toBe("/app");
+    expect(resolveMiddlewareRedirect("/login", true, "//evil.example")).toBe("/app");
+  });
+
   it("does not redirect authenticated users from recovery-related pages", () => {
     expect(resolveMiddlewareRedirect("/forgot-password", true)).toBeNull();
     expect(resolveMiddlewareRedirect("/reset-password", true)).toBeNull();

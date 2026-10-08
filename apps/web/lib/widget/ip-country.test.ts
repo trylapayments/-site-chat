@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ipCountryFromRequest } from "./ip-country";
+import { ipCountryFromRequest, ipCityFromRequest } from "./ip-country";
 afterEach(() => vi.unstubAllEnvs());
 describe("IP country provenance", () => {
   it("ignores a spoofed country header outside the trusted edge", () => {
@@ -30,6 +30,42 @@ describe("IP country provenance", () => {
         ipCountryFromRequest(
           new Request("https://mill.chat", {
             headers: { "x-vercel-ip-country": code },
+          }),
+        ),
+      ).toBeNull();
+    },
+  );
+});
+
+describe("IP city provenance", () => {
+  it("does not trust city headers off the edge", () => {
+    vi.stubEnv("VERCEL", "");
+    expect(
+      ipCityFromRequest(
+        new Request("https://mill.chat", {
+          headers: { "x-vercel-ip-city": "London" },
+        }),
+      ),
+    ).toBeNull();
+  });
+  it("decodes unicode edge city names", () => {
+    vi.stubEnv("VERCEL", "1");
+    expect(
+      ipCityFromRequest(
+        new Request("https://mill.chat", {
+          headers: { "x-vercel-ip-city": "S%C3%A3o%20Paulo" },
+        }),
+      ),
+    ).toBe("São Paulo");
+  });
+  it.each(["%", "%00London", "a".repeat(129)])(
+    "rejects invalid city %s",
+    (city) => {
+      vi.stubEnv("VERCEL", "1");
+      expect(
+        ipCityFromRequest(
+          new Request("https://mill.chat", {
+            headers: { "x-vercel-ip-city": city },
           }),
         ),
       ).toBeNull();

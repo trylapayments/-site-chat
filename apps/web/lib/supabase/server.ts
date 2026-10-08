@@ -5,6 +5,7 @@ import {
   type CookieOptions,
 } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 import { clientEnv } from "@/lib/env";
 
@@ -14,7 +15,8 @@ export type AppSupabaseClient = Awaited<ReturnType<typeof createClient>>;
  * Supabase client for Server Components, Server Actions, and Route Handlers.
  * Cookie-based session management for authenticated requests.
  */
-export async function createClient() {
+// React memoizes only within the current server render, never across users.
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   const cookieMethods: CookieMethodsServer = {
@@ -43,4 +45,4 @@ export async function createClient() {
       cookies: cookieMethods,
     },
   );
-}
+});

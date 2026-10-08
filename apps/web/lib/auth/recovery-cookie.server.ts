@@ -34,15 +34,12 @@ export async function readRecoveryCookieValidationForSession(
 ): Promise<RecoveryCookieValidationResult> {
   const cookieStore = await cookies();
   const rawValue = cookieStore.get(RECOVERY_COOKIE_NAME)?.value;
+  if (!rawValue) return { valid: false, reason: "missing" };
   const claims = await getClaimsOrNull(supabase);
   const sessionId =
     claims && typeof claims.session_id === "string"
       ? claims.session_id
       : undefined;
-
-  if (!rawValue) {
-    return { valid: false, reason: "missing" };
-  }
 
   if (!sessionId) {
     return { valid: false, reason: "session_mismatch" };
@@ -63,21 +60,22 @@ export async function readRecoveryGateContext(
 }> {
   const cookieStore = await cookies();
   const rawValue = cookieStore.get(RECOVERY_COOKIE_NAME)?.value;
+  if (!rawValue) return {
+    cookieValidation: { valid: false, reason: "missing" },
+    expiredSessionBindingMatches: false,
+  };
   const claims = await getClaimsOrNull(supabase);
   const sessionId =
     claims && typeof claims.session_id === "string"
       ? claims.session_id
       : undefined;
-
-  const cookieValidation = await readRecoveryCookieValidationForSession(
-    supabase,
-    nowSeconds,
-  );
+  const cookieValidation: RecoveryCookieValidationResult = sessionId
+    ? verifyRecoveryCookieValue(rawValue, env.AUTH_COOKIE_SECRET, {nowSeconds, sessionId})
+    : {valid: false, reason: "session_mismatch"};
 
   const expiredSessionBindingMatches =
     !cookieValidation.valid &&
     cookieValidation.reason === "expired" &&
-    rawValue !== undefined &&
     sessionId !== undefined &&
     verifyExpiredRecoveryCookieBinding(
       rawValue,

@@ -1,3 +1,4 @@
+import { UnansweredEmail } from "./UnansweredEmail";
 import { ConversationFollowUp } from "./ConversationFollowUp";
 import { VisitorComposerTools } from "./VisitorComposerTools";
 import { PreChatForm } from "./PreChatForm";
@@ -86,7 +87,6 @@ import {
   resolveLocalizedCopy,
   resolveWidgetThemeColors,
   safeHexColor,
-  widgetShadow,
   widgetFloatingShadow,
 } from "./appearance";
 import { isNearBottom, scrollContainerToBottom, shouldAutoScroll } from "./scroll";
@@ -173,7 +173,7 @@ const WIDGET_STYLES = `
   .sitechat-composer-row { min-width: 0; }
   .sitechat-composer { min-width: 0; }
   @media (max-width: 640px) {
-    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-panel {
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-panel {
       inset: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
@@ -181,12 +181,12 @@ const WIDGET_STYLES = `
       max-height: none !important;
       border-radius: 0 !important;
     }
-    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-header {
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-header {
       padding-top: calc(var(--widget-density-padding) + env(safe-area-inset-top));
       padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
       padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
     }
-    .sitechat-widget[data-mobile-behavior="fullscreen"] .sitechat-footer {
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-footer {
       padding-bottom: calc(var(--widget-density-padding) + env(safe-area-inset-bottom));
       padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
       padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
@@ -198,7 +198,9 @@ function LauncherGlyph({
   customUrl,
   icon,
   open,
+  rectangular = false,
 }: {
+  rectangular?: boolean;
   customUrl: string | null;
   icon: WidgetPublicConfig["launcherIcon"];
   open: boolean;
@@ -254,8 +256,8 @@ function LauncherGlyph({
     <svg
       aria-hidden="true"
       viewBox="-1 -1 34 34"
-      width="52%"
-      height="52%"
+      width={rectangular ? 34 : "52%"}
+      height={rectangular ? 34 : "52%"}
       fill="none"
       stroke="currentColor"
       strokeWidth="2.2"
@@ -297,6 +299,7 @@ function WidgetApp() {
   const [messages, setMessages] = useState<MessageView[]>([]);
   const [composer, setComposer] = useState("");
   const [sending, setSending] = useState(false);
+  const [endingChat, setEndingChat] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [failedClientMessageId, setFailedClientMessageId] = useState<string | null>(null);
@@ -1090,14 +1093,24 @@ function WidgetApp() {
     const filesForSend = pendingFiles;
     const clientMessageId = pendingClientMessageIdRef.current ?? generateClientMessageId();
     pendingClientMessageIdRef.current = clientMessageId;
+    const historyBeforeSend = messagesRef.current;
     const tempId = crypto.randomUUID();
+    const continuingClosedChat = engagement?.conversationStatus === "closed" || engagement?.conversationStatus === "resolved";
+    // A new conversation starts its own sequence. Never sort it into the old thread.
+    if (continuingClosedChat) {
+      transportRef.current?.stop();
+      transportRef.current = null;
+      messagesRef.current = [];
+      setMessages([]);
+      setEngagement((current) => current ? { ...current, conversationStatus: "open", rating: null } : current);
+    }
     const optimistic = createOptimisticMessage({
       tempId,
       clientMessageId,
       body,
       senderType: "visitor",
       senderLabel: messagesCopy.youLabel,
-      nextSequence: maxSequenceNumber(messages) + 1,
+      nextSequence: continuingClosedChat ? 1 : maxSequenceNumber(messages) + 1,
       attachments: filesForSend.map((file, index) => ({
         id: file.localId,
         filename: file.filename,
@@ -1113,7 +1126,9 @@ function WidgetApp() {
 
     forceScrollRef.current = true;
     nearBottomRef.current = true;
-    setMessages((current) => mergeMessages(current, [], [optimistic]));
+    messagesRef.current = mergeMessages(messagesRef.current, [], [optimistic]);
+    setMessages(messagesRef.current);
+    transportRef.current?.mergePending([optimistic]);
     setComposer("");
     setPendingFiles([]);
     transportRef.current?.clearLocalTyping();
@@ -1124,6 +1139,7 @@ function WidgetApp() {
     let activeBatchId: string | null = null;
     try {
       let resultMessage;
+      let resultConversationId: string | undefined;
       if (filesForSend.length > 0) {
         let batch = reduceUploadBatch(createEmptyUploadBatch(body), {
           type: "SELECT_FILES",
@@ -1216,6 +1232,7 @@ function WidgetApp() {
           referrer: pageContextRef.current.referrer ?? undefined,
         });
         resultMessage = completed.message;
+        resultConversationId = completed.conversationId;
         setUploadBatch(reduceUploadBatch(batch, { type: "CONFIRM_SUCCESS" }));
         revokePreviewUrls(filesForSend);
       } else {
@@ -1228,8 +1245,19 @@ function WidgetApp() {
           referrer: pageContextRef.current.referrer ?? undefined,
         });
         resultMessage = result.message;
+        resultConversationId = result.conversationId;
       }
 
+      const switchedConversation = !!resultConversationId && resultConversationId !== engagement?.conversationId;
+      if (switchedConversation) {
+        transportRef.current?.stop();
+        transportRef.current = null;
+        messagesRef.current = [];
+        agentReceiptsRef.current = { lastDeliveredSequence: 0, lastReadSequence: 0 };
+        visitorReceiptsRef.current = { lastDeliveredSequence: 0, lastReadSequence: 0 };
+        setAgentReceipts(agentReceiptsRef.current);
+      }
+      setEngagement((current) => current ? { ...current, conversationId: resultConversationId ?? current.conversationId, conversationStatus: "open", hasConversation: true } : current);
       pendingClientMessageIdRef.current = null;
       const confirmedMessages = mapWidgetHttpMessages([resultMessage]).map((message) => ({
         ...message,
@@ -1249,7 +1277,21 @@ function WidgetApp() {
       setMessages(mergedMessages);
       setUploadBatch(createEmptyUploadBatch());
       await reconcileTransport(state, mergedMessages);
+      if (continuingClosedChat || switchedConversation) {
+        // Fetch the new context now, rather than waiting for the engagement poll.
+        void Promise.all([
+          api.engagement(state.init.embedToken, state.sessionToken),
+          api.listMessages({ embedToken: state.init.embedToken, sessionToken: state.sessionToken }),
+        ]).then(([context, history]) => {
+          setEngagement(context);
+          transportRef.current?.mergeIncoming(mapWidgetHttpMessages(history.items));
+        }).catch(() => { /* The confirmed send remains visible during reconnect. */ });
+      }
     } catch {
+      if (continuingClosedChat) {
+        messagesRef.current = mergeMessages(historyBeforeSend, messagesRef.current, []);
+        setMessages(messagesRef.current);
+      }
       pendingClientMessageIdRef.current = clientMessageId;
       setFailedClientMessageId(clientMessageId);
       setMessages((current) =>
@@ -1393,12 +1435,13 @@ function WidgetApp() {
       data-color-mode={configuredColorMode}
       data-effective-color-mode={effectiveColorMode}
       data-mobile-behavior={config?.mobileBehavior ?? "responsive"}
+      data-host-mobile={hostViewportWidth <= 640 ? "true" : "false"}
       data-widget-locale={locale}
       data-widget-dir={direction}
       style={rootStyle}
     >
       <style>{WIDGET_STYLES}</style>
-      {config?.showGreeting === true && !open ? (
+      {config?.showGreeting === true && !open && hostViewportWidth > 640 ? (
         <div
           role="status"
           style={{
@@ -1416,7 +1459,7 @@ function WidgetApp() {
             zIndex: 1,
           }}
         >
-          {welcomeMessage}
+          <span style={{ color: available ? "#15803D" : "inherit", fontWeight: 600 }}>{presenceFallback}</span> · {welcomeMessage}
         </div>
       ) : null}
 
@@ -1450,6 +1493,7 @@ function WidgetApp() {
           }}
         >
           <LauncherGlyph
+            rectangular={config?.launcherShape === "rectangle"}
             customUrl={config?.launcherIconUrl ?? null}
             icon={config?.launcherIcon ?? "chat"}
             open={open}
@@ -1486,7 +1530,9 @@ function WidgetApp() {
             background: backgroundColor,
             color: textColor,
             borderRadius: `${String(borderRadius)}px`,
-            boxShadow: widgetShadow(config?.shadowLevel),
+            border: "none",
+            outline: "none",
+            boxShadow: "none",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -1563,6 +1609,23 @@ function WidgetApp() {
                     flexShrink: 0,
                   }}
                 />
+              ) : null}
+              {state.status === "ready" && engagement?.conversationId &&
+                engagement.conversationStatus !== "closed" && engagement.conversationStatus !== "resolved" ? (
+                <button type="button" data-testid="widget-end-chat" disabled={endingChat || sending}
+                  style={{ border: "1px solid currentColor", borderRadius: 8, padding: "0.4rem 0.55rem", background: "transparent", color: "inherit", fontSize: "0.75rem", cursor: "pointer", flexShrink: 0 }}
+                  onClick={() => {
+                    if (endingChat) return;
+                    setEndingChat(true);
+                    void api.conversationAction(state.init.embedToken, state.sessionToken, {
+                      action: "end", conversationId: engagement.conversationId,
+                    }).then(() => {
+                      setEngagement((current) => current ? { ...current, conversationStatus: "closed" } : current);
+                    }).catch(() => setSendError("Unable to end the chat. Please try again."))
+                      .finally(() => setEndingChat(false));
+                  }}>
+                  {endingChat ? "Ending…" : "End chat"}
+                </button>
               ) : null}
               <button
                 type="button"
@@ -1811,15 +1874,24 @@ function WidgetApp() {
                     "We've notified our team. We'll reply as soon as we're available.")}
               </p>
             ) : null}
+            {state.status === "ready" && readyEmbedToken && readySessionToken && engagement &&
+              engagement.conversationStatus !== "closed" && engagement.conversationStatus !== "resolved" ?
+              <UnansweredEmail key={`unanswered-email:${engagement.conversationId ?? readySessionToken}`}
+                api={api} embedToken={readyEmbedToken} sessionToken={readySessionToken} messages={messages}
+                enabled={engagement.setup.unansweredEmailEnabled} delaySeconds={engagement.setup.unansweredEmailDelaySeconds}
+                saved={engagement.replyEmailSaved ?? false} hasOperatorReply={Object.keys(engagement.messageAgents).length > 0} open={open} accentColor={accentColor} textColor={textColor} borderColor={borderColor} /> : null}
+            <div data-testid="widget-messages-end" aria-hidden="true" />
+          </div>
+
+          <div data-testid="widget-follow-up-slot" style={{ flexShrink: 0, maxHeight: "35%", overflowY: "auto", padding: `0 ${densityPadding}`, background: surfaceColor }}>
             {state.status === "ready" &&
             readyEmbedToken &&
             readySessionToken &&
             engagement?.conversationId &&
-            (engagement.setup.transcriptEnabled ||
-              engagement.conversationStatus === "closed" ||
+            (engagement.conversationStatus === "closed" ||
               engagement.conversationStatus === "resolved") ? (
               <ConversationFollowUp
-                key={engagement.conversationId}
+                key={`transcript:${engagement.conversationId}`}
                 api={api}
                 embedToken={readyEmbedToken}
                 sessionToken={readySessionToken}
@@ -1832,7 +1904,6 @@ function WidgetApp() {
                 }}
               />
             ) : null}
-            <div data-testid="widget-messages-end" aria-hidden="true" />
           </div>
 
           <div
@@ -2160,7 +2231,7 @@ function WidgetApp() {
                       type="button"
                       data-testid="widget-attach-button"
                       aria-label={messagesCopy.attachLabel}
-                      disabled={state.status !== "ready" || sending}
+                      disabled={state.status !== "ready" || sending || endingChat}
                       aria-haspopup="menu"
                       aria-expanded={attachmentMenuOpen}
                       onClick={() => {
@@ -2232,7 +2303,7 @@ function WidgetApp() {
                     aria-label={placeholderText}
                     dir="auto"
                     rows={2}
-                    disabled={state.status !== "ready" || sending}
+                    disabled={state.status !== "ready" || sending || endingChat}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();

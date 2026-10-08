@@ -106,3 +106,22 @@ export function resetWidgetStudioDraft(
 ): Promise<WidgetStudioState> {
   return runStateMutation(supabase, "reset_widget_studio_draft", workspaceId);
 }
+
+export async function siteStudioState(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  domain: string,
+  action = "get",
+  draft?: WidgetAppearanceConfig,
+  expected?: number | null,
+): Promise<WidgetStudioState> {
+  const { data, error } = await callPublicRpc(supabase, "site_widget_studio", {
+    p_workspace_id: workspaceId,
+    p_domain: domain,
+    p_action: action,
+    ...(draft ? { p_draft: draft as Json } : {}),
+    ...(expected != null ? { p_expected_version: expected } : {}),
+  });
+  if (error) throw error;
+  return parseState(data);
+}

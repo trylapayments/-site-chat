@@ -31,7 +31,18 @@ export function parseInboxListQuery(
   const assignmentResult =
     listConversationsQuerySchema.shape.assignment.safeParse(assignmentParam);
 
-  const query: ListConversationsQuery = { ...base };
+  const group = listConversationsQuerySchema.shape.statusGroup.safeParse(
+    getSingleParam(params, "statusGroup"),
+  );
+  const query: ListConversationsQuery = {
+    ...base,
+    statusGroup:
+      group.success && group.data
+        ? group.data
+        : ["closed", "resolved"].includes(statusParam ?? "")
+          ? "completed"
+          : "active",
+  };
 
   if (statusResult.success) {
     query.status = statusResult.data;
@@ -45,14 +56,16 @@ export function parseInboxListQuery(
 }
 
 export function serializeInboxFilters(
-  filters: Partial<Pick<ListConversationsQuery, "status" | "assignment">>,
+  filters: Partial<
+    Pick<ListConversationsQuery, "status" | "statusGroup" | "assignment">
+  >,
   current?: DashboardSearchParams,
 ): URLSearchParams {
   const next = new URLSearchParams();
 
   if (current) {
     for (const [key, value] of Object.entries(current)) {
-      if (["status", "assignment"].includes(key)) {
+      if (["status", "statusGroup", "assignment"].includes(key)) {
         continue;
       }
       if (Array.isArray(value)) {
@@ -65,6 +78,7 @@ export function serializeInboxFilters(
     }
   }
 
+  if (filters.statusGroup) next.set("statusGroup", filters.statusGroup);
   if (filters.status) {
     next.set("status", filters.status);
   }

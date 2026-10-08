@@ -24,6 +24,7 @@ function serializeInboxListQuery(query: ListConversationsQuery): string {
     page: query.page,
     pageSize: query.pageSize,
   });
+  if (query.statusGroup) params.set("statusGroup", query.statusGroup);
   if (query.status) {
     params.set("status", query.status);
   }
@@ -56,22 +57,26 @@ export function ConversationList({
     [searchParams],
   );
 
-  const hasFilters = Boolean(query.q || query.status || query.assignment);
+  const hasFilters = Boolean(
+    query.q || query.status || query.statusGroup || query.assignment,
+  );
   const listQueryString = serializeInboxListQuery(query);
 
-  const { items, connectionState, refreshList } = useLiveInboxList({
+  const { items, total, connectionState, refreshList } = useLiveInboxList({
     workspaceId,
     memberId,
     initialItems,
+    initialTotal,
     query,
   });
 
-  // Layout SSR seeds the unfiltered first page. When the URL has filters,
+  // Layout SSR seeds the first All open page. When the URL has filters,
   // refresh immediately so the queue matches the active filter set.
   const queryKey = useMemo(
     () =>
       JSON.stringify({
         status: query.status ?? null,
+        statusGroup: query.statusGroup,
         assignment: query.assignment ?? null,
         q: query.q ?? null,
         sort: query.sort ?? null,
@@ -92,14 +97,14 @@ export function ConversationList({
   }, [hasFilters, query.page, query.sort, queryKey, refreshList]);
 
   const pageMeta = buildPageMeta({
-    total: hasFilters ? Math.max(items.length, initialTotal) : initialTotal,
+    total,
     page: query.page,
     pageSize: query.pageSize,
   });
 
   // Prefer live list length for the header when filters are active; the layout
   // total is only authoritative for the default unfiltered seed.
-  const displayTotal = hasFilters ? items.length : initialTotal;
+  const displayTotal = total;
 
   return (
     <div

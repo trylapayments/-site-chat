@@ -67,7 +67,7 @@ describe("widget public config route", () => {
       "public, max-age=60, stale-while-revalidate=60",
     );
     expect(response.headers.get("etag")).toBe(
-      `"widget-config-${widgetPublicKey}-v4-s123"`,
+      `"widget-config-${widgetPublicKey}-customer.example.com-branded-v4-s123"`,
     );
     expect(body.data.version).toBe(4);
     expect(body.data.primaryColor).toBe("#0066FF");
@@ -81,7 +81,7 @@ describe("widget public config route", () => {
         {
           headers: {
             Origin: "https://customer.example.com",
-            "If-None-Match": `"widget-config-${widgetPublicKey}-v4-s123"`,
+            "If-None-Match": `"widget-config-${widgetPublicKey}-customer.example.com-branded-v4-s123"`,
           },
         },
       ),
@@ -92,5 +92,23 @@ describe("widget public config route", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe(
       "https://customer.example.com",
     );
+  });
+  it("invalidates a white-label cached response after a downgrade", async () => {
+    const response = await GET(
+      new Request(
+        `http://localhost:3000/api/v1/widget/config?key=${widgetPublicKey}`,
+        {
+          headers: {
+            Origin: "https://customer.example.com",
+            "If-None-Match": `"widget-config-${widgetPublicKey}-customer.example.com-white-label-v4-s123"`,
+          },
+        },
+      ),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { showPoweredBy: boolean };
+    };
+    expect(body.data.showPoweredBy).toBe(true);
   });
 });

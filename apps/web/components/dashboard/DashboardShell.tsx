@@ -5,6 +5,7 @@ import { can } from "@site-chat/shared";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState, type CSSProperties } from "react";
 
+import { InteractionTimingPanel } from "@/components/dashboard/InteractionTimingPanel";
 import { DashboardTopBar } from "@/components/dashboard/DashboardTopBar";
 import { MobileNav } from "@/components/dashboard/MobileNav";
 import { GlobalSidebar } from "@/components/inbox/workspace/GlobalSidebar";
@@ -19,6 +20,7 @@ export function DashboardShell({
   canAdministerPlatform = false,
   role,
   children,
+  trialBanner,
 }: {
   slug: string;
   workspaceName: string;
@@ -29,6 +31,7 @@ export function DashboardShell({
   canAdministerPlatform?: boolean;
   role: MemberRole;
   children: React.ReactNode;
+  trialBanner?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [mobileHeight, setMobileHeight] = useState<number | null>(null);
@@ -52,7 +55,7 @@ export function DashboardShell({
   const canSearchNotes = can(role, "manage_internal_notes");
   const inboxBase = `/app/${slug}/inbox`;
   const isInbox =
-    pathname === inboxBase || pathname.startsWith(`${inboxBase}/`);
+    pathname === "/app/all-websites" || pathname === inboxBase || pathname.startsWith(`${inboxBase}/`);
   const isContacts = pathname.startsWith(`/app/${slug}/contacts`);
   const isTeam = pathname.startsWith(`/app/${slug}/team`);
   const isVisitors = pathname === `/app/${slug}/visitors`;
@@ -75,8 +78,9 @@ export function DashboardShell({
         }
         data-testid="dashboard-operator-shell"
       >
+        <InteractionTimingPanel permitted={canAdministerPlatform} />
         <div className="hidden lg:flex">
-          <Suspense fallback={<div className="bg-inbox-nav w-[208px]" />}>
+          <Suspense fallback={<div className="bg-inbox-nav w-[224px]" />}>
             <GlobalSidebar
               workspaceName={workspaceName}
               slug={slug}
@@ -100,7 +104,11 @@ export function DashboardShell({
             />
             <p className="truncate text-sm font-semibold">{workspaceName}</p>
           </div>
-          <main id="main-content" className="min-h-0 flex-1 overflow-hidden">
+          {trialBanner}
+          <main
+            id="main-content"
+            className="mill-workbench min-h-0 flex-1 overflow-hidden"
+          >
             {children}
           </main>
         </div>
@@ -110,8 +118,9 @@ export function DashboardShell({
 
   return (
     <div className="mill-operator bg-inbox-canvas flex h-svh overflow-hidden">
+      <InteractionTimingPanel permitted={canAdministerPlatform} />
       <div className="hidden lg:flex">
-        <Suspense fallback={<div className="bg-inbox-nav w-[208px]" />}>
+        <Suspense fallback={<div className="bg-inbox-nav w-[224px]" />}>
           <GlobalSidebar
             workspaceName={workspaceName}
             slug={slug}
@@ -133,6 +142,7 @@ export function DashboardShell({
           canAdministerPlatform={canAdministerPlatform}
           canSearchNotes={canSearchNotes}
         />
+        {trialBanner}
         <main
           id="main-content"
           className="mill-page min-h-0 flex-1 overflow-y-auto p-4 md:p-8"

@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { InternalNotesPanel } from "@/components/inbox/InternalNotesPanel";
 import { LiveConversationThread } from "@/components/inbox/LiveConversationThread";
+import { useConversationTools } from "@/components/inbox/ConversationToolsProvider";
 import { cn } from "@/lib/utils";
 
 const messages = internalNotesMessagesEn;
@@ -126,6 +127,8 @@ export function ConversationMainPanel({
   canUseCannedResponses: boolean;
   aiSuggestedRepliesEnabled?: boolean;
 }) {
+  const tools = useConversationTools();
+  const toolsReady = tools?.ready ?? true;
   const visitorContext = useConversationVisitorContext();
   const searchParams = useSearchParams();
   const focusMessageId = searchParams.get("message");
@@ -165,7 +168,7 @@ export function ConversationMainPanel({
           memberDisplayLabel={memberDisplayLabel}
           initialMessages={initialMessages}
           initialVisitorReceipts={initialVisitorReceipts}
-          initialCannedResponses={initialCannedResponses}
+          initialCannedResponses={tools?.data?.cannedResponses ?? initialCannedResponses}
           visitorName={
             visitorContext
               ? (visitorContext.snapshot.contact?.name ?? null)
@@ -177,8 +180,8 @@ export function ConversationMainPanel({
               : visitorEmail
           }
           canSend={canSend}
-          canUseCannedResponses={canUseCannedResponses}
-          aiSuggestedRepliesEnabled={aiSuggestedRepliesEnabled}
+          canUseCannedResponses={canUseCannedResponses && toolsReady}
+          aiSuggestedRepliesEnabled={tools?.data?.aiSuggestedRepliesEnabled ?? aiSuggestedRepliesEnabled}
           focusMessageId={focusMessageId}
           composerAccessory={
             <ModeTabs
@@ -196,17 +199,17 @@ export function ConversationMainPanel({
         className={tab === "notes" ? "flex min-h-0 flex-1 flex-col" : "hidden"}
       >
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          <InternalNotesPanel
+          {toolsReady ? <InternalNotesPanel
             workspaceId={workspaceId}
             workspaceSlug={workspaceSlug}
             conversationId={conversationId}
             memberId={memberId}
-            members={members}
-            initialNotes={initialNotes}
+            members={tools?.data?.members ?? members}
+            initialNotes={tools?.data?.notes ?? initialNotes}
             canManage={canManageNotes}
             active={tab === "notes"}
             focusNoteId={focusNoteId}
-          />
+          /> : <p className="text-sm text-inbox-muted">Loading notes…</p>}
         </div>
         <ModeTabs tab={tab} onChange={onTabChange} testIds={tab === "notes"} />
       </div>

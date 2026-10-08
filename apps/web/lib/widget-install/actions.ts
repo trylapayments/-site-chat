@@ -39,7 +39,9 @@ export async function setInstallDomainAction(slug: string, input: unknown) {
     if (result.error)
       return {
         success: false as const,
-        message: "Could not update the domain. Please try again.",
+        message: result.error.message.startsWith("PLAN_SITE_LIMIT:")
+          ? result.error.message.slice("PLAN_SITE_LIMIT:".length).trim()
+          : "Could not update the domain. Please try again.",
       };
     revalidatePath(`/app/${slug}/settings/install`);
     return { success: true as const, domain: result.data };

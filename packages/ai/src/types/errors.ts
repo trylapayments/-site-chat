@@ -1,5 +1,6 @@
 export const AI_ERROR_CODES = [
   "AI_DISABLED",
+  "AI_QUOTA_EXHAUSTED",
   "AI_NOT_CONFIGURED",
   "AI_RATE_LIMITED",
   "AI_PROVIDER_ERROR",
@@ -33,6 +34,7 @@ function defaultStatusForCode(code: AIErrorCode): number {
   switch (code) {
     case "AI_DISABLED":
     case "AI_NOT_CONFIGURED":
+    case "AI_QUOTA_EXHAUSTED":
       return 403;
     case "AI_RATE_LIMITED":
       return 429;
@@ -92,6 +94,8 @@ export function toPublicAIError(error: unknown): {
 
 export function publicMessageForCode(code: AIErrorCode): string {
   switch (code) {
+    case "AI_QUOTA_EXHAUSTED":
+      return "Your included AI conversations are used up. Live chat remains available.";
     case "AI_DISABLED":
       return "AI features are disabled for this workspace.";
     case "AI_NOT_CONFIGURED":

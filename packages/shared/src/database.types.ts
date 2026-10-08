@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.18"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -66,6 +71,48 @@ export type Database = {
           },
           {
             foreignKeyName: "agent_profiles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_conversation_credits: {
+        Row: {
+          conversation_id: string
+          period_start: string
+          request_id: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          conversation_id: string
+          period_start: string
+          request_id: string
+          status: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          conversation_id?: string
+          period_start?: string
+          request_id?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversation_credits_conversation_id_workspace_id_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "ai_conversation_credits_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2169,6 +2216,38 @@ export type Database = {
           },
         ]
       }
+      site_chat_settings: {
+        Row: {
+          config: Json
+          domain: string
+          updated_at: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          config: Json
+          domain: string
+          updated_at?: string
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          config?: Json
+          domain?: string
+          updated_at?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_chat_settings_workspace_id_domain_fkey"
+            columns: ["workspace_id", "domain"]
+            isOneToOne: true
+            referencedRelation: "widget_site_configs"
+            referencedColumns: ["workspace_id", "domain"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           created_at: string
@@ -2297,6 +2376,7 @@ export type Database = {
           pre_chat_submitted_at: string | null
           referrer: string | null
           session_token_hash: string
+          site_domain: string | null
           timezone: string | null
           updated_at: string
           utm_campaign: string | null
@@ -2331,6 +2411,7 @@ export type Database = {
           pre_chat_submitted_at?: string | null
           referrer?: string | null
           session_token_hash: string
+          site_domain?: string | null
           timezone?: string | null
           updated_at?: string
           utm_campaign?: string | null
@@ -2365,6 +2446,7 @@ export type Database = {
           pre_chat_submitted_at?: string | null
           referrer?: string | null
           session_token_hash?: string
+          site_domain?: string | null
           timezone?: string | null
           updated_at?: string
           utm_campaign?: string | null
@@ -2524,12 +2606,51 @@ export type Database = {
         }
         Relationships: []
       }
+      widget_site_configs: {
+        Row: {
+          domain: string
+          draft_json: Json
+          draft_updated_at: string
+          published_at: string
+          published_json: Json
+          published_version: number
+          workspace_id: string
+        }
+        Insert: {
+          domain: string
+          draft_json: Json
+          draft_updated_at?: string
+          published_at?: string
+          published_json: Json
+          published_version?: number
+          workspace_id: string
+        }
+        Update: {
+          domain?: string
+          draft_json?: Json
+          draft_updated_at?: string
+          published_at?: string
+          published_json?: Json
+          published_version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "widget_site_configs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_admin_controls: {
         Row: {
           access_mode: string
           features: Json
           limits: Json
           override_expires_at: string | null
+          plan_id: string | null
           trial_ends_at: string | null
           updated_at: string
           version: number
@@ -2540,6 +2661,7 @@ export type Database = {
           features?: Json
           limits?: Json
           override_expires_at?: string | null
+          plan_id?: string | null
           trial_ends_at?: string | null
           updated_at?: string
           version?: number
@@ -2550,6 +2672,7 @@ export type Database = {
           features?: Json
           limits?: Json
           override_expires_at?: string | null
+          plan_id?: string | null
           trial_ends_at?: string | null
           updated_at?: string
           version?: number
@@ -2847,6 +2970,14 @@ export type Database = {
         }
         Returns: Json
       }
+      bind_widget_session_site: {
+        Args: {
+          p_origin: string
+          p_session_token: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       cancel_attachment_uploads: {
         Args: {
           p_agent_member_id?: string
@@ -3025,6 +3156,14 @@ export type Database = {
         }
         Returns: Json
       }
+      finish_ai_conversation_credit: {
+        Args: {
+          p_request_id: string
+          p_success: boolean
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       get_canned_response: {
         Args: { p_id: string; p_workspace_id: string }
         Returns: Json
@@ -3194,6 +3333,16 @@ export type Database = {
         Args: { p_actor_id: string; p_workspace_id: string }
         Returns: Json
       }
+      platform_set_launcher_icon: {
+        Args: {
+          p_actor_id: string
+          p_asset_id: string
+          p_expected_version: number
+          p_reason: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       promote_workspace_member_to_owner: {
         Args: { p_member_id: string }
         Returns: undefined
@@ -3225,6 +3374,14 @@ export type Database = {
       remove_workspace_member: {
         Args: { p_member_id: string }
         Returns: undefined
+      }
+      reserve_ai_conversation_credit: {
+        Args: {
+          p_conversation_id: string
+          p_request_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       reset_widget_studio_draft: {
         Args: { p_workspace_id: string }
@@ -3263,6 +3420,16 @@ export type Database = {
       set_last_workspace: {
         Args: { p_workspace_id: string }
         Returns: undefined
+      }
+      site_widget_studio: {
+        Args: {
+          p_action?: string
+          p_domain: string
+          p_draft?: Json
+          p_expected_version?: number
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       soft_delete_canned_response: {
         Args: { p_id: string; p_workspace_id: string }
@@ -3561,6 +3728,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      workspace_ai_credit_balance: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
+      workspace_plan_capacity: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_attachment_kind: "image" | "document"
@@ -3611,12 +3786,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3640,11 +3815,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3665,11 +3840,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3690,11 +3865,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3707,11 +3882,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3765,4 +3940,3 @@ export const Constants = {
     },
   },
 } as const
-

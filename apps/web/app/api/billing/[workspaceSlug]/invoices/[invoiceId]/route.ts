@@ -1,5 +1,5 @@
 import { requireInboxWorkspace } from "@/lib/inbox/guards";
-import { workspaceCustomer, downloadInvoice } from "@/lib/billing/stripe";
+import { workspaceCustomer, downloadInvoice } from "@/lib/billing/provider";
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workspaceSlug: string; invoiceId: string }> },
@@ -11,7 +11,7 @@ export async function GET(
   try {
     const customer = await workspaceCustomer(workspace.workspace_id);
     if (!customer) return new Response("Not found", { status: 404 });
-    const invoice = await downloadInvoice(customer, invoiceId);
+    const invoice = await downloadInvoice(workspace.workspace_id, customer, invoiceId);
     return new Response(invoice.bytes, {
       headers: {
         "Content-Type": "application/pdf",

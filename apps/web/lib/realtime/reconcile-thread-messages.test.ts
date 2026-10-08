@@ -86,7 +86,46 @@ describe("reconcileThreadMessages", () => {
       initialMessages,
     });
 
-    expect(next).toBe(current);
+    expect(next.map((item) => item.id)).toEqual(["m1", "temp"]);
+  });
+
+  it("merges missed incoming messages during a pending send after reconnect", () => {
+    const pending = message({
+      id: "temp",
+      sequenceNumber: 3,
+      clientMessageId: "c1",
+      isOptimistic: true,
+      status: "pending",
+    });
+    const next = reconcileThreadMessages({
+      conversationChanged: false,
+      current: [message({ id: "m1", sequenceNumber: 1 }), pending],
+      initialMessages: [
+        message({ id: "m1", sequenceNumber: 1 }),
+        message({ id: "m2", sequenceNumber: 2 }),
+      ],
+    });
+    expect(next.map((item) => item.id)).toEqual(["m1", "m2", "temp"]);
+  });
+
+  it("replaces an acknowledged pending send without duplicating it", () => {
+    const next = reconcileThreadMessages({
+      conversationChanged: false,
+      current: [
+        message({
+          id: "temp",
+          sequenceNumber: 2,
+          clientMessageId: "c1",
+          isOptimistic: true,
+          status: "pending",
+        }),
+      ],
+      initialMessages: [
+        message({ id: "saved", sequenceNumber: 2, clientMessageId: "c1" }),
+      ],
+    });
+    expect(next.map((item) => item.id)).toEqual(["saved"]);
+    expect(next[0]?.isOptimistic).toBeUndefined();
   });
 
   it("keeps local messages when local max sequence is ahead of server props", () => {

@@ -7,6 +7,9 @@ import {
   type WorkspaceAIConfig,
 } from "@site-chat/ai";
 
+import { workspaceBillingAccessForRender } from "@/lib/billing/access";
+import { aiCreditBalance } from "@/lib/ai/credits";
+
 import type { AppSupabaseClient } from "@/lib/supabase/server";
 
 export type WorkspaceAIRuntimeConfig = {
@@ -34,8 +37,22 @@ export async function loadWorkspaceAIConfig(
       : {};
 
   const config = parseWorkspaceAIConfig(settings.ai);
+  if (!config.enabled) {
+    return {
+      config,
+      flags: resolveAIFeatureFlags({
+        enabled: false,
+        features: config.features,
+      }),
+    };
+  }
+  const access = await workspaceBillingAccessForRender(workspaceId);
+  const balance = access.enabled ? await aiCreditBalance(workspaceId) : null;
+  const aiDebt = access.disabledAddOns.some((id) =>
+    /(^|[-_])ai([-_]|$)/i.test(id),
+  );
   const flags = resolveAIFeatureFlags({
-    enabled: config.enabled,
+    enabled: access.enabled && (balance?.limit ?? 0) > 0 && !aiDebt,
     features: config.features,
   });
 

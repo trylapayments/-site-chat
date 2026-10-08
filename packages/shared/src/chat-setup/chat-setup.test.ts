@@ -119,3 +119,17 @@ it("enables visitor tools for legacy settings while preserving explicit opt-outs
     disabled.quickQuestionsEnabled || disabled.emojiEnabled || disabled.voiceMessagesEnabled,
   ).toBe(false);
 });
+
+describe("unanswered email defaults", () => {
+  it("keeps follow-up opt-in with a two minute wait", () => {
+    expect(chatSetupSchema.parse({}).unansweredEmailEnabled).toBe(false);
+    expect(chatSetupSchema.parse({}).unansweredEmailDelaySeconds).toBe(120);
+  });
+  it("allows disabling and rejects unsafe timer values", () => {
+    expect(chatSetupSchema.parse({ unansweredEmailEnabled: false }).unansweredEmailEnabled).toBe(
+      false,
+    );
+    expect(chatSetupSchema.safeParse({ unansweredEmailDelaySeconds: 0 }).success).toBe(false);
+    expect(chatSetupSchema.safeParse({ unansweredEmailDelaySeconds: 1801 }).success).toBe(false);
+  });
+});

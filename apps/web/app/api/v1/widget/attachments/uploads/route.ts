@@ -127,6 +127,7 @@ export async function POST(request: Request) {
 
     const result = await initiateVisitorUploads({
       workspaceId: embedContext.workspaceId,
+      parentOrigin: embedContext.parentOrigin,
       sessionToken,
       files: parsed.data.files,
       body: parsed.data.body,

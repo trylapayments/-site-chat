@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { SaveVisitorContact } from "@/components/crm/SaveVisitorContact";
 import { ConversationFollowUp } from "@/components/inbox/ConversationFollowUp";
 import { ConversationEngagement } from "@/components/inbox/ConversationEngagement";
 import { AssignmentPanel } from "@/components/inbox/AssignmentPanel";
@@ -41,6 +42,7 @@ import {
   formatInboxDateTime,
   formatRelativeTime,
 } from "@/lib/inbox/search-params";
+import { useConversationTools } from "@/components/inbox/ConversationToolsProvider";
 import { cn } from "@/lib/utils";
 
 const crmMessages = crmMessagesEn;
@@ -95,12 +97,12 @@ export function ConversationSidebar({
   workspaceSlug,
   conversationId,
   conversation: initialConversation,
-  members,
+  members: initialMembers,
   memberId,
-  canAssign,
+  canAssign: initialCanAssign,
   canUpdateStatus,
   canUpdateVisitor,
-  contactTags = [],
+  contactTags: initialContactTags = [],
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -113,6 +115,10 @@ export function ConversationSidebar({
   canUpdateVisitor: boolean;
   contactTags?: ContactTagSummary[];
 }) {
+  const tools = useConversationTools();
+  const members = tools?.data?.members ?? initialMembers;
+  const canAssign = initialCanAssign && (tools?.ready ?? true);
+  const contactTags = tools?.data?.contactTags ?? initialContactTags;
   const visitorContext = useConversationVisitorContext();
   const conversation = visitorContext
     ? { ...initialConversation, ...visitorContext.snapshot }
@@ -256,6 +262,12 @@ export function ConversationSidebar({
           </div>
         ) : null}
 
+        <SaveVisitorContact
+          key={conversation.visitor_session_id}
+          workspaceId={workspaceId}
+          visitorSessionId={conversation.visitor_session_id}
+          canSave={canUpdateVisitor}
+        />
         {contact?.id ? (
           <Link
             href={toAppRoute(workspaceContactsPath(workspaceSlug, contact.id))}
@@ -314,6 +326,7 @@ export function ConversationSidebar({
               initialIp={conversation.visitor_ip}
             />
             <ConversationFollowUp
+              showRating={false}
               slug={workspaceSlug}
               conversationId={conversationId}
               email={conversation.contact?.email}
@@ -526,6 +539,15 @@ export function ConversationSidebar({
                               },
                             );
                             if (result.success) {
+                              window.dispatchEvent(
+                                new CustomEvent("mill:conversation-status", {
+                                  detail: {
+                                    conversationId,
+                                    workspaceSlug,
+                                    status,
+                                  },
+                                }),
+                              );
                               router.refresh();
                             }
                           });

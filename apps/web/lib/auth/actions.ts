@@ -69,7 +69,7 @@ export async function signUpAction(
   const redirectTo = `${clientEnv.NEXT_PUBLIC_APP_URL}${AUTH_ROUTES.authCallback}`;
 
   const { error } = await supabase.auth.signUp({
-    email: parsed.data.email,
+    email: parsed.data.email.toLowerCase(),
     password: parsed.data.password,
     options: {
       emailRedirectTo: redirectTo,
@@ -112,7 +112,7 @@ export async function signInAction(
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
+    email: parsed.data.email.toLowerCase(),
     password: parsed.data.password,
   });
 

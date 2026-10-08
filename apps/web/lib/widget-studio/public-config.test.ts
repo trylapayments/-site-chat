@@ -245,8 +245,46 @@ describe("enrichWidgetPublicAppearance asset authorization", () => {
     const result = await enrichWidgetPublicAppearance({
       workspaceId,
       publicConfig: {},
+      entitlements: emptyWidgetStudioEntitlements(),
     });
     expect(result.logoUrl).toBeNull();
     expect(createSignedDownloadUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe("website-specific published appearance", () => {
+  it("uses the origin's published design, never its draft or another site", async () => {
+    const global = defaultWidgetAppearanceConfig();
+    const site = { ...global, primaryColor: "#AABBCC", showPoweredBy: false };
+    const eq = vi.fn();
+    fromMock.mockImplementation((table: string) => {
+      const query = {
+        select: () => query,
+        eq: (field: string, value: string) => {
+          eq(field, value);
+          return query;
+        },
+        maybeSingle: () =>
+          Promise.resolve({
+            data: {
+              published_json: table === "widget_site_configs" ? site : global,
+              draft_json: { ...site, primaryColor: "#FF0000" },
+              published_version: 3,
+              published_at: "2026-10-06T12:00:00Z",
+            },
+            error: null,
+          }),
+      };
+      return query;
+    });
+    const result = await enrichWidgetPublicAppearance({
+      workspaceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      parentOrigin: "https://www.example.com",
+      publicConfig: {},
+      entitlements: emptyWidgetStudioEntitlements(),
+    });
+    expect(eq).toHaveBeenCalledWith("domain", "example.com");
+    expect(result.primaryColor).toBe("#AABBCC");
+    expect(result.showPoweredBy).toBe(true);
   });
 });

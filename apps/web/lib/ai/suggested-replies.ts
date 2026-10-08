@@ -18,6 +18,7 @@ import {
   type TokenUsage,
 } from "@site-chat/ai";
 
+import { reserveAICredit, finishAICredit } from "@/lib/ai/credits";
 import { loadWorkspaceAIConfig } from "@/lib/ai/config";
 import {
   AI_RATE_LIMITS,
@@ -183,12 +184,20 @@ export async function generateSuggestedReply(
   const started = Date.now();
   let providerId: AIProviderId = "mock";
   let model: string | null = null;
+  const creditRequestId = randomUUID();
+  let creditReserved = false;
 
   try {
     const { provider, prompt, config, regenerateSeed } =
       await loadAuthorizedContext(supabase, auth);
     providerId = provider.id;
     model = config.model ?? provider.metadata.model;
+    await reserveAICredit(
+      auth.workspaceId,
+      auth.conversationId,
+      creditRequestId,
+    );
+    creditReserved = true;
 
     const result = await provider.generate(
       {
@@ -212,6 +221,8 @@ export async function generateSuggestedReply(
       );
     }
 
+    await finishAICredit(auth.workspaceId, creditRequestId, true);
+    creditReserved = false;
     await persistUsage(
       buildUsageEvent({
         workspaceId: auth.workspaceId,
@@ -245,6 +256,14 @@ export async function generateSuggestedReply(
       }),
     );
     throw error;
+  } finally {
+    if (creditReserved) {
+      try {
+        await finishAICredit(auth.workspaceId, creditRequestId, false);
+      } catch {
+        console.error("AI credit reservation cleanup failed");
+      }
+    }
   }
 }
 
@@ -256,6 +275,8 @@ export async function* streamSuggestedReply(
   const started = Date.now();
   let providerId: AIProviderId = "mock";
   let model: string | null = null;
+  const creditRequestId = randomUUID();
+  let creditReserved = false;
   let completed = false;
 
   try {
@@ -263,6 +284,12 @@ export async function* streamSuggestedReply(
       await loadAuthorizedContext(supabase, auth);
     providerId = provider.id;
     model = config.model ?? provider.metadata.model;
+    await reserveAICredit(
+      auth.workspaceId,
+      auth.conversationId,
+      creditRequestId,
+    );
+    creditReserved = true;
 
     for await (const chunk of provider.stream(
       {
@@ -291,6 +318,8 @@ export async function* streamSuggestedReply(
       }
 
       model = chunk.model;
+      await finishAICredit(auth.workspaceId, creditRequestId, true);
+      creditReserved = false;
       completed = true;
 
       await persistUsage(
@@ -342,5 +371,13 @@ export async function* streamSuggestedReply(
       return;
     }
     throw error;
+  } finally {
+    if (creditReserved) {
+      try {
+        await finishAICredit(auth.workspaceId, creditRequestId, false);
+      } catch {
+        console.error("AI credit reservation cleanup failed");
+      }
+    }
   }
 }

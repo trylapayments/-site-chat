@@ -69,6 +69,8 @@ export const chatSetupSchema = z
       ]),
     emojiEnabled: z.boolean().default(true),
     voiceMessagesEnabled: z.boolean().default(true),
+    unansweredEmailEnabled: z.boolean().default(false),
+    unansweredEmailDelaySeconds: z.number().int().min(30).max(1800).default(120),
     allOfflineBehavior: z.enum(["message", "hide"]).default("message"),
     outsideHoursBehavior: z.enum(["message", "hide"]).default("message"),
     workingHours: workingHoursSchema.default({}),

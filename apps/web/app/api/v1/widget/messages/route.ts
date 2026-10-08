@@ -1,3 +1,8 @@
+import { dispatchMobilePush } from "@/lib/mobile/dispatch";
+import { dispatchNotificationEmails } from "@/lib/email/dispatch-notifications";
+
+export const maxDuration = 60;
+
 import {
   widgetListMessagesDataSchema,
   widgetListMessagesQuerySchema,
@@ -204,6 +209,8 @@ export async function POST(request: Request) {
       referrer: parsed.data.referrer,
     });
 
+    dispatchNotificationEmails();
+    dispatchMobilePush();
     return widgetJsonSuccess(widgetSendMessageDataSchema, result, requestId, {
       headers: Object.fromEntries(corsHeaders(corsOrigin).entries()),
     });

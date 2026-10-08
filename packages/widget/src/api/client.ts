@@ -228,6 +228,7 @@ export class WidgetApiClient {
     rating: { score: number; comment: string } | null;
     messageAgents: Record<string, { name: string; avatarUrl: string | null }>;
     formSubmitted: boolean;
+    replyEmailSaved?: boolean;
     operatorInitiated: boolean;
   }> {
     const response = await fetch(new URL("/api/v1/widget/engagement", this.apiBase), {
@@ -251,6 +252,23 @@ export class WidgetApiClient {
       },
       credentials: "omit",
       body: JSON.stringify(input),
+    });
+    return this.parseResponse(response);
+  }
+  async saveReplyEmail(
+    embedToken: string,
+    sessionToken: string,
+    email: string,
+  ): Promise<{ saved: boolean }> {
+    const response = await fetch(new URL("/api/v1/widget/engagement", this.apiBase), {
+      method: "POST",
+      credentials: "omit",
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+        [WIDGET_EMBED_TOKEN_HEADER]: embedToken,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action: "reply_email", email }),
     });
     return this.parseResponse(response);
   }
@@ -456,6 +474,7 @@ export class WidgetApiClient {
     referrer?: string;
   }): Promise<{
     message: MessagePayload;
+    conversationId?: string;
     conversationStatus: SessionPayload["conversationStatus"];
   }> {
     const response = await fetch(new URL("/api/v1/widget/messages", this.apiBase), {
@@ -549,6 +568,7 @@ export class WidgetApiClient {
     referrer?: string;
   }): Promise<{
     message: MessagePayload;
+    conversationId?: string;
     conversationStatus: SessionPayload["conversationStatus"];
   }> {
     const response = await fetch(

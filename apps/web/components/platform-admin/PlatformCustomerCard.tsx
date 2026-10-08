@@ -1,4 +1,9 @@
 "use client";
+import { AdminDebtWriteOff } from "./AdminDebtWriteOff";
+import { AdminPlanChange } from "./AdminPlanChange";
+import { InvoiceDownload } from "@/components/settings/InvoiceDownload";
+import { MILL_PLANS } from "@/lib/billing/plans";
+import { CompanyIdentifier } from "./CompanyIdentifier";
 import { toAppRoute } from "@/lib/auth/redirect";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
@@ -43,6 +48,10 @@ function Facts({ rows }: { rows: [string, React.ReactNode][] }) {
 }
 export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
   const router = useRouter();
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
   const [tab, setTab] = useState("Overview");
   const [profile, setProfile] = useState(data.profile);
   const [reason, setReason] = useState("");
@@ -73,9 +82,15 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
   const [trial, setTrial] = useState(
     data.controls?.trial_ends_at?.slice(0, 10) ?? "",
   );
+  const [plan, setPlan] = useState(data.controls?.plan_id ?? "");
+  const [planExpiry, setPlanExpiry] = useState(
+    data.controls?.override_expires_at?.slice(0, 10) ?? "",
+  );
   const [note, setNote] = useState("");
   const [domain, setDomain] = useState("");
   useEffect(() => {
+    setPlan(data.controls?.plan_id ?? "");
+    setPlanExpiry(data.controls?.override_expires_at?.slice(0, 10) ?? "");
     setProfile(data.profile);
     setMode(data.controls?.access_mode === "pilot" ? "pilot" : "standard");
     setFeatures(
@@ -174,6 +189,15 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
           <h1 className="text-2xl font-semibold tracking-tight">
             {data.workspace.name}
           </h1>
+          <CompanyIdentifier id={data.workspace.id} />
+          {owner ? (
+            <Link
+              className="mt-3 inline-block text-sm text-primary"
+              href={`/admin/customers/${data.workspace.id}/widget`}
+            >
+              Manage custom launcher icon
+            </Link>
+          ) : null}
           <p className="mt-2 text-sm text-[#747b80]">
             {data.profile.website || data.workspace.slug} ·{" "}
             {data.profile.email || "No company email"}
@@ -192,6 +216,7 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
           <button
             type="button"
             role="tab"
+            disabled={!hydrated}
             key={name}
             id={`admin-tab-${name.replaceAll(" ", "")}`}
             aria-selected={tab === name}
@@ -454,6 +479,9 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
                         operator_seats: limits.operator_seats
                           ? Number(limits.operator_seats)
                           : null,
+                        websites: limits.websites
+                          ? Number(limits.websites)
+                          : null,
                         monthly_conversations: limits.monthly_conversations
                           ? Number(limits.monthly_conversations)
                           : null,
@@ -473,15 +501,72 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
               ) : null}
             </section>
             <div>
+              <section className={`${box} mb-5`}>
+                <h2 className="font-semibold">Complimentary plan</h2>
+                <p className="mt-2 text-xs text-[#747b80]">
+                  Grant a plan without payment. Removing a grant returns access
+                  to the billing subscription; it does not cancel payments.
+                </p>
+                <Label htmlFor="complimentary-plan" className="mt-4 block">
+                  Plan
+                </Label>
+                <select
+                  id="complimentary-plan"
+                  value={plan}
+                  disabled={!owner || pending}
+                  className="mt-2 w-full rounded-md border px-3 py-2"
+                  onChange={(e) => {
+                    setPlan(e.target.value);
+                  }}
+                >
+                  <option value="">Use billing subscription</option>
+                  {MILL_PLANS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · complimentary
+                    </option>
+                  ))}
+                </select>
+                <Label htmlFor="plan-expiry" className="mt-4 block">
+                  Grant expires (optional)
+                </Label>
+                <Input
+                  id="plan-expiry"
+                  type="date"
+                  value={planExpiry}
+                  disabled={!owner || pending || !plan}
+                  onChange={(e) => {
+                    setPlanExpiry(e.target.value);
+                  }}
+                />
+                <p className="mt-2 text-xs text-[#747b80]">
+                  Leave empty for no expiry.
+                </p>
+                {owner ? (
+                  <>
+                    {reasonField("plan")}
+                    {actionButton("Save plan grant", {
+                      action: "plan",
+                      payload: {
+                        plan_id: plan || null,
+                        expires_at:
+                          plan && planExpiry
+                            ? new Date(planExpiry + "T23:59:59Z").toISOString()
+                            : null,
+                      },
+                    })}
+                  </>
+                ) : null}
+              </section>
               <section className={box}>
                 <h2 className="font-semibold">Individual limits</h2>
                 <p className="mt-2 text-xs text-[#747b80]">
-                  Saved allowances for the upcoming metering integration.
-                  Enforcement is not active yet.
+                  Operator and website limits are enforced. Other allowances are
+                  saved for the upcoming metering integration.
                 </p>
                 <div className="mt-5 space-y-4">
                   {[
                     { key: "operator_seats", label: "Operator seats" },
+                    { key: "websites", label: "Websites" },
                     {
                       key: "monthly_conversations",
                       label: "Monthly conversations",
@@ -523,26 +608,16 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
                   id="trial-end"
                   type="date"
                   value={trial}
-                  disabled={
-                    !support ||
-                    pending ||
-                    data.controls?.access_mode === "pilot" ||
-                    data.billingAccounts.length > 0
-                  }
+                  disabled={!support || pending}
                   onChange={(e) => {
                     setTrial(e.target.value);
                   }}
                 />
                 <p className="mt-3 text-xs text-[#747b80]">
-                  {data.controls?.access_mode === "pilot"
-                    ? "Pilot access does not expire. Change it explicitly before granting a trial."
-                    : data.billingAccounts.length
-                      ? "This customer has connected billing. Its trial must be managed through Chargebee; local changes are blocked."
-                      : "Grant or extend a Mill access trial without creating a paid subscription."}
+                  Grant or extend a Mill trial independently of billing.
+                  Existing paid subscriptions are unchanged.
                 </p>
-                {support &&
-                data.controls?.access_mode !== "pilot" &&
-                !data.billingAccounts.length ? (
+                {support ? (
                   <>
                     {reasonField("trial")}
                     <Button
@@ -586,7 +661,14 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
                       {data.billing.subscriptions.map((s) => (
                         <div key={s.id}>
                           <p>
-                            {s.id} · {s.status}
+                            {s.items.data
+                              .map((item) =>
+                                typeof item.price.product === "object"
+                                  ? item.price.product.name
+                                  : "Mill plan",
+                              )
+                              .join(", ")}{" "}
+                            · {s.status}
                           </p>
                           <p className="text-xs text-[#747b80]">
                             Current term ends{" "}
@@ -607,10 +689,47 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
                       start paid billing.
                     </p>
                   )}
+                  {data.billing?.scheduledChange ? (
+                    <p className="mt-4 text-sm text-[#747b80]">
+                      Next renewal: {data.billing.scheduledChange.name} ·{" "}
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      }).format(data.billing.scheduledChange.amount / 100)}{" "}
+                      / {data.billing.scheduledChange.interval}
+                    </p>
+                  ) : null}
                   <p className="mt-4 text-xs text-[#747b80]">
-                    Plan prices, payment collection and refunds are not enabled
-                    until the billing catalogue and gateway are ready.
+                    Subscription and payment records are synchronised from the
+                    billing provider. Complimentary access, trials and
+                    suspension are controlled independently in Access & limits.
                   </p>
+                  <AdminPlanChange
+                    currentPlan={
+                      MILL_PLANS.find((p) =>
+                        data.billing?.subscriptions[0]?.items.data.some(
+                          (item) =>
+                            typeof item.price.product === "object" &&
+                            item.price.product.name === p.name,
+                        ),
+                      )?.id ?? "essential"
+                    }
+                    currentInterval={
+                      data.billing?.subscriptions[0]?.items.data[0]?.price
+                        .recurring?.interval === "year"
+                        ? "year"
+                        : "month"
+                    }
+                    workspaceId={data.workspace.id}
+                    enabled={
+                      !data.billingError &&
+                      Boolean(
+                        data.billing?.subscriptions.some(
+                          (s) => s.status === "active",
+                        ),
+                      )
+                    }
+                  />
                 </section>
                 <section className={box}>
                   <h2 className="font-semibold">Payment methods</h2>
@@ -627,6 +746,7 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
                     </p>
                   )}
                 </section>
+                <AdminDebtWriteOff workspaceId={data.workspace.id} />
                 <section className={box}>
                   <h2 className="font-semibold">Invoices</h2>
                   {data.billing?.invoices.length ? (
@@ -638,6 +758,7 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
                             <th>Date</th>
                             <th>Amount</th>
                             <th>Status</th>
+                            <th>Download</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -654,6 +775,15 @@ export function PlatformCustomerCard({ data }: { data: PlatformCustomer }) {
                                 }).format(i.total / 100)}
                               </td>
                               <td>{i.status}</td>
+                              <td>
+                                {i.invoice_pdf ? (
+                                  <InvoiceDownload
+                                    slug={data.workspace.slug}
+                                    adminWorkspaceId={data.workspace.id}
+                                    invoiceId={i.id}
+                                  />
+                                ) : null}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

@@ -51,6 +51,8 @@ function mapTeamActionError<T>(
     return { success: false, message: error.message, code: error.code };
   }
   if (error instanceof Error) {
+    if (error.message.startsWith("Your operator limit is reached."))
+      return { success: false, message: error.message, code: "PLAN_LIMIT" };
     const typed = parseTeamErrorMessage(error.message);
     if (typed) {
       return { success: false, message: typed.message, code: typed.code };
@@ -104,8 +106,9 @@ export async function listWorkspaceTeamAction(
 export async function inviteWorkspaceMemberAction(
   workspaceSlug: string,
   input: unknown,
+  sendEmail = true,
 ): Promise<
-  TeamActionResult<CreateWorkspaceInvitationResult & { invite_url: string }>
+  TeamActionResult<CreateWorkspaceInvitationResult & { invite_url: string; email_sent: boolean; email_error?: string }>
 > {
   try {
     const parsed = createWorkspaceInvitationInputSchema.safeParse(input);
@@ -126,10 +129,20 @@ export async function inviteWorkspaceMemberAction(
       workspace.workspace_id,
       parsed.data,
     );
+    const url = inviteUrl(data.token);
+    let emailSent = false;
+    let emailError: string | undefined;
+    if (sendEmail) {
+      try {
+        const { sendTeamInvitationEmail } = await import("@/lib/team/invitation-email");
+        await sendTeamInvitationEmail({ email: parsed.data.email, role: parsed.data.role, workspaceName: workspace.name, url, invitationId: data.invitation_id });
+        emailSent = true;
+      } catch { emailError = "Invitation created, but the email could not be sent. You can copy the link below."; }
+    }
     revalidateTeamPath(workspaceSlug);
     return {
       success: true,
-      data: { ...data, invite_url: inviteUrl(data.token) },
+      data: { ...data, invite_url: url, email_sent: emailSent, ...(emailError ? { email_error: emailError } : {}) },
     };
   } catch (error) {
     return mapTeamActionError(error, "Unable to create the invitation.");

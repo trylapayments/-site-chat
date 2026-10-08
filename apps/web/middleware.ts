@@ -26,6 +26,10 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/app/")
   ))
     return NextResponse.next();
+  // Overwrite any client-supplied hint; the layout uses this only to start
+  // authorized data for the actual first screen in parallel with shell rendering.
+  request.headers.set("x-mill-portal-path", request.nextUrl.pathname);
+  request.headers.set("x-mill-startup-profile", request.nextUrl.searchParams.get("millPerf") === "1" ? "1" : "0");
   const { supabase, response } = createMiddlewareClient(request);
   const {
     data: { user },
@@ -34,6 +38,7 @@ export async function middleware(request: NextRequest) {
   const redirectPath = resolveMiddlewareRedirect(
     request.nextUrl.pathname,
     Boolean(user),
+    request.nextUrl.searchParams.get("next"),
   );
 
   if (redirectPath) {

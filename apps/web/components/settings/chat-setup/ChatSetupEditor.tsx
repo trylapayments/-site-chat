@@ -21,12 +21,14 @@ const fieldTypes: { value: PreChatField["type"]; label: string }[] = [
 ];
 export function ChatSetupEditor({
   slug,
+  siteDomain,
   initial,
   canManage,
   workspaceName,
   showPoweredBy = true,
 }: {
   slug: string;
+  siteDomain?: string;
   workspaceName: string;
   showPoweredBy?: boolean;
   initial: { config: ChatSetup; version: number };
@@ -184,10 +186,14 @@ export function ChatSetupEditor({
             event.preventDefault();
             if (!valid.success) return;
             startTransition(async () => {
-              const result = await saveChatSetupAction(slug, {
-                config: draft,
-                version,
-              });
+              const result = await saveChatSetupAction(
+                slug,
+                {
+                  config: draft,
+                  version,
+                },
+                siteDomain,
+              );
               if (result.success) {
                 setVersion(result.version);
                 setSaved(draft);
@@ -415,6 +421,45 @@ export function ChatSetupEditor({
                 />
               </div>
             ))}
+            <section className="space-y-3 border-t pt-5">
+              <h2 className="text-lg font-semibold">
+                Email follow-up when no one replies
+              </h2>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={draft.unansweredEmailEnabled}
+                  onChange={(event) => {
+                    update({ unansweredEmailEnabled: event.target.checked });
+                  }}
+                />
+                Offer an email reply when the visitor is waiting
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Visitors can leave their email and continue the same
+                conversation later. Enabled by default.
+              </p>
+              <Label htmlFor="unanswered-email-delay">Offer after</Label>
+              <select
+                id="unanswered-email-delay"
+                className="rounded-md border p-2"
+                disabled={!draft.unansweredEmailEnabled}
+                value={draft.unansweredEmailDelaySeconds}
+                onChange={(event) => {
+                  update({
+                    unansweredEmailDelaySeconds: Number(event.target.value),
+                  });
+                }}
+              >
+                {[30, 60, 120, 300, 600, 1800].map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    {seconds < 60
+                      ? `${String(seconds)} seconds`
+                      : `${String(seconds / 60)} minutes`}
+                  </option>
+                ))}
+              </select>
+            </section>
             <section className="space-y-3 border-t pt-5">
               <h2 className="text-lg font-semibold">Read receipts</h2>
               <label className="flex items-center gap-2">

@@ -48,12 +48,16 @@ export function TeamInviteSheet({
   const [error, setError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sendEmail, setSendEmail] = useState(true);
+  const [emailNotice, setEmailNotice] = useState("");
 
   useEffect(() => {
     if (!open) {
       return;
     }
     setEmail("");
+    setSendEmail(true);
+    setEmailNotice("");
     setRole("agent");
     setPending(false);
     setError(null);
@@ -78,13 +82,14 @@ export function TeamInviteSheet({
     const result = await inviteWorkspaceMemberAction(workspaceSlug, {
       email,
       role,
-    });
+    }, sendEmail);
     setPending(false);
     if (!result.success) {
       setError(result.message);
       return;
     }
     setInviteUrl(result.data.invite_url);
+    setEmailNotice(result.data.email_error ?? (result.data.email_sent ? "Invitation email sent." : "Email was not sent. Share the invitation link below."));
     onInvited();
   }
 
@@ -123,7 +128,7 @@ export function TeamInviteSheet({
               {messages.invitePendingLabel}
             </p>
             <p className="text-inbox-muted text-[13px] leading-relaxed">
-              {messages.inviteLinkHint}
+              {emailNotice}
             </p>
             <p className="border-inbox-border bg-inbox-panel truncate rounded-md border px-3 py-2 text-[13px]">
               {inviteUrl}
@@ -187,6 +192,10 @@ export function TeamInviteSheet({
                   ))}
                 </select>
               </div>
+              <label className="flex items-center gap-2 text-[13px]">
+                <input type="checkbox" checked={sendEmail} onChange={(event) => { setSendEmail(event.target.checked); }} />
+                Send invitation by email
+              </label>
               {error ? (
                 <p
                   id={errorId}

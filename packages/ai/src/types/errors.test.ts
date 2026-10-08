@@ -14,3 +14,11 @@ describe("AIError", () => {
     expect(publicError.message).not.toContain("sk-live");
   });
 });
+
+it("clearly explains exhausted allowance without inviting automatic retries", () => {
+  const error = toPublicAIError(new AIError("AI_QUOTA_EXHAUSTED", "database detail"));
+  expect(error.status).toBe(403);
+  expect(error.retryable).toBe(false);
+  expect(error.message).toContain("Live chat remains available");
+  expect(error.message).not.toContain("database detail");
+});

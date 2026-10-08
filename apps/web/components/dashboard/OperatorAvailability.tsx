@@ -2,6 +2,7 @@
 import { Popover } from "radix-ui";
 import { Settings2 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
+import { heartbeatOperator } from "@/lib/operators/heartbeat-client";
 import { updateOperatorAvailability } from "@/lib/operators/actions";
 import type {
   OperatorStatus,
@@ -38,7 +39,7 @@ export function OperatorAvailability({
       const activity = activityRevision.current;
       const active = dirtyActivity.current;
       try {
-        const next = await updateOperatorAvailability(slug, { active });
+        const next = await heartbeatOperator(slug, active);
         if (mounted && started === revision.current) {
           snapshotRef.current = next;
           setSnapshot(next);

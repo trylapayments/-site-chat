@@ -1,4 +1,5 @@
 "use client";
+import { markPortalReady } from "@/lib/portal/startup";
 
 import {
   conversationStatusSchema,
@@ -9,7 +10,7 @@ import { IdentityAvatar } from "@/components/dashboard/IdentityAvatar";
 import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useConversationVisitorContext } from "@/components/inbox/ConversationVisitorProvider";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
@@ -23,21 +24,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { updateConversationStatusAction } from "@/lib/inbox/actions";
+import {
+  finishConversationNavigation,
+  recordDocumentReady,
+  startInteraction,
+  finishInteraction,
+} from "@/lib/performance/interactions";
+import { useConversationTools } from "@/components/inbox/ConversationToolsProvider";
 import { cn } from "@/lib/utils";
 
 export function ConversationHeader({
   contactLabel: initialContactLabel,
   conversationId,
-  status,
+  status: serverStatus,
   locationLabel: initialLocationLabel,
   deviceLabel: initialDeviceLabel,
   pageTitle: initialPageTitle,
   workspaceSlug,
   workspaceId,
   conversation,
-  members,
+  members: initialMembers,
   memberId,
-  canAssign,
+  canAssign: initialCanAssign,
   canUpdateStatus,
 }: {
   contactLabel: string;
@@ -54,6 +62,9 @@ export function ConversationHeader({
   canAssign: boolean;
   canUpdateStatus: boolean;
 }) {
+  const tools = useConversationTools();
+  const members = tools?.data?.members ?? initialMembers;
+  const canAssign = initialCanAssign && (tools?.ready ?? true);
   const visitorContext = useConversationVisitorContext();
   const context = visitorContext?.snapshot.visitor_context;
   const contactLabel = visitorContext
@@ -77,7 +88,24 @@ export function ConversationHeader({
     ? (context?.current_title ?? null)
     : initialPageTitle;
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setPending] = useState(false);
+  const [status, setLocalStatus] = useState(serverStatus);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      recordDocumentReady();
+      markPortalReady();
+      finishConversationNavigation(conversationId);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [conversationId]);
+  useEffect(() => {
+    setLocalStatus(serverStatus);
+    setStatusError(null);
+  }, [conversationId, serverStatus]);
   const meta = [locationLabel, deviceLabel, pageTitle]
     .filter(Boolean)
     .join(" · ");
@@ -88,19 +116,43 @@ export function ConversationHeader({
   function setStatus(
     nextStatus: (typeof conversationStatusSchema.options)[number],
   ) {
-    startTransition(async () => {
-      const result = await updateConversationStatusAction(workspaceSlug, {
-        conversationId,
-        status: nextStatus,
-      });
-      if (result.success) {
-        router.refresh();
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setPending(true);
+    setStatusError(null);
+    const timing = startInteraction("Change status");
+    void (async () => {
+      try {
+        const result = await updateConversationStatusAction(workspaceSlug, {
+          conversationId,
+          status: nextStatus,
+        });
+        finishInteraction(timing, result.success);
+        if (result.success) {
+          window.dispatchEvent(
+            new CustomEvent("mill:conversation-status", {
+              detail: { conversationId, workspaceSlug, status: nextStatus },
+            }),
+          );
+          setLocalStatus(nextStatus);
+          router.refresh();
+        } else {
+          setStatusError(result.message);
+        }
+      } catch {
+        finishInteraction(timing, false);
+        setStatusError(
+          "Unable to change conversation status. Please try again.",
+        );
+      } finally {
+        busyRef.current = false;
+        setPending(false);
       }
-    });
+    })();
   }
 
   return (
-    <header className="border-inbox-border/80 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-inbox-panel px-3 py-2 md:flex-nowrap md:gap-4 md:px-5 md:py-3">
+    <header className="mill-conversation-header border-inbox-border/80 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-inbox-panel px-3 py-2 md:flex-nowrap md:gap-4 md:px-5 md:py-3">
       <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
         <Link
           href={`/app/${workspaceSlug}/inbox`}
@@ -170,26 +222,26 @@ export function ConversationHeader({
               <Button
                 type="button"
                 size="sm"
-                className="bg-brand text-brand-foreground hover:bg-brand/90 h-8 px-3"
+                className="bg-brand text-brand-foreground hover:bg-brand/90 h-11 px-4 md:h-8 md:px-3"
                 disabled={isPending}
                 onClick={() => {
                   setStatus("closed");
                 }}
               >
-                Close
+                {isPending ? "Closing…" : "Close"}
               </Button>
             ) : (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-8 capitalize"
+                className="h-11 capitalize md:h-8"
                 disabled={isPending}
                 onClick={() => {
                   setStatus("open");
                 }}
               >
-                Reopen
+                {isPending ? "Reopening…" : "Reopen"}
               </Button>
             )}
             {otherStatuses.length > 0 ? (
@@ -225,6 +277,11 @@ export function ConversationHeader({
           </>
         ) : null}
       </div>
+      {statusError ? (
+        <p role="alert" className="w-full text-sm text-red-700">
+          {statusError}
+        </p>
+      ) : null}
     </header>
   );
 }

@@ -32,9 +32,9 @@ const VIEWPORT_CLASS: Record<PreviewViewport, string> = {
 };
 
 const LAUNCHER_SIZE: Record<WidgetAppearanceConfig["launcherSize"], string> = {
-  sm: "size-11",
-  md: "size-14",
-  lg: "size-16",
+  sm: "size-14",
+  md: "size-16",
+  lg: "size-[72px]",
 };
 
 const LAUNCHER_SHAPE: Record<WidgetAppearanceConfig["launcherShape"], string> =
@@ -379,7 +379,11 @@ export function WidgetStudioPreview({
                 <svg
                   aria-hidden="true"
                   viewBox="-1 -1 34 34"
-                  className="size-7 shrink-0"
+                  className={
+                    config.launcherShape === "rectangle"
+                      ? "size-[34px] shrink-0"
+                      : "size-[52%] shrink-0"
+                  }
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.2"

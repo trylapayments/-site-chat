@@ -1,3 +1,4 @@
+import { workspaceBillingAccess } from "@/lib/billing/access";
 import { isAICancellation, toPublicAIError } from "@site-chat/ai";
 import { suggestedReplyRequestSchema } from "@site-chat/shared";
 import { NextResponse } from "next/server";
@@ -113,6 +114,21 @@ export async function POST(request: Request) {
         );
       }
       throw error;
+    }
+
+    const billingAccess = await workspaceBillingAccess(workspace.workspace_id);
+    if (billingAccess.disabledAddOns.some((id) => id.startsWith("mill-ai-"))) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "AI_UNAVAILABLE",
+            message:
+              "AI is paused because its add-on invoice is unpaid. Your base chat remains available. Please contact your billing administrator.",
+            retryable: false,
+          },
+        },
+        { status: 402 },
+      );
     }
 
     const { data: memberRow } = await supabase

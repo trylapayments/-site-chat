@@ -1,3 +1,4 @@
+import { millEmailHtml } from "./mill-template";
 import "server-only";
 
 import { z } from "zod";
@@ -58,7 +59,7 @@ export type NotificationEmailProcessorDeps = {
   prepare: (
     row: ClaimedOutboxRow,
     appUrl: string,
-  ) => Promise<{ href: string } | { skip: string }>;
+  ) => Promise<{ href: string; preview?: string } | { skip: string }>;
   send: (input: {
     apiKey: string;
     to: string;
@@ -66,6 +67,7 @@ export type NotificationEmailProcessorDeps = {
     from: string;
     appUrl: string;
     idempotencyKey: string;
+    preview?: string;
   }) => Promise<NotificationEmailSendResult>;
 };
 
@@ -132,7 +134,7 @@ export async function prepareNotificationEmail(
   supabase: ServiceClient,
   row: ClaimedOutboxRow,
   appUrl: string,
-): Promise<{ href: string } | { skip: string }> {
+): Promise<{ href: string; preview?: string } | { skip: string }> {
   // Never deliver expired staging history or reserved test recipients.
   if (Date.now() - Date.parse(row.created_at) >= 24 * 60 * 60 * 1000) {
     return { skip: "Notification expired" };
@@ -165,7 +167,7 @@ export async function prepareNotificationEmail(
     row.notification_id
       ? supabase
           .from("notifications")
-          .select("conversation_id,read_at")
+          .select("conversation_id,read_at,body")
           .eq("id", row.notification_id)
           .eq("workspace_id", row.workspace_id)
           .eq("recipient_id", row.recipient_member_id)
@@ -221,7 +223,21 @@ export async function prepareNotificationEmail(
   const origin = new URL(appUrl).origin;
   const base = `/app/${encodeURIComponent(workspace.data.slug)}/inbox`;
   const conversationId = notification.data?.conversation_id;
+  let preview = ["conversation_new", "visitor_message"].includes(row.email_category)
+    ? notification.data?.body ?? undefined
+    : undefined;
+  if (conversationId && preview !== undefined) {
+    const submission = await supabase.from("pre_chat_submissions")
+      .select("snapshot").eq("workspace_id", row.workspace_id)
+      .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (submission.error) throw new Error("Visitor contact context unavailable");
+    const snapshot = z.object({ name: z.string().optional(), email: z.string().email().optional() }).passthrough().safeParse(submission.data?.snapshot);
+    if (snapshot.success) {
+      preview = [snapshot.data.name?.slice(0, 100), snapshot.data.email, preview].filter(Boolean).join("\n");
+    }
+  }
   return {
+    preview,
     href: new URL(conversationId ? `${base}/${conversationId}` : base, origin)
       .href,
   };
@@ -234,10 +250,12 @@ async function sendViaResend(input: {
   from: string;
   appUrl: string;
   idempotencyKey: string;
+  preview?: string;
 }): Promise<NotificationEmailSendResult> {
   const body = [
     input.subject,
     "",
+    ...(input.preview ? [input.preview, ""] : []),
     "Open conversation in Mill:",
     input.appUrl,
     "",
@@ -258,6 +276,14 @@ async function sendViaResend(input: {
         to: [input.to],
         subject: input.subject,
         text: body,
+        html: millEmailHtml({
+          title: input.subject,
+          paragraphs: ["A conversation needs your attention in Mill. Reply from the conversation in your Mill workspace."],
+          preformatted: input.preview,
+          button: { label: "Open conversation", href: input.appUrl },
+          footer:
+            "You received this because email notifications are enabled for your account. You can manage them in Mill Settings.",
+        }),
       }),
     });
 
@@ -342,7 +368,7 @@ export async function processNotificationEmailOutbox(options?: {
   for (const row of claimed) {
     result.processed += 1;
 
-    let target: { href: string } | { skip: string };
+    let target: { href: string; preview?: string } | { skip: string };
     try {
       target = await deps.prepare(row, appUrl);
     } catch {
@@ -373,6 +399,7 @@ export async function processNotificationEmailOutbox(options?: {
       subject: row.subject,
       from: fromEmail,
       appUrl: target.href,
+      preview: target.preview,
       idempotencyKey: `mill-notification/${row.id}`,
     });
 

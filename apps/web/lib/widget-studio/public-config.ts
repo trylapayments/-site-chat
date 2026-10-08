@@ -1,3 +1,4 @@
+import { canonicalSite } from "@/lib/widget-install/site";
 import "server-only";
 
 import {
@@ -35,6 +36,7 @@ type AssetTarget = {
 export async function enrichWidgetPublicAppearance(input: {
   workspaceId: string;
   publicConfig: unknown;
+  parentOrigin?: string | null;
   entitlements?: WidgetStudioEntitlements;
 }): Promise<WidgetPublicAppearance> {
   const entitlements =
@@ -48,18 +50,37 @@ export async function enrichWidgetPublicAppearance(input: {
     .eq("workspace_id", input.workspaceId)
     .maybeSingle();
 
+  let effectiveRow = configRow;
+  if (input.parentOrigin) {
+    let domain: string | null = null;
+    try {
+      domain = canonicalSite(input.parentOrigin);
+    } catch {
+      /* Local development uses workspace defaults. */
+    }
+    if (domain) {
+      const site = await supabase
+        .from("widget_site_configs")
+        .select("published_json,published_version,published_at")
+        .eq("workspace_id", input.workspaceId)
+        .eq("domain", domain)
+        .maybeSingle();
+      if (site.error) throw new Error("Could not load website widget.");
+      if (site.data) effectiveRow = site.data;
+    }
+  }
   let published: WidgetAppearanceConfig | null = null;
   let base: WidgetPublicAppearance;
-  if (!configError && configRow) {
+  if (!configError && effectiveRow) {
     const parsedPublished = widgetAppearanceConfigSchema.safeParse(
-      configRow.published_json,
+      effectiveRow.published_json,
     );
     if (parsedPublished.success) {
       published = parsedPublished.data;
       base = mapAppearanceToPublicConfig({
         config: published,
-        publishedVersion: configRow.published_version,
-        publishedAt: configRow.published_at,
+        publishedVersion: effectiveRow.published_version,
+        publishedAt: effectiveRow.published_at,
         entitlements,
       });
     } else {

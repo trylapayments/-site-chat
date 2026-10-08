@@ -3,11 +3,12 @@
 import type { ConversationListItem } from "@site-chat/shared";
 import { IdentityAvatar } from "@/components/dashboard/IdentityAvatar";
 import { Paperclip } from "lucide-react";
-import Link from "next/link";
+import { PortalLink as Link } from "@/components/dashboard/PortalLink";
 import { useEffect, useState } from "react";
 
 import { toAppRoute } from "@/lib/auth/redirect";
 import { formatConversationContactLabel } from "@/lib/inbox/search-params";
+import { startConversationNavigation } from "@/lib/performance/interactions";
 import { cn } from "@/lib/utils";
 
 function formatListAbsoluteDate(date: Date): string {
@@ -104,7 +105,7 @@ export function ConversationListItemRow({
       data-selected={selected ? "true" : "false"}
       data-conversation-id={conversation.id}
       className={cn(
-        "group relative border-b border-inbox-border/60 transition-colors",
+        "mill-queue-row group relative border-b border-inbox-border/60 transition-colors",
         selected ? "bg-brand-soft" : "hover:bg-inbox-hover bg-transparent",
       )}
     >
@@ -117,6 +118,17 @@ export function ConversationListItemRow({
       <div role="cell" className="w-full">
         <Link
           href={href}
+          onClick={(event) => {
+            if (
+              !selected &&
+              !event.metaKey &&
+              !event.ctrlKey &&
+              !event.shiftKey &&
+              !event.altKey
+            ) {
+              startConversationNavigation(conversation.id);
+            }
+          }}
           className="flex gap-3.5 px-4 py-3.5 outline-none focus-visible:bg-brand-soft"
         >
           <div className="relative shrink-0 self-start pt-0.5">

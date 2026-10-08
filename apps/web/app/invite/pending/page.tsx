@@ -72,8 +72,8 @@ export default async function InvitePendingPage({
         </div>
 
         <div className="flex flex-col gap-3">
-          <Button asChild>
-            <Link href={toAppRoute(buildLoginUrl("/app"))}>
+          <Button asChild className="!bg-[#1761df] !text-white hover:!bg-[#1253c8] [&_a]:!text-white">
+            <Link className="!text-white" href={toAppRoute(buildLoginUrl("/app"))}>
               Sign in to accept
             </Link>
           </Button>

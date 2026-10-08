@@ -148,10 +148,14 @@ export function conversationMatchesFilters(
   item: ConversationListItem,
   filters: {
     status?: string;
+    statusGroup?: "active" | "completed";
     assignment?: string;
     memberId?: string;
   },
 ): boolean {
+  if (filters.statusGroup === "active" && !["open", "pending"].includes(item.status)) return false;
+  if (filters.statusGroup === "completed" && !["resolved", "closed"].includes(item.status))
+    return false;
   if (filters.status && item.status !== filters.status) {
     return false;
   }

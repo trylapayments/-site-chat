@@ -37,3 +37,5 @@ export type { Database, Json } from "./database.types";
 export * from "./chat-setup/index";
 
 export * from "./brand/index";
+
+export * from "./schemas/all-websites";

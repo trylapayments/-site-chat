@@ -9,7 +9,7 @@ const secret = readFileSync(secretPath, "utf8").trim();
 if (!/^[A-Za-z0-9_-]{32,128}$/.test(secret)) throw new Error("Invalid scheduler secret");
 const endpoint = new URL(
   process.env.MILL_NOTIFICATION_WORKER_URL ??
-    "https://site-chat-staging.vercel.app/api/internal/notification-emails",
+    "https://app.mill.chat/api/internal/notification-emails",
 );
 if (
   endpoint.protocol !== "https:" ||
@@ -43,6 +43,9 @@ SELECT cron.schedule('mill-notification-emails', '* * * * *', $job$
     timeout_milliseconds := 60000
   ) WHERE EXISTS (
     SELECT 1 FROM public.notification_email_outbox
+    WHERE status IN ('pending', 'failed', 'sending') AND next_attempt_at <= now() AND attempts < 10
+  ) OR EXISTS (
+    SELECT 1 FROM public.conversation_email_outbox
     WHERE status IN ('pending', 'failed', 'sending') AND next_attempt_at <= now() AND attempts < 10
   );
 $job$);

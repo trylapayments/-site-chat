@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       "lib/**/*.test.ts",
       "app/api/internal/**/*.test.ts",
+      "app/api/portal/**/*.test.ts",
       "lib/**/*.integration.test.ts",
       "components/contacts/**/*.test.ts",
       "app/widget/embed/**/*.test.ts",

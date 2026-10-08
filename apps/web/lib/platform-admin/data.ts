@@ -13,8 +13,16 @@ export async function loadPlatformCustomers(query = "", page = 1) {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .range((page - 1) * 25, page * 25 - 1);
-  if (query)
-    request = request.ilike("name", `%${query.replace(/[%_,()]/g, "")}%`);
+  const search = query.trim();
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      search,
+    )
+  ) {
+    request = request.eq("id", search.toLowerCase());
+  } else if (search) {
+    request = request.ilike("name", `%${search.replace(/[%_,()]/g, "")}%`);
+  }
   const { data, error, count } = await request;
   if (error) throw new Error("Customers could not be loaded.");
   const ids = data.map((w) => w.id);
@@ -119,17 +127,19 @@ export async function loadPlatformCustomer(id: string) {
   if (members.error || profiles.error)
     throw new Error("Member details unavailable.");
   const users = await Promise.all(
-    members.data.map(async (m) => {
-      const { data, error } = await service.auth.admin.getUserById(m.user_id);
-      if (error) throw new Error("Member details could not be loaded.");
-      return {
-        ...m,
-        email: data.user.email ?? "",
-        name:
-          profiles.data.find((p) => p.member_id === m.id)?.display_name ?? "",
-        lastSignIn: data.user.last_sign_in_at ?? null,
-      };
-    }),
+    members.data
+      .filter((m) => Boolean(m.user_id))
+      .map(async (m) => {
+        const { data, error } = await service.auth.admin.getUserById(m.user_id);
+        if (error) throw new Error("Member details could not be loaded.");
+        return {
+          ...m,
+          email: data.user.email ?? "",
+          name:
+            profiles.data.find((p) => p.member_id === m.id)?.display_name ?? "",
+          lastSignIn: data.user.last_sign_in_at ?? null,
+        };
+      }),
   );
   const stats =
     usage.data && typeof usage.data === "object" && !Array.isArray(usage.data)

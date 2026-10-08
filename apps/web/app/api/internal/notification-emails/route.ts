@@ -1,5 +1,7 @@
+import { processAccountDeletionCleanup } from "@/lib/account/cleanup";
 import { createHash, timingSafeEqual } from "node:crypto";
 
+import { processConversationEmailOutbox } from "@/lib/email/conversation/delivery";
 import { processNotificationEmailOutbox } from "@/lib/email/notification-email";
 
 export const runtime = "nodejs";
@@ -21,18 +23,34 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    const accountCleanup = await processAccountDeletionCleanup().catch(() => ({
+      removed: 0,
+      pending: true,
+    }));
     return Response.json(
-      { error: "Email delivery not configured" },
+      { error: "Email delivery not configured", accountCleanup },
       { status: 503 },
     );
   }
 
   try {
-    // Five sequential provider calls, each capped at ten seconds, fit the worker budget.
-    const result = await processNotificationEmailOutbox({ limit: 5 });
-    return Response.json(result, {
-      headers: { "Cache-Control": "no-store" },
-    });
+    // Independent bounded queues share the worker budget.
+    const [result, customerReplies, accountCleanup] = await Promise.all([
+      processNotificationEmailOutbox({
+        limit: process.env.MILL_EMAIL_BRIDGE_ENABLED === "true" ? 3 : 5,
+      }),
+      processConversationEmailOutbox(50),
+      processAccountDeletionCleanup().catch(() => ({
+        removed: 0,
+        pending: true,
+      })),
+    ]);
+    return Response.json(
+      { ...result, customerReplies, accountCleanup },
+      {
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   } catch {
     return Response.json({ error: "Email processing failed" }, { status: 503 });
   }

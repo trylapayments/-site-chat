@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  conversationMatchesFilters,
   conversationListItemFromChange,
   conversationListItemFromMessage,
 } from "./merge-conversations.js";
@@ -52,4 +53,35 @@ describe("conversation list stubs from CDC", () => {
       status: "open",
     });
   });
+});
+
+describe("All open and Closed", () => {
+  it.each(["open", "pending", "resolved", "closed"] as const)(
+    "moves %s into the correct queue",
+    (status) => {
+      const item = conversationListItemFromChange({
+        id: "11111111-1111-4111-8111-111111111111",
+        workspace_id: "22222222-2222-4222-8222-222222222222",
+        status,
+        assigned_to: null,
+        last_message_at: null,
+        last_message_preview: null,
+        message_count: 0,
+        updated_at: "2026-10-07T00:00:00Z",
+      });
+      expect(conversationMatchesFilters(item, { statusGroup: "active" })).toBe(
+        status === "open" || status === "pending",
+      );
+      expect(conversationMatchesFilters(item, { statusGroup: "completed" })).toBe(
+        status === "resolved" || status === "closed",
+      );
+      expect(
+        conversationMatchesFilters(item, {
+          statusGroup: "active",
+          assignment: "assigned_to_me",
+          memberId: "33333333-3333-4333-8333-333333333333",
+        }),
+      ).toBe(false);
+    },
+  );
 });

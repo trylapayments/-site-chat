@@ -45,6 +45,7 @@ export function TeamShell({
   canSearchNotes,
   initialTeam,
   loadError,
+  operatorLimit,
 }: {
   workspaceId: string;
   workspaceSlug: string;
@@ -53,6 +54,7 @@ export function TeamShell({
   canSearchNotes: boolean;
   initialTeam: ListWorkspaceTeamResult;
   loadError: boolean;
+  operatorLimit?: number;
 }) {
   const router = useRouter();
   const canManage = canManageWorkspaceMembers(callerRole);
@@ -238,7 +240,7 @@ export function TeamShell({
         ) : null}
       </div>
 
-      <div className="border-inbox-border flex shrink-0 items-start justify-between gap-4 border-b bg-inbox-panel px-5 py-4">
+      <div className="mill-section-banner border-inbox-border flex shrink-0 items-start justify-between gap-4 border-b bg-inbox-panel px-5 py-4">
         <div className="flex min-w-0 items-start gap-2.5">
           <div className="bg-brand-soft text-brand mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg">
             <UserCog className="size-4" strokeWidth={1.75} aria-hidden="true" />
@@ -253,6 +255,32 @@ export function TeamShell({
                 ? ` · ${String(team.invitations.length)} pending`
                 : ""}
             </p>
+            {operatorLimit !== undefined ? (
+              <p className="mt-2 text-sm text-inbox-muted">
+                {
+                  team.members.filter(
+                    (m) => m.status === "active" && m.role !== "viewer",
+                  ).length
+                }{" "}
+                / {operatorLimit} operators ·{" "}
+                {
+                  team.invitations.filter(
+                    (i) =>
+                      i.role !== "viewer" &&
+                      Date.parse(i.expires_at) > Date.now(),
+                  ).length
+                }{" "}
+                seats reserved by invitations. Viewers do not use seats.{" "}
+                {canManage ? (
+                  <a
+                    className="text-brand underline"
+                    href={`/app/${workspaceSlug}/billing`}
+                  >
+                    Manage plan
+                  </a>
+                ) : null}
+              </p>
+            ) : null}
           </div>
         </div>
         {canManage ? (
