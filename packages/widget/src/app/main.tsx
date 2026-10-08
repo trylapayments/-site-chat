@@ -1621,8 +1621,8 @@ function WidgetApp() {
                       action: "end", conversationId: engagement.conversationId,
                     }).then(() => {
                       setEngagement((current) => current ? { ...current, conversationStatus: "closed" } : current);
-                    }).catch(() => setSendError("Unable to end the chat. Please try again."))
-                      .finally(() => setEndingChat(false));
+                    }).catch(() => { setSendError("Unable to end the chat. Please try again."); })
+                      .finally(() => { setEndingChat(false); });
                   }}>
                   {endingChat ? "Ending…" : "End chat"}
                 </button>
@@ -1852,9 +1852,7 @@ function WidgetApp() {
             {state.status === "ready" &&
             engagement?.conversationStatus !== "closed" &&
             engagement?.conversationStatus !== "resolved" &&
-            (shouldShowWaitingAcknowledgement(messages) ||
-              (engagement?.formSubmitted &&
-                !messages.some((message) => message.senderType === "agent"))) ? (
+            shouldShowWaitingAcknowledgement(messages) ? (
               <p
                 role="status"
                 data-testid="widget-waiting-acknowledgement"

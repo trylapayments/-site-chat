@@ -312,11 +312,14 @@ export async function processMobilePush(
 
 export async function processAllMobilePush() {
   const deadline = Date.now() + 35000;
-  const visitor = await processMobilePush({
-    visitorEvents: true,
-    deadline: Math.min(deadline, Date.now() + 10000),
-  });
-  const conversation = await processMobilePush({ deadline });
+  // A busy visitor queue must never hold up a new conversation notification.
+  const [conversation, visitor] = await Promise.all([
+    processMobilePush({ deadline }),
+    processMobilePush({
+      visitorEvents: true,
+      deadline: Math.min(deadline, Date.now() + 10000),
+    }),
+  ]);
   return {
     sent: conversation.sent + visitor.sent,
     skipped: conversation.skipped + visitor.skipped,

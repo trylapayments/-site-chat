@@ -21,7 +21,7 @@ vi.mock("@/lib/billing/access", () => ({
   workspaceBillingAccess: state.billing,
 }));
 vi.mock("@site-chat/shared", () => ({ isQuietHoursActive: state.quiet }));
-import { processMobilePush } from "./push";
+import { processAllMobilePush, processMobilePush } from "./push";
 const uuid = (n: number) =>
   `00000000-0000-4000-8000-${n.toString().padStart(12, "0")}`;
 let member: Record<string, unknown>, notification: Record<string, unknown>;
@@ -402,4 +402,19 @@ it("a revoked visitor context is skipped without table access or provider delive
  process.env.MOBILE_VISITOR_PUSH_ENABLED="1";
  state.claim.mockReset().mockResolvedValue({ error: null, data: [] }).mockResolvedValueOnce({ error: null, data: [{ id: uuid(1), device_id: uuid(3), visitor_session_id: uuid(8), attempts: 1, visitor: null }] });
  expect((await processMobilePush({ visitorEvents: true })).skipped).toBe(1); expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("conversation delivery starts while the visitor queue is still waiting", async () => {
+  process.env.MOBILE_VISITOR_PUSH_ENABLED = "1";
+  state.claim.mockReset();
+  let releaseVisitor!: (value: unknown) => void;
+  state.claim.mockImplementation((operation: string) => operation === "claim_mobile_visitor_push"
+    ? new Promise((resolve) => { releaseVisitor = resolve; })
+    : Promise.resolve({ data: [], error: null }));
+  const processing = processAllMobilePush();
+  await Promise.resolve();
+  expect(state.claim).toHaveBeenCalledWith("claim_mobile_push", { p_limit: 1 });
+  expect(state.claim).toHaveBeenCalledWith("claim_mobile_visitor_push", { p_limit: 1 });
+  releaseVisitor({ data: [], error: null });
+  await expect(processing).resolves.toEqual({ sent: 0, skipped: 0, claimed: 0 });
 });

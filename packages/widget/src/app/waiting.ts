@@ -30,11 +30,6 @@ export function unansweredSince(
   if (messages.some((m) => m.senderType === "agent" && !m.isInternal)) return null;
   const accepted = messages.filter((m) => !m.isOptimistic && m.status !== "failed");
   const visitors = accepted.filter((m) => m.senderType === "visitor");
-  const candidates = visitors.length
-    ? visitors
-    : accepted.filter(
-        (m) => m.senderType === "system" && m.body === "Chat request submitted.",
-      );
-  const times = candidates.map((m) => Date.parse(m.createdAt)).filter(Number.isFinite);
+  const times = visitors.map((m) => Date.parse(m.createdAt)).filter(Number.isFinite);
   return times.length ? Math.min(...times) : null;
 }

@@ -77,3 +77,9 @@ describe("unanswered email timer", () => {
     ).toBe(Date.parse(visitor.createdAt));
   });
 });
+
+it("form completion alone never starts waiting or the email timer", () => {
+  const form = { senderType: "system", body: "Chat request submitted.", sequenceNumber: 1, createdAt: "2026-10-08T22:00:00Z" };
+  expect(shouldShowWaitingAcknowledgement([form])).toBe(false);
+  expect(unansweredSince([form])).toBeNull();
+});
