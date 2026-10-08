@@ -1,0 +1,98 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
+    {
+      "source": "/assets/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/:file.css",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/:file.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/login",
+      "destination": "https://app.mill.chat/login",
+      "permanent": false
+    },
+    {
+      "source": "/signup",
+      "destination": "https://app.mill.chat/signup",
+      "permanent": false
+    },
+    {
+      "source": "/forgot-password",
+      "destination": "https://app.mill.chat/forgot-password",
+      "permanent": false
+    },
+    {
+      "source": "/reset-password",
+      "destination": "https://app.mill.chat/reset-password",
+      "permanent": false
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "https://app.mill.chat/app/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://app.mill.chat/admin/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "https://app.mill.chat/auth/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/invite/:path*",
+      "destination": "https://app.mill.chat/invite/:path*",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/widget/:path*",
+      "destination": "https://app.mill.chat/widget/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://app.mill.chat/api/:path*"
+    }
+  ]
+}
