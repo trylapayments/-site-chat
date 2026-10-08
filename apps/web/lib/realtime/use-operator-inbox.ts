@@ -1,0 +1,618 @@
+"use client";
+
+import type {
+  ConversationListItem,
+  ListConversationsQuery,
+} from "@site-chat/shared";
+import {
+  assignmentNeedsEnrichmentRefresh,
+  computeUnreadAfterVisitorMessage,
+  conversationListItemFromChange,
+  conversationListItemFromMessage,
+  conversationMatchesFilters,
+  genericSenderLabel,
+  mergeMessages,
+  operatorConversationChangeSchema,
+  operatorMessageChangeSchema,
+  patchConversationListItem,
+  sortConversationItems,
+  toMessageViewFromOperatorRow,
+  upsertConversationListItem,
+  type ConnectionState,
+  type MessageView,
+} from "@site-chat/shared";
+import { z } from "zod";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { fetchConversations } from "@/lib/inbox/queries";
+import {
+  subscribeOperatorConversation,
+  subscribeOperatorWorkspaceInbox,
+  useOnlineStatus,
+} from "@/lib/realtime/operator-subscriptions";
+import { createRequestFlight } from "./request-flight";
+import { reconcileThreadMessages } from "@/lib/realtime/reconcile-thread-messages";
+import { createClient } from "@/lib/supabase/client";
+import type { AppSupabaseClient } from "@/lib/supabase/server";
+
+export function useLiveInboxList(input: {
+  workspaceId: string;
+  memberId: string;
+  initialItems: ConversationListItem[];
+  initialTotal?: number;
+  query: ListConversationsQuery;
+}) {
+  const [items, setItems] = useState(input.initialItems);
+  const [total, setTotal] = useState(
+    input.initialTotal ?? input.initialItems.length,
+  );
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("connecting");
+  const refreshTimerRef = useRef<number | null>(null);
+  const refreshGenerationRef = useRef(0);
+  const queryKey = useMemo(
+    () =>
+      JSON.stringify({
+        statusGroup: input.query.statusGroup,
+        status: input.query.status ?? null,
+        assignment: input.query.assignment ?? null,
+        q: input.query.q ?? null,
+        sort: input.query.sort ?? null,
+        page: input.query.page,
+        pageSize: input.query.pageSize,
+      }),
+    [input.query],
+  );
+
+  // Reset from server props only when the list scope changes — not on every new
+  // initialItems array reference (RSC re-renders were clobbering live upserts).
+  useEffect(() => {
+    setItems(
+      input.initialItems.filter((item) =>
+        conversationMatchesFilters(item, {
+          statusGroup: input.query.statusGroup,
+          status: input.query.status,
+          assignment: input.query.assignment,
+          memberId: input.memberId,
+        }),
+      ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped
+  }, [input.workspaceId, input.memberId, queryKey]);
+
+  const sort = input.query.sort ?? "-last_message_at";
+  const statusFilter = input.query.status;
+  const assignmentFilter = input.query.assignment;
+
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  const queryRef = useRef(input.query);
+  queryRef.current = input.query;
+  const statusFilterRef = useRef(statusFilter);
+  statusFilterRef.current = statusFilter;
+  const assignmentFilterRef = useRef(assignmentFilter);
+  assignmentFilterRef.current = assignmentFilter;
+  const sortRef = useRef(sort);
+  sortRef.current = sort;
+  const memberIdRef = useRef(input.memberId);
+  memberIdRef.current = input.memberId;
+
+  const refreshList = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current;
+    const itemsBeforeFetch = itemsRef.current;
+    try {
+      const supabase = createClient() as AppSupabaseClient;
+      const refreshed = await fetchConversations(
+        supabase,
+        input.workspaceId,
+        queryRef.current,
+      );
+      if (generation !== refreshGenerationRef.current) {
+        return;
+      }
+      setTotal(refreshed.total);
+      setItems((current) => {
+        // Preserve CDC stubs that landed while the RPC was in flight so a
+        // slightly-stale list_conversations response cannot wipe them.
+        const byId = new Map(
+          refreshed.items.map((item) => [item.id, item] as const),
+        );
+        for (const local of current) {
+          const previous = itemsBeforeFetch.find(
+            (item) => item.id === local.id,
+          );
+          if (
+            local !== previous &&
+            !byId.has(local.id) &&
+            !queryRef.current.q &&
+            conversationMatchesFilters(local, {
+              statusGroup: queryRef.current.statusGroup,
+              status: statusFilterRef.current,
+              assignment: assignmentFilterRef.current,
+              memberId: memberIdRef.current,
+            })
+          ) {
+            byId.set(local.id, local);
+          }
+        }
+        return sortConversationItems([...byId.values()], sortRef.current);
+      });
+    } catch {
+      // Keep the last good list; a later CDC event or reconnect will retry.
+    }
+    // queryKey is the list-scope identity; the body reads queryRef so filter
+    // changes still produce a new callback and the connected effect refetches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- queryKey identity
+  }, [input.workspaceId, queryKey]);
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimerRef.current !== null) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = window.setTimeout(() => {
+      void refreshList();
+    }, 250);
+  }, [refreshList]);
+
+  const refreshListRef = useRef(refreshList);
+  refreshListRef.current = refreshList;
+  const scheduleRefreshRef = useRef(scheduleRefresh);
+  scheduleRefreshRef.current = scheduleRefresh;
+
+  /** Gates optimistic unread +1 when mark-read CDC arrives before message INSERT. */
+  const lastReadByConversationRef = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    const memberReadSchema = z
+      .object({
+        conversation_id: z.string().uuid(),
+        member_id: z.string().uuid(),
+        unread_count: z.coerce.number().int().nonnegative(),
+        last_read_sequence: z.coerce.number().int().nonnegative(),
+      })
+      .passthrough();
+
+    const unsubscribe = subscribeOperatorWorkspaceInbox({
+      workspaceId: input.workspaceId,
+      memberId: input.memberId,
+      onConnectionChange: setConnectionState,
+      onMessageInsert: (raw) => {
+        const parsed = operatorMessageChangeSchema.safeParse(raw);
+        if (!parsed.success || parsed.data.is_internal) {
+          return;
+        }
+
+        // Side effects must not run inside setState updaters (React may invoke
+        // them more than once or discard them under concurrent rendering).
+        const existing = itemsRef.current.find(
+          (item) => item.id === parsed.data.conversation_id,
+        );
+        const lastRead =
+          lastReadByConversationRef.current.get(parsed.data.conversation_id) ??
+          -1;
+        const shouldIncrementUnread =
+          parsed.data.sender_type === "visitor" &&
+          parsed.data.sequence_number > lastRead;
+
+        setItems((current) => {
+          const currentExisting = current.find(
+            (item) => item.id === parsed.data.conversation_id,
+          );
+          const base =
+            currentExisting ?? conversationListItemFromMessage(parsed.data);
+          const nextUnread = shouldIncrementUnread
+            ? computeUnreadAfterVisitorMessage(base.unread_count)
+            : base.unread_count;
+          const next = patchConversationListItem(base, {
+            last_message_at: parsed.data.created_at,
+            last_message_preview: parsed.data.body.slice(0, 200),
+            message_count: currentExisting
+              ? currentExisting.message_count + 1
+              : base.message_count,
+            unread_count: nextUnread,
+            has_unread: nextUnread > 0,
+          });
+          const matches = conversationMatchesFilters(next, {
+            statusGroup: queryRef.current.statusGroup,
+            status: statusFilterRef.current,
+            assignment: assignmentFilterRef.current,
+            memberId: memberIdRef.current,
+          });
+          if (!matches) {
+            return current.filter((item) => item.id !== next.id);
+          }
+          return sortConversationItems(
+            upsertConversationListItem(current, next, sortRef.current),
+            sortRef.current,
+          );
+        });
+
+        if (!existing) {
+          // Authoritative catch-up for contact/assignee enrichment.
+          void refreshListRef.current();
+        }
+      },
+      onConversationChange: (raw) => {
+        const parsed = operatorConversationChangeSchema.safeParse(raw);
+        if (!parsed.success) {
+          scheduleRefreshRef.current();
+          return;
+        }
+
+        const existing = itemsRef.current.find(
+          (item) => item.id === parsed.data.id,
+        );
+
+        setItems((current) => {
+          const currentExisting = current.find(
+            (item) => item.id === parsed.data.id,
+          );
+          const base =
+            currentExisting ?? conversationListItemFromChange(parsed.data);
+          const patched = patchConversationListItem(base, parsed.data);
+          const matches = conversationMatchesFilters(patched, {
+            statusGroup: queryRef.current.statusGroup,
+            status: statusFilterRef.current,
+            assignment: assignmentFilterRef.current,
+            memberId: memberIdRef.current,
+          });
+
+          if (!matches) {
+            return current.filter((item) => item.id !== patched.id);
+          }
+
+          return sortConversationItems(
+            upsertConversationListItem(current, patched, sortRef.current),
+            sortRef.current,
+          );
+        });
+
+        scheduleRefreshRef.current();
+        if (!existing) {
+          void refreshListRef.current();
+        } else if (assignmentNeedsEnrichmentRefresh(existing, parsed.data)) {
+          // Assignee UUID changed — refresh for display_label enrichment and
+          // keep Mine/Unassigned queues consistent without polling.
+          scheduleRefreshRef.current();
+        }
+      },
+      onMemberReadChange: (raw) => {
+        const parsed = memberReadSchema.safeParse(raw);
+        if (!parsed.success || parsed.data.member_id !== input.memberId) {
+          return;
+        }
+
+        const previous =
+          lastReadByConversationRef.current.get(parsed.data.conversation_id) ??
+          0;
+        lastReadByConversationRef.current.set(
+          parsed.data.conversation_id,
+          Math.max(previous, parsed.data.last_read_sequence),
+        );
+
+        setItems((current) => {
+          const existing = current.find(
+            (item) => item.id === parsed.data.conversation_id,
+          );
+          if (!existing) {
+            return current;
+          }
+
+          const next = patchConversationListItem(existing, {
+            unread_count: parsed.data.unread_count,
+            has_unread: parsed.data.unread_count > 0,
+          });
+
+          return sortConversationItems(
+            upsertConversationListItem(current, next, sortRef.current),
+            sortRef.current,
+          );
+        });
+      },
+    });
+
+    return unsubscribe;
+    // Workspace + member only. Filter/sort/query object identity and refresh
+    // callbacks must not tear down postgres_changes (Team chrome prefetch and
+    // router.refresh() churn searchParams / function identity while idle).
+  }, [input.memberId, input.workspaceId]);
+
+  useOnlineStatus((online) => {
+    if (online) {
+      void refreshList();
+    } else {
+      setConnectionState("disconnected");
+    }
+  });
+
+  useEffect(() => {
+    if (connectionState === "connected") {
+      void refreshList();
+    }
+  }, [connectionState, refreshList]);
+
+  useEffect(() => {
+    const onStatus = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          conversationId: string;
+          workspaceSlug: string;
+          status: ConversationListItem["status"];
+        }>
+      ).detail;
+      if (!(event instanceof CustomEvent)) return;
+      setItems((current) =>
+        current.flatMap((item) => {
+          if (item.id !== detail.conversationId) return [item];
+          const next = { ...item, status: detail.status };
+          return conversationMatchesFilters(next, {
+            ...queryRef.current,
+            memberId: memberIdRef.current,
+          })
+            ? [next]
+            : [];
+        }),
+      );
+      void refreshList();
+    };
+    window.addEventListener("mill:conversation-status", onStatus);
+    return () => {
+      window.removeEventListener("mill:conversation-status", onStatus);
+    };
+  }, [refreshList]);
+
+  return useMemo(
+    () => ({
+      total,
+      items,
+      connectionState,
+      refreshList,
+    }),
+    [connectionState, items, refreshList, total],
+  );
+}
+
+export function useLiveConversationThread(input: {
+  workspaceId: string;
+  workspaceSlug: string;
+  conversationId: string;
+  initialMessages: MessageView[];
+  /** Durable visitor receipt cursor CDC (conversation_visitor_reads). */
+  onVisitorReceiptCursors?: (cursors: {
+    lastDeliveredSequence: number;
+    lastReadSequence: number;
+  }) => void;
+}) {
+  const [messages, setMessages] = useState<MessageView[]>(
+    input.initialMessages,
+  );
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("connecting");
+  const [newMessagesBelow, setNewMessagesBelow] = useState(0);
+  const atBottomRef = useRef(true);
+  const conversationIdRef = useRef(input.conversationId);
+  const maxSequenceRef = useRef(
+    input.initialMessages.reduce(
+      (max, message) => Math.max(max, message.sequenceNumber),
+      0,
+    ),
+  );
+
+  useEffect(() => {
+    setMessages((current) => {
+      const conversationChanged =
+        conversationIdRef.current !== input.conversationId;
+
+      const next = reconcileThreadMessages({
+        conversationChanged,
+        current,
+        initialMessages: input.initialMessages,
+      });
+
+      if (conversationChanged) {
+        conversationIdRef.current = input.conversationId;
+      }
+
+      // Bail out with the same reference when content is unchanged so React
+      // skips the re-render (avoids Maximum update depth from rematerialized
+      // initialMessages arrays).
+      if (next === current) {
+        return current;
+      }
+
+      maxSequenceRef.current = next.reduce(
+        (max, message) => Math.max(max, message.sequenceNumber),
+        0,
+      );
+      return next;
+    });
+  }, [input.conversationId, input.initialMessages]);
+
+  const catchUpFlight = useRef(createRequestFlight());
+  useEffect(() => {
+    const flight = catchUpFlight.current;
+    return () => {
+      flight.invalidate();
+    };
+  }, [input.workspaceId, input.conversationId]);
+
+  const catchUp = useCallback(async () => {
+    await catchUpFlight.current.run(async (isCurrent) => {
+      try {
+        const supabase = createClient() as AppSupabaseClient;
+        let afterSequence = maxSequenceRef.current;
+        for (let page = 0; page < 20 && isCurrent(); page += 1) {
+          const result = await fetchConversationsMessages(
+            supabase,
+            input.workspaceId,
+            input.conversationId,
+            afterSequence,
+          );
+          if (!isCurrent() || result.length === 0) break;
+          setMessages((current) => {
+            if (!isCurrent()) return current;
+            const merged = mergeMessages(current, result, []);
+            maxSequenceRef.current = merged.reduce(
+              (max, message) => Math.max(max, message.sequenceNumber),
+              0,
+            );
+            return merged;
+          });
+          afterSequence = Math.max(
+            afterSequence,
+            ...result.map((message) => message.sequenceNumber),
+          );
+          if (result.length < 50) break;
+        }
+      } catch {
+        // Preserve the saved thread during a temporary outage. Reconnect,
+        // foregrounding or the next online event retries the durable cursor.
+        if (isCurrent()) setConnectionState("disconnected");
+      }
+    });
+  }, [input.conversationId, input.workspaceId]);
+
+  useEffect(() => {
+    const visible = () => {
+      if (document.visibilityState === "visible") void catchUp();
+    };
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [catchUp]);
+
+  const onVisitorReceiptCursorsRef = useRef(input.onVisitorReceiptCursors);
+  onVisitorReceiptCursorsRef.current = input.onVisitorReceiptCursors;
+
+  useEffect(() => {
+    const unsubscribe = subscribeOperatorConversation({
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      onConnectionChange: setConnectionState,
+      onMessageInsert: (raw) => {
+        const parsed = operatorMessageChangeSchema.safeParse(raw);
+        if (!parsed.success || parsed.data.is_internal) {
+          return;
+        }
+
+        const next = toMessageViewFromOperatorRow({
+          id: parsed.data.id,
+          sequence_number: parsed.data.sequence_number,
+          sender_type: parsed.data.sender_type,
+          sender_label: genericSenderLabel(parsed.data.sender_type),
+          body: parsed.data.body,
+          created_at: parsed.data.created_at,
+          client_message_id: parsed.data.client_message_id,
+          is_internal: parsed.data.is_internal,
+          metadata_json: parsed.data.metadata_json ?? null,
+        });
+
+        setMessages((current) => {
+          const merged = mergeMessages(current, [next], []);
+          maxSequenceRef.current = merged.reduce(
+            (max, message) => Math.max(max, message.sequenceNumber),
+            0,
+          );
+          return merged;
+        });
+
+        if (!atBottomRef.current) {
+          setNewMessagesBelow((count) => count + 1);
+        }
+      },
+      onConversationChange: () => {
+        // Sidebar/detail enrichment uses targeted RPC elsewhere.
+      },
+      onVisitorReceiptChange: (raw) => {
+        const delivered = Number(raw.last_delivered_sequence ?? 0);
+        const read = Number(raw.last_read_sequence ?? 0);
+        if (!Number.isFinite(delivered) || !Number.isFinite(read)) {
+          return;
+        }
+        onVisitorReceiptCursorsRef.current?.({
+          lastDeliveredSequence: Math.max(0, Math.floor(delivered)),
+          lastReadSequence: Math.max(0, Math.floor(read)),
+        });
+      },
+    });
+
+    return unsubscribe;
+  }, [input.conversationId, input.workspaceId]);
+
+  useEffect(() => {
+    if (connectionState === "connected") {
+      void catchUp();
+    }
+  }, [catchUp, connectionState]);
+
+  useOnlineStatus((online) => {
+    if (online) {
+      void catchUp();
+    } else {
+      setConnectionState("disconnected");
+    }
+  });
+
+  const observeBottom = useCallback((node: HTMLDivElement | null) => {
+    if (!node) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        atBottomRef.current = entry?.isIntersecting ?? false;
+        if (atBottomRef.current) {
+          setNewMessagesBelow(0);
+        }
+      },
+      { rootMargin: "0px 0px 100px 0px" },
+    );
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return {
+    messages,
+    setMessages,
+    connectionState,
+    newMessagesBelow,
+    observeBottom,
+    catchUp,
+  };
+}
+
+async function fetchConversationsMessages(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  conversationId: string,
+  afterSequence: number,
+) {
+  const { fetchMessages } = await import("@/lib/inbox/queries");
+  const result = await fetchMessages(supabase, workspaceId, conversationId, {
+    after_sequence: afterSequence,
+    limit: 50,
+  });
+
+  return result.items.map((item) =>
+    toMessageViewFromOperatorRow({
+      id: item.id,
+      sequence_number: item.sequence_number,
+      sender_type: item.sender_type,
+      sender_label: item.sender_label,
+      body: item.body,
+      created_at: item.created_at,
+      client_message_id: item.client_message_id ?? null,
+      is_internal: item.is_internal,
+      attachments: item.attachments,
+    }),
+  );
+}

@@ -1,0 +1,72 @@
+---
+description: React and Next.js UI conventions using shadcn/ui, accessibility, responsive design, and state handling
+globs: apps/web/**/*.tsx, apps/web/**/*.css, packages/widget/**
+alwaysApply: false
+---
+
+# Frontend Rules
+
+UI code lives in `apps/web` (dashboard, auth, marketing) and `packages/widget` (embeddable chat widget). Follow existing patterns in the codebase.
+
+## shadcn/ui
+
+- Use shadcn/ui components from `apps/web/components/ui/` as the base design system.
+- Add new shadcn components via the CLI (`pnpm dlx shadcn@latest add <component>`) rather than copying from external sources.
+- Extend shadcn primitives with project-specific variants; do not fork component internals unnecessarily.
+- Use Tailwind CSS utility classes and the project's design tokens (`globals.css`, CSS variables).
+- Match existing component APIs and naming when creating composite components.
+
+## Accessibility
+
+- Use semantic HTML elements (`button`, `nav`, `main`, `dialog`, `label`) instead of generic `div`/`span` with click handlers.
+- Every interactive element must be keyboard accessible (Tab, Enter, Escape, arrow keys where appropriate).
+- Provide visible focus indicators; do not remove focus outlines without an accessible replacement.
+- Associate form inputs with labels; use `aria-*` attributes when shadcn/Radix primitives require them.
+- Ensure color contrast meets WCAG AA for text and interactive elements.
+- Test with screen reader semantics in mind: headings hierarchy, live regions for dynamic updates.
+
+## Responsive
+
+- Design mobile-first; scale up with Tailwind responsive prefixes (`sm:`, `md:`, `lg:`).
+- Dashboard layouts must work on tablet and desktop; critical flows must work on mobile.
+- Avoid fixed pixel widths that break on small screens; prefer flex, grid, and max-width containers.
+- Test chat widget and inbox views at common breakpoints (320px, 768px, 1280px).
+
+## Loading States
+
+- Show loading indicators during async operations (data fetching, form submission, file upload).
+- Use skeleton loaders for page-level content; spinners or button loading states for actions.
+- Disable submit buttons while a mutation is in flight to prevent double submission.
+- Prefer React Suspense boundaries and Next.js loading.tsx where appropriate in the App Router.
+
+## Empty States
+
+- Every list, inbox, or collection view must handle the zero-items case with a helpful empty state.
+- Empty states should explain what the area is for and guide the user to the next action (e.g., "No conversations yet").
+- Do not show a blank screen or an infinite loader when data is simply empty.
+
+## Error States
+
+- Display user-friendly error messages when data fetching or mutations fail.
+- Provide retry actions where recovery is possible.
+- Do not expose raw error messages, stack traces, or internal codes to users.
+- Use error boundaries for unexpected render failures in client components.
+
+## Avoid Duplicated Components
+
+- Before creating a new component, search `apps/web/components/` for an existing one that can be reused or extended.
+- Extract shared UI into reusable components when the same pattern appears in two or more places.
+- Shared presentation components used by both web and widget belong in a shared package if cross-app reuse is needed.
+- Do not copy-paste component code; refactor into a shared abstraction instead.
+
+## Client vs Server Components
+
+- Default to Server Components in the App Router; add `"use client"` only when client interactivity is required.
+- Keep client components small; push data fetching and business logic to the server.
+- Never import server-only modules (service role, secrets) into client components.
+
+## Forms and Validation
+
+- Use Zod schemas from `packages/shared` for client-side form validation.
+- Display field-level validation errors inline next to the relevant input.
+- Optimistic UI is acceptable for chat messages but must reconcile with server responses and handle failures gracefully.

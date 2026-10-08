@@ -1,0 +1,86 @@
+---
+description: Authentication, authorization, tenant isolation, input validation, and OWASP-aligned security controls
+globs: apps/web/**, packages/**, supabase/**/*.sql
+alwaysApply: false
+---
+
+# Security Rules
+
+Security is designed into every layer. Follow `docs/SECURITY.md` for the full threat model and control details.
+
+## Row Level Security Required
+
+- RLS must be enabled on every tenant-scoped table before the migration merges.
+- RLS is the last line of defense; application checks provide UX, RLS provides enforcement.
+- Test cross-tenant access attempts in integration tests — they must fail.
+- Policy changes are security-critical and require explicit review.
+
+## Never Trust Client workspace_id
+
+- Derive workspace context server-side from authenticated membership, URL slug validation, or session token claims.
+- Treat `workspace_id` sent from the client (request body, query params, headers) as untrusted input.
+- Every query against tenant data must filter by a server-validated `workspace_id`.
+- Service-role queries must include an explicit `workspace_id` parameter; never query tenant tables without a workspace filter.
+
+## Validate All Input
+
+- Validate every API input with Zod schemas before processing (see backend rules).
+- Use `strict()` mode; disable unsafe type coercion.
+- Enforce string length limits, UUID format, and email validation at the schema level.
+- Strip null bytes and control characters from user-provided text.
+- Messages are plain text in MVP — no HTML from visitors.
+
+## No Service Role in Browser
+
+- `SUPABASE_SERVICE_ROLE_KEY` is used exclusively in server context (Route Handlers, Server Actions, cron jobs).
+- Never import service-role clients in Client Components, hooks, or any code bundled for the browser.
+- Only the Supabase anon key and project URL are client-exposed; they rely on RLS for protection.
+- CI must fail builds that detect the service role key in client bundles.
+
+## Rate Limiting
+
+- Apply rate limits to public and widget API endpoints to prevent abuse.
+- Widget endpoints (see `docs/SECURITY.md` Section 5.3):
+  - `POST /widget/init`: 30 req/min per IP
+  - `POST /widget/messages`: 60 req/min per session
+  - `POST /widget/attachments`: 10 req/min per session
+- Include rate limit headers in responses (`X-RateLimit-Remaining`).
+- Authenticated dashboard endpoints should have appropriate per-user or per-workspace limits.
+
+## Secure File Uploads
+
+- Validate file size against plan limits before accepting uploads.
+- Detect MIME type via magic bytes (`file-type`), not the `Content-Type` header alone.
+- Sanitize filenames; reject path traversal characters.
+- Whitelist allowed types: JPEG, PNG, GIF, WebP, PDF, plain text, CSV.
+- Store files under workspace-scoped paths in Supabase Storage with RLS policies.
+
+## OWASP Recommendations
+
+Apply OWASP Top 10 mitigations throughout the codebase:
+
+| Risk | Mitigation |
+|------|------------|
+| Broken access control | RLS + middleware + role checks; deny by default |
+| Cryptographic failures | TLS everywhere; secrets in env vars only; hash tokens at rest |
+| Injection | Parameterized queries via Supabase client; no dynamic SQL in app code |
+| Insecure design | Threat model in `docs/SECURITY.md`; defense in depth |
+| Security misconfiguration | Security headers (CSP, HSTS, X-Content-Type-Options); least-privilege env scoping |
+| Vulnerable components | Dependabot; patch critical/high CVEs within 48 hours; frozen lockfile in CI |
+| Auth failures | Supabase Auth with refresh rotation; short-lived JWTs; explicit logout |
+| Software/data integrity | Stripe webhook signature verification; idempotent webhook processing |
+| Logging failures | Audit logs for security events; Sentry for error monitoring; never log secrets |
+| SSRF | Validate and allowlist external URLs; no user-controlled server-side fetches without review |
+
+## Widget-Specific Security
+
+- The widget runs on untrusted third-party sites. Treat all widget input as hostile.
+- Validate `Origin` / `Referer` against the workspace domain allowlist on every widget API request.
+- Use iframe isolation with restrictive sandbox attributes.
+- Validate `postMessage` origins before processing cross-frame communication.
+
+## Secrets and Headers
+
+- Never commit secrets, API keys, or `.env.local` files.
+- Apply HTTP security headers via Next.js middleware (see `docs/SECURITY.md` Section 7.2).
+- Dashboard API is same-origin only; widget API CORS allows only allowlisted origins.

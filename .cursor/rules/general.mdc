@@ -1,0 +1,57 @@
+---
+description: Core project standards for production-ready code, architecture, and git hygiene
+alwaysApply: true
+---
+
+# General Rules
+
+These rules apply to every change in this repository.
+
+## Production-Ready Code Only
+
+- Ship complete, working implementations. Every change must be safe to merge and deploy.
+- Handle real error paths, edge cases, and failure modes that the feature can encounter in production.
+- Do not leave TODO comments, FIXME markers, or "implement later" stubs in merged code.
+- Prefer the simplest correct solution over speculative abstractions.
+
+## No Placeholder Implementations
+
+- Do not use `throw new Error('Not implemented')`, empty function bodies, or hardcoded dummy return values.
+- Do not add routes, components, or services that are wired up but non-functional.
+- If a feature is out of scope, do not scaffold it. Implement only what the task requires.
+
+## No Mock Business Logic
+
+- Do not simulate domain behavior with fake data, in-memory stores, or hardcoded responses in production code paths.
+- Test doubles belong in tests only (`__tests__`, `*.test.ts`, `*.spec.ts`), never in application runtime code.
+- Integrate with real services (Supabase, Stripe, etc.) or document why a stub is temporarily required in a follow-up task.
+
+## Explain Architectural Decisions
+
+Before or while implementing non-trivial changes, briefly explain:
+
+- Why this approach was chosen over alternatives.
+- How the change fits existing patterns in `docs/ARCHITECTURE.md` and the codebase.
+- Any trade-offs (performance, complexity, security) the reviewer should know about.
+
+## Small Focused Commits
+
+- One logical change per commit. Do not mix unrelated refactors with feature work.
+- Write clear commit messages that describe **what** changed and **why**.
+- Commit and push incrementally during multi-step work rather than one large dump at the end.
+
+## Never Modify Unrelated Files
+
+- Limit diffs to files required for the task.
+- Do not reformat, rename, or refactor code outside the scope of the request.
+- Do not update lock files, configs, or docs unless the task explicitly requires it or the change cannot work without it.
+
+## Project Context
+
+Site Chat is a multi-tenant customer messaging platform:
+
+- **Monorepo:** `apps/web` (Next.js App Router), `packages/shared`, `packages/widget`
+- **Database:** PostgreSQL via Supabase with RLS-enforced tenant isolation
+- **Docs:** See `docs/` for architecture, database design, security model, and roadmap
+
+When in doubt, read the relevant doc in `docs/` before implementing.

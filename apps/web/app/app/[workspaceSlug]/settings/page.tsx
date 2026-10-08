@@ -1,0 +1,234 @@
+import { requireInboxWorkspace } from "@/lib/inbox/guards";
+import {
+  cannedResponsesMessagesEn,
+  crmMessagesEn,
+  notificationsMessagesEn,
+  widgetStudioMessagesEn,
+} from "@site-chat/shared";
+import {
+  Building2,
+  CreditCard,
+  Bell,
+  MessageSquareQuote,
+  Palette,
+  Tags,
+  UserRound,
+  Code2,
+  SlidersHorizontal,
+} from "lucide-react";
+import Link from "next/link";
+
+import { PageHeader } from "@/components/dashboard/PageHeader";
+import { toAppRoute } from "@/lib/auth/redirect";
+import {
+  SETTINGS_SECTION_CANNED_RESPONSES,
+  SETTINGS_SECTION_CRM,
+  SETTINGS_SECTION_NOTIFICATIONS,
+  SETTINGS_SECTION_WIDGET_STUDIO,
+  workspaceSettingsPath,
+} from "@/lib/dashboard/routes";
+
+const cannedMessages = cannedResponsesMessagesEn;
+const crmMessages = crmMessagesEn;
+const notificationMessages = notificationsMessagesEn;
+const widgetMessages = widgetStudioMessagesEn;
+
+export default async function SettingsPage({
+  params,
+}: {
+  params: Promise<{ workspaceSlug: string }>;
+}) {
+  const { workspaceSlug } = await params;
+  const { workspace } = await requireInboxWorkspace(workspaceSlug);
+
+  return (
+    <div className="space-y-8" data-testid="settings-page">
+      <PageHeader
+        title="Settings"
+        description="Configure workspace tools and personal notification preferences."
+      />
+
+      <ul className="grid gap-4 sm:grid-cols-2">
+        <li>
+          <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/company`)}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <Building2 className="size-5" />
+            </span>
+            <span className="block text-sm font-medium">Company</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Manage your company name, address and contact information.
+            </span>
+          </Link>
+        </li>
+        {["owner", "admin"].includes(workspace.role) ? (
+          <li>
+            <Link
+              href={toAppRoute(`/app/${workspaceSlug}/billing`)}
+              className="block h-full rounded-lg border p-4"
+            >
+              <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                <CreditCard className="size-5" />
+              </span>
+              <span className="block text-sm font-medium">Billing</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Your plan, invoices and saved payment methods.
+              </span>
+            </Link>
+          </li>
+        ) : null}
+        <li>
+          <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/profile`)}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <UserRound className="size-5" aria-hidden="true" />
+            </span>
+            <span className="block text-sm font-medium">My profile</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Set the name and photo visitors see when you reply.
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={toAppRoute(`/app/${workspaceSlug}/settings/install`)}
+            className="block h-full rounded-lg border p-4"
+            data-testid="settings-link-install"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <Code2 className="size-5" aria-hidden="true" />
+            </span>
+            <span className="block text-sm font-medium">Install widget</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Copy your website code and manage allowed domains.
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={`/app/${workspaceSlug}/settings/chat-setup`}
+            className="block h-full rounded-lg border p-4"
+          >
+            <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <SlidersHorizontal className="size-5" aria-hidden="true" />
+            </span>
+            <span className="block text-sm font-medium">Chat setup</span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              Pre-chat forms, custom fields, waiting messages and chat
+              invitations.
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={toAppRoute(
+              workspaceSettingsPath(
+                workspaceSlug,
+                SETTINGS_SECTION_WIDGET_STUDIO,
+              ),
+            )}
+            className="border-border/60 hover:border-border hover:bg-muted/40 focus-visible:ring-ring flex h-full items-start gap-3 rounded-lg border p-4 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            data-testid="settings-link-widget-studio"
+          >
+            <span
+              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-md"
+              aria-hidden="true"
+            >
+              <Palette className="size-5" />
+            </span>
+            <span className="space-y-1">
+              <span className="block text-sm font-medium">
+                {widgetMessages.settingsLinkLabel}
+              </span>
+              <span className="text-muted-foreground block text-sm">
+                {widgetMessages.settingsLinkDescription}
+              </span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={toAppRoute(
+              workspaceSettingsPath(
+                workspaceSlug,
+                SETTINGS_SECTION_CANNED_RESPONSES,
+              ),
+            )}
+            className="border-border/60 hover:border-border hover:bg-muted/40 focus-visible:ring-ring flex h-full items-start gap-3 rounded-lg border p-4 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            data-testid="settings-link-canned-responses"
+          >
+            <span
+              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-md"
+              aria-hidden="true"
+            >
+              <MessageSquareQuote className="size-5" />
+            </span>
+            <span className="space-y-1">
+              <span className="block text-sm font-medium">
+                {cannedMessages.settingsLinkLabel}
+              </span>
+              <span className="text-muted-foreground block text-sm">
+                {cannedMessages.settingsLinkDescription}
+              </span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={toAppRoute(
+              workspaceSettingsPath(workspaceSlug, SETTINGS_SECTION_CRM),
+            )}
+            className="border-border/60 hover:border-border hover:bg-muted/40 focus-visible:ring-ring flex h-full items-start gap-3 rounded-lg border p-4 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            data-testid="settings-link-crm"
+          >
+            <span
+              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-md"
+              aria-hidden="true"
+            >
+              <Tags className="size-5" />
+            </span>
+            <span className="space-y-1">
+              <span className="block text-sm font-medium">
+                {crmMessages.settingsLinkLabel}
+              </span>
+              <span className="text-muted-foreground block text-sm">
+                {crmMessages.settingsLinkDescription}
+              </span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={toAppRoute(
+              workspaceSettingsPath(
+                workspaceSlug,
+                SETTINGS_SECTION_NOTIFICATIONS,
+              ),
+            )}
+            className="border-border/60 hover:border-border hover:bg-muted/40 focus-visible:ring-ring flex h-full items-start gap-3 rounded-lg border p-4 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            data-testid="settings-link-notifications"
+          >
+            <span
+              className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-md"
+              aria-hidden="true"
+            >
+              <Bell className="size-5" />
+            </span>
+            <span className="space-y-1">
+              <span className="block text-sm font-medium">
+                {notificationMessages.settingsLinkLabel}
+              </span>
+              <span className="text-muted-foreground block text-sm">
+                {notificationMessages.settingsLinkDescription}
+              </span>
+            </span>
+          </Link>
+        </li>
+      </ul>
+    </div>
+  );
+}

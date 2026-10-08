@@ -1,0 +1,269 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+  SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
+  SUPABASE_JWT_SECRET: placeholder-supabase-jwt-secret-for-ci-build-min-32-chars
+  AUTH_COOKIE_SECRET: placeholder-auth-cookie-secret-for-ci-build-min-32-chars
+  WIDGET_EMBED_SECRET: placeholder-widget-embed-secret-for-ci-build-min-32-chars
+  RATE_LIMIT_SECRET: placeholder-rate-limit-secret-for-ci-build-min-32-chars
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter @site-chat/shared build && pnpm --filter @site-chat/ai build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test shared package
+        run: pnpm --filter @site-chat/shared test
+
+      - name: Test AI package
+        run: pnpm --filter @site-chat/ai test
+
+      - name: Test web auth utilities
+        run: pnpm --filter @site-chat/web test
+
+      - name: Test widget package
+        run: pnpm --filter @site-chat/widget test
+
+      - name: Check widget i18n completeness
+        run: pnpm --filter @site-chat/widget i18n:check
+
+      - name: Format check
+        run: pnpm format:check
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter @site-chat/shared build && pnpm --filter @site-chat/ai build
+
+      - name: Build widget bundle
+        run: pnpm --filter @site-chat/widget build
+
+      - name: Verify widget bundles contain no machine-specific paths
+        run: pnpm --filter @site-chat/widget verify:bundle-paths
+
+      - name: Verify committed widget bundles match build output
+        run: git diff --exit-code apps/web/public/widget/
+
+      - name: Build web app
+        run: pnpm --filter @site-chat/web build
+
+      - name: Check service role key not in client bundle
+        run: |
+          if grep -r "placeholder-service-role-key-for-ci-build" apps/web/.next/static/ 2>/dev/null; then
+            echo "ERROR: Service role key found in client bundle!"
+            exit 1
+          fi
+          echo "Client bundle check passed"
+
+  database:
+    name: Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.111.0
+
+      - name: Start Supabase local stack
+        run: supabase start
+
+      - name: Reset database
+        run: supabase db reset
+
+      - name: Run database tests
+        run: supabase test db
+
+      - name: Check generated database types
+        run: |
+          supabase gen types typescript --local > /tmp/database.types.ts
+          diff -u packages/shared/src/database.types.ts /tmp/database.types.ts
+
+  e2e-realtime:
+    name: Playwright Realtime E2E
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.111.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Supabase local stack
+        run: supabase start
+
+      - name: Reset database and seed
+        run: supabase db reset
+
+      - name: Export local Supabase credentials for E2E
+        run: |
+          set -a
+          # shellcheck disable=SC1090
+          source <(supabase status -o env)
+          set +a
+          if [ -z "${API_URL:-}" ] || [ -z "${ANON_KEY:-}" ] || [ -z "${SERVICE_ROLE_KEY:-}" ] || [ -z "${JWT_SECRET:-}" ]; then
+            echo "supabase status -o env did not export required credentials"
+            exit 1
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}"
+            echo "SUPABASE_JWT_SECRET=${JWT_SECRET}"
+          } >> "$GITHUB_ENV"
+          echo "Exported Supabase credentials for ${API_URL}"
+
+      - name: Verify widget bootstrap RPC credentials
+        run: |
+          auth_header=()
+          if [[ "${SUPABASE_SERVICE_ROLE_KEY}" != sb_secret_* ]]; then
+            auth_header=(-H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+          fi
+          curl -sf "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/widget_resolve_public_key" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${auth_header[@]}" \
+            -H "Content-Type: application/json" \
+            -d '{"p_widget_public_key":"wk_e2e00000000000000000000000000001"}' \
+            | grep -q workspace_id
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Build widget bundle for E2E
+        run: pnpm --filter @site-chat/widget build
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Mobile Inbox reply smoke (retries off)
+        run: pnpm exec playwright test -c e2e/playwright.config.ts inbox/mobile-inbox.spec.ts --retries=0
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
+      - name: Visitor identity and page context soak (retries off)
+        run: >
+          pnpm exec playwright test
+          -c e2e/playwright.config.ts
+          visitor/identity-context.spec.ts
+          -g "SiteChat.identify updates operator sidebar live|operator can edit visitor|SPA navigation records"
+          --retries=0
+          --repeat-each=10
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
+      - name: Unread conversation and file selection soak (retries off)
+        run: >
+          pnpm exec playwright test
+          -c e2e/playwright.config.ts
+          realtime/attachments.spec.ts
+          -g "operator attach control is available in live thread|operator image attachment arrives live for visitor"
+          --retries=0
+          --repeat-each=10
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
+      - name: Run Playwright cross-origin realtime suite
+        run: pnpm test:e2e --retries=0
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
+      # Prove Contacts Load more is stable on first attempt (no CI retries).
+      # The same assertion previously failed twice and only passed on retry #2.
+      - name: Contacts Load more soak (retries off)
+        run: >
+          pnpm exec playwright test
+          -c e2e/playwright.config.ts
+          visitor/visitor-profile-crm.spec.ts
+          -g "contacts list Load more paginates past 50"
+          --retries=0
+          --repeat-each=10
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AI_ALLOW_MOCK_PROVIDER: "true"
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7

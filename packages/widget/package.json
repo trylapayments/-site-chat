@@ -1,0 +1,35 @@
+{
+  "name": "@site-chat/widget",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "description": "Mill embeddable widget bundle",
+  "scripts": {
+    "build": "vite build --config vite.loader.config.ts && vite build --config vite.app.config.ts",
+    "verify:bundle-paths": "node scripts/verify-bundle-paths.mjs",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build:committed": "node scripts/build-committed.mjs"
+  },
+  "dependencies": {
+    "@site-chat/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.49.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@site-chat/eslint-config": "workspace:*",
+    "@site-chat/typescript-config": "workspace:*",
+    "@types/react": "^19.0.11",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.22.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vitest": "^3.0.9"
+  }
+}

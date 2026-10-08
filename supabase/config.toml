@@ -1,0 +1,78 @@
+# Mill local Supabase configuration.
+
+project_id = "site-chat"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = [
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/auth/recovery",
+]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.sessions]
+# Maximum session lifetime (7 days). Enforced on next refresh.
+timebox = "168h"
+# Invalidate sessions inactive longer than 24 hours. Enforced on next refresh.
+inactivity_timeout = "24h"
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+# Shared with hosted Supabase Auth. Local mail still goes to Inbucket.
+[auth.email.template.confirmation]
+subject = "Confirm your Mill account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Mill password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.invite]
+subject = "You are invited to Mill"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "Your Mill sign-in link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new Mill email address"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.email.template.reauthentication]
+subject = "Verify your Mill account"
+content_path = "./supabase/templates/reauthentication.html"
+

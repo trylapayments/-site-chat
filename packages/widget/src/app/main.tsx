@@ -1,0 +1,2508 @@
+import { UnansweredEmail } from "./UnansweredEmail";
+import { ConversationFollowUp } from "./ConversationFollowUp";
+import { VisitorComposerTools } from "./VisitorComposerTools";
+import { PreChatForm } from "./PreChatForm";
+import { shouldShowWaitingAcknowledgement } from "./waiting";
+import {
+  MILL_DIALOGUE_REAR_PATH,
+  MILL_DIALOGUE_FRONT_PATH,
+  MILL_WEBSITE_URL,
+  MILL_DIALOGUE_MARK,
+  createOptimisticMessage,
+  deriveMessageReceiptStatus,
+  maxSequenceNumber,
+  mergeMessages,
+  reduceUploadBatch,
+  uploadBatchAriaStatus,
+  createEmptyUploadBatch,
+  hostIdentifyPayloadSchema,
+  sanitizePageUrl,
+  sanitizeReferrer,
+  shouldRecordPageView,
+  type ConnectionState,
+  type HostIdentifyPayload,
+  type MessageReceiptStatus,
+  type MessageView,
+  type ReceiptCursors,
+  type UploadBatchState,
+  type WidgetLocale,
+} from "@site-chat/shared";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { CSSProperties } from "react";
+import { createRoot } from "react-dom/client";
+
+import { WidgetApiClient, type BootstrapPayload, type WidgetPublicConfig } from "../api/client";
+import { MessageAttachments } from "../attachments/AttachmentViews";
+import {
+  acceptAttributeForAttachments,
+  fileToSelectedLocalFile,
+  revokePreviewUrls,
+  uploadBlobWithProgress,
+  type SelectedLocalFile,
+} from "../attachments/upload-file";
+import {
+  englishMessages,
+  formatMessageTime,
+  formatWidgetMessage,
+  getWidgetDirection,
+  loadWidgetDictionary,
+  resolveWidgetLocale,
+  type WidgetMessages,
+} from "../i18n";
+import { isLoaderMessageType, isMessageFromParent } from "../post-message";
+import { readParentOriginFromLocation } from "../parent-origin";
+import { maxAgentMessageSequence, shouldMarkMessagesRead } from "../realtime/receipt-visibility";
+import {
+  mapWidgetHttpMessages,
+  WidgetRealtimeTransport,
+  type WidgetTypingIndicator,
+} from "../realtime/visitor-transport";
+import {
+  clearSessionToken,
+  generateClientMessageId,
+  getOrCreateTabId,
+  readContinuityToken,
+  readSessionToken,
+  writeContinuityToken,
+  writeSessionToken,
+  writeVisitorPublicId,
+} from "../session/storage";
+import {
+  clampedPixels,
+  contrastingTextColor,
+  fontFamilyStack,
+  fontSizeForScale,
+  launcherRadius,
+  launcherSizePixels,
+  mixHexColors,
+  positionInsets,
+  resolveLocalizedCopy,
+  resolveWidgetThemeColors,
+  safeHexColor,
+  widgetFloatingShadow,
+} from "./appearance";
+import { isNearBottom, scrollContainerToBottom, shouldAutoScroll } from "./scroll";
+
+const EMPTY_RECEIPTS: ReceiptCursors = {
+  lastDeliveredSequence: 0,
+  lastReadSequence: 0,
+};
+
+const MESSAGE_SOURCE = "sitechat-embed";
+
+type PageContextState = {
+  url: string | null;
+  title: string | null;
+  referrer: string | null;
+};
+
+type InitPayload = BootstrapPayload & {
+  parentOrigin: string;
+  hostViewportWidth?: number;
+  pageUrl?: string;
+  pageTitle?: string;
+  referrer?: string;
+};
+
+type WidgetState =
+  | { status: "booting" }
+  | { status: "ready"; init: InitPayload; sessionToken: string; locale: WidgetLocale }
+  | { status: "error"; message: string };
+
+function postToParent(parentOrigin: string, type: string, payload?: Record<string, unknown>) {
+  window.parent.postMessage(
+    {
+      source: MESSAGE_SOURCE,
+      type,
+      payload,
+    },
+    parentOrigin,
+  );
+}
+
+function resolveParentOrigin(init: InitPayload | null): string | null {
+  if (init?.parentOrigin) {
+    return init.parentOrigin;
+  }
+
+  return readParentOriginFromLocation(window.location);
+}
+
+function applyDocumentLocale(locale: WidgetLocale, direction: "ltr" | "rtl") {
+  document.documentElement.lang = locale;
+  document.documentElement.dir = direction;
+}
+
+type WidgetCssProperties = CSSProperties & {
+  "--widget-accent": string;
+  "--widget-background": string;
+  "--widget-border": string;
+  "--widget-density-padding": string;
+  "--widget-font-family": string;
+  "--widget-font-size": string;
+  "--widget-message-gap": string;
+  "--widget-primary": string;
+  "--widget-surface": string;
+  "--widget-text": string;
+};
+
+const WIDGET_STYLES = `
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: transparent;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  button:focus-visible, textarea:focus-visible {
+    outline: 3px solid var(--widget-accent);
+    outline-offset: 2px;
+  }
+  button:disabled { cursor: not-allowed !important; opacity: 0.58; }
+  .sitechat-panel { overscroll-behavior: contain; }
+  .sitechat-messages { min-height: 0; overscroll-behavior: contain; }
+  .sitechat-composer-row { min-width: 0; }
+  .sitechat-composer { min-width: 0; }
+  @media (max-width: 640px) {
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-panel {
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      border-radius: 0 !important;
+    }
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-header {
+      padding-top: calc(var(--widget-density-padding) + env(safe-area-inset-top));
+      padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
+      padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
+    }
+    .sitechat-widget[data-host-mobile="true"][data-mobile-behavior="fullscreen"] .sitechat-footer {
+      padding-bottom: calc(var(--widget-density-padding) + env(safe-area-inset-bottom));
+      padding-left: calc(var(--widget-density-padding) + env(safe-area-inset-left));
+      padding-right: calc(var(--widget-density-padding) + env(safe-area-inset-right));
+    }
+  }
+`;
+
+function LauncherGlyph({
+  customUrl,
+  icon,
+  open,
+  rectangular = false,
+}: {
+  rectangular?: boolean;
+  customUrl: string | null;
+  icon: WidgetPublicConfig["launcherIcon"];
+  open: boolean;
+}) {
+  if (open) {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="44%" height="44%">
+        <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
+
+  if (customUrl) {
+    return (
+      <img
+        src={customUrl}
+        alt=""
+        referrerPolicy="no-referrer"
+        style={{ width: "58%", height: "58%", objectFit: "contain" }}
+      />
+    );
+  }
+
+  if (icon === "help") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="50%" height="50%">
+        <path
+          d="M9.6 9a2.5 2.5 0 1 1 3.2 2.4c-.8.3-1.3.9-1.3 1.8v.3M12 17.5h.01"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="2"
+        />
+      </svg>
+    );
+  }
+
+  if (icon === "message") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="52%" height="52%">
+        <path
+          d="M5 5h14v10H9l-4 4V5Z"
+          fill="none"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="2"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="-1 -1 34 34"
+      width={rectangular ? 34 : "52%"}
+      height={rectangular ? 34 : "52%"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={MILL_DIALOGUE_REAR_PATH} />
+      <path d={MILL_DIALOGUE_FRONT_PATH} />
+    </svg>
+  );
+}
+
+function SendButtonContent({
+  copy,
+  sending,
+  style,
+}: {
+  copy: WidgetMessages;
+  sending: boolean;
+  style: WidgetPublicConfig["sendButtonStyle"];
+}) {
+  if (sending) {
+    return copy.sendingLabel;
+  }
+  if (style === "text") {
+    return copy.sendLabel;
+  }
+  return (
+    <>
+      <span aria-hidden="true">➤</span>
+      {style === "icon-text" ? <span>{copy.sendLabel}</span> : null}
+    </>
+  );
+}
+
+function WidgetApp() {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<WidgetState>({ status: "booting" });
+  const [messages, setMessages] = useState<MessageView[]>([]);
+  const [composer, setComposer] = useState("");
+  const [sending, setSending] = useState(false);
+  const [endingChat, setEndingChat] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
+  const [failedClientMessageId, setFailedClientMessageId] = useState<string | null>(null);
+  const [messagesCopy, setMessagesCopy] = useState<WidgetMessages>(englishMessages);
+  const [agentTyping, setAgentTyping] = useState<WidgetTypingIndicator>({
+    active: false,
+    displayName: null,
+  });
+  const [workspaceStatus, setWorkspaceStatus] = useState<"available" | "away" | "offline" | null>(
+    null,
+  );
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const [operatorsOnline, setOperatorsOnline] = useState(false);
+  const [engagement, setEngagement] = useState<Awaited<
+    ReturnType<WidgetApiClient["engagement"]>
+  > | null>(null);
+  const [engagementError, setEngagementError] = useState(false);
+  const inviteSeenRef = useRef(false);
+  const hasEngagementConversation = engagement?.hasConversation ?? false;
+  const preChatRequired =
+    engagement?.setup.enabled === true &&
+    !engagement.hasConversation &&
+    !engagement.formSubmitted &&
+    !engagement.operatorInitiated;
+
+  const [agentReceipts, setAgentReceipts] = useState<ReceiptCursors>(EMPTY_RECEIPTS);
+  const [pendingFiles, setPendingFiles] = useState<SelectedLocalFile[]>([]);
+  const [uploadBatch, setUploadBatch] = useState<UploadBatchState>(createEmptyUploadBatch());
+  const [dragActive, setDragActive] = useState(false);
+  const [prefersDarkColorScheme, setPrefersDarkColorScheme] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const initRef = useRef<InitPayload | null>(null);
+  const parentOriginRef = useRef<string | null>(null);
+  const transportRef = useRef<WidgetRealtimeTransport | null>(null);
+  const pendingClientMessageIdRef = useRef<string | null>(null);
+  const messagesRef = useRef<MessageView[]>([]);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const forceScrollRef = useRef(false);
+  const nearBottomRef = useRef(true);
+  const sessionLocaleRef = useRef<WidgetLocale>("en");
+  const visitorReceiptsRef = useRef<ReceiptCursors>(EMPTY_RECEIPTS);
+  const agentReceiptsRef = useRef<ReceiptCursors>(EMPTY_RECEIPTS);
+  const pageContextRef = useRef<PageContextState>({
+    url: null,
+    title: null,
+    referrer: null,
+  });
+  const lastRecordedPageUrlRef = useRef<string | null>(null);
+  const identifyInFlightRef = useRef(false);
+  const pendingIdentifyRef = useRef<HostIdentifyPayload | null>(null);
+  const autoOpenAttemptedRef = useRef(false);
+  const visitorToggledOpenRef = useRef(false);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    agentReceiptsRef.current = agentReceipts;
+  }, [agentReceipts]);
+
+  useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || !open) {
+      return;
+    }
+
+    const force = forceScrollRef.current;
+    forceScrollRef.current = false;
+
+    if (
+      !shouldAutoScroll({
+        force,
+        nearBottom: nearBottomRef.current,
+      })
+    ) {
+      return;
+    }
+
+    scrollContainerToBottom(container);
+    // After paint, snap again in case bubble height settled late.
+    requestAnimationFrame(() => {
+      const latest = messagesContainerRef.current;
+      if (latest) {
+        scrollContainerToBottom(latest);
+        nearBottomRef.current = true;
+      }
+    });
+  }, [messages, open, agentTyping.active]);
+
+  const api = useMemo(() => new WidgetApiClient(window.location.origin), []);
+
+  const locale = state.status === "ready" ? state.locale : sessionLocaleRef.current;
+  const direction = getWidgetDirection(locale);
+
+  useEffect(() => {
+    applyDocumentLocale(locale, direction);
+  }, [locale, direction]);
+
+  const [hostViewportWidth, setHostViewportWidth] = useState(1024);
+  const rawConfig: WidgetPublicConfig | null =
+    state.status === "ready" ? state.init.config : (initRef.current?.config ?? null);
+  const mobileLauncher = hostViewportWidth <= 640 ? rawConfig?.mobileLauncher : null;
+  const config =
+    rawConfig && mobileLauncher
+      ? { ...rawConfig, ...mobileLauncher, position: mobileLauncher.launcherPosition }
+      : rawConfig;
+
+  useEffect(() => {
+    if (config?.colorMode !== "system") {
+      setPrefersDarkColorScheme(false);
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncPreference = () => {
+      setPrefersDarkColorScheme(mediaQuery.matches);
+    };
+    syncPreference();
+    mediaQuery.addEventListener("change", syncPreference);
+    return () => {
+      mediaQuery.removeEventListener("change", syncPreference);
+    };
+  }, [config?.colorMode]);
+
+  useEffect(() => {
+    const delay = config?.autoOpenDelayMs;
+    if (
+      delay === null ||
+      delay === undefined ||
+      autoOpenAttemptedRef.current ||
+      visitorToggledOpenRef.current
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => {
+        autoOpenAttemptedRef.current = true;
+        if (!visitorToggledOpenRef.current) {
+          setOpen(true);
+        }
+      },
+      clampedPixels(delay, 0, 0, 60_000),
+    );
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [config?.autoOpenDelayMs, config?.updatedAt, config?.version]);
+
+  const readySessionToken = state.status === "ready" ? state.sessionToken : null;
+  const readyEmbedToken = state.status === "ready" ? state.init.embedToken : null;
+  const embedExpiresAt = state.status === "ready" ? state.init.embedTokenExpiresAt : null;
+  const embedPublicKey = state.status === "ready" ? state.init.widgetPublicKey : null;
+  useEffect(() => {
+    if (!readyEmbedToken || !embedExpiresAt || !embedPublicKey) return;
+    const expiresAt = Date.parse(embedExpiresAt);
+    if (!Number.isFinite(expiresAt)) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = () => {
+      const origin = parentOriginRef.current;
+      if (origin)
+        postToParent(origin, "sitechat:refresh-embed", { widgetPublicKey: embedPublicKey });
+      // Retry a failed refresh; a successful token change cancels this timer.
+      timer = setTimeout(refresh, 30_000);
+    };
+    timer = setTimeout(refresh, Math.max(1000, expiresAt - Date.now() - 30_000));
+    const onFocus = () => {
+      if (Date.now() >= expiresAt - 30_000) {
+        clearTimeout(timer);
+        refresh();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [readyEmbedToken, embedExpiresAt, embedPublicKey]);
+
+  useEffect(() => {
+    if (!readyEmbedToken) return;
+    const token = readyEmbedToken;
+    let active = true;
+    let inFlight = false;
+    async function refresh() {
+      if (inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const { status, visible } = await api.operatorAvailability(token);
+        if (active) {
+          setWorkspaceStatus(status);
+          const origin = parentOriginRef.current;
+          if (origin) postToParent(origin, "sitechat:availability", { visible: visible !== false });
+        }
+      } catch {
+        // A network interruption must not turn an available team offline.
+      } finally {
+        inFlight = false;
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const onVisibility = () => {
+      void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [api, readyEmbedToken]);
+
+  useEffect(() => {
+    if (!readyEmbedToken || !readySessionToken) return;
+    let active = true;
+    let inFlight = false;
+    async function refresh() {
+      if (inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const next = await api.engagement(readyEmbedToken as string, readySessionToken as string);
+        if (!active) return;
+        setEngagement(next);
+        setEngagementError(false);
+        if (next.operatorInitiated && !inviteSeenRef.current) {
+          inviteSeenRef.current = true;
+          setOpen(true);
+        }
+      } catch {
+        if (active) setEngagementError(true);
+      } finally {
+        inFlight = false;
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const onVisibility = () => {
+      void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [api, readyEmbedToken, readySessionToken]);
+
+  const sessionTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    sessionTokenRef.current = readySessionToken;
+  }, [readySessionToken]);
+
+  const initialize = useCallback(
+    async (init: InitPayload) => {
+      initRef.current = init;
+      parentOriginRef.current = init.parentOrigin;
+
+      if (init.pageUrl) {
+        pageContextRef.current = {
+          url: sanitizePageUrl(init.pageUrl) ?? init.pageUrl,
+          title: init.pageTitle ?? null,
+          referrer: sanitizeReferrer(init.referrer) ?? null,
+        };
+      }
+
+      const resolvedLocale = resolveWidgetLocale({
+        configLocale: init.config.locale,
+        browserLanguages: typeof navigator !== "undefined" ? navigator.languages : undefined,
+        browserLocale: typeof navigator !== "undefined" ? navigator.language : undefined,
+      });
+
+      sessionLocaleRef.current = resolvedLocale;
+      const dictionary = await loadWidgetDictionary(resolvedLocale);
+      setMessagesCopy(dictionary);
+      applyDocumentLocale(resolvedLocale, getWidgetDirection(resolvedLocale));
+
+      try {
+        const existingToken = readSessionToken(init.widgetPublicKey);
+        const continuityToken = readContinuityToken(init.widgetPublicKey);
+        const pageUrl = sanitizePageUrl(pageContextRef.current.url ?? init.pageUrl ?? null) ?? null;
+        const pageTitle = pageContextRef.current.title ?? init.pageTitle ?? null;
+        const referrer =
+          sanitizeReferrer(pageContextRef.current.referrer ?? init.referrer ?? null) ?? null;
+        let timezone: string | null = null;
+        try {
+          timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+        } catch {
+          timezone = null;
+        }
+        const language =
+          typeof navigator !== "undefined" && navigator.language ? navigator.language : null;
+
+        const session = await api.createSession({
+          embedToken: init.embedToken,
+          sessionToken: existingToken,
+          locale: resolvedLocale,
+          pageUrl,
+          pageTitle,
+          referrer,
+          continuityToken,
+          timezone,
+          language,
+        });
+
+        inviteSeenRef.current = session.hasConversation;
+        writeSessionToken(init.widgetPublicKey, session.sessionToken);
+        if (session.continuityToken) {
+          writeContinuityToken(init.widgetPublicKey, session.continuityToken);
+        }
+        if (session.visitorPublicId) {
+          writeVisitorPublicId(init.widgetPublicKey, session.visitorPublicId);
+        }
+        if (pageUrl) {
+          lastRecordedPageUrlRef.current = pageUrl;
+        }
+
+        // Prefer session-returned locale when supported; keep session-stable otherwise.
+        const sessionLocale = resolveWidgetLocale({ configLocale: session.locale });
+        sessionLocaleRef.current = sessionLocale;
+        if (sessionLocale !== resolvedLocale) {
+          const sessionDictionary = await loadWidgetDictionary(sessionLocale);
+          setMessagesCopy(sessionDictionary);
+          applyDocumentLocale(sessionLocale, getWidgetDirection(sessionLocale));
+        }
+
+        setState({
+          status: "ready",
+          init,
+          sessionToken: session.sessionToken,
+          locale: sessionLocale,
+        });
+
+        if (session.hasConversation) {
+          const listed = await api.listMessages({
+            embedToken: init.embedToken,
+            sessionToken: session.sessionToken,
+          });
+          const initialMessages = mapWidgetHttpMessages(listed.items);
+          const nextAgentReceipts = {
+            lastDeliveredSequence: listed.agent_last_delivered_sequence,
+            lastReadSequence: listed.agent_last_read_sequence,
+          };
+          visitorReceiptsRef.current = {
+            lastDeliveredSequence: listed.visitor_last_delivered_sequence,
+            lastReadSequence: listed.visitor_last_read_sequence,
+          };
+          agentReceiptsRef.current = nextAgentReceipts;
+          setAgentReceipts(nextAgentReceipts);
+          forceScrollRef.current = true;
+          nearBottomRef.current = true;
+          setMessages(initialMessages);
+        }
+      } catch {
+        clearSessionToken(init.widgetPublicKey);
+        setState({ status: "error", message: dictionary.loadError });
+      }
+    },
+    [api],
+  );
+
+  useEffect(() => {
+    const parentOrigin = resolveParentOrigin(initRef.current);
+    if (!parentOrigin) {
+      return;
+    }
+
+    parentOriginRef.current = parentOrigin;
+    postToParent(parentOrigin, "sitechat:ready");
+
+    async function flushIdentify() {
+      const payload = pendingIdentifyRef.current;
+      const init = initRef.current;
+      const sessionToken = sessionTokenRef.current;
+      if (!payload || !init || !sessionToken || identifyInFlightRef.current) {
+        return;
+      }
+
+      identifyInFlightRef.current = true;
+      pendingIdentifyRef.current = null;
+      try {
+        const result = await api.identify({
+          embedToken: init.embedToken,
+          sessionToken,
+          name: payload.name,
+          email: payload.email,
+          phone: payload.phone,
+          attributes: payload.attributes,
+        });
+        if (result.visitorPublicId) {
+          writeVisitorPublicId(init.widgetPublicKey, result.visitorPublicId);
+        }
+      } catch {
+        // Identify is best-effort from the host page.
+      } finally {
+        identifyInFlightRef.current = false;
+        // Another host identify may have queued while this call was in flight.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- ref mutated concurrently
+        if (pendingIdentifyRef.current) {
+          void flushIdentify();
+        }
+      }
+    }
+
+    function onMessage(event: MessageEvent) {
+      const data = event.data as {
+        source?: string;
+        type?: string;
+        payload?: unknown;
+      };
+
+      if (data.source !== "sitechat-loader" || !isLoaderMessageType(data.type)) {
+        return;
+      }
+
+      if (data.type === "sitechat:init") {
+        const payload = data.payload as InitPayload | undefined;
+        if (!payload?.parentOrigin) {
+          return;
+        }
+        if (!isMessageFromParent(event, payload.parentOrigin)) {
+          return;
+        }
+        if (
+          typeof payload.hostViewportWidth === "number" &&
+          Number.isFinite(payload.hostViewportWidth)
+        )
+          setHostViewportWidth(payload.hostViewportWidth);
+        if (
+          sessionTokenRef.current &&
+          initRef.current?.widgetPublicKey === payload.widgetPublicKey &&
+          initRef.current.parentOrigin === payload.parentOrigin
+        ) {
+          initRef.current = payload;
+          setState((current) =>
+            current.status === "ready" ? { ...current, init: payload } : current,
+          );
+        } else {
+          void initialize(payload);
+        }
+        return;
+      }
+
+      const expectedOrigin = parentOriginRef.current;
+      if (!expectedOrigin || !isMessageFromParent(event, expectedOrigin)) {
+        return;
+      }
+
+      if (data.type === "sitechat:viewport") {
+        const width = (data.payload as { width?: unknown } | undefined)?.width;
+        if (typeof width === "number" && Number.isFinite(width) && width > 0)
+          setHostViewportWidth(width);
+        return;
+      }
+      if (data.type === "sitechat:page") {
+        const page = data.payload as
+          { url?: unknown; title?: unknown; referrer?: unknown } | undefined;
+        if (!page || typeof page.url !== "string" || page.url.length === 0) {
+          return;
+        }
+
+        const nextUrl = sanitizePageUrl(page.url) ?? page.url;
+        const nextTitle = typeof page.title === "string" ? page.title : null;
+        const nextReferrer =
+          typeof page.referrer === "string" ? (sanitizeReferrer(page.referrer) ?? null) : null;
+
+        pageContextRef.current = {
+          url: nextUrl,
+          title: nextTitle,
+          referrer: nextReferrer,
+        };
+
+        const init = initRef.current;
+        const sessionToken = sessionTokenRef.current;
+        if (!init || !sessionToken) {
+          return;
+        }
+
+        if (
+          !shouldRecordPageView({
+            previousUrl: lastRecordedPageUrlRef.current,
+            nextUrl,
+          })
+        ) {
+          return;
+        }
+
+        lastRecordedPageUrlRef.current = nextUrl;
+        void api
+          .recordPageView({
+            embedToken: init.embedToken,
+            sessionToken,
+            url: nextUrl,
+            title: nextTitle,
+            referrer: nextReferrer,
+            tabId: getOrCreateTabId(),
+          })
+          .catch(() => {
+            // Page views are best-effort; keep messaging healthy on failure.
+          });
+        return;
+      }
+
+      // Remaining loader→embed type after init/page: identify
+      const parsed = hostIdentifyPayloadSchema.safeParse(data.payload);
+      if (!parsed.success) {
+        return;
+      }
+      pendingIdentifyRef.current = parsed.data;
+      void flushIdentify();
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+    };
+  }, [api, initialize]);
+
+  // Flush identify queued before the session became ready.
+  useEffect(() => {
+    const payload = pendingIdentifyRef.current;
+    const init = initRef.current;
+    if (!readySessionToken || !payload || !init || identifyInFlightRef.current) {
+      return;
+    }
+
+    identifyInFlightRef.current = true;
+    pendingIdentifyRef.current = null;
+    void api
+      .identify({
+        embedToken: init.embedToken,
+        sessionToken: readySessionToken,
+        name: payload.name,
+        email: payload.email,
+        phone: payload.phone,
+        attributes: payload.attributes,
+      })
+      .then((result) => {
+        if (result.visitorPublicId) {
+          writeVisitorPublicId(init.widgetPublicKey, result.visitorPublicId);
+        }
+      })
+      .catch(() => {
+        // Identify is best-effort from the host page.
+      })
+      .finally(() => {
+        identifyInFlightRef.current = false;
+      });
+  }, [api, readySessionToken]);
+
+  useEffect(() => {
+    const parentOrigin = resolveParentOrigin(
+      state.status === "ready" ? state.init : initRef.current,
+    );
+    if (!parentOrigin) {
+      return;
+    }
+
+    postToParent(parentOrigin, "sitechat:visibility", { open });
+  }, [open, state]);
+
+  useEffect(() => {
+    const init = initRef.current;
+    if (!readySessionToken || !readyEmbedToken || !open || !init) {
+      transportRef.current?.stop();
+      transportRef.current = null;
+      setAgentTyping({ active: false, displayName: null });
+      setOperatorsOnline(false);
+      return;
+    }
+
+    const sessionToken = readySessionToken;
+    const snapshot = transportRef.current?.getMessages() ?? messagesRef.current;
+
+    void (async () => {
+      transportRef.current?.stop();
+
+      const transport = new WidgetRealtimeTransport(api, {
+        onMessages: (next) => {
+          setMessages(next);
+        },
+        onConnectionState: setConnectionState,
+        onAgentTyping: (indicator) => {
+          setAgentTyping(indicator);
+        },
+        onPresence: (presence) => {
+          setOperatorsOnline(presence.operatorsOnline);
+        },
+        onAgentReceipts: (cursors) => {
+          agentReceiptsRef.current = cursors;
+          setAgentReceipts(cursors);
+        },
+      });
+      transportRef.current = transport;
+      await transport.start({
+        embedToken: init.embedToken,
+        sessionToken,
+        initialMessages: snapshot,
+        hasConversation: hasEngagementConversation,
+        initialAgentReceipts: agentReceiptsRef.current,
+        initialVisitorReceipts: visitorReceiptsRef.current,
+      });
+
+      // StrictMode/effect cleanup may have replaced or cleared this transport.
+      if (transportRef.current !== transport) {
+        transport.stop();
+      }
+    })();
+
+    return () => {
+      const current = transportRef.current;
+      transportRef.current = null;
+      current?.stop();
+      setAgentTyping({ active: false, displayName: null });
+      setOperatorsOnline(false);
+    };
+  }, [api, open, readyEmbedToken, readySessionToken, hasEngagementConversation]);
+
+  // Read receipts: only while the panel is open AND the document is visible.
+  // Closing the panel or hiding the tab stops further mark-read calls.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const markVisibleAgentMessagesRead = () => {
+      if (
+        !shouldMarkMessagesRead({
+          panelOpen: open,
+          visibilityState: document.visibilityState,
+        })
+      ) {
+        return;
+      }
+
+      const maxSeq = maxAgentMessageSequence(messagesRef.current);
+      if (maxSeq > 0) {
+        transportRef.current?.notifyMessagesVisible(maxSeq);
+      }
+    };
+
+    markVisibleAgentMessagesRead();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markVisibleAgentMessagesRead();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [open, messages]);
+
+  // Multi-tab / race: panel may open before listMessages finishes. When the
+  // conversation snapshot arrives, promote connecting → subscribed.
+  useEffect(() => {
+    const init = initRef.current;
+    const transport = transportRef.current;
+    if (!open || !init || !readySessionToken || !readyEmbedToken || !transport) {
+      return;
+    }
+    if (messages.length === 0) {
+      return;
+    }
+
+    if (transport.getMessages().length === 0) {
+      transport.replaceMessages(messages);
+    }
+    void transport.ensureLiveConnection({
+      embedToken: init.embedToken,
+      sessionToken: readySessionToken,
+    });
+  }, [messages.length, open, readyEmbedToken, readySessionToken]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const onOffline = () => {
+      setConnectionState("disconnected");
+    };
+
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [open]);
+
+  const addLocalFiles = useCallback(
+    async (fileList: FileList | File[]) => {
+      const incoming = Array.from(fileList);
+      const accepted: SelectedLocalFile[] = [];
+      for (const file of incoming) {
+        if (
+          engagement?.setup.voiceMessagesEnabled === false &&
+          (file.type.startsWith("audio/") || /\.(webm|m4a|ogg|oga|mp3|wav)$/i.test(file.name))
+        ) {
+          setSendError("Voice messages are disabled for this chat.");
+          continue;
+        }
+        const result = await fileToSelectedLocalFile(file);
+        if (!result.ok) {
+          setSendError(
+            result.message.toLowerCase().includes("large")
+              ? messagesCopy.attachmentTooLarge
+              : messagesCopy.attachmentUnsupported,
+          );
+          continue;
+        }
+        accepted.push(result.value);
+      }
+      if (accepted.length === 0) {
+        return;
+      }
+      setPendingFiles((current) => [...current, ...accepted].slice(0, 10));
+      setSendError(null);
+    },
+    [
+      messagesCopy.attachmentTooLarge,
+      messagesCopy.attachmentUnsupported,
+      engagement?.setup.voiceMessagesEnabled,
+    ],
+  );
+
+  useEffect(() => {
+    const preventNavigation = (event: DragEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("dragover", preventNavigation);
+    window.addEventListener("drop", preventNavigation);
+    return () => {
+      window.removeEventListener("dragover", preventNavigation);
+      window.removeEventListener("drop", preventNavigation);
+    };
+  }, []);
+
+  const reconcileTransport = async (
+    readyState: Extract<WidgetState, { status: "ready" }>,
+    mergedMessages: MessageView[],
+  ) => {
+    if (!transportRef.current) {
+      const transport = new WidgetRealtimeTransport(api, {
+        onMessages: setMessages,
+        onConnectionState: setConnectionState,
+        onAgentTyping: setAgentTyping,
+        onPresence: (presence) => {
+          setOperatorsOnline(presence.operatorsOnline);
+        },
+        onAgentReceipts: (cursors) => {
+          agentReceiptsRef.current = cursors;
+          setAgentReceipts(cursors);
+        },
+      });
+      transportRef.current = transport;
+      await transport.start({
+        embedToken: readyState.init.embedToken,
+        sessionToken: readyState.sessionToken,
+        initialMessages: mergedMessages,
+        initialAgentReceipts: agentReceiptsRef.current,
+        initialVisitorReceipts: visitorReceiptsRef.current,
+      });
+    } else {
+      transportRef.current.replaceMessages(mergedMessages);
+      await transportRef.current.ensureLiveConnection({
+        embedToken: readyState.init.embedToken,
+        sessionToken: readyState.sessionToken,
+      });
+    }
+  };
+
+  const handleSend = async (selectedQuestion?: string) => {
+    if (state.status !== "ready" || sending) {
+      return;
+    }
+    if (!(selectedQuestion ?? composer).trim() && pendingFiles.length === 0) {
+      return;
+    }
+
+    const body = (selectedQuestion ?? composer).trim();
+    const filesForSend = pendingFiles;
+    const clientMessageId = pendingClientMessageIdRef.current ?? generateClientMessageId();
+    pendingClientMessageIdRef.current = clientMessageId;
+    const historyBeforeSend = messagesRef.current;
+    const tempId = crypto.randomUUID();
+    const continuingClosedChat = engagement?.conversationStatus === "closed" || engagement?.conversationStatus === "resolved";
+    // A new conversation starts its own sequence. Never sort it into the old thread.
+    if (continuingClosedChat) {
+      transportRef.current?.stop();
+      transportRef.current = null;
+      messagesRef.current = [];
+      setMessages([]);
+      setEngagement((current) => current ? { ...current, conversationStatus: "open", rating: null } : current);
+    }
+    const optimistic = createOptimisticMessage({
+      tempId,
+      clientMessageId,
+      body,
+      senderType: "visitor",
+      senderLabel: messagesCopy.youLabel,
+      nextSequence: continuingClosedChat ? 1 : maxSequenceNumber(messages) + 1,
+      attachments: filesForSend.map((file, index) => ({
+        id: file.localId,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        kind: file.kind,
+        width: file.width,
+        height: file.height,
+        sortOrder: index,
+        hasThumbnail: file.kind === "image",
+      })),
+    });
+
+    forceScrollRef.current = true;
+    nearBottomRef.current = true;
+    messagesRef.current = mergeMessages(messagesRef.current, [], [optimistic]);
+    setMessages(messagesRef.current);
+    transportRef.current?.mergePending([optimistic]);
+    setComposer("");
+    setPendingFiles([]);
+    transportRef.current?.clearLocalTyping();
+    setSending(true);
+    setSendError(null);
+    setFailedClientMessageId(null);
+
+    let activeBatchId: string | null = null;
+    try {
+      let resultMessage;
+      let resultConversationId: string | undefined;
+      if (filesForSend.length > 0) {
+        let batch = reduceUploadBatch(createEmptyUploadBatch(body), {
+          type: "SELECT_FILES",
+          clientMessageId,
+          body,
+          items: filesForSend.map((file) => ({
+            localId: file.localId,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            sizeBytes: file.sizeBytes,
+            kind: file.kind,
+            previewUrl: file.previewUrl,
+            width: file.width,
+            height: file.height,
+          })),
+        });
+        setUploadBatch(batch);
+
+        const initiated = await api.initiateUploads({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+          files: filesForSend.map((file) => ({
+            localId: file.localId,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            sizeBytes: file.sizeBytes,
+            width: file.width,
+            height: file.height,
+          })),
+          body,
+          clientMessageId,
+          pageUrl: pageContextRef.current.url ?? undefined,
+          referrer: pageContextRef.current.referrer ?? undefined,
+        });
+        activeBatchId = initiated.batchId;
+
+        batch = reduceUploadBatch(batch, {
+          type: "PREPARE_SUCCESS",
+          batchId: initiated.batchId,
+          uploads: initiated.uploads.map((upload) => ({
+            localId: upload.localId,
+            uploadId: upload.uploadId,
+            attachmentId: upload.attachmentId,
+          })),
+        });
+        setUploadBatch(batch);
+
+        const abort = new AbortController();
+        uploadAbortRef.current = abort;
+
+        for (const upload of initiated.uploads) {
+          const local = filesForSend.find((file) => file.localId === upload.localId);
+          if (!local) {
+            continue;
+          }
+          await uploadBlobWithProgress({
+            url: upload.uploadUrl,
+            token: upload.uploadToken,
+            file: local.file,
+            contentType: upload.mimeType,
+            signal: abort.signal,
+            onProgress: (percent) => {
+              setUploadBatch((current) =>
+                reduceUploadBatch(current, {
+                  type: "UPLOAD_PROGRESS",
+                  localId: upload.localId,
+                  progress: percent,
+                }),
+              );
+            },
+          });
+          batch = reduceUploadBatch(batch, {
+            type: "UPLOAD_ITEM_SUCCESS",
+            localId: upload.localId,
+          });
+          setUploadBatch(batch);
+        }
+
+        batch = reduceUploadBatch(batch, { type: "CONFIRM_START" });
+        setUploadBatch(batch);
+
+        const completed = await api.completeUploads({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+          batchId: initiated.batchId,
+          uploadIds: initiated.uploads.map((upload) => upload.uploadId),
+          body,
+          clientMessageId,
+          pageUrl: pageContextRef.current.url ?? undefined,
+          referrer: pageContextRef.current.referrer ?? undefined,
+        });
+        resultMessage = completed.message;
+        resultConversationId = completed.conversationId;
+        setUploadBatch(reduceUploadBatch(batch, { type: "CONFIRM_SUCCESS" }));
+        revokePreviewUrls(filesForSend);
+      } else {
+        const result = await api.sendMessage({
+          embedToken: state.init.embedToken,
+          sessionToken: state.sessionToken,
+          body,
+          clientMessageId,
+          pageUrl: pageContextRef.current.url ?? undefined,
+          referrer: pageContextRef.current.referrer ?? undefined,
+        });
+        resultMessage = result.message;
+        resultConversationId = result.conversationId;
+      }
+
+      const switchedConversation = !!resultConversationId && resultConversationId !== engagement?.conversationId;
+      if (switchedConversation) {
+        transportRef.current?.stop();
+        transportRef.current = null;
+        messagesRef.current = [];
+        agentReceiptsRef.current = { lastDeliveredSequence: 0, lastReadSequence: 0 };
+        visitorReceiptsRef.current = { lastDeliveredSequence: 0, lastReadSequence: 0 };
+        setAgentReceipts(agentReceiptsRef.current);
+      }
+      setEngagement((current) => current ? { ...current, conversationId: resultConversationId ?? current.conversationId, conversationStatus: "open", hasConversation: true } : current);
+      pendingClientMessageIdRef.current = null;
+      const confirmedMessages = mapWidgetHttpMessages([resultMessage]).map((message) => ({
+        ...message,
+        clientMessageId: message.clientMessageId ?? clientMessageId,
+      }));
+      const mergedMessages = mergeMessages(
+        messagesRef.current.filter(
+          (item) => item.id !== tempId && item.clientMessageId !== clientMessageId,
+        ),
+        confirmedMessages,
+        [],
+      );
+
+      messagesRef.current = mergedMessages;
+      forceScrollRef.current = true;
+      nearBottomRef.current = true;
+      setMessages(mergedMessages);
+      setUploadBatch(createEmptyUploadBatch());
+      await reconcileTransport(state, mergedMessages);
+      if (continuingClosedChat || switchedConversation) {
+        // Fetch the new context now, rather than waiting for the engagement poll.
+        void Promise.all([
+          api.engagement(state.init.embedToken, state.sessionToken),
+          api.listMessages({ embedToken: state.init.embedToken, sessionToken: state.sessionToken }),
+        ]).then(([context, history]) => {
+          setEngagement(context);
+          transportRef.current?.mergeIncoming(mapWidgetHttpMessages(history.items));
+        }).catch(() => { /* The confirmed send remains visible during reconnect. */ });
+      }
+    } catch {
+      if (continuingClosedChat) {
+        messagesRef.current = mergeMessages(historyBeforeSend, messagesRef.current, []);
+        setMessages(messagesRef.current);
+      }
+      pendingClientMessageIdRef.current = clientMessageId;
+      setFailedClientMessageId(clientMessageId);
+      setMessages((current) =>
+        current.map((item) =>
+          item.clientMessageId === clientMessageId ? { ...item, status: "failed" } : item,
+        ),
+      );
+      setComposer(body);
+      setPendingFiles(filesForSend);
+      // Text-only failures must not flip the upload state machine (would replace Send
+      // with "Retry upload" and break message-retry UX / a11y selectors).
+      if (filesForSend.length > 0) {
+        setUploadBatch((current) =>
+          reduceUploadBatch(current, {
+            type: "CONFIRM_FAILURE",
+            message: messagesCopy.uploadFailedLabel,
+          }),
+        );
+        // Mid-batch PUT/complete failure: cancel leftover intents + storage objects.
+        if (activeBatchId) {
+          void api.cancelUploads({
+            embedToken: state.init.embedToken,
+            sessionToken: state.sessionToken,
+            batchId: activeBatchId,
+          });
+        }
+      }
+      setSendError(messagesCopy.sendError);
+    } finally {
+      uploadAbortRef.current = null;
+      setSending(false);
+    }
+  };
+
+  const primaryColor = safeHexColor(
+    config?.primaryColor ?? config?.branding.primaryColor,
+    "#0066FF",
+  );
+  const accentColor = safeHexColor(config?.accentColor, "#0052CC");
+  const { backgroundColor, textColor } = resolveWidgetThemeColors({
+    colorMode: config?.colorMode,
+    backgroundColor: config?.backgroundColor,
+    textColor: config?.textColor,
+    prefersDark: prefersDarkColorScheme,
+  });
+  const launcherColor = safeHexColor(config?.launcherColor, primaryColor);
+  const surfaceColor = mixHexColors(backgroundColor, textColor, 0.04);
+  const borderColor = mixHexColors(backgroundColor, textColor, 0.16);
+  const mutedColor = mixHexColors(backgroundColor, textColor, 0.62);
+  const position = config?.position ?? "bottom-right";
+  const launcherOffsetX = clampedPixels(config?.launcherOffsetX, 16, 0, 120);
+  const launcherOffsetY = clampedPixels(config?.launcherOffsetY, 16, 0, 120);
+  const launcherSize = launcherSizePixels(config?.launcherSize);
+  const launcherWidth =
+    config?.launcherShape === "rectangle"
+      ? clampedPixels(config.launcherWidth, 180, 120, 320)
+      : launcherSize;
+  const insets = positionInsets(position, launcherOffsetX);
+  const greetingInsets = positionInsets(position, launcherOffsetX + launcherWidth + 12);
+  const hideLauncherWhenOpen = config?.hideLauncherWhenOpen === true;
+  const panelBottom = launcherOffsetY + (hideLauncherWhenOpen ? 0 : launcherSize + 12);
+  const widgetWidth = clampedPixels(config?.widgetWidth, 380, 300, 480);
+  const widgetHeight = clampedPixels(config?.widgetHeight, 560, 360, 800);
+  const widgetMaxHeight = clampedPixels(config?.widgetMaxHeight, 720, 360, 900);
+  const borderRadius = clampedPixels(config?.borderRadius, 16, 0, 32);
+  const densityPadding = config?.density === "compact" ? "0.75rem" : "1rem";
+  const messageGap = config?.density === "compact" ? "0.5rem" : "0.75rem";
+  const effectiveStatus = workspaceStatus ?? (operatorsOnline ? "available" : "offline");
+  const available = effectiveStatus === "available";
+  const presenceFallback =
+    effectiveStatus === "away" ? "Away" : available ? messagesCopy.online : messagesCopy.offline;
+  const headerTitle = resolveLocalizedCopy({
+    copy: config?.headerTitle,
+    locale,
+    systemFallback: config?.branding.displayName ?? messagesCopy.chatPanelLabel,
+  });
+  const subtitle = config?.subtitle
+    ? resolveLocalizedCopy({
+        copy: config.subtitle,
+        locale,
+        systemFallback: presenceFallback,
+      })
+    : (config?.greetingMessage ?? presenceFallback);
+  const welcomeMessage = config?.welcomeMessage
+    ? resolveLocalizedCopy({
+        copy: config.welcomeMessage,
+        locale,
+        systemFallback: messagesCopy.welcomeTitle,
+      })
+    : (config?.greetingMessage ?? messagesCopy.welcomeTitle);
+  const placeholderText = resolveLocalizedCopy({
+    copy: config?.placeholderText,
+    locale,
+    systemFallback: messagesCopy.composerPlaceholder,
+  });
+  const headerStyle = config?.headerStyle ?? "solid";
+  const headerBackground =
+    headerStyle === "minimal"
+      ? backgroundColor
+      : headerStyle === "branded"
+        ? `linear-gradient(135deg, ${primaryColor}, ${accentColor})`
+        : primaryColor;
+  const headerColor =
+    headerStyle === "minimal"
+      ? textColor
+      : contrastingTextColor(
+          headerStyle === "branded" ? mixHexColors(primaryColor, accentColor, 0.5) : primaryColor,
+        );
+  const logoUrl = config ? (config.logoUrl ?? config.branding.logoUrl) : null;
+  const panelLabel = headerTitle || messagesCopy.chatPanelLabel;
+  const configuredColorMode = config?.colorMode ?? "light";
+  const effectiveColorMode =
+    configuredColorMode === "system"
+      ? prefersDarkColorScheme
+        ? "dark"
+        : "light"
+      : configuredColorMode;
+  const rootStyle: WidgetCssProperties = {
+    "--widget-accent": accentColor,
+    "--widget-background": backgroundColor,
+    "--widget-border": borderColor,
+    "--widget-density-padding": densityPadding,
+    "--widget-font-family": fontFamilyStack(config?.fontFamily),
+    "--widget-font-size": fontSizeForScale(config?.fontSizeScale),
+    "--widget-message-gap": messageGap,
+    "--widget-primary": primaryColor,
+    "--widget-surface": surfaceColor,
+    "--widget-text": textColor,
+    color: textColor,
+    colorScheme: effectiveColorMode,
+    fontFamily: "var(--widget-font-family)",
+    fontSize: "var(--widget-font-size)",
+  };
+
+  return (
+    <div
+      className="sitechat-widget"
+      dir={direction}
+      lang={locale}
+      data-config-version={config?.version}
+      data-color-mode={configuredColorMode}
+      data-effective-color-mode={effectiveColorMode}
+      data-mobile-behavior={config?.mobileBehavior ?? "responsive"}
+      data-host-mobile={hostViewportWidth <= 640 ? "true" : "false"}
+      data-widget-locale={locale}
+      data-widget-dir={direction}
+      style={rootStyle}
+    >
+      <style>{WIDGET_STYLES}</style>
+      {config?.showGreeting === true && !open && hostViewportWidth > 640 ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            bottom: `${String(launcherOffsetY + Math.max(0, (launcherSize - 44) / 2))}px`,
+            ...greetingInsets,
+            width: `min(16.25rem, calc(100vw - ${String(launcherOffsetX + launcherWidth + 12 + 16)}px))`,
+            minHeight: "2.75rem",
+            padding: "0.7rem 0.85rem",
+            border: `1px solid ${borderColor}`,
+            borderRadius: `${String(Math.min(borderRadius, 14))}px`,
+            background: backgroundColor,
+            color: textColor,
+            boxShadow: widgetFloatingShadow(config.shadowLevel),
+            zIndex: 1,
+          }}
+        >
+          <span style={{ color: available ? "#15803D" : "inherit", fontWeight: 600 }}>{presenceFallback}</span> · {welcomeMessage}
+        </div>
+      ) : null}
+
+      {!open || !hideLauncherWhenOpen ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? messagesCopy.launcherOpenLabel : messagesCopy.launcherLabel}
+          onClick={() => {
+            visitorToggledOpenRef.current = true;
+            setOpen((value) => !value);
+          }}
+          style={{
+            position: "fixed",
+            bottom: `${String(launcherOffsetY)}px`,
+            ...insets,
+            width: `${String(launcherWidth)}px`,
+            height: `${String(launcherSize)}px`,
+            padding: config?.launcherShape === "rectangle" ? "0 16px" : 0,
+            gap: 10,
+            borderRadius: launcherRadius(config?.launcherShape),
+            border: "none",
+            background: launcherColor,
+            color: contrastingTextColor(launcherColor),
+            cursor: "pointer",
+            boxShadow: widgetFloatingShadow(config?.shadowLevel),
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2,
+          }}
+        >
+          <LauncherGlyph
+            rectangular={config?.launcherShape === "rectangle"}
+            customUrl={config?.launcherIconUrl ?? null}
+            icon={config?.launcherIcon ?? "chat"}
+            open={open}
+          />
+          {config?.launcherShape === "rectangle" && !open ? (
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {config.launcherText || "Online chat"}
+            </span>
+          ) : null}
+        </button>
+      ) : null}
+
+      {open ? (
+        <section
+          className="sitechat-panel"
+          aria-label={panelLabel}
+          data-testid="widget-realtime-ready"
+          data-realtime-state={connectionState}
+          style={{
+            position: "fixed",
+            bottom: `${String(panelBottom)}px`,
+            ...insets,
+            width: `min(calc(100vw - ${String(launcherOffsetX)}px), ${String(widgetWidth)}px)`,
+            height: `min(${String(widgetHeight)}px, ${String(widgetMaxHeight)}px, calc(100dvh - ${String(panelBottom + 8)}px))`,
+            maxHeight: `${String(widgetMaxHeight)}px`,
+            background: backgroundColor,
+            color: textColor,
+            borderRadius: `${String(borderRadius)}px`,
+            border: "none",
+            outline: "none",
+            boxShadow: "none",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            zIndex: 1,
+          }}
+        >
+          <header
+            className="sitechat-header"
+            style={{
+              padding: densityPadding,
+              borderBottom: `1px solid ${headerStyle === "minimal" ? borderColor : "transparent"}`,
+              background: headerBackground,
+              color: headerColor,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  style={{
+                    width: "2rem",
+                    height: "2rem",
+                    borderRadius: "0.5rem",
+                    objectFit: "contain",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : null}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 650, overflowWrap: "anywhere" }}>{headerTitle}</div>
+                <div
+                  data-testid="widget-operator-presence"
+                  data-presence={effectiveStatus === "available" ? "online" : effectiveStatus}
+                  style={{
+                    fontSize: "0.78em",
+                    opacity: 0.86,
+                    marginTop: "0.15rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: "0.4rem",
+                      height: "0.4rem",
+                      borderRadius: "50%",
+                      background: available
+                        ? "#22C55E"
+                        : effectiveStatus === "away"
+                          ? "#F59E0B"
+                          : "currentColor",
+                      opacity: effectiveStatus !== "offline" ? 1 : 0.45,
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span dir="auto">{subtitle}</span>
+                </div>
+              </div>
+              {config?.showAgentAvatars !== false && config?.agentAvatarUrl ? (
+                <img
+                  src={config.agentAvatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  style={{
+                    width: "2rem",
+                    height: "2rem",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : null}
+              {state.status === "ready" && engagement?.conversationId &&
+                engagement.conversationStatus !== "closed" && engagement.conversationStatus !== "resolved" ? (
+                <button type="button" data-testid="widget-end-chat" disabled={endingChat || sending}
+                  style={{ border: "1px solid currentColor", borderRadius: 8, padding: "0.4rem 0.55rem", background: "transparent", color: "inherit", fontSize: "0.75rem", cursor: "pointer", flexShrink: 0 }}
+                  onClick={() => {
+                    if (endingChat) return;
+                    setEndingChat(true);
+                    void api.conversationAction(state.init.embedToken, state.sessionToken, {
+                      action: "end", conversationId: engagement.conversationId,
+                    }).then(() => {
+                      setEngagement((current) => current ? { ...current, conversationStatus: "closed" } : current);
+                    }).catch(() => setSendError("Unable to end the chat. Please try again."))
+                      .finally(() => setEndingChat(false));
+                  }}>
+                  {endingChat ? "Ending…" : "End chat"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                aria-label={messagesCopy.closeLabel}
+                onClick={() => {
+                  visitorToggledOpenRef.current = true;
+                  setOpen(false);
+                }}
+                style={{
+                  width: "2rem",
+                  height: "2rem",
+                  padding: 0,
+                  border: 0,
+                  borderRadius: "50%",
+                  background: "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                  fontSize: "1.35rem",
+                  lineHeight: 1,
+                  flexShrink: 0,
+                }}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            {connectionState !== "connected" && connectionState !== "connecting" ? (
+              <div
+                role="status"
+                data-testid="widget-connection-status"
+                data-connection-state={connectionState}
+                style={{ fontSize: "0.75rem", marginTop: "0.35rem", opacity: 0.9 }}
+              >
+                {connectionState === "reconnecting"
+                  ? messagesCopy.reconnectingLabel
+                  : connectionState === "failed"
+                    ? messagesCopy.connectionFailedLabel
+                    : messagesCopy.offlineLabel}
+              </div>
+            ) : null}
+          </header>
+
+          <div
+            className="sitechat-messages"
+            ref={messagesContainerRef}
+            aria-live="polite"
+            data-testid="widget-messages"
+            onScroll={(event) => {
+              nearBottomRef.current = isNearBottom(event.currentTarget);
+            }}
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: densityPadding,
+              display: "flex",
+              flexDirection: "column",
+              gap: messageGap,
+              background: surfaceColor,
+            }}
+          >
+            {state.status === "error" ? <p role="alert">{state.message}</p> : null}
+
+            {state.status === "booting" ? <p>{messagesCopy.welcomeTitle}</p> : null}
+
+            {state.status === "ready" && messages.length === 0 && !preChatRequired ? (
+              <p dir="auto">{welcomeMessage}</p>
+            ) : null}
+
+            {state.status === "ready" && !engagement ? (
+              <p role="status">
+                {engagementError ? messagesCopy.loadError : messagesCopy.reconnectingLabel}
+              </p>
+            ) : null}
+            {preChatRequired ? (
+              <PreChatForm
+                key={engagement.version}
+                setup={engagement.setup}
+                accentColor={accentColor}
+                textColor={textColor}
+                onSubmit={async (submission) => {
+                  if (!readyEmbedToken || !readySessionToken) return;
+                  await api.submitPreChat(readyEmbedToken, readySessionToken, submission);
+                  setEngagement((current) =>
+                    current ? { ...current, formSubmitted: true, hasConversation: true } : current,
+                  );
+                  const listed = await api.listMessages({
+                    embedToken: readyEmbedToken,
+                    sessionToken: readySessionToken,
+                  });
+                  setMessages(mapWidgetHttpMessages(listed.items));
+                }}
+              />
+            ) : null}
+            {messages.map((message) => {
+              const isVisitor = message.senderType === "visitor";
+              const label = isVisitor
+                ? messagesCopy.youLabel
+                : message.senderType === "agent"
+                  ? (engagement?.messageAgents[message.id]?.name ?? messagesCopy.agentLabel)
+                  : messagesCopy.systemLabel;
+              const actualReceiptStatus =
+                isVisitor && message.status !== "failed" && !message.isOptimistic
+                  ? deriveMessageReceiptStatus({
+                      sequenceNumber: message.sequenceNumber,
+                      peer: agentReceipts,
+                    })
+                  : null;
+              const receiptStatus =
+                actualReceiptStatus && engagement?.setup.showReadReceipts !== true
+                  ? "sent"
+                  : actualReceiptStatus;
+              const personalAgent = engagement?.messageAgents[message.id];
+              const showAvatar =
+                message.senderType === "agent" && config?.showAgentAvatars !== false;
+
+              return (
+                <div
+                  key={message.id}
+                  style={{
+                    alignSelf: isVisitor ? "flex-end" : "flex-start",
+                    maxWidth: "88%",
+                    display: "flex",
+                    alignItems: "flex-end",
+                    gap: "0.45rem",
+                    direction: "ltr",
+                  }}
+                >
+                  {showAvatar ? (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: "1.75rem",
+                        height: "1.75rem",
+                        borderRadius: "50%",
+                        background: backgroundColor,
+                        border: `1px solid ${borderColor}`,
+                        color: textColor,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {(personalAgent?.avatarUrl ?? config?.agentAvatarUrl) ? (
+                        <img
+                          src={(personalAgent?.avatarUrl ?? config?.agentAvatarUrl) as string}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        label.slice(0, 1)
+                      )}
+                    </span>
+                  ) : null}
+                  <article
+                    data-testid={isVisitor ? "visitor-message" : "agent-message"}
+                    style={{
+                      minWidth: 0,
+                      background: isVisitor ? primaryColor : backgroundColor,
+                      color: isVisitor ? contrastingTextColor(primaryColor) : textColor,
+                      padding:
+                        config?.density === "compact" ? "0.5rem 0.625rem" : "0.625rem 0.75rem",
+                      border: isVisitor ? "none" : `1px solid ${borderColor}`,
+                      borderRadius: `${String(Math.min(borderRadius, 14))}px`,
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+                      opacity: message.status === "pending" ? 0.8 : 1,
+                      direction,
+                    }}
+                  >
+                    <div style={{ fontSize: "0.75em", opacity: 0.78, marginBottom: "0.25rem" }}>
+                      {label} · {formatMessageTime(message.createdAt, locale)}
+                    </div>
+                    {message.body ? (
+                      <div dir="auto" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                        {message.body}
+                      </div>
+                    ) : null}
+                    {state.status === "ready" &&
+                    message.attachments &&
+                    message.attachments.length > 0 ? (
+                      <MessageAttachments
+                        attachments={message.attachments}
+                        isVisitor={isVisitor}
+                        api={api}
+                        embedToken={state.init.embedToken}
+                        sessionToken={state.sessionToken}
+                        copy={messagesCopy}
+                      />
+                    ) : null}
+                    {receiptStatus ? (
+                      <MessageReceiptTicks
+                        status={receiptStatus}
+                        label={receiptLabel(receiptStatus, messagesCopy)}
+                      />
+                    ) : null}
+                    {message.status === "failed" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComposer(message.body);
+                          pendingClientMessageIdRef.current =
+                            message.clientMessageId ?? failedClientMessageId;
+                        }}
+                        style={{
+                          marginTop: "0.35rem",
+                          background: "transparent",
+                          border: "none",
+                          color: isVisitor ? contrastingTextColor(primaryColor) : "#B91C1C",
+                          textDecoration: "underline",
+                          cursor: "pointer",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {messagesCopy.retryLabel}
+                      </button>
+                    ) : null}
+                  </article>
+                </div>
+              );
+            })}
+            {state.status === "ready" &&
+            engagement?.conversationStatus !== "closed" &&
+            engagement?.conversationStatus !== "resolved" &&
+            (shouldShowWaitingAcknowledgement(messages) ||
+              (engagement?.formSubmitted &&
+                !messages.some((message) => message.senderType === "agent"))) ? (
+              <p
+                role="status"
+                data-testid="widget-waiting-acknowledgement"
+                style={{
+                  color: mutedColor,
+                  fontSize: "0.8125rem",
+                  lineHeight: 1.5,
+                  textAlign: "center",
+                  padding: "0.75rem 0.5rem",
+                  margin: 0,
+                }}
+              >
+                {available
+                  ? (engagement?.setup.waitingMessage ??
+                    "We've notified our team. An operator will join you shortly.")
+                  : (engagement?.setup.offlineWaitingMessage ??
+                    "We've notified our team. We'll reply as soon as we're available.")}
+              </p>
+            ) : null}
+            {state.status === "ready" && readyEmbedToken && readySessionToken && engagement &&
+              engagement.conversationStatus !== "closed" && engagement.conversationStatus !== "resolved" ?
+              <UnansweredEmail key={`unanswered-email:${engagement.conversationId ?? readySessionToken}`}
+                api={api} embedToken={readyEmbedToken} sessionToken={readySessionToken} messages={messages}
+                enabled={engagement.setup.unansweredEmailEnabled} delaySeconds={engagement.setup.unansweredEmailDelaySeconds}
+                saved={engagement.replyEmailSaved ?? false} hasOperatorReply={Object.keys(engagement.messageAgents).length > 0} open={open} accentColor={accentColor} textColor={textColor} borderColor={borderColor} /> : null}
+            <div data-testid="widget-messages-end" aria-hidden="true" />
+          </div>
+
+          <div data-testid="widget-follow-up-slot" style={{ flexShrink: 0, maxHeight: "35%", overflowY: "auto", padding: `0 ${densityPadding}`, background: surfaceColor }}>
+            {state.status === "ready" &&
+            readyEmbedToken &&
+            readySessionToken &&
+            engagement?.conversationId &&
+            (engagement.conversationStatus === "closed" ||
+              engagement.conversationStatus === "resolved") ? (
+              <ConversationFollowUp
+                key={`transcript:${engagement.conversationId}`}
+                api={api}
+                embedToken={readyEmbedToken}
+                sessionToken={readySessionToken}
+                context={engagement}
+                accentColor={accentColor}
+                textColor={textColor}
+                borderColor={borderColor}
+                onRated={(rating) => {
+                  setEngagement((current) => (current ? { ...current, rating } : current));
+                }}
+              />
+            ) : null}
+          </div>
+
+          <div
+            data-testid="agent-typing"
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              minHeight: "1.25rem",
+              padding: `0 ${densityPadding}`,
+              fontSize: "0.75rem",
+              color: mutedColor,
+              background: surfaceColor,
+            }}
+          >
+            {agentTyping.active
+              ? formatWidgetMessage(messagesCopy.agentTyping, {
+                  name: agentTyping.displayName ?? messagesCopy.agentLabel,
+                })
+              : null}
+          </div>
+
+          <footer
+            className="sitechat-footer"
+            style={{
+              borderTop: `1px solid ${borderColor}`,
+              padding: densityPadding,
+              position: "relative",
+              outline: dragActive ? `2px solid ${accentColor}` : undefined,
+              background: dragActive ? surfaceColor : backgroundColor,
+              flexShrink: 0,
+            }}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              if (event.dataTransfer.files.length > 0) {
+                void addLocalFiles(event.dataTransfer.files);
+              }
+            }}
+          >
+            {!preChatRequired && engagement ? (
+              <>
+                {engagement.setup.quickQuestionsEnabled &&
+                  !messages.some((message) => message.senderType === "visitor") && (
+                    <div
+                      aria-label="Quick questions"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: "8px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {engagement.setup.quickQuestions.map((question, index) => (
+                        <button
+                          key={`${String(index)}-${question}`}
+                          type="button"
+                          disabled={sending || !!composer.trim() || pendingFiles.length > 0}
+                          onClick={() => {
+                            void handleSend(question);
+                          }}
+                          style={{
+                            border: `1px solid ${borderColor}`,
+                            borderRadius: "20px",
+                            padding: "8px 12px",
+                            background: backgroundColor,
+                            color: textColor,
+                            fontSize: "13px",
+                            cursor: "pointer",
+                            maxWidth: "100%",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                {dragActive ? (
+                  <div
+                    role="status"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: surfaceColor,
+                      color: textColor,
+                      zIndex: 2,
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {messagesCopy.dropFilesLabel}
+                  </div>
+                ) : null}
+                {sendError ? (
+                  <p
+                    role="alert"
+                    style={{ color: "#b91c1c", fontSize: "0.875rem", marginBottom: "0.5rem" }}
+                  >
+                    {sendError}
+                  </p>
+                ) : null}
+                {pendingFiles.length > 0 ? (
+                  <ul
+                    data-testid="pending-attachments"
+                    style={{
+                      listStyle: "none",
+                      margin: "0 0 0.5rem",
+                      padding: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.35rem",
+                    }}
+                  >
+                    {pendingFiles.map((file) => (
+                      <li
+                        key={file.localId}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {file.previewUrl ? (
+                          <img
+                            src={file.previewUrl}
+                            alt=""
+                            width={32}
+                            height={32}
+                            style={{ objectFit: "cover", borderRadius: "0.25rem" }}
+                          />
+                        ) : null}
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {file.filename}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={formatWidgetMessage(messagesCopy.removeAttachmentLabel, {
+                            filename: file.filename,
+                          })}
+                          onClick={() => {
+                            setPendingFiles((current) => {
+                              const next = current.filter((item) => item.localId !== file.localId);
+                              revokePreviewUrls(
+                                current.filter((item) => item.localId === file.localId),
+                              );
+                              return next;
+                            });
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: mutedColor,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div
+                  role="status"
+                  aria-live="polite"
+                  data-testid="upload-status"
+                  data-upload-status={uploadBatchAriaStatus(uploadBatch.status)}
+                  style={{
+                    fontSize: "0.75rem",
+                    color: mutedColor,
+                    minHeight: uploadBatch.status === "idle" ? 0 : "1rem",
+                    marginBottom: uploadBatch.status === "idle" ? 0 : "0.35rem",
+                  }}
+                >
+                  {uploadBatch.status === "uploading" || uploadBatch.status === "confirming"
+                    ? messagesCopy.uploadUploadingLabel
+                    : uploadBatch.status === "failed"
+                      ? messagesCopy.uploadFailedLabel
+                      : uploadBatch.status === "complete"
+                        ? messagesCopy.uploadCompleteLabel
+                        : null}
+                  {(() => {
+                    const uploading = uploadBatch.items.find((item) => item.status === "uploading");
+                    return uploading ? ` ${String(uploading.progress)}%` : null;
+                  })()}
+                </div>
+                <div
+                  className="sitechat-composer-row"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                    border: `1px solid ${borderColor}`,
+                    borderRadius: "16px",
+                    padding: "8px",
+                    background: backgroundColor,
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept={acceptAttributeForAttachments()}
+                    aria-label={messagesCopy.attachFilesLabel}
+                    data-testid="widget-file-input"
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        void addLocalFiles(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    aria-label="Photo library"
+                    data-testid="widget-photo-input"
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        void addLocalFiles(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    aria-label="Take photo"
+                    data-testid="widget-camera-input"
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        void addLocalFiles(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      minWidth: 0,
+                      gap: "2px",
+                      gridColumn: "1",
+                      gridRow: "2",
+                    }}
+                  >
+                    {attachmentMenuOpen ? (
+                      <div
+                        role="menu"
+                        aria-label="Add attachment"
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") setAttachmentMenuOpen(false);
+                        }}
+                        style={{
+                          position: "absolute",
+                          bottom: "100%",
+                          marginBottom: "0.5rem",
+                          left: 0,
+                          minWidth: "10rem",
+                          border: `1px solid ${borderColor}`,
+                          borderRadius: "0.75rem",
+                          background: backgroundColor,
+                          color: textColor,
+                          padding: "0.25rem",
+                          boxShadow: widgetFloatingShadow(config?.shadowLevel),
+                          zIndex: 5,
+                        }}
+                      >
+                        {(
+                          [
+                            ["Photo library", photoInputRef],
+                            ["Take photo", cameraInputRef],
+                            ["Choose file", fileInputRef],
+                          ] as const
+                        ).map(([label, input]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              input.current?.click();
+                              setAttachmentMenuOpen(false);
+                            }}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              padding: "0.7rem",
+                              textAlign: "start",
+                              border: 0,
+                              background: "transparent",
+                              color: "inherit",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      data-testid="widget-attach-button"
+                      aria-label={messagesCopy.attachLabel}
+                      disabled={state.status !== "ready" || sending || endingChat}
+                      aria-haspopup="menu"
+                      aria-expanded={attachmentMenuOpen}
+                      onClick={() => {
+                        setAttachmentMenuOpen((current) => !current);
+                      }}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: "none",
+                        background: "transparent",
+                        color: textColor,
+                        padding: "6px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <svg
+                        width="22"
+                        height="22"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="m21 11-8.6 8.6a6 6 0 0 1-8.5-8.5L12.5 2.5a4 4 0 0 1 5.7 5.7L9.6 16.8a2 2 0 1 1-2.8-2.8l8-8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                    <VisitorComposerTools
+                      emojiEnabled={engagement.setup.emojiEnabled}
+                      voiceEnabled={engagement.setup.voiceMessagesEnabled}
+                      disabled={state.status !== "ready" || sending || pendingFiles.length >= 10}
+                      active={open}
+                      color={textColor}
+                      onEmoji={(emoji) => {
+                        setComposer((current) => current + emoji);
+                      }}
+                      onVoice={(file) => {
+                        void addLocalFiles([file]);
+                      }}
+                    />
+                  </div>
+                  <textarea
+                    className="sitechat-composer"
+                    value={composer}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setComposer(next);
+                      transportRef.current?.notifyComposerChange(next);
+                    }}
+                    onPaste={(event) => {
+                      const items = event.clipboardData.items;
+                      const files: File[] = [];
+                      for (const item of Array.from(items)) {
+                        if (item.kind === "file") {
+                          const file = item.getAsFile();
+                          if (file) {
+                            files.push(file);
+                          }
+                        }
+                      }
+                      if (files.length > 0) {
+                        event.preventDefault();
+                        void addLocalFiles(files);
+                      }
+                    }}
+                    placeholder={placeholderText}
+                    aria-label={placeholderText}
+                    dir="auto"
+                    rows={2}
+                    disabled={state.status !== "ready" || sending || endingChat}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void handleSend();
+                      }
+                    }}
+                    style={{
+                      gridColumn: "1 / -1",
+                      gridRow: "1",
+                      minWidth: 0,
+                      width: "100%",
+                      boxSizing: "border-box",
+                      resize: "none",
+                      borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                      border: "none",
+                      background: "transparent",
+                      color: textColor,
+                      padding: "0.625rem 0.75rem",
+                      font: "inherit",
+                    }}
+                  />
+                  {uploadBatch.status === "uploading" || uploadBatch.status === "confirming" ? (
+                    <button
+                      type="button"
+                      data-testid="widget-upload-cancel"
+                      aria-label={messagesCopy.uploadCancelLabel}
+                      onClick={() => {
+                        uploadAbortRef.current?.abort();
+                        setUploadBatch((current) => reduceUploadBatch(current, { type: "CANCEL" }));
+                        if (uploadBatch.batchId && state.status === "ready") {
+                          void api.cancelUploads({
+                            embedToken: state.init.embedToken,
+                            sessionToken: state.sessionToken,
+                            batchId: uploadBatch.batchId,
+                          });
+                        }
+                        setSending(false);
+                      }}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: `1px solid ${borderColor}`,
+                        background: backgroundColor,
+                        color: textColor,
+                        padding: "0 0.75rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  ) : null}
+                  {uploadBatch.status === "failed" ? (
+                    <button
+                      type="button"
+                      data-testid="widget-upload-retry"
+                      aria-label={messagesCopy.uploadRetryLabel}
+                      onClick={() => {
+                        setUploadBatch((current) => reduceUploadBatch(current, { type: "RETRY" }));
+                        void handleSend();
+                      }}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: "none",
+                        background: accentColor,
+                        color: contrastingTextColor(accentColor),
+                        padding: "0 1rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {messagesCopy.uploadRetryLabel}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleSend();
+                      }}
+                      disabled={
+                        state.status !== "ready" ||
+                        sending ||
+                        (!composer.trim() && pendingFiles.length === 0)
+                      }
+                      aria-label={sending ? messagesCopy.sendingLabel : messagesCopy.sendLabel}
+                      style={{
+                        borderRadius: `${String(Math.min(borderRadius, 12))}px`,
+                        border: "none",
+                        background: accentColor,
+                        color: contrastingTextColor(accentColor),
+                        padding: "0 1rem",
+                        cursor: "pointer",
+                        minWidth: config?.sendButtonStyle === "icon" ? "2.75rem" : "4.5rem",
+                        minHeight: "2.5rem",
+                        gridColumn: "2",
+                        gridRow: "2",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.4rem",
+                      }}
+                    >
+                      <SendButtonContent
+                        copy={messagesCopy}
+                        sending={sending}
+                        style={config?.sendButtonStyle ?? "text"}
+                      />
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : null}
+            {(config?.showPoweredBy ?? config?.branding.showPoweredBy) !== false ? (
+              <div
+                style={{
+                  marginTop: "0.5rem",
+                  fontSize: "0.75rem",
+                  color: mutedColor,
+                  textAlign: "center",
+                }}
+              >
+                <a
+                  href={MILL_WEBSITE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={messagesCopy.poweredBy}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    color: "inherit",
+                    textDecoration: "none",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  <span style={{ color: "#59636f" }}>Powered by</span>
+                  <img
+                    src={MILL_DIALOGUE_MARK}
+                    alt=""
+                    width={18}
+                    height={18}
+                    style={{ display: "block", flexShrink: 0 }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: "Arial, Helvetica, sans-serif",
+                      fontWeight: 600,
+                      color: "#142838",
+                    }}
+                  >
+                    Mill
+                  </span>
+                </a>
+              </div>
+            ) : null}
+          </footer>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function receiptLabel(status: MessageReceiptStatus, copy: WidgetMessages): string {
+  if (status === "seen") {
+    return copy.messageSeen;
+  }
+  if (status === "delivered") {
+    return copy.messageDelivered;
+  }
+  return copy.messageSent;
+}
+
+function MessageReceiptTicks({ status, label }: { status: MessageReceiptStatus; label: string }) {
+  const glyph = status === "sent" ? "✓" : "✓✓";
+
+  return (
+    <span
+      data-testid="message-receipt"
+      data-receipt={status}
+      aria-label={label}
+      title={label}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.25rem",
+        marginTop: "0.35rem",
+        fontSize: "0.7rem",
+        opacity: status === "seen" ? 1 : 0.85,
+        letterSpacing: status === "sent" ? "0" : "-0.06em",
+      }}
+    >
+      <span aria-hidden="true">{glyph}</span>
+    </span>
+  );
+}
+
+const rootElement = document.getElementById("root");
+if (rootElement) {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <WidgetApp />
+    </StrictMode>,
+  );
+}

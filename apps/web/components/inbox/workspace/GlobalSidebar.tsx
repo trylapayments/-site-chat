@@ -1,0 +1,325 @@
+"use client";
+
+import { PlatformAdminLink } from "@/components/dashboard/PlatformAdminLink";
+
+import { type AccessibleWorkspace } from "@site-chat/shared";
+import {
+  Bookmark,
+  CreditCard,
+  ContactRound,
+  Radar,
+  CheckCheck,
+  Inbox,
+  LayoutDashboard,
+  MessageSquareText,
+  Settings,
+  UserCog,
+  UserX,
+} from "lucide-react";
+import { PortalLink as Link } from "@/components/dashboard/PortalLink";
+import { Fragment } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+
+import { OperatorAvailability } from "@/components/dashboard/OperatorAvailability";
+import { UserMenu } from "@/components/dashboard/UserMenu";
+import { WorkspaceSwitcher } from "@/components/dashboard/WorkspaceSwitcher";
+import { InboxUnreadBadge } from "@/components/inbox/InboxUnreadBadge";
+import { toAppRoute } from "@/lib/auth/redirect";
+import {
+  SETTINGS_SECTION_CANNED_RESPONSES,
+  workspaceNavPath,
+  workspaceSettingsPath,
+} from "@/lib/dashboard/routes";
+import { cn } from "@/lib/utils";
+
+type NavItem = {
+  id: string;
+  label: string;
+  href: string;
+  icon: React.ComponentType<{
+    className?: string;
+    "aria-hidden"?: boolean;
+    strokeWidth?: number;
+  }>;
+  showUnread?: boolean;
+  match?: "exact" | "prefix" | "assignment";
+  assignment?: string;
+};
+
+function buildInboxNav(slug: string): NavItem[] {
+  const inbox = "/app/all-websites";
+  return [
+    {
+      id: "overview",
+      label: "Overview",
+      href: workspaceNavPath(slug, ""),
+      icon: LayoutDashboard,
+      match: "exact",
+    },
+    {
+      id: "inbox",
+      label: "Inbox",
+      href: inbox,
+      icon: Inbox,
+      showUnread: true,
+      match: "assignment",
+      assignment: "all",
+    },
+    {
+      id: "unassigned",
+      label: "Unassigned",
+      href: `${inbox}?assignment=unassigned`,
+      icon: UserX,
+      match: "assignment",
+      assignment: "unassigned",
+    },
+    {
+      id: "mine",
+      label: "Assigned to me",
+      href: `${inbox}?assignment=assigned_to_me`,
+      icon: MessageSquareText,
+      match: "assignment",
+      assignment: "assigned_to_me",
+    },
+    {
+      id: "closed",
+      label: "Closed",
+      href: `${inbox}?statusGroup=completed`,
+      icon: CheckCheck,
+      match: "prefix",
+    },
+    {
+      id: "visitors",
+      label: "Visitors",
+      href: workspaceNavPath(slug, "visitors"),
+      icon: Radar,
+      match: "prefix",
+    },
+    {
+      id: "contacts",
+      label: "Contacts",
+      href: workspaceNavPath(slug, "contacts"),
+      icon: ContactRound,
+      match: "prefix",
+    },
+    {
+      id: "team",
+      label: "Team",
+      href: workspaceNavPath(slug, "team"),
+      icon: UserCog,
+      match: "prefix",
+    },
+    {
+      id: "billing",
+      label: "Billing",
+      href: workspaceNavPath(slug, "billing"),
+      icon: CreditCard,
+      match: "prefix",
+    },
+    {
+      id: "templates",
+      label: "Templates",
+      href: workspaceSettingsPath(slug, SETTINGS_SECTION_CANNED_RESPONSES),
+      icon: Bookmark,
+      match: "prefix",
+    },
+  ];
+}
+
+function isNavActive(
+  item: NavItem,
+  pathname: string,
+  assignment: string | null,
+  slug: string,
+): boolean {
+  const inboxBase = toAppRoute(workspaceNavPath(slug, "inbox"));
+  const appPath = pathname.startsWith("/app")
+    ? pathname
+    : pathname.replace(/^/, "");
+
+  if (item.match === "exact") {
+    const target = toAppRoute(item.href);
+    return appPath === target || appPath === `${target}/`;
+  }
+
+  if (item.match === "prefix") {
+    const target = toAppRoute(item.href.split("?")[0] ?? item.href);
+    return appPath === target || appPath.startsWith(`${target}/`);
+  }
+
+  const onInbox =
+    appPath === "/app/all-websites" ||
+    appPath === inboxBase ||
+    appPath.startsWith(`${inboxBase}/`);
+  if (!onInbox) {
+    return false;
+  }
+
+  const current = assignment ?? "all";
+  const wanted = item.assignment ?? "all";
+  if (wanted === "all") {
+    return current === "all" || current === "";
+  }
+  return current === wanted;
+}
+
+export function GlobalSidebar({
+  workspaceName,
+  slug,
+  workspaceId,
+  memberId,
+  workspaces,
+  email,
+  canAdministerPlatform = false,
+}: {
+  workspaceName: string;
+  slug: string;
+  workspaceId: string;
+  memberId: string;
+  workspaces: AccessibleWorkspace[];
+  email: string;
+  canAdministerPlatform?: boolean;
+}) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const assignment = searchParams.get("assignment");
+  const items = buildInboxNav(slug).filter(
+    (item) =>
+      item.id !== "billing" ||
+      ["owner", "admin"].includes(
+        workspaces.find((w) => w.workspace_id === workspaceId)?.role ?? "",
+      ),
+  );
+  const closed =
+    searchParams.get("statusGroup") === "completed" ||
+    ["closed", "resolved"].includes(searchParams.get("status") ?? "");
+  const settingsHref = toAppRoute(workspaceNavPath(slug, "settings"));
+
+  return (
+    <aside
+      className="mill-sidebar bg-inbox-nav border-inbox-nav-border border-r text-inbox-nav-foreground flex h-full w-[224px] shrink-0 flex-col"
+      data-testid="inbox-global-sidebar"
+      aria-label="Workspace"
+    >
+      <div className="mill-sidebar-brand">
+        <Link
+          href={toAppRoute(`/app/${slug}`)}
+          aria-label="Mill workspace"
+          className="mill-brand-link"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- approved local brand asset */}
+          <img src="/icon.svg" alt="" width={38} height={38} />
+          <span>
+            Mill<span className="mill-brand-label">WORKSPACE</span>
+          </span>
+        </Link>
+        <div className="mill-workspace-switch">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            currentWorkspaceId={workspaceId}
+            currentPath={pathname}
+          />
+          <Link
+            href={toAppRoute(`/app/${slug}/settings/company`)}
+            aria-label="Company details"
+            title={workspaceName}
+            className="mill-workspace-details"
+          >
+            ↗
+          </Link>
+        </div>
+      </div>
+
+      <nav
+        className="flex-1 space-y-1 overflow-y-auto px-2.5 py-4"
+        aria-label="Main"
+      >
+        {items.map((item) => {
+          const active =
+            item.id === "closed"
+              ? closed &&
+                (pathname === "/app/all-websites" ||
+                  pathname.startsWith(
+                    toAppRoute(workspaceNavPath(slug, "inbox")),
+                  ))
+              : !(item.match === "assignment" && closed) &&
+                isNavActive(item, pathname, assignment, slug);
+          const Icon = item.icon;
+          return (
+            <Fragment key={item.id}>
+              {item.id === "overview" || item.id === "visitors" ? (
+                <p className="mill-nav-label">
+                  {item.id === "overview" ? "WORKSPACE" : "MANAGE"}
+                </p>
+              ) : null}
+              <Link
+                data-nav-item={item.id}
+                href={toAppRoute(item.href)}
+                prefetch={item.id === "team" ? false : undefined}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
+                  active
+                    ? "bg-inbox-nav-active text-white"
+                    : "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground",
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "size-[18px] shrink-0",
+                    active ? "text-white" : "text-brand",
+                  )}
+                  strokeWidth={1.75}
+                  aria-hidden={true}
+                />
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {item.showUnread && workspaceId && memberId ? (
+                  <InboxUnreadBadge
+                    workspaceId={workspaceId}
+                    memberId={memberId}
+                    className={cn(
+                      "ml-auto",
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-brand-soft text-brand",
+                    )}
+                  />
+                ) : null}
+              </Link>
+            </Fragment>
+          );
+        })}
+      </nav>
+
+      <div className="mill-sidebar-footer border-inbox-nav-border mt-auto space-y-2 border-t px-2.5 py-3.5">
+        {canAdministerPlatform ? <PlatformAdminLink /> : null}
+        <Link
+          href={settingsHref}
+          aria-current={pathname.startsWith(settingsHref) ? "page" : undefined}
+          className={cn(
+            "text-inbox-nav-muted hover:bg-inbox-nav-hover hover:text-inbox-nav-foreground flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition-colors",
+            pathname.startsWith(settingsHref) &&
+              "bg-inbox-nav-active text-inbox-nav-foreground",
+          )}
+        >
+          <Settings
+            className="size-[18px] shrink-0 opacity-75"
+            strokeWidth={1.75}
+            aria-hidden={true}
+          />
+          Settings
+        </Link>
+        <div className="mill-account-area px-1 pt-1 [&_button]:border-inbox-border [&_button]:bg-transparent [&_button]:text-inbox-nav-foreground [&_button]:hover:bg-inbox-nav-hover">
+          {workspaces.some(
+            (workspace) =>
+              workspace.workspace_id === workspaceId &&
+              workspace.role !== "viewer",
+          ) ? (
+            <OperatorAvailability key={slug} slug={slug} />
+          ) : null}
+          <UserMenu email={email} />
+        </div>
+      </div>
+    </aside>
+  );
+}

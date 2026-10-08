@@ -1,0 +1,271 @@
+"use server";
+
+import {
+  forgotPasswordSchema,
+  resendConfirmationSchema,
+  resetPasswordSchema,
+  signInSchema,
+  signUpSchema,
+} from "@site-chat/shared";
+import { redirect } from "next/navigation";
+
+import { AUTH_ROUTES } from "@/lib/auth/constants";
+import {
+  AUTH_ERROR_CODES,
+  getUserMessage,
+  type AuthActionState,
+} from "@/lib/auth/errors";
+import { buildRecoveryClearUrl } from "@/lib/auth/recovery-clear.server";
+import { toAppRoute } from "@/lib/auth/redirect";
+import { isEmailConfirmed, requireUser } from "@/lib/auth/session";
+import {
+  clearRecoveryCookie,
+  readRecoveryGateContext,
+} from "@/lib/auth/recovery-cookie.server";
+import { resolveResetPasswordGate } from "@/lib/auth/recovery-gate";
+import { clearInviteCookie } from "@/lib/auth/invite-cookie.server";
+import { redirectAuthenticatedUser } from "@/lib/workspace/redirect.server";
+import { createClient } from "@/lib/supabase/server";
+import { clientEnv } from "@/lib/env.client";
+import { env } from "@/lib/env.server";
+import { revalidatePath } from "next/cache";
+
+function mapFieldErrors(
+  issues: { path: PropertyKey[]; message: string }[],
+): Record<string, string[]> {
+  return issues.reduce<Record<string, string[]>>((acc, issue) => {
+    const key = String(issue.path[0] ?? "form");
+    acc[key] ??= [];
+    acc[key].push(issue.message);
+    return acc;
+  }, {});
+}
+
+function getFormString(formData: FormData, key: string): string {
+  const value = formData.get(key);
+  return typeof value === "string" ? value : "";
+}
+
+export async function signUpAction(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = signUpSchema.safeParse({
+    email: getFormString(formData, "email"),
+    password: getFormString(formData, "password"),
+    confirmPassword: getFormString(formData, "confirmPassword"),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      fieldErrors: mapFieldErrors(parsed.error.issues),
+      errorCode: AUTH_ERROR_CODES.UNKNOWN,
+      message: getUserMessage(AUTH_ERROR_CODES.UNKNOWN),
+    };
+  }
+
+  const supabase = await createClient();
+  const redirectTo = `${clientEnv.NEXT_PUBLIC_APP_URL}${AUTH_ROUTES.authCallback}`;
+
+  const { error } = await supabase.auth.signUp({
+    email: parsed.data.email.toLowerCase(),
+    password: parsed.data.password,
+    options: {
+      emailRedirectTo: redirectTo,
+    },
+  });
+
+  if (error) {
+    // Generic response to reduce account enumeration.
+    redirect(
+      toAppRoute(
+        `${AUTH_ROUTES.checkEmail}?email=${encodeURIComponent(parsed.data.email)}`,
+      ),
+    );
+  }
+
+  redirect(
+    toAppRoute(
+      `${AUTH_ROUTES.checkEmail}?email=${encodeURIComponent(parsed.data.email)}`,
+    ),
+  );
+}
+
+export async function signInAction(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = signInSchema.safeParse({
+    email: getFormString(formData, "email"),
+    password: getFormString(formData, "password"),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      fieldErrors: mapFieldErrors(parsed.error.issues),
+      errorCode: AUTH_ERROR_CODES.UNKNOWN,
+      message: getUserMessage(AUTH_ERROR_CODES.UNKNOWN),
+    };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email.toLowerCase(),
+    password: parsed.data.password,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      errorCode: AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+      message: getUserMessage(AUTH_ERROR_CODES.INVALID_CREDENTIALS),
+    };
+  }
+
+  const user = data.user;
+
+  if (!isEmailConfirmed(user)) {
+    redirect(
+      toAppRoute(
+        `${AUTH_ROUTES.checkEmail}?email=${encodeURIComponent(parsed.data.email)}`,
+      ),
+    );
+  }
+
+  return redirectAuthenticatedUser(getFormString(formData, "next"));
+}
+
+export async function signOutAction(): Promise<void> {
+  const supabase = await createClient();
+  await clearRecoveryCookie();
+  await clearInviteCookie();
+  await supabase.auth.signOut();
+  redirect(toAppRoute(AUTH_ROUTES.login));
+}
+
+export async function requestPasswordResetAction(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = forgotPasswordSchema.safeParse({
+    email: getFormString(formData, "email"),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      fieldErrors: mapFieldErrors(parsed.error.issues),
+      errorCode: AUTH_ERROR_CODES.UNKNOWN,
+      message: getUserMessage(AUTH_ERROR_CODES.UNKNOWN),
+    };
+  }
+
+  const supabase = await createClient();
+  const redirectTo = `${clientEnv.NEXT_PUBLIC_APP_URL}${AUTH_ROUTES.authRecovery}`;
+
+  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo,
+  });
+
+  return {
+    success: true,
+    errorCode: AUTH_ERROR_CODES.RESET_EMAIL_SENT,
+    message: getUserMessage(AUTH_ERROR_CODES.RESET_EMAIL_SENT),
+  };
+}
+
+export async function updatePasswordAction(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = resetPasswordSchema.safeParse({
+    password: getFormString(formData, "password"),
+    confirmPassword: getFormString(formData, "confirmPassword"),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      fieldErrors: mapFieldErrors(parsed.error.issues),
+      errorCode: AUTH_ERROR_CODES.UNKNOWN,
+      message: getUserMessage(AUTH_ERROR_CODES.UNKNOWN),
+    };
+  }
+
+  const supabase = await createClient();
+  const { user } = await requireUser(supabase);
+
+  const recoveryContext = await readRecoveryGateContext(supabase);
+  const gate = resolveResetPasswordGate({
+    hasAuthenticatedUser: Boolean(user),
+    ...recoveryContext,
+  });
+
+  if (gate.action === "clear_via_handler") {
+    redirect(
+      toAppRoute(
+        buildRecoveryClearUrl(gate.destination, env.AUTH_COOKIE_SECRET, {
+          signOutRecoverySession: gate.signOutRecoverySession,
+        }),
+      ),
+    );
+  }
+
+  if (gate.action === "redirect") {
+    redirect(toAppRoute(gate.destination));
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data.password,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      errorCode: AUTH_ERROR_CODES.UNKNOWN,
+      message: getUserMessage(AUTH_ERROR_CODES.UNKNOWN),
+    };
+  }
+
+  await supabase.auth.refreshSession();
+  await clearRecoveryCookie();
+  revalidatePath(AUTH_ROUTES.app);
+  redirect(toAppRoute(AUTH_ROUTES.app));
+}
+
+export async function resendConfirmationEmailAction(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = resendConfirmationSchema.safeParse({
+    email: getFormString(formData, "email"),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      fieldErrors: mapFieldErrors(parsed.error.issues),
+      errorCode: AUTH_ERROR_CODES.UNKNOWN,
+      message: getUserMessage(AUTH_ERROR_CODES.UNKNOWN),
+    };
+  }
+
+  const supabase = await createClient();
+  const redirectTo = `${clientEnv.NEXT_PUBLIC_APP_URL}${AUTH_ROUTES.authCallback}`;
+
+  await supabase.auth.resend({
+    type: "signup",
+    email: parsed.data.email,
+    options: {
+      emailRedirectTo: redirectTo,
+    },
+  });
+
+  return {
+    success: true,
+    errorCode: AUTH_ERROR_CODES.CONFIRMATION_SENT,
+    message: getUserMessage(AUTH_ERROR_CODES.CONFIRMATION_SENT),
+  };
+}

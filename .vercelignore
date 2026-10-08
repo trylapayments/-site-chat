@@ -1,0 +1,6 @@
+infra/aws/runtime/
+.env*
+**/.env*
+supabase/snippets/
+playwright-report/
+test-results/
