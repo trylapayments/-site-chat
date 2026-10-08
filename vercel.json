@@ -83,6 +83,11 @@
       "source": "/invite/:path*",
       "destination": "https://app.mill.chat/invite/:path*",
       "permanent": false
+    },
+    {
+      "source": "/downloads",
+      "destination": "/apps",
+      "permanent": true
     }
   ],
   "rewrites": [
