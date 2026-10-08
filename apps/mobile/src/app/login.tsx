@@ -13,9 +13,11 @@ import { Redirect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { configured, supabase } from "../lib/client";
 import { useMill } from "../lib/session";
-import { Button, ErrorBanner, Logo, colors, styles } from "../components/ui";
+import { Button, ErrorBanner, Logo, useTheme } from "../components/ui";
+import { LegalLinks } from "../components/LegalLinks";
 
 export default function Login() {
+  const { colors, styles, dark } = useTheme();
   const { session } = useMill();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +42,10 @@ export default function Login() {
     }
   }
   return (
-    <LinearGradient colors={["#EDF3FF", "#F9FBFF", "#FFFFFF"]} style={styles.screen}>
+    <LinearGradient
+      colors={dark ? ["#102742", "#0C1523", "#0C1523"] : ["#EAF2FF", "#F5F8FC", "#FFFFFF"]}
+      style={styles.screen}
+    >
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -111,6 +116,7 @@ export default function Login() {
             <Text style={[styles.caption, { textAlign: "center", fontSize: 12, marginTop: 22 }]}>
               Sign in with your existing Mill account.
             </Text>
+            <LegalLinks />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

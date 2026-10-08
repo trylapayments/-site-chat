@@ -86,7 +86,18 @@ describe("mobile authorization", () => {
       status: 403,
       code: "WORKSPACE_DISABLED",
     });
-    expect(mocks.member).not.toHaveBeenCalled();
+    expect(mocks.member).toHaveBeenCalled();
+  });
+  it("starts independent membership and billing checks together", async () => {
+    let releaseBilling!: (value: { enabled: boolean }) => void;
+    mocks.billing.mockImplementation(() => new Promise((resolve) => {
+      releaseBilling = resolve;
+    }));
+    const authorization = authorizeMobile(context, workspaceId);
+    await Promise.resolve();
+    expect(mocks.member).toHaveBeenCalled();
+    releaseBilling({ enabled: true });
+    await expect(authorization).resolves.toMatchObject({ memberId: "member" });
   });
   it("fails closed when membership was revoked", async () => {
     mocks.member.mockResolvedValue({ data: null, error: new Error("Revoked") });
@@ -100,4 +111,14 @@ describe("mobile authorization", () => {
       status: 403,
     });
   });
+});
+
+it("requires the same confirmed-email state as the portal", async () => {
+ mocks.getUser.mockResolvedValue({data: {user: {id: "user", email_confirmed_at: null}}, error: null});
+ await expect(authenticateMobile(new Request("https://test", {headers: {authorization: "Bearer valid"}}))).rejects.toMatchObject({status: 403, code: "EMAIL_NOT_CONFIRMED"});
+});
+it("accepts a verified bearer user with a confirmed email", async () => {
+ mocks.getUser.mockResolvedValue({data: {user: {id: "user", email_confirmed_at: "2026-01-01T00:00:00Z"}}, error: null});
+ await expect(authenticateMobile(new Request("https://test", {headers: {authorization: "Bearer valid"}}))).resolves.toMatchObject({user: {id: "user"}});
+ expect(mocks.getUser).toHaveBeenCalledWith("valid");
 });

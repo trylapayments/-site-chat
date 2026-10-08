@@ -9,6 +9,8 @@ import {
   updateConversationStatusSchema,
   markConversationReadSchema,
   createInternalNoteSchema,
+  updateInternalNoteSchema,
+  softDeleteInternalNoteSchema,
   listInternalNotesQuerySchema,
   operatorInitiateUploadsRequestSchema,
   completeUploadsRequestSchema,
@@ -27,6 +29,7 @@ import {
   authorizeMobile,
   MobileError,
 } from "@/lib/mobile/access";
+import { mobileService } from "@/lib/mobile/push";
 import { effectiveOperatorStatus } from "@/lib/operators/status";
 
 export const runtime = "nodejs";
@@ -47,6 +50,8 @@ const mutationCapabilities: Record<string, DashboardCapability> = {
   status: "update_conversation_status",
   notes: "manage_internal_notes",
   note: "manage_internal_notes",
+  updateNote: "manage_internal_notes",
+  deleteNote: "manage_internal_notes",
   initiateUpload: "send_messages",
   completeUpload: "send_messages",
   availability: "send_messages",
@@ -64,14 +69,33 @@ export async function POST(request: Request) {
     );
     if (operation === "workspaces")
       return ok(await fetchAccessibleWorkspaces(context.client));
-    if (operation === "capabilities") return ok({ apiVersion: 1, push: false });
-    // Core rollout is independent of the separately approved push schema/worker.
-    if (operation === "registerPush" || operation === "unregisterPush")
-      throw new MobileError(
-        503,
-        "FEATURE_UNAVAILABLE",
-        "Push notifications are not available yet.",
-      );
+    const pushEnabled = process.env.MOBILE_PUSH_ENABLED === "1";
+    if (operation === "capabilities")
+      return ok({ apiVersion: 1, push: pushEnabled });
+    if (operation === "registerPush" || operation === "unregisterPush") {
+      if (!pushEnabled)
+        throw new MobileError(
+          503,
+          "FEATURE_UNAVAILABLE",
+          "Push notifications are not available yet.",
+        );
+      if (operation === "unregisterPush") {
+        // Revoked workspace access must never prevent an authenticated user from disabling push.
+        const p = z
+          .object({ installationId: z.string().uuid() })
+          .strict()
+          .parse(input);
+        let deletion = mobileService()
+          .from("mobile_push_devices")
+          .delete()
+          .eq("user_id", context.user.id)
+          .eq("installation_id", p.installationId);
+        if (workspaceId) deletion = deletion.eq("workspace_id", workspaceId);
+        const { error } = await deletion;
+        if (error) throw error;
+        return ok({ enabled: false });
+      }
+    }
     if (!workspaceId)
       throw new MobileError(400, "INVALID_INPUT", "Workspace is required.");
     const { memberId } = await authorizeMobile(
@@ -81,6 +105,31 @@ export async function POST(request: Request) {
     );
     const client = context.client;
     switch (operation) {
+      case "registerPush": {
+        const p = z
+          .object({
+            soundMode: z
+              .enum(["mill", "voice", "silent", "system"])
+              .default("mill"),
+            installationId: z.string().uuid(),
+            token: z
+              .string()
+              .max(256)
+              .regex(/^(Expo|Exponent)PushToken\[[A-Za-z0-9_-]+\]$/),
+          })
+          .strict()
+          .parse(input);
+        const { error } = await mobileService().rpc("register_mobile_push", {
+          p_user_id: context.user.id,
+          p_member_id: memberId,
+          p_workspace_id: workspaceId,
+          p_installation_id: p.installationId,
+          p_token: p.token,
+          p_sound_mode: p.soundMode,
+        });
+        if (error) throw error;
+        return ok({ enabled: true });
+      }
       case "conversations":
         return ok(
           await inbox.fetchConversations(
@@ -195,6 +244,22 @@ export async function POST(request: Request) {
               .parse(input),
           ),
         );
+      case "updateNote":
+        return ok(
+          await inbox.updateInternalNote(
+            client,
+            workspaceId,
+            updateInternalNoteSchema.parse(input),
+          ),
+        );
+      case "deleteNote":
+        return ok(
+          await inbox.softDeleteInternalNote(
+            client,
+            workspaceId,
+            softDeleteInternalNoteSchema.parse(input),
+          ),
+        );
       case "initiateUpload": {
         const p = operatorInitiateUploadsRequestSchema
           .extend({ clientMessageId: z.string().uuid() })
@@ -222,6 +287,7 @@ export async function POST(request: Request) {
           .in("id", p.uploadIds);
         if (
           error ||
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Do not authorize an upload if provider data is unexpectedly absent.
           !uploads ||
           uploads.length !== p.uploadIds.length ||
           uploads.some(

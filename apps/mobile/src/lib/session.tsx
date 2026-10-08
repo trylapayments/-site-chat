@@ -1,3 +1,4 @@
+import { clearCache, clearAccountCache } from "./cache";
 import { reusableUpload, duplicateUpload } from "../core/uploads";
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
@@ -5,26 +6,42 @@ import * as Crypto from "expo-crypto";
 import * as Network from "expo-network";
 import { File } from "expo-file-system";
 import type { Session } from "@supabase/supabase-js";
-import type { AccessibleWorkspace, ListAccessibleWorkspacesResult } from "@site-chat/shared";
+import {
+  sendOperatorMessageResultSchema,
+  type AccessibleWorkspace,
+  type ListAccessibleWorkspacesResult,
+  type MessageItem,
+} from "@site-chat/shared";
 import { api, ApiError, configured, supabase } from "./client";
 import { storage } from "./storage";
 import { withPushRegistrationLock } from "./push-lock";
 import { eligible, failedAttempt, type PendingMessage } from "../core/outbox";
-import { removeLocalFile } from "./files";
+import { removeLocalFile, removeAccountFiles } from "./files";
+
+type DeliveredMessage = {
+  userId: string;
+  workspaceId: string;
+  conversationId: string;
+  message: MessageItem;
+};
 
 type Context = {
   session: Session | null;
   ready: boolean;
   workspaces: AccessibleWorkspace[];
   workspace: AccessibleWorkspace | null;
+  allWebsites: boolean;
+  selectAllWebsites: () => void;
   online: boolean;
   active: boolean;
   error: string;
   pending: PendingMessage[];
+  delivered: DeliveredMessage[];
   revision: number;
   selectWorkspace: (id: string) => void;
   reload: () => Promise<void>;
   logout: () => Promise<void>;
+  finishAccountDeletion: (userId: string) => Promise<void>;
   send: (conversationId: string, body: string, file?: PendingMessage["file"]) => Promise<void>;
   retry: (id: string) => Promise<void>;
   discard: (id: string) => Promise<void>;
@@ -41,14 +58,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(!configured);
   const [workspaces, setWorkspaces] = useState<AccessibleWorkspace[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [allWebsites, setAllWebsites] = useState(true);
   const [online, setOnline] = useState(true);
   const [active, setActive] = useState(AppState.currentState === "active");
   const [error, setError] = useState("");
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  const [delivered, setDelivered] = useState<DeliveredMessage[]>([]);
   const [revision, setRevision] = useState(0);
   const items = useRef<PendingMessage[]>([]);
   const currentUser = useRef<string | null>(null);
   const busy = useRef(false);
+  const deliveryAllowed = useRef(online && active);
+  useEffect(() => {
+    deliveryAllowed.current = online && active;
+  }, [online, active]);
+  const flushNow = useRef<() => Promise<void>>(async () => {});
   const writeChain = useRef(Promise.resolve());
   const hydrated = useRef(false);
   function save(change: (previous: PendingMessage[]) => PendingMessage[]) {
@@ -59,7 +83,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       .then(async () => {
         if (currentUser.current !== userId) throw new Error("Your account has changed.");
         const next = change(items.current);
-        await storage.setItem(`mill.outbox.${userId}`, JSON.stringify(next));
+        // Show the queued state immediately; delivery still waits for durable storage.
+        setPending(next);
+        try {
+          await storage.setItem(`mill.outbox.${userId}`, JSON.stringify(next));
+        } catch (error) {
+          if (currentUser.current === userId) setPending(items.current);
+          throw error;
+        }
         if (currentUser.current === userId) {
           items.current = next;
           setPending(next);
@@ -105,8 +136,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     void Promise.resolve().then(() => {
       if (currentUser.current === userId) {
         setPending([]);
+        setDelivered([]);
         setWorkspaces([]);
         setSelected(null);
+        setAllWebsites(true);
       }
     });
     if (!userId) return;
@@ -117,9 +150,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         items.current = value ? JSON.parse(value) : [];
         setPending(items.current);
         hydrated.current = true;
+        void flushNow.current();
       })
       .catch(() => setError("Unable to restore queued messages."));
     void Promise.resolve().then(reload);
+    void storage.getItem(`mill.inboxScope.${userId}`).then((scope) => {
+      if (currentUser.current === userId) setAllWebsites(scope !== "workspace");
+    });
     void storage.getItem(`mill.workspace.${userId}`).then((id) => {
       if (id && currentUser.current === userId) setSelected(id);
     });
@@ -153,9 +190,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (!userId || !online || !active || busy.current || !hydrated.current) return;
       busy.current = true;
       try {
-        for (const item of eligible(items.current, userId, Date.now())) {
-          if (currentUser.current !== userId) break;
+        while (currentUser.current === userId && deliveryAllowed.current) {
+          // Include messages queued while the previous delivery was in flight.
+          const item = eligible(items.current, userId, Date.now())[0];
+          if (!item) break;
           try {
+            let response: unknown;
             if (item.file) {
               let upload = reusableUpload(item.upload, Date.now());
               if (!upload) {
@@ -206,7 +246,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                   clearTimeout(timeout);
                 }
               }
-              await api(
+              response = await api(
                 "completeUpload",
                 item.workspaceId,
                 {
@@ -219,7 +259,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 userId,
               );
             } else
-              await api(
+              response = await api(
                 "send",
                 item.workspaceId,
                 {
@@ -230,6 +270,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 userId,
               );
             if (currentUser.current !== userId) break;
+            const acknowledged = sendOperatorMessageResultSchema.safeParse(response);
+            if (acknowledged.success) {
+              const message: MessageItem = {
+                ...acknowledged.data.message,
+                sender_type: "agent",
+                sender_label: "You",
+                is_internal: false,
+                client_message_id: item.id,
+              };
+              setDelivered((previous) => [
+                ...previous.filter((row) => row.message.id !== message.id).slice(-99),
+                {
+                  userId,
+                  workspaceId: item.workspaceId,
+                  conversationId: item.conversationId,
+                  message,
+                },
+              ]);
+            }
             await save((previous) => previous.filter((m) => m.id !== item.id));
             try {
               removeLocalFile(item);
@@ -254,12 +313,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         busy.current = false;
       }
     }
+    flushNow.current = flush;
     void flush();
     const timer = setInterval(() => void flush(), 1500);
     return () => clearInterval(timer);
   }, [online, active, session?.user.id]);
   const selectWorkspace = useCallback((id: string) => {
     setSelected(id);
+    setAllWebsites(false);
+    if (currentUser.current)
+      void storage.setItem(`mill.inboxScope.${currentUser.current}`, "workspace");
+  }, []);
+  const selectAllWebsites = useCallback(() => {
+    setAllWebsites(true);
+    if (currentUser.current) void storage.setItem(`mill.inboxScope.${currentUser.current}`, "all");
   }, []);
   const workspace = workspaces.find((w) => w.workspace_id === selected) ?? null;
   useEffect(() => {
@@ -280,10 +347,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         ready,
         workspaces,
         workspace,
+        allWebsites,
+        selectAllWebsites,
         online,
         active,
         error,
         pending,
+        delivered,
         revision,
         selectWorkspace,
         reload,
@@ -292,13 +362,73 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             const installationId = await storage.getItem("mill.installation");
             const registered = await storage.getItem(`mill.push.${session?.user.id}`);
             if (installationId && registered) {
-              await api("unregisterPush", undefined, { installationId });
+              await api("unregisterPush", undefined, { installationId }, session?.user.id);
               await storage.removeItem(`mill.push.${session?.user.id}`);
               await storage.removeItem(`mill.push.scopes.${session?.user.id}`);
             }
             await writeChain.current;
             await supabase.auth.signOut({ scope: "local" });
+            clearCache();
             setSession(null);
+          }),
+        finishAccountDeletion: (userId) =>
+          withPushRegistrationLock(async () => {
+            if (currentUser.current !== userId || session?.user.id !== userId)
+              throw new Error("Your account has changed. Please sign in again.");
+            // The server has already deleted this account and its push tokens.
+            // Stop delivery before waiting for any queued storage writes.
+            hydrated.current = false;
+            currentUser.current = null;
+            try {
+              await writeChain.current.catch(() => undefined);
+              let savedScopes: string[] = [];
+              try {
+                const value: unknown = JSON.parse(
+                  (await storage.getItem(`mill.push.scopes.${userId}`)) || "[]",
+                );
+                if (Array.isArray(value))
+                  savedScopes = value.filter((item): item is string => typeof item === "string");
+              } catch {
+                // Invalid old preferences must not keep a deleted account signed in.
+              }
+              const scopes = new Set([
+                ...savedScopes,
+                ...workspaces.map((company) => company.workspace_id),
+              ]);
+              await Promise.all(
+                [
+                  ...[
+                    "outbox",
+                    "workspace",
+                    "inboxScope",
+                    "push",
+                    "push.scopes",
+                    "push.token",
+                    "push.onboarding",
+                    "review",
+                  ].map((key) => `mill.${key}.${userId}`),
+                  ...[...scopes].flatMap((companyId) => [
+                    `mill.push.sound.${userId}.${companyId}`,
+                    `mill.push.preferences.${userId}.${companyId}`,
+                  ]),
+                ].map((key) => storage.removeItem(key)),
+              );
+              removeAccountFiles(userId);
+              clearAccountCache(userId);
+              items.current = [];
+              setPending([]);
+              setDelivered([]);
+            } finally {
+              items.current = [];
+              setPending([]);
+              setDelivered([]);
+              clearAccountCache(userId);
+              try {
+                await supabase.auth.signOut({ scope: "local" });
+              } finally {
+                setSession(null);
+              }
+            }
           }),
         send: async (conversationId, body, file) => {
           if (!session || !workspace || !hydrated.current)
@@ -320,6 +450,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               state: "queued",
             },
           ]);
+          void flushNow.current();
         },
         retry: async (id) => {
           await save((previous) =>
@@ -336,6 +467,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 : m,
             ),
           );
+          void flushNow.current();
         },
         discard: async (id) => {
           const item = items.current.find((m) => m.id === id);

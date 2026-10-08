@@ -1,0 +1,35 @@
+--- a/apps/web/app/api/v1/mobile/route.ts
++++ b/apps/web/app/api/v1/mobile/route.ts
+@@ -1,3 +1,6 @@
++import { mobileTranslationCapabilities, mobileTranslate } from "@/lib/ai-translation/mobile";
++import { TranslationServiceError } from "@/lib/ai-translation/service";
++import { AIError, toPublicAIError } from "@site-chat/ai";
+ import {
+   accountDeletionPreview,
+   deleteOwnAccount,
+@@ -178,6 +181,12 @@
+     );
+     const client = context.client;
+     switch (operation) {
++      case "translationCapabilities":
++        z.object({}).strict().parse(input ?? {});
++        return ok(await mobileTranslationCapabilities(context, workspaceId));
++      case "translateMessage":
++      case "previewReplyTranslation":
++        return ok(await mobileTranslate(context, workspaceId, operation, input));
+       case "visitors":
+         return ok(await fetchActiveVisitors(client, workspaceId));
+       case "contacts":
+@@ -702,6 +711,12 @@
+   } catch (error) {
+     if (error instanceof z.ZodError || error instanceof SyntaxError)
+       return fail(400, "INVALID_INPUT", "Invalid request.");
++    if (error instanceof TranslationServiceError)
++      return fail(error.status, error.code, error.message);
++    if (error instanceof AIError) {
++      const safe = toPublicAIError(error);
++      return fail(safe.status, safe.code, safe.message);
++    }
+     if (error instanceof AccountDeletionError)
+       return fail(400, "ACCOUNT_DELETION_FAILED", error.message);
+     if (error instanceof MobileError)

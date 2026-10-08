@@ -30,7 +30,7 @@ if (key?.split(".").length === 3) {
 for (const name of Object.keys(process.env))
   if (
     name.startsWith("EXPO_PUBLIC_") &&
-    /SERVICE_ROLE|PRIVATE|SECRET|PASSWORD|CHARGEBEE|RESEND|STRIPE_SECRET|CRON/.test(name)
+    /SERVICE_ROLE|PRIVATE|SECRET|PASSWORD|CHARGEBEE|RESEND|STRIPE_SECRET|CRON|OPENAI|ANTHROPIC|AI_API_KEY/.test(name)
   )
     errors.push(`Forbidden public secret variable: ${name}`);
 if (release) {

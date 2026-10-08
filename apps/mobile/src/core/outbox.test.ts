@@ -49,3 +49,18 @@ test("notification data is a UUID route, never arbitrary URL", () => {
     }),
   );
 });
+
+test("server acknowledgment reconciles with history without a duplicate bubble", () => {
+  const acknowledgment = {
+    id: "confirmed",
+    sequence_number: 3,
+    client_message_id: "retry-id",
+    body: "Hi",
+  };
+  const result = mergeMessages(
+    [acknowledgment],
+    [{ ...acknowledgment, body: "Hi", sender_label: "Operator" }],
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, "confirmed");
+});

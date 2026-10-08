@@ -1,3 +1,5 @@
+import { scopeStorage } from "../core/scoped-storage";
+import { cacheSessionStorage } from "../core/cached-storage";
 import * as SecureStore from "expo-secure-store";
 import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
@@ -18,7 +20,7 @@ async function remove(key: string) {
 
 // Publish a manifest only after all chunks are committed. The previous value survives interruption.
 // SecureStore values are small: encode Unicode to ASCII before splitting.
-export const storage = {
+const durableStorage = {
   async getItem(key: string) {
     const manifest = await read(`${key}.manifest`);
     if (!manifest) return null;
@@ -55,3 +57,10 @@ export const storage = {
     }
   },
 };
+
+const environmentStorage = scopeStorage(
+  durableStorage,
+  process.env.EXPO_PUBLIC_SUPABASE_URL || "https://unconfigured.supabase.co",
+  process.env.EXPO_PUBLIC_API_URL || "https://app.mill.chat",
+);
+export const storage = cacheSessionStorage(environmentStorage, "mill.session");

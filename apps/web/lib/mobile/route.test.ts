@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   uploads: vi.fn(),
   conversation: vi.fn(),
   complete: vi.fn(),
+  updateNote: vi.fn(),
+  deleteNote: vi.fn(),
 }));
 vi.mock("@/lib/mobile/access", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -17,6 +19,8 @@ vi.mock("@/lib/mobile/access", async (importOriginal) => ({
 vi.mock("@/lib/inbox/queries", () => ({
   sendOperatorMessage: mocks.send,
   fetchConversation: mocks.conversation,
+  updateInternalNote: mocks.updateNote,
+  softDeleteInternalNote: mocks.deleteNote,
 }));
 vi.mock("@/lib/workspace/queries", () => ({
   fetchAccessibleWorkspaces: mocks.workspaces,
@@ -44,6 +48,7 @@ const request = (body: unknown) =>
   });
 beforeEach(() => {
   vi.clearAllMocks();
+  delete process.env.MOBILE_PUSH_ENABLED;
   mocks.authenticate.mockResolvedValue({ client: {}, user: { id: "user" } });
   mocks.authorize.mockResolvedValue({ memberId: "member" });
   mocks.send.mockResolvedValue({ message: { id: "stable" } });
@@ -216,4 +221,131 @@ it("finalizes only uploads owned by the authenticated conversation member", asyn
       authedClient: {},
     }),
   );
+});
+
+it.each(["updateNote", "deleteNote"])(
+  "rechecks notes permissions for %s",
+  async (operation) => {
+    mocks.authorize.mockRejectedValue(
+      new MobileError(403, "FORBIDDEN", "Denied"),
+    );
+    const result = await POST(
+      request({
+        operation,
+        workspaceId,
+        input: { noteId: conversationId, body: "Changed" },
+      }),
+    );
+    expect(result.status).toBe(403);
+    expect(mocks.authorize.mock.calls[0][2]).toBe("manage_internal_notes");
+    expect(mocks.updateNote).not.toHaveBeenCalled();
+    expect(mocks.deleteNote).not.toHaveBeenCalled();
+  },
+);
+it.each(["updateNote", "deleteNote"])(
+  "rejects malformed note identity for %s",
+  async (operation) => {
+    const result = await POST(
+      request({ operation, workspaceId, input: { noteId: "bad" } }),
+    );
+    expect(result.status).toBe(400);
+    expect(mocks.updateNote).not.toHaveBeenCalled();
+    expect(mocks.deleteNote).not.toHaveBeenCalled();
+  },
+);
+it("preserves mentions when updating a note", async () => {
+  const input = {
+    noteId: conversationId,
+    body: "Changed",
+    mentionedMemberIds: [clientMessageId],
+  };
+  mocks.updateNote.mockResolvedValue({ id: conversationId });
+  const result = await POST(
+    request({ operation: "updateNote", workspaceId, input }),
+  );
+  expect(result.status).toBe(200);
+  expect(mocks.updateNote).toHaveBeenCalledWith({}, workspaceId, input);
+});
+it("uses existing soft deletion in the authorized workspace", async () => {
+  mocks.deleteNote.mockResolvedValue({ id: conversationId, deleted_at: "now" });
+  const result = await POST(
+    request({
+      operation: "deleteNote",
+      workspaceId,
+      input: { noteId: conversationId },
+    }),
+  );
+  expect(result.status).toBe(200);
+  expect(mocks.deleteNote).toHaveBeenCalledWith({}, workspaceId, {
+    noteId: conversationId,
+  });
+});
+
+it("registers only the verified user and freshly authorized member", async () => {
+  process.env.MOBILE_PUSH_ENABLED = "1";
+  const rpc = vi.fn().mockResolvedValue({ error: null });
+  mocks.push.mockReturnValue({ rpc });
+  const result = await POST(
+    request({
+      operation: "registerPush",
+      workspaceId,
+      input: {
+        installationId: clientMessageId,
+        token: "ExpoPushToken[valid_token]",
+      },
+    }),
+  );
+  expect(result.status).toBe(200);
+  expect(mocks.authorize).toHaveBeenCalledWith(
+    expect.anything(),
+    workspaceId,
+    "send_messages",
+  );
+  expect(rpc).toHaveBeenCalledWith("register_mobile_push", {
+    p_user_id: "user",
+    p_member_id: "member",
+    p_workspace_id: workspaceId,
+    p_installation_id: clientMessageId,
+    p_token: "ExpoPushToken[valid_token]",
+    p_sound_mode: "mill",
+  });
+});
+it("denied workspace cannot register a push device", async () => {
+  process.env.MOBILE_PUSH_ENABLED = "1";
+  mocks.authorize.mockRejectedValue(
+    new MobileError(403, "FORBIDDEN", "Denied"),
+  );
+  const result = await POST(
+    request({
+      operation: "registerPush",
+      workspaceId,
+      input: { installationId: clientMessageId, token: "ExpoPushToken[valid]" },
+    }),
+  );
+  expect(result.status).toBe(403);
+  expect(mocks.push).not.toHaveBeenCalled();
+});
+it("unregisters only this authenticated user installation without requiring workspace access", async () => {
+  process.env.MOBILE_PUSH_ENABLED = "1";
+  const filters: unknown[] = [];
+  const chain = {
+    eq: (key: string, value: string) => {
+      filters.push([key, value]);
+      return chain;
+    },
+    then: (resolve: (value: unknown) => void) => resolve({ error: null }),
+  };
+  mocks.push.mockReturnValue({ from: () => ({ delete: () => chain }) });
+  const result = await POST(
+    request({
+      operation: "unregisterPush",
+      input: { installationId: clientMessageId },
+    }),
+  );
+  expect(result.status).toBe(200);
+  expect(filters).toEqual([
+    ["user_id", "user"],
+    ["installation_id", clientMessageId],
+  ]);
+  expect(mocks.authorize).not.toHaveBeenCalled();
 });

@@ -41,8 +41,11 @@ export async function authenticateMobile(request: Request) {
     },
   );
   const { data, error } = await client.auth.getUser(token);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Fail closed on malformed provider responses as well as typed errors.
   if (error || !data.user)
     throw new MobileError(401, "UNAUTHORIZED", "Please sign in again.");
+  if (!data.user.email_confirmed_at)
+    throw new MobileError(403, "EMAIL_NOT_CONFIRMED", "Please confirm your email before signing in.");
   return { client, user: data.user };
 }
 
@@ -57,20 +60,25 @@ export async function authorizeMobile(
   );
   if (!workspace || !can(workspace.role, capability))
     throw new MobileError(403, "FORBIDDEN", "Workspace access denied.");
-  const access = await workspaceBillingAccess(workspaceId);
+  // The workspace capability is verified before starting either query.
+  // Fresh billing and membership checks are independent; never cache access.
+  const [access, { data: member, error }] = await Promise.all([
+    workspaceBillingAccess(workspaceId),
+    context.client
+      .from("workspace_members")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", context.user.id)
+      .eq("status", "active")
+      .single<{ id: string }>(),
+  ]);
   if (!access.enabled)
     throw new MobileError(
       403,
       "WORKSPACE_DISABLED",
       "Workspace access is restricted. Contact your administrator.",
     );
-  const { data: member, error } = await context.client
-    .from("workspace_members")
-    .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", context.user.id)
-    .eq("status", "active")
-    .single<{ id: string }>();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A missing active member must fail closed even on a malformed success response.
   if (error || !member)
     throw new MobileError(403, "FORBIDDEN", "Workspace access denied.");
   return { workspace, memberId: member.id };

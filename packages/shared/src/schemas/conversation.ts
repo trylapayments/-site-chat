@@ -71,6 +71,7 @@ export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export const listConversationsQuerySchema = listQuerySchema
   .extend({
     status: conversationStatusSchema.optional(),
+    statusGroup: z.enum(["active", "completed"]).optional(),
     assignment: z.enum(["all", "unassigned", "assigned_to_me"]).optional(),
   })
   .strict();

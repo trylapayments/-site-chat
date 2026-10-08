@@ -122,3 +122,27 @@ Upload retries retain the latest persisted upload batch, renew expired upload in
 First native cloud Simulator build finished successfully. Its archive was downloaded and its Info.plist verified. Native app execution is still untested on this Mac (no Xcode). Later JS fixes in notes, push refresh and attachment recovery are not in that first archive; include them in the next build.
 
 Product language is English throughout: UI, accessibility labels, errors, permission prompts, notification titles, date formatting and App Store metadata. Discussion language in the development chat does not determine the product locale. Existing Russian screenshots and the first native archive predate this change and must not be used as English release assets.
+
+
+## Physical iPhone live preview (October 7, 2026)
+
+The `development-device` EAS profile builds an internal development client for registered iPhones. The first build completed successfully on October 7. It uses the same bundle identifier as TestFlight and therefore replaces that installation on the phone. This is not an App Store release.
+
+Run `outputs/Mill-Live-Preview.command` from the task workspace. Keep the Mac and iPhone on the same Wi-Fi network. In the development client, connect to the server address printed by the launcher. The launcher uses one Metro worker and a 768 MB Node heap limit. It loads only public staging environment values and mirrors mobile source/assets into a clean temporary dependency workspace every two seconds.
+
+JavaScript and UI changes can refresh without another EAS build. Native dependency, entitlement, or native configuration changes still require rebuilding. The temporary runtime must exist before starting the launcher.
+
+Validation: 15 core tests, full mobile lint, and TypeScript passed. Metro served the iOS bundle with HTTP 200. Photo delivery and perceived latency still require verification on the physical iPhone.
+
+
+## October 8 operator workflows and push consent recovery
+
+Release candidate 0.1.0 (8) adds visitor invitations with standard/custom greetings, custom-recipient conversation transcripts, shared personal/team template creation, customer feedback, and Notification Center. It retains the Chats empty state during background reconciliation.
+
+The iOS permission request now runs before server registration. An old onboarding attempt marker cannot suppress a NOT_DETERMINED permission; failed networking does not mark onboarding complete. Explicit denial and manual opt-out remain respected. Notification Center reports disabled iPhone alerts and offers an Enable notifications action when permission has not been requested.
+
+Validation: 40 mobile core tests, mobile TypeScript and lint, iOS Hermes export, backend TypeScript, and 79 focused API/push tests passed. The owner confirmed that direct default and supplied voice push notifications reached the physical iPhone after granting permission. New workflow UI still needs physical-device acceptance after installation.
+
+Approved production migration 20261008120000 records one visitor push per continuous online visit, including returning visitors. It was reviewed by the parallel portal task, validated in a disposable database, applied as one guarded transaction, and recorded in migration history. Postflight confirms the private queue remains inaccessible to anon/authenticated roles and visitor/conversation/message identity history was preserved.
+
+The parallel portal task deployed the matching mobile adapter and compatibility worker to app.mill.chat. No privileged credentials are shipped in the mobile archive. On the owner's October 8 instruction, TestFlight submission/release is held until that task completes its company-management work. EAS cloud compilation does not publish an App Store release.

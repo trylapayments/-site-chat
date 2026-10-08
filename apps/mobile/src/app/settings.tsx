@@ -3,55 +3,45 @@ import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router } from "expo-router";
 import { can } from "@site-chat/shared";
+import { CompanyChoices } from "../components/CompanyChoices";
+import { useCompanyInboxes } from "../lib/company-inboxes";
 import { useMill } from "../lib/session";
 import { api } from "../lib/client";
+import { Avatar, Button, ErrorBanner, useTheme } from "../components/ui";
+import { LegalLinks } from "../components/LegalLinks";
 import { getMobileCapabilities } from "../lib/capabilities";
-import { registerPush, pushWorkspaces } from "../lib/push";
-import { Avatar, Button, ErrorBanner, colors, styles } from "../components/ui";
 export default function Settings() {
-  const { session, workspace, workspaces, selectWorkspace, logout, pending, active, online } =
-    useMill();
+  const { colors, styles, mode, setMode } = useTheme();
+  const {
+    session,
+    workspace,
+    workspaces,
+    selectWorkspace,
+    selectAllWebsites,
+    allWebsites,
+    logout,
+    pending,
+    active,
+  } = useMill();
+  const { companies } = useCompanyInboxes();
   const [status, setStatus] = useState("offline");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [pushScope, setPushScope] = useState<string | null>(null);
-  const [pushCapabilities, setPushCapabilities] = useState<{
-    userId: string;
-    push: boolean;
-  } | null>(null);
-  const pushAvailable =
-    !!session &&
-    active &&
-    online &&
-    pushCapabilities?.userId === session.user.id &&
-    pushCapabilities?.push === true;
-  const push = !!workspace && pushScope === workspace.workspace_id;
+  const [deletion, setDeletion] = useState<{ userId: string; enabled: boolean } | null>(null);
+  useEffect(() => {
+    const userId = session?.user.id;
+    if (!userId) return;
+    let cancelled = false;
+    void getMobileCapabilities(userId)
+      .then((value) => {
+        if (!cancelled) setDeletion({ userId, enabled: value.accountDeletion === true });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
   const enabled = !!workspace && can(workspace.role, "send_messages");
-  useEffect(() => {
-    let cancelled = false;
-    if (session && active && online)
-      void getMobileCapabilities(session.user.id)
-        .then((capabilities) => {
-          if (!cancelled) setPushCapabilities({ userId: session.user.id, push: capabilities.push });
-        })
-        .catch(() => {
-          if (!cancelled) setPushCapabilities({ userId: session!.user.id, push: false });
-        });
-    return () => {
-      cancelled = true;
-    };
-  }, [session, active, online]);
-  useEffect(() => {
-    let cancelled = false;
-    if (session && workspace)
-      void pushWorkspaces(session.user.id).then((scopes) => {
-        if (!cancelled)
-          setPushScope(scopes.includes(workspace.workspace_id) ? workspace.workspace_id : null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [session, workspace]);
   useEffect(() => {
     if (!enabled || !active) return;
     const update = () =>
@@ -111,7 +101,12 @@ export default function Settings() {
                 style={[styles.row, { minHeight: 46, gap: 12 }]}
               >
                 <View
-                  style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: item.color }}
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: 5,
+                    backgroundColor: item.color,
+                  }}
                 />
                 <Text style={{ flex: 1, color: colors.ink }}>{item.label}</Text>
                 {status === item.key && <Text style={{ color: colors.blue }}>✓</Text>}
@@ -120,46 +115,57 @@ export default function Settings() {
           </View>
         )}
         <View style={[styles.card, { gap: 15 }]}>
-          <Text style={{ color: colors.ink, fontWeight: "600" }}>Workspaces</Text>
-          {workspaces.map((w) => (
-            <Pressable
-              key={w.workspace_id}
-              onPress={() => selectWorkspace(w.workspace_id)}
-              style={[styles.row, { minHeight: 42, justifyContent: "space-between" }]}
-            >
-              <Text style={{ color: colors.ink }}>{w.name}</Text>
-              <Text style={{ color: colors.blue }}>
-                {workspace?.workspace_id === w.workspace_id ? "✓" : w.role}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        {enabled && (
-          <Button
-            title={
-              !pushAvailable
-                ? "Push notifications unavailable"
-                : push
-                  ? "Notifications enabled"
-                  : "Enable push notifications"
-            }
-            subtle
-            disabled={busy || !pushAvailable}
-            onPress={() => {
-              setBusy(true);
-              void registerPush(workspace!.workspace_id)
-                .then(() => {
-                  setPushScope(workspace!.workspace_id);
-                  setError("");
-                })
-                .catch((e) => setError(e.message))
-                .finally(() => setBusy(false));
+          <Text style={{ color: colors.ink, fontWeight: "600" }}>Companies</Text>
+          <CompanyChoices
+            workspaces={workspaces}
+            counts={Object.fromEntries(
+              companies.map((company) => [company.workspace_id, company.unread_total]),
+            )}
+            selected={allWebsites ? "all" : (workspace?.workspace_id ?? null)}
+            onSelect={(id) => {
+              if (id === "all") {
+                selectAllWebsites();
+                router.replace("/(tabs)/inbox");
+              } else selectWorkspace(id);
             }}
           />
-        )}
+        </View>
+        <Button title="Notification Center" subtle onPress={() => router.push("/notifications")} />
+        <View style={[styles.card, { gap: 15 }]}>
+          <Text style={styles.heading}>Appearance</Text>
+          <View style={[styles.row, { gap: 8 }]}>
+            {(["system", "light", "dark"] as const).map((value) => (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: mode === value }}
+                onPress={() => setMode(value)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 13,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  backgroundColor: mode === value ? colors.pale : colors.canvas,
+                  borderWidth: 1,
+                  borderColor: mode === value ? colors.blue : colors.line,
+                }}
+              >
+                <Text
+                  style={{ color: mode === value ? colors.blue : colors.ink, fontWeight: "600" }}
+                >
+                  {value[0].toUpperCase() + value.slice(1)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
         <Text style={styles.caption}>
           Manage your subscription and access in the Mill web portal.
         </Text>
+        <LegalLinks />
+        {deletion?.userId === session.user.id && deletion.enabled && (
+          <Button title="Delete account" subtle onPress={() => router.push("/delete-account")} />
+        )}
         <Button
           title="Sign out"
           subtle

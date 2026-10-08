@@ -7,6 +7,7 @@ type DeviceRow = {
   workspace_id: string;
   member_id: string;
   token: string;
+  sound_mode: "mill" | "voice" | "silent" | "system";
   updated_at: string;
 };
 type OutboxRow = {
@@ -38,6 +39,17 @@ export type MobileDatabase = Omit<Database, "public"> & {
       mobile_push_outbox: Table<OutboxRow>;
     };
     Functions: Database["public"]["Functions"] & {
+      register_mobile_push: {
+        Args: {
+          p_user_id: string;
+          p_member_id: string;
+          p_workspace_id: string;
+          p_installation_id: string;
+          p_token: string;
+          p_sound_mode: string;
+        };
+        Returns: undefined;
+      };
       claim_mobile_push: { Args: { p_limit: number }; Returns: Json };
     };
   };

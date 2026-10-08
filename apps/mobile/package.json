@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@react-native/metro-config": "^0.86.3",
     "@site-chat/shared": "workspace:*",
     "@supabase/supabase-js": "^2.49.1",
     "expo": "~57.0.27",
+    "expo-audio": "~57.0.5",
     "expo-constants": "~57.0.21",
     "expo-crypto": "~57.0.3",
     "expo-dev-client": "~57.0.19",
@@ -14,6 +16,8 @@
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-haptics": "~57.0.3",
+    "expo-image": "~57.0.5",
+    "expo-image-manipulator": "~57.0.21",
     "expo-image-picker": "~57.0.20",
     "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.12",
@@ -22,10 +26,14 @@
     "expo-router": "~57.0.25",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.22",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
+    "expo-store-review": "~57.0.3",
+    "expo-system-ui": "~57.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.2",
@@ -35,8 +43,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3",
-    "eslint-config-expo": "~57.0.2"
+    "eslint-config-expo": "~57.0.2",
+    "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
@@ -49,7 +57,8 @@
     "export:ios": "expo export --platform ios",
     "preflight": "node scripts/preflight.mjs",
     "eas-build-pre-install": "node scripts/preflight.mjs",
-    "eas-build-post-install": "pnpm --filter @site-chat/shared build"
+    "eas-build-post-install": "pnpm --filter @site-chat/shared build",
+    "start:device": "expo start --dev-client --lan --max-workers 1"
   },
   "private": true,
   "license": "UNLICENSED"

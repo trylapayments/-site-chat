@@ -61,3 +61,41 @@ export function pushDestination(
     ? { workspaceId, conversationId }
     : null;
 }
+
+export type PushContext = {
+  userId: string | null;
+  workspaceIds: string[];
+  activeChat: { workspaceId: string; conversationId: string } | null;
+};
+export function pushPolicy(data: unknown, context: PushContext) {
+  const target = pushDestination(data);
+  const recipient =
+    data && typeof data === "object" ? (data as Record<string, unknown>).recipientUserId : null;
+  const allowed =
+    !!target &&
+    !!context.userId &&
+    recipient === context.userId &&
+    context.workspaceIds.includes(target.workspaceId);
+  const activeChat =
+    allowed &&
+    target!.workspaceId === context.activeChat?.workspaceId &&
+    target!.conversationId === context.activeChat?.conversationId;
+  return { target: allowed ? target : null, show: allowed && !activeChat };
+}
+
+export function visitorPushDestination(data: unknown, context: PushContext) {
+  if (!data || typeof data !== "object" || !context.userId) return null;
+  const value = data as Record<string, unknown>;
+  const validId = (id: unknown): id is string =>
+    typeof id === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  if (
+    value.screen !== "visitors" ||
+    value.recipientUserId !== context.userId ||
+    !validId(value.workspaceId) ||
+    !validId(value.visitorId) ||
+    !context.workspaceIds.includes(value.workspaceId)
+  )
+    return null;
+  return { workspaceId: value.workspaceId, visitorId: value.visitorId };
+}

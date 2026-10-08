@@ -26,7 +26,21 @@
     },
     "testflight": {
       "extends": "production",
-      "environment": "preview"
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://app.mill.chat",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://qhdpusswkhshdqkowmft.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZHB1c3N3a2hzaGRxa293bWZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwNDQ5MzUsImV4cCI6MjEwNjYyMDkzNX0.zKEuel7jMchJnEM9utImHaDBir2ZhqIi9kvXpLxxMyQ",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "9deb0aa1-df65-4c03-99dd-0d8757f4ba73"
+      }
+    },
+    "development-device": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "preview",
+      "ios": {
+        "simulator": false
+      }
     }
   },
   "submit": {

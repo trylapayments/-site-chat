@@ -22,18 +22,28 @@ const jobSchema = z.object({
   attempts: z.number(),
 });
 export async function processMobilePush() {
+  if (process.env.MOBILE_PUSH_ENABLED !== "1")
+    return { sent: 0, skipped: 0, claimed: 0 };
   const mobile = mobileService();
   const service = createServiceClient();
-  const { data, error } = await mobile.rpc("claim_mobile_push", {
-    p_limit: 10,
-  });
-  if (error) throw error;
-  const jobs = z.array(jobSchema).parse(data);
+  const deadline = Date.now() + 35000;
   let sent = 0;
   let skipped = 0;
-  for (const job of jobs) {
+  let claimed = 0;
+  while (claimed < 10 && Date.now() < deadline) {
+    const { data, error } = await mobile.rpc("claim_mobile_push", {
+      p_limit: 1,
+    });
+    if (error) throw error;
+    const jobs = z.array(jobSchema).parse(data);
+    const job = jobs[0];
+    if (!job) break;
+    claimed++;
     try {
-      const [{ data: device }, { data: notification }] = await Promise.all([
+      const [
+        { data: device, error: deviceError },
+        { data: notification, error: notificationError },
+      ] = await Promise.all([
         mobile
           .from("mobile_push_devices")
           .select("*")
@@ -45,17 +55,22 @@ export async function processMobilePush() {
           .eq("id", job.notification_id)
           .single(),
       ]);
+      if (deviceError || notificationError)
+        throw new Error("Push context unavailable");
       if (
-        !device ||
-        !notification ||
         notification.read_at ||
-        !notification.conversation_id
+        !notification.conversation_id ||
+        Date.parse(notification.created_at) < Date.now() - 3600000
       ) {
         await finish(job.id, "skipped");
         skipped++;
         continue;
       }
-      const [{ data: member }, { data: prefs }, access] = await Promise.all([
+      const [
+        { data: member, error: memberError },
+        { data: prefs, error: prefsError },
+        access,
+      ] = await Promise.all([
         service
           .from("workspace_members")
           .select("id,role,status,user_id")
@@ -70,8 +85,8 @@ export async function processMobilePush() {
           .maybeSingle(),
         workspaceBillingAccess(device.workspace_id),
       ]);
+      if (memberError || prefsError) throw new Error("Push access unavailable");
       if (
-        !member ||
         member.status !== "active" ||
         member.role === "viewer" ||
         member.user_id !== device.user_id ||
@@ -100,14 +115,22 @@ export async function processMobilePush() {
             notification.type === "conversation_new"
               ? "New conversation in Mill"
               : "New conversation activity",
-          sound: "default",
+          ...(device.sound_mode === "silent"
+            ? {}
+            : {
+                sound:
+                  device.sound_mode === "system"
+                    ? "default"
+                    : `${device.sound_mode === "voice" ? "mill-voice" : "mill"}-${notification.type === "conversation_new" ? "conversation" : "message"}.wav`,
+              }),
+          channelId: `mill-conversations-${device.sound_mode}`,
           data: {
             workspaceId: device.workspace_id,
             conversationId: notification.conversation_id,
             notificationId: notification.id,
+            recipientUserId: device.user_id,
           },
           ttl: 3600,
-          collapseId: notification.id,
         }),
         signal: AbortSignal.timeout(5000),
       });
@@ -123,15 +146,17 @@ export async function processMobilePush() {
         .parse(await response.json());
       if (result.data.status !== "ok") {
         if (result.data.details?.error === "DeviceNotRegistered") {
-          await mobile
+          const { error } = await mobile
             .from("mobile_push_devices")
             .delete()
             .eq("id", job.device_id);
+          if (error) throw error;
           skipped++;
           continue;
         }
         throw new Error("Push rejected");
       }
+      if (!result.data.id) throw new Error("Missing provider ticket");
       await finish(job.id, "sent", result.data.id);
       sent++;
     } catch {
@@ -148,6 +173,15 @@ export async function processMobilePush() {
       if (retryError) throw retryError;
     }
   }
+  // Stop polling tickets whose provider receipt window has expired.
+  const { error: expiryError } = await mobile
+    .from("mobile_push_outbox")
+    .update({ status: "failed", receipt_checked_at: new Date().toISOString() })
+    .eq("status", "sent")
+    .is("receipt_checked_at", null)
+    .lt("claimed_at", new Date(Date.now() - 24 * 3600000).toISOString());
+  if (expiryError) throw expiryError;
+  if (Date.now() > deadline) return { sent, skipped, claimed };
   // Provider tickets are acceptance, receipts are delivery results. Disable invalid tokens.
   const { data: receipts, error: receiptQueryError } = await mobile
     .from("mobile_push_outbox")
@@ -186,26 +220,28 @@ export async function processMobilePush() {
         })
         .parse(await response.json());
       for (const row of receipts) {
+        if (Date.now() >= deadline) break;
         if (!row.ticket_id) continue;
         const receipt = result.data[row.ticket_id];
         if (!receipt) continue;
-        if (receipt.details?.error === "DeviceNotRegistered")
-          await mobile
-            .from("mobile_push_devices")
-            .delete()
-            .eq("id", row.device_id);
-        else
-          await mobile
-            .from("mobile_push_outbox")
-            .update({
-              receipt_checked_at: new Date().toISOString(),
-              status: receipt.status === "ok" ? "sent" : "failed",
-            })
-            .eq("id", row.id);
+        const { error } =
+          receipt.details?.error === "DeviceNotRegistered"
+            ? await mobile
+                .from("mobile_push_devices")
+                .delete()
+                .eq("id", row.device_id)
+            : await mobile
+                .from("mobile_push_outbox")
+                .update({
+                  receipt_checked_at: new Date().toISOString(),
+                  status: receipt.status === "ok" ? "sent" : "failed",
+                })
+                .eq("id", row.id);
+        if (error) throw error;
       }
     }
   }
-  return { sent, skipped, claimed: jobs.length };
+  return { sent, skipped, claimed };
   async function finish(id: string, status: string, ticketId?: string) {
     const { error } = await mobile
       .from("mobile_push_outbox")
