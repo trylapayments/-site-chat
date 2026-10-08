@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   greeting: vi.fn(),
   scopeLookup: vi.fn(),
   rating: vi.fn(),
+  translate: vi.fn(),
+  translationCapabilities: vi.fn(),
 }));
 vi.mock("@/lib/account/service", async (original) => ({
   ...(await original<object>()),
@@ -77,6 +79,11 @@ vi.mock("@/lib/workspace/rpc", () => ({ callPublicRpc: mocks.visitorStart }));
 vi.mock("@/lib/canned/queries", async (original) => ({
   ...(await original<object>()),
   createCannedResponse: mocks.createTemplate,
+}));
+vi.mock("@/lib/ai-translation/mobile", () => ({
+  mobileTranslate: mocks.translate,
+  mobileTranslationCapabilities: mocks.translationCapabilities,
+  translationServiceClient: vi.fn(),
 }));
 import { POST } from "@/app/api/v1/mobile/route";
 import { MobileError } from "./access";
@@ -836,4 +843,37 @@ it("own deletion passes confirmation to the account-scoped service without a wor
   expect(await result.json()).toEqual({ data: { deleted: true } });
   expect(mocks.accountDelete).toHaveBeenCalledWith(expect.anything(), input);
   expect(mocks.authorize).not.toHaveBeenCalled();
+});
+
+it.each(["translateMessage", "previewReplyTranslation"])(
+  "%s uses the translation service's fresh authorization without duplicate workspace fetching",
+  async (operation) => {
+    mocks.translate.mockResolvedValue({ translatedText: "Hello" });
+    const input = { conversationId, consent: true };
+    const result = await POST(request({ operation, workspaceId, input }));
+    expect(result.status).toBe(200);
+    expect(mocks.translate).toHaveBeenCalledWith(
+      { client: {}, user: { id: "user" } }, workspaceId, operation, input,
+    );
+    expect(mocks.authorize).not.toHaveBeenCalled();
+  },
+);
+it("unauthenticated translation cannot reach the provider service", async () => {
+  mocks.authenticate.mockRejectedValue(new MobileError(401, "UNAUTHORIZED", "Sign in"));
+  const result = await POST(request({ operation: "translateMessage", workspaceId, input: {} }));
+  expect(result.status).toBe(401);
+  expect(mocks.translate).not.toHaveBeenCalled();
+});
+it("translation cannot run without an explicit workspace", async () => {
+  const result = await POST(request({ operation: "translateMessage", input: {} }));
+  expect(result.status).toBe(400);
+  expect(mocks.translate).not.toHaveBeenCalled();
+});
+it("translation originals retain workspace view authorization", async () => {
+  mocks.authorize.mockRejectedValue(new MobileError(403, "FORBIDDEN", "Denied"));
+  const result = await POST(request({ operation: "translationOriginals", workspaceId, input: { conversationId } }));
+  expect(result.status).toBe(403);
+  expect(mocks.authorize).toHaveBeenCalledWith(
+    { client: {}, user: { id: "user" } }, workspaceId, "view_conversations",
+  );
 });

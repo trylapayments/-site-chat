@@ -1,3 +1,4 @@
+import { loadAuthorizedTranslationOriginals } from "@/lib/ai-translation/originals";
 import {
   mobileTranslationCapabilities,
   mobileTranslate,
@@ -90,6 +91,7 @@ const mutationCapabilities: Record<string, DashboardCapability> = {
   startVisitorChat: "send_messages",
   visitorGreeting: "view_conversations",
   rating: "view_conversations",
+  translationOriginals: "view_conversations",
   transcript: "send_messages",
   send: "send_messages",
   take: "assign_conversations",
@@ -178,6 +180,15 @@ export async function POST(request: Request) {
     }
     if (!workspaceId)
       throw new MobileError(400, "INVALID_INPUT", "Workspace is required.");
+    // Translation services perform fresh membership, billing and conversation
+    // authorization themselves. Avoid fetching the full workspace list twice.
+    if (operation === "translationCapabilities") {
+      z.object({}).strict().parse(input ?? {});
+      return ok(await mobileTranslationCapabilities(context, workspaceId));
+    }
+    if (operation === "translateMessage" || operation === "previewReplyTranslation") {
+      return ok(await mobileTranslate(context, workspaceId, operation, input));
+    }
     const { memberId, workspace: authorizedWorkspace } = await authorizeMobile(
       context,
       workspaceId,
@@ -185,16 +196,10 @@ export async function POST(request: Request) {
     );
     const client = context.client;
     switch (operation) {
-      case "translationCapabilities":
-        z.object({})
-          .strict()
-          .parse(input ?? {});
-        return ok(await mobileTranslationCapabilities(context, workspaceId));
-      case "translateMessage":
-      case "previewReplyTranslation":
-        return ok(
-          await mobileTranslate(context, workspaceId, operation, input),
-        );
+      case "translationOriginals": {
+        const p = z.object({ conversationId: z.string().uuid() }).strict().parse(input);
+        return ok(await loadAuthorizedTranslationOriginals(client, workspaceId, p.conversationId));
+      }
       case "visitors":
         return ok(await fetchActiveVisitors(client, workspaceId));
       case "contacts":
